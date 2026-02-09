@@ -1,5 +1,5 @@
 /**
- * CRTMonitorFX v6.1 - 修正版
+ * CRTMonitorFX v6.1 
  * 修复了扫描线缺失单位导致渲染异常的问题
  */
 class CRTMonitorFX {
@@ -16,23 +16,23 @@ class CRTMonitorFX {
             // [重点修正] 必须加上 unit: 'px'，否则 background-size 无效
             showLines: { label: '启用扫描线', type: 'bool', value: true, cssClass: 'show-lines' },
             lineDensity: { label: '线条间距 (px)', type: 'range', min: 2, max: 8, step: 1, value: 3, cssVar: '--crt-line-size', unit: 'px' },
-            lineOpacity: { label: '线条深度', type: 'range', min: 0.1, max: 1.0, step: 0.05, value: 0.4, cssVar: '--crt-line-opacity' },
+            lineOpacity: { label: '线条深度', type: 'range', min: 0.1, max: 1.0, step: 0.05, value: 0.25, cssVar: '--crt-line-opacity' },
 
             // --- 2. 动态光带 (Beam) ---
             showBeam: { label: '启用扫描光带', type: 'bool', value: true, cssClass: 'show-beam' },
-            beamSpeed: { label: '扫描速度 (s)', type: 'range', min: 2, max: 20, step: 1, value: 8, cssVar: '--crt-beam-speed', unit: 's' },
-            beamOpacity: { label: '光带强度', type: 'range', min: 0, max: 0.3, step: 0.01, value: 0.08, cssVar: '--crt-beam-opacity' },
+            beamSpeed: { label: '扫描速度 (s)', type: 'range', min: 2, max: 20, step: 1, value: 10, cssVar: '--crt-beam-speed', unit: 's' },
+            beamOpacity: { label: '光带强度', type: 'range', min: 0, max: 0.3, step: 0.01, value: 0.03, cssVar: '--crt-beam-opacity' },
 
             // --- 3. RGB 色差 ---
             showRGB: { label: '启用 RGB 色差', type: 'bool', value: true, cssClass: 'show-rgb' },
-            rgbOffset: { label: '色差偏移 (px)', type: 'range', min: 0, max: 10, step: 0.5, value: 2, cssVar: '--crt-rgb-offset', unit: 'px' },
+            rgbOffset: { label: '色差偏移 (px)', type: 'range', min: 0, max: 10, step: 0.5, value: 1, cssVar: '--crt-rgb-offset', unit: 'px' },
             color1: { label: '通道1 (Red)', type: 'color', value: '#ff0000', cssVar: '--crt-rgb-c1' },
             color2: { label: '通道2 (Cyan)', type: 'color', value: '#00ffff', cssVar: '--crt-rgb-c2' },
 
             // --- 4. 闪烁 ---
             showFlicker: { label: '启用微闪', type: 'bool', value: false, cssClass: 'show-flicker' },
-            flickerSpeed: { label: '闪烁频率 (s)', type: 'range', min: 0.01, max: 0.5, step: 0.01, value: 0.1, cssVar: '--crt-flicker-speed', unit: 's' },
-            flickerStr: { label: '闪烁强度', type: 'range', min: 0, max: 0.3, step: 0.01, value: 0.04, cssVar: '--crt-flicker-str' },
+            flickerSpeed: { label: '闪烁频率 (s)', type: 'range', min: 0.01, max: 0.5, step: 0.01, value: 0.6, cssVar: '--crt-flicker-speed', unit: 's' },
+            flickerStr: { label: '闪烁强度', type: 'range', min: 0, max: 0.3, step: 0.01, value: 0.01, cssVar: '--crt-flicker-str' },
 
             // --- 5. 暗角 ---
             showVignette: { label: '启用暗角', type: 'bool', value: true, cssClass: 'show-vignette' },
