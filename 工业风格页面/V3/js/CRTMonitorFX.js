@@ -32,14 +32,14 @@ class CRTMonitorFX {
             // --- 4. 闪烁 ---
             showFlicker: { label: '启用微闪', type: 'bool', value: false, cssClass: 'show-flicker' },
             flickerSpeed: { label: '闪烁频率 (s)', type: 'range', min: 0.01, max: 0.5, step: 0.01, value: 0.6, cssVar: '--crt-flicker-speed', unit: 's' },
-            flickerStr: { label: '闪烁强度', type: 'range', min: 0, max: 0.3, step: 0.01, value: 0.01, cssVar: '--crt-flicker-str' },
+            flickerStr: { label: '闪烁强度', type: 'range', min: 0, max: 0.3, step: 0.01, value: 0.02, cssVar: '--crt-flicker-str' },
 
             // --- 5. 暗角 ---
             showVignette: { label: '启用暗角', type: 'bool', value: true, cssClass: 'show-vignette' },
             vignetteStr: { label: '暗角深度', type: 'range', min: 0, max: 1, step: 0.05, value: 0.5, cssVar: '--crt-vignette-str' },
 
             // --- 6. 故障 ---
-            allowGlitch: { label: '允许故障动画', type: 'bool', value: true },
+            allowGlitch: { label: '允许故障动画⚠️注：光敏性癫痫警告！', type: 'bool', value: false },
             glitchInterval: { label: '故障间隔 (ms)', type: 'range', min: 2000, max: 30000, step: 1000, value: 10000 }
         };
 
@@ -193,9 +193,45 @@ class CRTMonitorFX {
             @keyframes ${p}-beam-anim { 0% { background-position: 0 -100vh; } 100% { background-position: 0 200vh; } }
             @keyframes ${p}-flicker-anim { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; } }
             @keyframes ${p}-glitch-anim {
-                0% { transform: translate(0); } 20% { transform: translate(-2px, 2px); }
-                40% { transform: translate(-2px, -2px); } 60% { transform: translate(2px, 2px); }
-                80% { transform: translate(2px, -2px); } 100% { transform: translate(0); }
+                0% { 
+                    text-shadow: var(--crt-rgb-offset) 0 var(--crt-rgb-c1), calc(var(--crt-rgb-offset) * -1) 0 var(--crt-rgb-c2);
+                    transform: translate(0) skewX(0);
+                    filter: none;
+                }
+                20% { 
+                    /* 第一阶段：轻微错位 */
+                    text-shadow: -5px 0 var(--crt-rgb-c1), 5px 0 var(--crt-rgb-c2);
+                    transform: translate(-5px, 0) skewX(5deg);
+                }
+                40% { 
+                    /* 第二阶段：剧烈拉扯 + 色差反转 */
+                    text-shadow: 20px -5px var(--crt-rgb-c1), -20px 5px var(--crt-rgb-c2);
+                    transform: scale(1.02, 0.98) translate(10px, 0) skewX(-10deg);
+                    filter: hue-rotate(90deg); /* 颜色变得诡异 */
+                }
+                50% {
+                    /* 中间态：瞬间回正 (闪烁感) */
+                    text-shadow: 0 0 transparent;
+                    transform: scale(1, 1) translate(0) skewX(0);
+                    filter: invert(1); /* 瞬间反色 */
+                }
+                60% { 
+                    /* 第三阶段：横向撕裂最大化 */
+                    text-shadow: -30px 0 var(--crt-rgb-c1), 30px 0 var(--crt-rgb-c2);
+                    transform: scale(1.05, 0.95) translate(-20px, 0) skewX(15deg);
+                    filter: hue-rotate(-90deg) contrast(2); /* 高对比度 */
+                }
+                80% { 
+                    /* 收尾：回归 */
+                    text-shadow: 5px 0 var(--crt-rgb-c1), -5px 0 var(--crt-rgb-c2);
+                    transform: translate(5px, -2px) skewX(-5deg);
+                    filter: none;
+                }
+                100% { 
+                    text-shadow: var(--crt-rgb-offset) 0 var(--crt-rgb-c1), calc(var(--crt-rgb-offset) * -1) 0 var(--crt-rgb-c2);
+                    transform: translate(0) skewX(0);
+                    filter: none;
+                }
             }
 
             /* 面板样式 (保持不变) */
