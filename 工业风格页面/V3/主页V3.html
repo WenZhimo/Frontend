@@ -41,6 +41,7 @@
 <div id="highlight-rect" aria-hidden="true"></div>
 
 <body>
+    <script src="js/CRTMonitorFX.js"></script>
     <script src="../asset/javascript/glitch-text.js"></script>
     <script src="../asset/javascript/FootnoteGenerator.js"></script>
     <script src="../asset/javascript/FootnotePreview.js"></script>
@@ -76,6 +77,13 @@
             <div class="info-group">
                 <div class="coord-label">Local Time</div>
                 <div class="clock-box" id="clock" aria-live="polite" aria-atomic="true">00:00:00</div>
+            </div>
+            <div class="info-group">
+                <div id="crt-config-trigger">特效配置</div>
+                <script>
+                    // 传入您刚才创建的 DIV 的 ID
+                    new CRTMonitorFX('crt-config-trigger');
+                </script>
             </div>
         </div>
 
