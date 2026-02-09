@@ -34,8 +34,25 @@ function updatePages() {
     clearIndicator();
 }
 
+/**
+ * 检查事件目标是否属于“非翻页区域”（例如悬浮窗、弹出的配置面板）
+ * 如果是，则返回 true，表示 pager.js 应该忽略该事件
+ */
+function shouldIgnoreEvent(e) {
+    // 检查目标是否在 CRT 配置面板内
+    if (e.target.closest('#crt-fx-main-panel')) return true;
+
+    // 如果未来有其他悬浮窗需要滚动，也可以加在这里
+    // if (e.target.closest('.other-scrollable-popup')) return true;
+
+    return false;
+}
+
 // 鼠标滚轮翻页
 window.addEventListener('wheel', e => {
+    // [修正] 如果在配置面板上滚动，直接返回，允许浏览器默认行为（滚动面板内容）
+    if (shouldIgnoreEvent(e)) return;
+
     const scroller = getActiveScroller();
     if (!scroller) return;
 
@@ -67,11 +84,17 @@ window.addEventListener('wheel', e => {
 let touchStartY = 0;
 
 window.addEventListener('touchstart', e => {
+    // [修正] 如果触摸的是配置面板，忽略
+    if (shouldIgnoreEvent(e)) return;
+
     if (e.touches.length !== 1) return;
     touchStartY = e.touches[0].clientY;
 }, { passive: true });
 
 window.addEventListener('touchend', e => {
+    // [修正] 如果触摸的是配置面板，忽略
+    if (shouldIgnoreEvent(e)) return;
+
     if (e.changedTouches.length !== 1) return;
 
     const touchEndY = e.changedTouches[0].clientY;
