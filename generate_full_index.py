@@ -11,7 +11,7 @@ OUTPUT_FILENAME = "index.html"
 
 # 忽略配置
 EXCLUDED_DIRS = {'.git', '.github', '.vscode', 'node_modules', '__pycache__', 'dist', 'venv'}
-EXCLUDED_FILES = {'generate_dark_tree.py',  '.DS_Store', 'CNAME', '.gitignore', 'package-lock.json', '_config.yml', 'README.md'}
+EXCLUDED_FILES = {'.DS_Store', 'CNAME', '.gitignore', 'package-lock.json', '_config.yml',}
 # ===========================================
 
 def get_web_url(relative_path, is_markdown=False):

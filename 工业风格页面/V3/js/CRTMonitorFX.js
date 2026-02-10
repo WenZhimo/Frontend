@@ -1,6 +1,5 @@
 /**
- * CRTMonitorFX v7.2 - 工业控制台版 (淡入蓄力展开动画)
- * 动画序列：点击 -> 角标淡入 -> 蓄力 -> 展开
+ * CRTMonitorFX v7.2
  */
 class CRTMonitorFX {
     constructor(triggerId = 'crt-config-trigger') {
