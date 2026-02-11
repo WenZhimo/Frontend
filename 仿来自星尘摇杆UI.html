@@ -1,234 +1,179 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Directional Noise Joystick</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: #0b0e14;
-            /* 截图中的深色背景 */
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            touch-action: none;
-        }
-
-        #canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
-
-        #hint {
-            position: absolute;
-            bottom: 50px;
-            color: rgba(255, 255, 255, 0.4);
-            font-family: sans-serif;
-            pointer-events: none;
-            user-select: none;
-        }
-    </style>
+    <meta charset="utf-8">
 </head>
 
-<body>
-    <div id="hint">单向拉伸 + 边缘杂波渲染</div>
-    <canvas id="canvas"></canvas>
+<body style="margin:0;background:black;">
+    <canvas id="c"></canvas>
 
     <script>
-        class WaveJoystick {
-            constructor(canvas) {
-                this.canvas = canvas;
-                this.ctx = canvas.getContext('2d');
+        const canvas = document.getElementById("c");
+        const gl = canvas.getContext("webgl");
 
-                this.config = {
-                    maxDist: 80,         // 摇杆最大拉伸距离
-                    baseRadius: 50,      // 基础圆半径 (后半部分保持这个大小)
-                    layers: 8,           // 线圈层数 (越多杂波越密集)
-                    color: '#00ffff'     // 主色调
-                };
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+        resize();
+        window.addEventListener("resize", resize);
 
-                this.origin = { x: 0, y: 0 }; // 摇杆中心
-                this.pos = { x: 0, y: 0 };    // 摇杆头当前位置 (dx, dy)
-                this.smoothPos = { x: 0, y: 0 }; // 用于平滑动画
-                this.active = false;
-                this.time = 0; // 用于波浪动画的时间变量
+        const vertexSrc = `
+attribute vec2 position;
+varying vec2 vUV;
+void main(){
+    vUV = position * 0.5 + 0.5;
+    gl_Position = vec4(position,0.0,1.0);
+}
+`;
 
-                this.resize();
-                this.bindEvents();
-                this.animate();
-            }
+        const fragmentSrc = `
+precision highp float;
 
-            resize() {
-                this.canvas.width = window.innerWidth;
-                this.canvas.height = window.innerHeight;
-                this.origin = { x: this.canvas.width / 2, y: this.canvas.height / 2 };
-            }
+varying vec2 vUV;
 
-            bindEvents() {
-                const update = (x, y) => {
-                    if (!this.active) return;
-                    let dx = x - this.origin.x;
-                    let dy = y - this.origin.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+uniform vec2 uCenter;
+uniform vec2 uPointer;
+uniform vec2 uResolution;
+uniform float uTime;
 
-                    // 限制最大距离
-                    if (dist > this.config.maxDist) {
-                        const angle = Math.atan2(dy, dx);
-                        dx = Math.cos(angle) * this.config.maxDist;
-                        dy = Math.sin(angle) * this.config.maxDist;
-                    }
-                    this.pos = { x: dx, y: dy };
-                };
+float variation(vec2 v1, vec2 v2, float frequency, float speed, float amplitude){
+    float v = dot(normalize(v1), normalize(v2));
+    float waves =
+        sin(v * frequency - uTime * speed) / 50.0 +
+        sin(v * frequency * 3.0 - uTime * speed) / 500.0;
+    return amplitude * waves;
+}
 
-                const start = (x, y) => {
-                    this.active = true;
-                    this.origin = { x, y };
-                    this.pos = { x: 0, y: 0 };
-                    this.smoothPos = { x: 0, y: 0 };
-                };
-                const end = () => {
-                    this.active = false;
-                    this.pos = { x: 0, y: 0 };
-                };
+vec2 fixAspect(vec2 uv, vec2 center){
+    vec2 d = uv - center;
+    d.x *= uResolution.x / uResolution.y;
+    return d + center;
+}
 
-                this.canvas.addEventListener('mousedown', e => start(e.clientX, e.clientY));
-                window.addEventListener('mousemove', e => update(e.clientX, e.clientY));
-                window.addEventListener('mouseup', end);
-                this.canvas.addEventListener('touchstart', e => { e.preventDefault(); start(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
-                window.addEventListener('touchmove', e => { e.preventDefault(); update(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
-                window.addEventListener('touchend', end);
-                window.addEventListener('resize', () => this.resize());
-            }
+float drawCircle(vec2 uv, float r1, float r2, float remap_len,
+                 float frequency, float speed, float amplitude){
 
-            // --- 核心算法：绘制定向变形的噪波圆环 ---
-            drawWaveRings(cx, cy, dx, dy) {
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                const rotationAngle = Math.atan2(dy, dx); // 获取拖拽方向
-                const intensity = Math.min(dist / this.config.maxDist, 1); // 0.0 ~ 1.0 的拉伸强度
+    vec2 direct = normalize(uPointer - uCenter);
+    float strength = min(length(uPointer - uCenter), 0.5) * 2.0;
 
-                this.ctx.save();
-                this.ctx.translate(cx, cy);
-                this.ctx.rotate(rotationAngle); // 旋转画布，X轴正方向即为拉伸方向
+    vec2 remap_pointer = direct * strength * remap_len + uCenter;
 
-                // 遍历每一层线圈
-                for (let i = 0; i < this.config.layers; i++) {
-                    this.ctx.beginPath();
+    vec2 uv_fixed = fixAspect(uv, uCenter);
+    vec2 remap_fixed = fixAspect(remap_pointer, uCenter);
 
-                    // 将圆分割成 100 个点来绘制，以实现不规则形状
-                    const points = 100;
-                    for (let j = 0; j <= points; j++) {
-                        // 当前点的角度 (0 到 2PI)
-                        const theta = (j / points) * Math.PI * 2;
+    vec2 uv_center = uv_fixed - uCenter;
+    vec2 uv_pointer = uv_fixed - remap_fixed;
 
-                        // 基础半径
-                        let r = this.config.baseRadius;
+    float mask_center = step(0.0, dot(-direct, normalize(uv_center)));
+    float mask_pointer = step(0.0, dot(direct, normalize(uv_pointer)));
 
-                        // --- 1. 定向拉伸逻辑 ---
-                        // Math.cos(theta) 在 0 (正前方) 时为 1，在 PI (正后方) 时为 -1
-                        // 我们只希望对前方进行拉伸，所以使用 Math.max(0, cos)
-                        const directionFactor = Math.cos(theta);
+    float len = max(
+        length(uv_center) * mask_center +
+        length(uv_pointer) * mask_pointer,
+        abs(uv_center.x * direct.y - uv_center.y * direct.x)
+    );
 
-                        if (directionFactor > 0) {
-                            // 只有面向摇杆方向的部分会被拉长
-                            // i * 3 让每一层拉伸的长度略有不同，形成层次感
-                            const stretch = (dist * 0.5) + (i * 6);
+    vec2 back_center = uCenter - direct * 0.1;
+    vec2 back_fixed = fixAspect(back_center, uCenter);
 
-                            // 使用平滑曲线过渡：directionFactor 的平方可以让过渡更自然
-                            // 乘以 intensity 确保如果不拉摇杆，圆是完美的
-                            r += stretch * Math.pow(directionFactor, 2) * intensity;
+    float mask_diff = step(0.0, dot(-direct, normalize(uv_fixed - back_fixed)));
+    float diff = (1.0 - mask_diff) * dot(uv_fixed - back_fixed, direct);
+    diff *= diff;
 
-                            // --- 2. 杂波/噪波逻辑 (仅在拉伸部分叠加) ---
-                            // 只有被拉伸的区域才会有波纹抖动
-                            if (intensity > 0.1) {
-                                // 频率：i (层级) 和 theta (角度) 共同决定波形
-                                const freq = 10 + i * 2;
-                                // 波动幅度：随拉伸强度增加
-                                const amp = 3 * intensity;
-                                // 动画：加上 this.time 让波纹流动
-                                const noise = Math.sin(theta * freq + this.time + i) * amp;
+    len += variation(uv_center, direct, frequency, speed, amplitude) * diff;
+    len -= variation(vec2(uv_center.y, -uv_center.x),
+                     direct, frequency, speed, amplitude) * diff;
 
-                                // 将噪波应用到半径上，并且随 directionFactor 衰减 (边缘处平滑过渡回圆形)
-                                r += noise * directionFactor;
-                            }
-                        }
+    return step(r2, len) * step(len, r1);
+}
 
-                        // 转换极坐标 (r, theta) 为笛卡尔坐标 (x, y)
-                        const px = Math.cos(theta) * r;
-                        const py = Math.sin(theta) * r;
+void main(){
 
-                        if (j === 0) this.ctx.moveTo(px, py);
-                        else this.ctx.lineTo(px, py);
-                    }
+    vec2 uv = vUV;
 
-                    // 样式设置
-                    this.ctx.closePath();
-                    // 颜色计算：利用 i 制造渐变，内亮外暗或随机
-                    const alpha = 0.6 - (i / this.config.layers) * 0.4;
-                    this.ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`; // 青色
-                    // 偶尔混入白色线条，模仿截图中的高光层
-                    if (i === 2 || i === 5) {
-                        this.ctx.strokeStyle = `rgba(255, 255, 255, ${alpha + 0.2})`;
-                        this.ctx.lineWidth = 2;
-                    } else {
-                        this.ctx.lineWidth = 1.2;
-                    }
+    float strength = min(length(uPointer - uCenter), 0.5) * 2.0;
+    float s = mix(0.0, 10.0, strength);
 
-                    this.ctx.stroke();
-                }
-                this.ctx.restore();
-            }
+    float width = 0.0045;
+    float r1 = 0.16;
 
-            draw() {
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    float color = drawCircle(uv, r1, r1-width, 0.12, 5.0, 7.2, s);
+    color += mix(0.0,
+        drawCircle(uv, r1, r1-4.0*width, 0.10, 4.0, 6.8, s),
+        strength);
 
-                // 平滑插值
-                this.smoothPos.x += (this.pos.x - this.smoothPos.x) * 0.3;
-                this.smoothPos.y += (this.pos.y - this.smoothPos.y) * 0.3;
+    float r2 = mix(r1, 0.17, strength);
+    color = max(color,
+        drawCircle(uv, r2, r2-width, 0.14, 6.5, 7.8, s));
 
-                const cx = this.origin.x;
-                const cy = this.origin.y;
+    float r3 = mix(r1, 0.18, strength);
+    color = max(color,
+        drawCircle(uv, r3, r3-width, 0.16, 6.5, 8.4, s));
 
-                // 1. 绘制复杂的波形圆环
-                this.drawWaveRings(cx, cy, this.smoothPos.x, this.smoothPos.y);
+    float r4 = mix(r1, 0.19, strength);
+    color = max(color,
+        drawCircle(uv, r4, r4-width, 0.18, 7.0, 9.0, s));
 
-                // 2. 绘制摇杆头
-                // 摇杆头的位置是平滑后的位置
-                const headX = cx + this.smoothPos.x;
-                const headY = cy + this.smoothPos.y;
+    gl_FragColor = vec4(color, color*0.8, color*0.8, color);
+}
+`;
 
-                this.ctx.save();
-                this.ctx.shadowBlur = 15;
-                this.ctx.shadowColor = '#00ffff';
-
-                // 外部光晕
-                this.ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
-                this.ctx.beginPath();
-                this.ctx.arc(headX, headY, 15, 0, Math.PI * 2);
-                this.ctx.fill();
-
-                // 实体核心
-                this.ctx.fillStyle = '#00ffff';
-                this.ctx.beginPath();
-                this.ctx.arc(headX, headY, 6, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.restore();
-            }
-
-            animate() {
-                this.time += 0.1; // 控制波纹流动的速度
-                this.draw();
-                requestAnimationFrame(() => this.animate());
-            }
+        function compile(type, source) {
+            const s = gl.createShader(type);
+            gl.shaderSource(s, source);
+            gl.compileShader(s);
+            return s;
         }
 
-        window.onload = () => new WaveJoystick(document.getElementById('canvas'));
+        const program = gl.createProgram();
+        gl.attachShader(program, compile(gl.VERTEX_SHADER, vertexSrc));
+        gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragmentSrc));
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, -1,
+            1, -1,
+            -1, 1,
+            1, 1
+        ]), gl.STATIC_DRAW);
+
+        const position = gl.getAttribLocation(program, "position");
+        gl.enableVertexAttribArray(position);
+        gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+
+        const uCenter = gl.getUniformLocation(program, "uCenter");
+        const uPointer = gl.getUniformLocation(program, "uPointer");
+        const uResolution = gl.getUniformLocation(program, "uResolution");
+        const uTime = gl.getUniformLocation(program, "uTime");
+
+        let center = [0.5, 0.5];
+        let pointer = [0.5, 0.5];
+
+        canvas.addEventListener("mousemove", e => {
+            const r = canvas.getBoundingClientRect();
+            pointer[0] = (e.clientX - r.left) / r.width;
+            pointer[1] = 1.0 - (e.clientY - r.top) / r.height;
+        });
+
+        function render(t) {
+
+            gl.uniform2fv(uCenter, center);
+            gl.uniform2fv(uPointer, pointer);
+            gl.uniform2f(uResolution, canvas.width, canvas.height);
+            gl.uniform1f(uTime, t * 0.001);
+
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            requestAnimationFrame(render);
+        }
+
+        requestAnimationFrame(render);
+
     </script>
 </body>
 
