@@ -1,386 +1,438 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Color Converter</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .container {
-            background-color: #222222;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(142, 142, 142, 0.1);
-        }
-        h1 {
-            text-align: center;
-            color: #ffffff;
-        }
-        .input-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            color: #ffffff;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input {
-            width: 100%;
-            padding: 8px;
-            box-sizing: border-box;
-            border: 1px solid #525252;
-            border-radius: 4px;
-        }
-        button {
-            display: block;
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            background-color: #4CAF50;
-            color: rgb(0, 0, 0);
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .result {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #222222;
-            border-radius: 4px;
-            text-align: center;
-            font-weight: bold;
-        }
-        .error {
-            background-color: #222222;
-            color: #c62828;
-        }
-        .color-display {
-            height: 100px;
-            margin-top: 20px;
-            border-radius: 4px;
-            background-color: #222222;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Color Converter</h1>
-        
-        <div class="input-group">
-            <label for="hexColor" >Hex Color Code:</label>
-            <input type="text" id="hexColor" placeholder="Enter hex color code (e.g., #f0df32 or f0df32)">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Color Converter</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+            }
+            .container {
+                background-color: #222222;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(142, 142, 142, 0.1);
+            }
+            h1 {
+                text-align: center;
+                color: #ffffff;
+            }
+            .input-group {
+                margin-bottom: 20px;
+            }
+            label {
+                display: block;
+                color: #ffffff;
+                margin-bottom: 5px;
+                font-weight: bold;
+            }
+            input {
+                width: 100%;
+                padding: 8px;
+                box-sizing: border-box;
+                border: 1px solid #525252;
+                border-radius: 4px;
+            }
+            button {
+                display: block;
+                width: 100%;
+                padding: 10px;
+                margin-bottom: 10px;
+                background-color: #4caf50;
+                color: rgb(0, 0, 0);
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+            }
+            button:hover {
+                background-color: #45a049;
+            }
+            .result {
+                margin-top: 20px;
+                padding: 15px;
+                background-color: #222222;
+                border-radius: 4px;
+                text-align: center;
+                font-weight: bold;
+            }
+            .error {
+                background-color: #222222;
+                color: #c62828;
+            }
+            .color-display {
+                height: 100px;
+                margin-top: 20px;
+                border-radius: 4px;
+                background-color: #222222;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Color Converter</h1>
+
+            <div class="input-group">
+                <label for="hexColor">Hex Color Code:</label>
+                <input
+                    type="text"
+                    id="hexColor"
+                    placeholder="Enter hex color code (e.g., #f0df32 or f0df32)"
+                />
+            </div>
+
+            <div class="input-group">
+                <label for="rgb565">RGB565 Value:</label>
+                <input
+                    type="text"
+                    id="rgb565"
+                    placeholder="Enter RGB565 value (e.g., 0xffa5 or ffa5)"
+                />
+            </div>
+
+            <div class="input-group">
+                <label for="rgbR">RGB R:</label>
+                <input
+                    type="number"
+                    id="rgbR"
+                    placeholder="0-255"
+                    min="0"
+                    max="255"
+                />
+            </div>
+
+            <div class="input-group">
+                <label for="rgbG">RGB G:</label>
+                <input
+                    type="number"
+                    id="rgbG"
+                    placeholder="0-255"
+                    min="0"
+                    max="255"
+                />
+            </div>
+
+            <div class="input-group">
+                <label for="rgbB">RGB B:</label>
+                <input
+                    type="number"
+                    id="rgbB"
+                    placeholder="0-255"
+                    min="0"
+                    max="255"
+                />
+            </div>
+
+            <button onclick="hexToRgb565()">Hex to RGB565</button>
+            <button onclick="rgb565ToHex()">RGB565 to Hex</button>
+            <button onclick="hexToRgb()">Hex to RGB</button>
+            <button onclick="rgbToHex()">RGB to Hex</button>
+            <button onclick="hexToRgbAndRgb565()">Hex to RGB & RGB565</button>
+            <button onclick="rgbToRgb565()">RGB to RGB565</button>
+            <button onclick="rgb565ToRgb()">RGB565 to RGB</button>
+
+            <div class="result" id="result"></div>
+
+            <div class="color-display" id="colorDisplay"></div>
         </div>
-        
-        <div class="input-group">
-            <label for="rgb565">RGB565 Value:</label>
-            <input type="text" id="rgb565" placeholder="Enter RGB565 value (e.g., 0xffa5 or ffa5)">
-        </div>
-        
-        <div class="input-group">
-            <label for="rgbR">RGB R:</label>
-            <input type="number" id="rgbR" placeholder="0-255" min="0" max="255">
-        </div>
-        
-        <div class="input-group">
-            <label for="rgbG">RGB G:</label>
-            <input type="number" id="rgbG" placeholder="0-255" min="0" max="255">
-        </div>
-        
-        <div class="input-group">
-            <label for="rgbB">RGB B:</label>
-            <input type="number" id="rgbB" placeholder="0-255" min="0" max="255">
-        </div>
-        
-        <button onclick="hexToRgb565()">Hex to RGB565</button>
-        <button onclick="rgb565ToHex()">RGB565 to Hex</button>
-        <button onclick="hexToRgb()">Hex to RGB</button>
-        <button onclick="rgbToHex()">RGB to Hex</button>
-        <button onclick="hexToRgbAndRgb565()">Hex to RGB & RGB565</button>
-        <button onclick="rgbToRgb565()">RGB to RGB565</button>
-        <button onclick="rgb565ToRgb()">RGB565 to RGB</button>
-        
-        <div class="result" id="result"></div>
-        
-        <div class="color-display" id="colorDisplay"></div>
-    </div>
 
-    <script>
-        function hexToRgb565() {
-            const hexColorInput = document.getElementById('hexColor');
-            const rgb565Input = document.getElementById('rgb565');
-            const resultDiv = document.getElementById('result');
-            const colorDisplay = document.getElementById('colorDisplay');
+        <script>
+            function hexToRgb565() {
+                const hexColorInput = document.getElementById("hexColor");
+                const rgb565Input = document.getElementById("rgb565");
+                const resultDiv = document.getElementById("result");
+                const colorDisplay = document.getElementById("colorDisplay");
 
-            let hexColor = hexColorInput.value.trim();
+                let hexColor = hexColorInput.value.trim();
 
-            // 检查是否以#开头
-            if (hexColor.startsWith('#')) {
-                hexColor = hexColor.substring(1);
+                // 检查是否以#开头
+                if (hexColor.startsWith("#")) {
+                    hexColor = hexColor.substring(1);
+                }
+
+                // 检查颜色码长度是否有效
+                if (hexColor.length !== 6) {
+                    resultDiv.textContent =
+                        "Invalid hex color code. Please enter a 6-digit hex code.";
+                    resultDiv.className = "result error";
+                    return;
+                }
+
+                // 将十六进制颜色码转换为RGB值
+                const r = parseInt(hexColor.substring(0, 2), 16);
+                const g = parseInt(hexColor.substring(2, 4), 16);
+                const b = parseInt(hexColor.substring(4, 6), 16);
+
+                // 检查RGB值是否有效
+                if (isNaN(r) || isNaN(g) || isNaN(b)) {
+                    resultDiv.textContent = "Invalid hex color code.";
+                    resultDiv.className = "result error";
+                    return;
+                }
+
+                // 转换为RGB565格式
+                const r5 = r >> 3;
+                const g6 = g >> 2;
+                const b5 = b >> 3;
+                const rgb565 = (r5 << 11) | (g6 << 5) | b5;
+
+                // 显示结果
+                rgb565Input.value = `0x${rgb565.toString(16).padStart(4, "0")}`;
+                resultDiv.textContent = "Conversion successful!";
+                resultDiv.className = "result";
+
+                // 显示颜色
+                colorDisplay.style.backgroundColor = `#${hexColor}`;
             }
 
-            // 检查颜色码长度是否有效
-            if (hexColor.length !== 6) {
-                resultDiv.textContent = "Invalid hex color code. Please enter a 6-digit hex code.";
-                resultDiv.className = "result error";
-                return;
+            function rgb565ToHex() {
+                const hexColorInput = document.getElementById("hexColor");
+                const rgb565Input = document.getElementById("rgb565");
+                const resultDiv = document.getElementById("result");
+                const colorDisplay = document.getElementById("colorDisplay");
+
+                let rgb565Str = rgb565Input.value.trim();
+
+                // 检查是否以0x开头
+                if (rgb565Str.startsWith("0x")) {
+                    rgb565Str = rgb565Str.substring(2);
+                }
+
+                // 检查RGB565值长度是否有效
+                if (rgb565Str.length !== 4) {
+                    resultDiv.textContent =
+                        "Invalid RGB565 value. Please enter a 4-digit hex value.";
+                    resultDiv.className = "result error";
+                    return;
+                }
+
+                // 将RGB565值转换为整数
+                const rgb565 = parseInt(rgb565Str, 16);
+
+                if (isNaN(rgb565)) {
+                    resultDiv.textContent = "Invalid RGB565 value.";
+                    resultDiv.className = "result error";
+                    return;
+                }
+
+                // 提取RGB565的各个通道值
+                const r5 = (rgb565 >> 11) & 0x1f;
+                const g6 = (rgb565 >> 5) & 0x3f;
+                const b5 = rgb565 & 0x1f;
+
+                // 扩展回8位
+                const r = (r5 << 3) | (r5 >> 2);
+                const g = (g6 << 2) | (g6 >> 4);
+                const b = (b5 << 3) | (b5 >> 2);
+
+                // 转换为十六进制颜色码
+                const hexColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+
+                // 显示结果
+                hexColorInput.value = hexColor.toUpperCase();
+                resultDiv.textContent = "Conversion successful!";
+                resultDiv.className = "result";
+
+                // 显示颜色
+                colorDisplay.style.backgroundColor = hexColor;
             }
 
-            // 将十六进制颜色码转换为RGB值
-            const r = parseInt(hexColor.substring(0, 2), 16);
-            const g = parseInt(hexColor.substring(2, 4), 16);
-            const b = parseInt(hexColor.substring(4, 6), 16);
+            function hexToRgb() {
+                const hexColorInput = document.getElementById("hexColor");
+                const rgbRInput = document.getElementById("rgbR");
+                const rgbGInput = document.getElementById("rgbG");
+                const rgbBInput = document.getElementById("rgbB");
+                const resultDiv = document.getElementById("result");
+                const colorDisplay = document.getElementById("colorDisplay");
 
-            // 检查RGB值是否有效
-            if (isNaN(r) || isNaN(g) || isNaN(b)) {
-                resultDiv.textContent = "Invalid hex color code.";
-                resultDiv.className = "result error";
-                return;
+                let hexColor = hexColorInput.value.trim();
+
+                // 检查是否以#开头
+                if (hexColor.startsWith("#")) {
+                    hexColor = hexColor.substring(1);
+                }
+
+                // 检查颜色码长度是否有效
+                if (hexColor.length !== 6) {
+                    resultDiv.textContent =
+                        "Invalid hex color code. Please enter a 6-digit hex code.";
+                    resultDiv.className = "result error";
+                    return;
+                }
+
+                // 将十六进制颜色码转换为RGB值
+                const r = parseInt(hexColor.substring(0, 2), 16);
+                const g = parseInt(hexColor.substring(2, 4), 16);
+                const b = parseInt(hexColor.substring(4, 6), 16);
+
+                // 检查RGB值是否有效
+                if (isNaN(r) || isNaN(g) || isNaN(b)) {
+                    resultDiv.textContent = "Invalid hex color code.";
+                    resultDiv.className = "result error";
+                    return;
+                }
+
+                // 显示结果
+                rgbRInput.value = r;
+                rgbGInput.value = g;
+                rgbBInput.value = b;
+                resultDiv.textContent = "Conversion successful!";
+                resultDiv.className = "result";
+
+                // 显示颜色
+                colorDisplay.style.backgroundColor = `#${hexColor}`;
             }
 
-            // 转换为RGB565格式
-            const r5 = r >> 3;
-            const g6 = g >> 2;
-            const b5 = b >> 3;
-            const rgb565 = (r5 << 11) | (g6 << 5) | b5;
+            function rgbToHex() {
+                const hexColorInput = document.getElementById("hexColor");
+                const rgbRInput = document.getElementById("rgbR");
+                const rgbGInput = document.getElementById("rgbG");
+                const rgbBInput = document.getElementById("rgbB");
+                const resultDiv = document.getElementById("result");
+                const colorDisplay = document.getElementById("colorDisplay");
 
-            // 显示结果
-            rgb565Input.value = `0x${rgb565.toString(16).padStart(4, '0')}`;
-            resultDiv.textContent = "Conversion successful!";
-            resultDiv.className = "result";
-            
-            // 显示颜色
-            colorDisplay.style.backgroundColor = `#${hexColor}`;
-        }
+                const r = parseInt(rgbRInput.value);
+                const g = parseInt(rgbGInput.value);
+                const b = parseInt(rgbBInput.value);
 
-        function rgb565ToHex() {
-            const hexColorInput = document.getElementById('hexColor');
-            const rgb565Input = document.getElementById('rgb565');
-            const resultDiv = document.getElementById('result');
-            const colorDisplay = document.getElementById('colorDisplay');
+                // 检查RGB值是否有效
+                if (
+                    isNaN(r) ||
+                    isNaN(g) ||
+                    isNaN(b) ||
+                    r < 0 ||
+                    r > 255 ||
+                    g < 0 ||
+                    g > 255 ||
+                    b < 0 ||
+                    b > 255
+                ) {
+                    resultDiv.textContent =
+                        "Invalid RGB values. Please enter values between 0 and 255.";
+                    resultDiv.className = "result error";
+                    return;
+                }
 
-            let rgb565Str = rgb565Input.value.trim();
+                // 转换为十六进制颜色码
+                const hexColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 
-            // 检查是否以0x开头
-            if (rgb565Str.startsWith('0x')) {
-                rgb565Str = rgb565Str.substring(2);
+                // 显示结果
+                hexColorInput.value = hexColor.toUpperCase();
+                resultDiv.textContent = "Conversion successful!";
+                resultDiv.className = "result";
+
+                // 显示颜色
+                colorDisplay.style.backgroundColor = hexColor;
             }
 
-            // 检查RGB565值长度是否有效
-            if (rgb565Str.length !== 4) {
-                resultDiv.textContent = "Invalid RGB565 value. Please enter a 4-digit hex value.";
-                resultDiv.className = "result error";
-                return;
+            function hexToRgbAndRgb565() {
+                hexToRgb();
+                hexToRgb565();
             }
 
-            // 将RGB565值转换为整数
-            const rgb565 = parseInt(rgb565Str, 16);
+            function rgbToRgb565() {
+                const rgbRInput = document.getElementById("rgbR");
+                const rgbGInput = document.getElementById("rgbG");
+                const rgbBInput = document.getElementById("rgbB");
+                const rgb565Input = document.getElementById("rgb565");
+                const resultDiv = document.getElementById("result");
+                const colorDisplay = document.getElementById("colorDisplay");
 
-            if (isNaN(rgb565)) {
-                resultDiv.textContent = "Invalid RGB565 value.";
-                resultDiv.className = "result error";
-                return;
+                const r = parseInt(rgbRInput.value);
+                const g = parseInt(rgbGInput.value);
+                const b = parseInt(rgbBInput.value);
+
+                // 检查RGB值是否有效
+                if (
+                    isNaN(r) ||
+                    isNaN(g) ||
+                    isNaN(b) ||
+                    r < 0 ||
+                    r > 255 ||
+                    g < 0 ||
+                    g > 255 ||
+                    b < 0 ||
+                    b > 255
+                ) {
+                    resultDiv.textContent =
+                        "Invalid RGB values. Please enter values between 0 and 255.";
+                    resultDiv.className = "result error";
+                    return;
+                }
+
+                // 转换为RGB565格式
+                const r5 = r >> 3;
+                const g6 = g >> 2;
+                const b5 = b >> 3;
+                const rgb565 = (r5 << 11) | (g6 << 5) | b5;
+
+                // 显示结果
+                rgb565Input.value = `0x${rgb565.toString(16).padStart(4, "0")}`;
+                resultDiv.textContent = "Conversion successful!";
+                resultDiv.className = "result";
+
+                // 显示颜色
+                const hexColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+                colorDisplay.style.backgroundColor = hexColor;
             }
 
-            // 提取RGB565的各个通道值
-            const r5 = (rgb565 >> 11) & 0x1F;
-            const g6 = (rgb565 >> 5) & 0x3F;
-            const b5 = rgb565 & 0x1F;
+            function rgb565ToRgb() {
+                const rgb565Input = document.getElementById("rgb565");
+                const rgbRInput = document.getElementById("rgbR");
+                const rgbGInput = document.getElementById("rgbG");
+                const rgbBInput = document.getElementById("rgbB");
+                const resultDiv = document.getElementById("result");
+                const colorDisplay = document.getElementById("colorDisplay");
 
-            // 扩展回8位
-            const r = (r5 << 3) | (r5 >> 2);
-            const g = (g6 << 2) | (g6 >> 4);
-            const b = (b5 << 3) | (b5 >> 2);
+                let rgb565Str = rgb565Input.value.trim();
 
-            // 转换为十六进制颜色码
-            const hexColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+                // 检查是否以0x开头
+                if (rgb565Str.startsWith("0x")) {
+                    rgb565Str = rgb565Str.substring(2);
+                }
 
-            // 显示结果
-            hexColorInput.value = hexColor.toUpperCase();
-            resultDiv.textContent = "Conversion successful!";
-            resultDiv.className = "result";
-            
-            // 显示颜色
-            colorDisplay.style.backgroundColor = hexColor;
-        }
+                // 检查RGB565值长度是否有效
+                if (rgb565Str.length !== 4) {
+                    resultDiv.textContent =
+                        "Invalid RGB565 value. Please enter a 4-digit hex value.";
+                    resultDiv.className = "result error";
+                    return;
+                }
 
-        function hexToRgb() {
-            const hexColorInput = document.getElementById('hexColor');
-            const rgbRInput = document.getElementById('rgbR');
-            const rgbGInput = document.getElementById('rgbG');
-            const rgbBInput = document.getElementById('rgbB');
-            const resultDiv = document.getElementById('result');
-            const colorDisplay = document.getElementById('colorDisplay');
+                // 将RGB565值转换为整数
+                const rgb565 = parseInt(rgb565Str, 16);
 
-            let hexColor = hexColorInput.value.trim();
+                if (isNaN(rgb565)) {
+                    resultDiv.textContent = "Invalid RGB565 value.";
+                    resultDiv.className = "result error";
+                    return;
+                }
 
-            // 检查是否以#开头
-            if (hexColor.startsWith('#')) {
-                hexColor = hexColor.substring(1);
+                // 提取RGB565的各个通道值
+                const r5 = (rgb565 >> 11) & 0x1f;
+                const g6 = (rgb565 >> 5) & 0x3f;
+                const b5 = rgb565 & 0x1f;
+
+                // 扩展回8位
+                const r = (r5 << 3) | (r5 >> 2);
+                const g = (g6 << 2) | (g6 >> 4);
+                const b = (b5 << 3) | (b5 >> 2);
+
+                // 显示结果
+                rgbRInput.value = r;
+                rgbGInput.value = g;
+                rgbBInput.value = b;
+                resultDiv.textContent = "Conversion successful!";
+                resultDiv.className = "result";
+
+                // 显示颜色
+                const hexColor = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+                colorDisplay.style.backgroundColor = hexColor;
             }
-
-            // 检查颜色码长度是否有效
-            if (hexColor.length !== 6) {
-                resultDiv.textContent = "Invalid hex color code. Please enter a 6-digit hex code.";
-                resultDiv.className = "result error";
-                return;
-            }
-
-            // 将十六进制颜色码转换为RGB值
-            const r = parseInt(hexColor.substring(0, 2), 16);
-            const g = parseInt(hexColor.substring(2, 4), 16);
-            const b = parseInt(hexColor.substring(4, 6), 16);
-
-            // 检查RGB值是否有效
-            if (isNaN(r) || isNaN(g) || isNaN(b)) {
-                resultDiv.textContent = "Invalid hex color code.";
-                resultDiv.className = "result error";
-                return;
-            }
-
-            // 显示结果
-            rgbRInput.value = r;
-            rgbGInput.value = g;
-            rgbBInput.value = b;
-            resultDiv.textContent = "Conversion successful!";
-            resultDiv.className = "result";
-            
-            // 显示颜色
-            colorDisplay.style.backgroundColor = `#${hexColor}`;
-        }
-
-        function rgbToHex() {
-            const hexColorInput = document.getElementById('hexColor');
-            const rgbRInput = document.getElementById('rgbR');
-            const rgbGInput = document.getElementById('rgbG');
-            const rgbBInput = document.getElementById('rgbB');
-            const resultDiv = document.getElementById('result');
-            const colorDisplay = document.getElementById('colorDisplay');
-
-            const r = parseInt(rgbRInput.value);
-            const g = parseInt(rgbGInput.value);
-            const b = parseInt(rgbBInput.value);
-
-            // 检查RGB值是否有效
-            if (isNaN(r) || isNaN(g) || isNaN(b) || r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
-                resultDiv.textContent = "Invalid RGB values. Please enter values between 0 and 255.";
-                resultDiv.className = "result error";
-                return;
-            }
-
-            // 转换为十六进制颜色码
-            const hexColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-
-            // 显示结果
-            hexColorInput.value = hexColor.toUpperCase();
-            resultDiv.textContent = "Conversion successful!";
-            resultDiv.className = "result";
-            
-            // 显示颜色
-            colorDisplay.style.backgroundColor = hexColor;
-        }
-
-        function hexToRgbAndRgb565() {
-            hexToRgb();
-            hexToRgb565();
-        }
-
-        function rgbToRgb565() {
-            const rgbRInput = document.getElementById('rgbR');
-            const rgbGInput = document.getElementById('rgbG');
-            const rgbBInput = document.getElementById('rgbB');
-            const rgb565Input = document.getElementById('rgb565');
-            const resultDiv = document.getElementById('result');
-            const colorDisplay = document.getElementById('colorDisplay');
-
-            const r = parseInt(rgbRInput.value);
-            const g = parseInt(rgbGInput.value);
-            const b = parseInt(rgbBInput.value);
-
-            // 检查RGB值是否有效
-            if (isNaN(r) || isNaN(g) || isNaN(b) || r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
-                resultDiv.textContent = "Invalid RGB values. Please enter values between 0 and 255.";
-                resultDiv.className = "result error";
-                return;
-            }
-
-            // 转换为RGB565格式
-            const r5 = r >> 3;
-            const g6 = g >> 2;
-            const b5 = b >> 3;
-            const rgb565 = (r5 << 11) | (g6 << 5) | b5;
-
-            // 显示结果
-            rgb565Input.value = `0x${rgb565.toString(16).padStart(4, '0')}`;
-            resultDiv.textContent = "Conversion successful!";
-            resultDiv.className = "result";
-            
-            // 显示颜色
-            const hexColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-            colorDisplay.style.backgroundColor = hexColor;
-        }
-
-        function rgb565ToRgb() {
-            const rgb565Input = document.getElementById('rgb565');
-            const rgbRInput = document.getElementById('rgbR');
-            const rgbGInput = document.getElementById('rgbG');
-            const rgbBInput = document.getElementById('rgbB');
-            const resultDiv = document.getElementById('result');
-            const colorDisplay = document.getElementById('colorDisplay');
-
-            let rgb565Str = rgb565Input.value.trim();
-
-            // 检查是否以0x开头
-            if (rgb565Str.startsWith('0x')) {
-                rgb565Str = rgb565Str.substring(2);
-            }
-
-            // 检查RGB565值长度是否有效
-            if (rgb565Str.length !== 4) {
-                resultDiv.textContent = "Invalid RGB565 value. Please enter a 4-digit hex value.";
-                resultDiv.className = "result error";
-                return;
-            }
-
-            // 将RGB565值转换为整数
-            const rgb565 = parseInt(rgb565Str, 16);
-
-            if (isNaN(rgb565)) {
-                resultDiv.textContent = "Invalid RGB565 value.";
-                resultDiv.className = "result error";
-                return;
-            }
-
-            // 提取RGB565的各个通道值
-            const r5 = (rgb565 >> 11) & 0x1F;
-            const g6 = (rgb565 >> 5) & 0x3F;
-            const b5 = rgb565 & 0x1F;
-
-            // 扩展回8位
-            const r = (r5 << 3) | (r5 >> 2);
-            const g = (g6 << 2) | (g6 >> 4);
-            const b = (b5 << 3) | (b5 >> 2);
-
-            // 显示结果
-            rgbRInput.value = r;
-            rgbGInput.value = g;
-            rgbBInput.value = b;
-            resultDiv.textContent = "Conversion successful!";
-            resultDiv.className = "result";
-            
-            // 显示颜色
-            const hexColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-            colorDisplay.style.backgroundColor = hexColor;
-        }
-    </script>
-</body>
+        </script>
+    </body>
 </html>
