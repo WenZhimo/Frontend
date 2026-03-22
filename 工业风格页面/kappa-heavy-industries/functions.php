@@ -17,6 +17,10 @@ function kappa_theme_setup() {
         'flex-height' => true,
         'flex-width'  => true,
     ) );
+    // 开启编辑器样式接管权限
+    add_theme_support( 'editor-styles' ); 
+    // 指定编辑器专属的 CSS 涂装文件
+    add_editor_style( 'editor-style.css' );
 }
 // 将这个设置函数挂载到主题初始化钩子上
 add_action( 'after_setup_theme', 'kappa_theme_setup' );
