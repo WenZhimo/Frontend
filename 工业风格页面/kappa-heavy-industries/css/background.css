@@ -1,0 +1,50 @@
+/* ---------- 固定网格背景 ---------- */
+:root {
+    --cursor-x: 50%;
+    --cursor-y: 50%;
+    --grid-size: 48px;
+    --grid-color: rgba(255, 255, 255, 0.06);
+    --grid-glow-color: rgba(120, 180, 255, 0.35);
+}
+
+/* 基础网格：永远存在 */
+.grid-base {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    background-size: var(--grid-size) var(--grid-size);
+}
+
+/* 发光网格：只在鼠标附近显示 */
+.grid-glow {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background-image:
+        linear-gradient(var(--grid-glow-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-glow-color) 1px, transparent 1px);
+    background-size: var(--grid-size) var(--grid-size);
+    /* 关键：圆形遮罩 */
+    -webkit-mask-image: radial-gradient(circle 280px at var(--cursor-x) var(--cursor-y), black 0%, rgba(0, 0, 0, 0.6) 40%, transparent 100%);
+    mask-image: radial-gradient(circle 280px at var(--cursor-x) var(--cursor-y), black 0%, rgba(0, 0, 0, 0.6) 40%, transparent 100%);
+    mix-blend-mode: screen;
+    opacity: 0.9;
+}
+
+/* 响应式：背景 */
+@media (max-width: 768px) {
+    .grid-glow {
+        opacity: 0.5;
+    }
+}
+
+@media (max-width: 480px) {
+    .grid-glow {
+        display: none;
+    }
+}

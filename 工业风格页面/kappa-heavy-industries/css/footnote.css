@@ -1,0 +1,122 @@
+/*脚注样式*/
+.footnotes-sub-style a {
+    color: var(--accent);
+}
+
+.footnotes-item-style {
+    color: var(--muted);
+}
+
+.footnotes-item-style a {
+    color: var(--accent);
+}
+
+/* 脚注内容预览样式 */
+.footnote-preview-box {
+    position: fixed;
+    top: 80px;
+    /* 起始位置 */
+    left: 40px;
+    /* 起始位置 */
+    z-index: 10000;
+
+    /* 关键 1: 初始尺寸为 0，通过 JS 动画变大 */
+    width: 0;
+    height: 0;
+
+    /* 关键 2: 背景色和边框加在最外层，这样它们才会随 width/height 展开 */
+    background: rgba(10, 10, 10, 0.95);
+    border: 1px solid rgba(255, 183, 0, 0.3);
+    /* 金色边框 */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+
+    /* 关键 3: 隐藏溢出，防止文字在盒子还很小时就露出来 */
+    overflow: hidden;
+
+    /* 动画过渡：宽度和高度 */
+    transition: width 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+        height 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+        opacity 0.2s ease;
+
+    /* 初始不可见 */
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* 激活状态 */
+.footnote-preview-box.active {
+    opacity: 1;
+    /* width 和 height 由 JS 动态计算并赋值 */
+}
+
+/* ---------- 内容层 ---------- */
+.footnote-content {
+    /* 给一个固定的最小宽度，防止文字换行在动画过程中乱跳 */
+    min-width: 200px;
+    max-width: 300px;
+    /* 限制最大宽度 */
+    padding: 16px 20px;
+
+    color: #e5e5e5;
+    font-size: 14px;
+    line-height: 1.6;
+
+    /* 文字淡入动画：延迟 0.1s 等盒子展开一点再显示 */
+    opacity: 0;
+    transform: translateY(5px);
+    transition: opacity 0.3s ease 0.1s, transform 0.3s ease 0.1s;
+}
+
+.footnote-preview-box.active .footnote-content {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ---------- 工业风角标 (死死粘在四个角) ---------- */
+.footnote-corners {
+    position: absolute;
+    inset: 0;
+    /* 撑满整个盒子 */
+    pointer-events: none;
+    z-index: 10001;
+}
+
+.footnote-corners span {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-color: #ffb700;
+    /* 强调色 */
+    border-style: solid;
+    border-width: 0;
+    /* 移除之前的 transform transition，让它跟随父元素尺寸实时变动 */
+}
+
+/* 定义四个角 */
+.footnote-corners .tl {
+    top: 0;
+    left: 0;
+    border-top-width: 2px;
+    border-left-width: 2px;
+}
+
+.footnote-corners .tr {
+    top: 0;
+    right: 0;
+    border-top-width: 2px;
+    border-right-width: 2px;
+}
+
+.footnote-corners .bl {
+    bottom: 0;
+    left: 0;
+    border-bottom-width: 2px;
+    border-left-width: 2px;
+}
+
+.footnote-corners .br {
+    bottom: 0;
+    right: 0;
+    border-bottom-width: 2px;
+    border-right-width: 2px;
+}

@@ -1,0 +1,152 @@
+/* ---------- 页眉 ---------- */
+:root {
+    --header-h: 72px;
+    --header-bg: rgba(5, 8, 12, 0.62);
+    --glass-border: rgba(255, 255, 255, 0.04);
+}
+
+.site-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--header-h);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 0 28px;
+    background: var(--header-bg);
+    backdrop-filter: blur(6px) saturate(120%);
+    border-bottom: 1px solid var(--glass-border);
+    z-index: 100;
+    pointer-events: auto;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+}
+
+.header-left:focus {
+    box-shadow: 0 0 0 4px rgba(111, 180, 255, 0.06);
+    border-radius: 8px;
+}
+
+.logo {
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: transform .18s ease, box-shadow .18s ease;
+    box-shadow: 0 2px 10px rgba(15, 20, 25, 0.25), inset 0 -2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.header-left:hover .logo,
+.header-left:focus .logo {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 6px 18px rgba(15, 20, 25, 0.35);
+}
+
+.company-meta {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+}
+
+.company-name {
+    font-family: "Oswald", system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    font-size: 0.95rem;
+    color: #fff;
+}
+
+.company-sub {
+    font-size: 19px;
+    color: var(--muted);
+    margin-top: 2px;
+    transform: translateY(1px);
+}
+
+.header-right {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    color: var(--muted);
+    font-family: "Roboto Mono", monospace;
+    font-size: 13px;
+}
+
+.info-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    min-width: 96px;
+}
+
+.coord-label {
+    font-size: 10px;
+    color: #8e9aa6;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.coord-box {
+    background: rgba(255, 255, 255, 0.02);
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    min-width: 84px;
+    text-align: right;
+}
+
+.coord-row {
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: #dfe8ef;
+    font-size: 13px;
+}
+
+.clock-box {
+    background: linear-gradient(90deg, rgba(111, 180, 255, 0.08), rgba(77, 168, 255, 0.06));
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(111, 180, 255, 0.12);
+    color: #eaf6ff;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+/* 响应式：页眉 */
+@media (max-width: 880px) {
+    .site-header {
+        padding: 0 14px;
+    }
+
+    .company-name {
+        font-size: .88rem;
+    }
+
+    .header-right {
+        gap: 10px;
+        font-size: 12px;
+    }
+
+    .info-group {
+        min-width: 72px;
+    }
+}
+
+@media (max-width: 480px) {
+    .info-group {
+        display: none;
+    }
+}

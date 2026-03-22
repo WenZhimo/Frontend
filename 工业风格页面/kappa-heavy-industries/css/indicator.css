@@ -1,0 +1,81 @@
+/* ---------- 选中动画 ---------- */
+#corner-indicator {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 9999;
+    transition:
+        transform .45s cubic-bezier(.25, 1, .5, 1),
+        width .35s cubic-bezier(.25, 1, .5, 1),
+        height .35s cubic-bezier(.25, 1, .5, 1),
+        opacity .2s ease;
+    opacity: 0;
+}
+
+#corner-indicator span {
+    position: absolute;
+    font-size: 18px;
+    color: var(--accent);
+}
+
+#corner-indicator .tl {
+    left: -14px;
+    top: -14px;
+}
+
+#corner-indicator .tr {
+    right: -14px;
+    top: -14px;
+}
+
+#corner-indicator .bl {
+    left: -14px;
+    bottom: -14px;
+}
+
+#corner-indicator .br {
+    right: -14px;
+    bottom: -14px;
+}
+
+/* 响应式：无触摸设备不显示 */
+@media (hover: none) {
+
+    [data-selectable]::before,
+    [data-selectable]::after,
+    .corner-host::before,
+    .corner-host::after {
+        display: none;
+    }
+}
+
+/* 高亮矩形 */
+
+#highlight-rect {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 1;
+    /* 在角标(9999)之下，但在内容之上 */
+
+    background-color: rgba(255, 255, 255, 0.155);
+    /* 实心白色 */
+
+    /* 关键：使用差值混合模式，使被覆盖的文字反色可见，
+       如果不喜欢反色，可以删掉这行并将 z-index 设为 -1 (但需注意背景层级) */
+    mix-blend-mode: difference;
+
+    opacity: 0;
+    /* 默认 transition，会被 JS 动态覆盖 */
+    transition:
+        transform 0.45s cubic-bezier(.25, 1, .5, 1),
+        width 0.35s cubic-bezier(.25, 1, .5, 1),
+        height 0.35s cubic-bezier(.25, 1, .5, 1),
+        opacity 0.2s ease;
+}
