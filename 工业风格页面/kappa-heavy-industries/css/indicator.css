@@ -92,3 +92,9 @@
     letter-spacing: 0.5px;
     text-transform: uppercase;
 }
+/* 响应式：在屏幕宽度小于 768px 的移动设备上隐藏数字容器 */
+@media (max-width: 768px) {
+    .indicator-data {
+        display: none !important;
+    }
+}

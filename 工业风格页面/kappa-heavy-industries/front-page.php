@@ -338,9 +338,9 @@
                     </a>
                 </div>
 
-                <div style="position: absolute; right: 3vw; bottom: 3vh;">
+                <div class="corner-quote">
                     <p data-selectable
-                        style="font-size: clamp(24px, 4vw, 40px); font-family: '华康金文体W3', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
+                        style="font-family: '华康金文体W3', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
                         让频率震荡，让杂音沉寂。
                     </p>
                 </div>
@@ -389,9 +389,9 @@
                     </a>
                 </div>
 
-                <div style="position: absolute; right: 3vw; bottom: 3vh;">
+                <div class="corner-quote">
                     <p data-selectable
-                        style="font-size: clamp(24px, 4vw, 40px); font-family: '华康金文体W3', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
+                        style="font-family: '华康金文体W3', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
                         我们将死于黑暗，以便你们生于光明。
                     </p>
                 </div>
@@ -433,9 +433,9 @@
                     </a>
                 </div>
 
-                <div style="position: absolute; right: 3vw; bottom: 3vh;">
+                <div class="corner-quote">
                     <p data-selectable
-                        style="font-size: clamp(24px, 4vw, 40px); font-family: '华康金文体W3', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
+                        style="font-family: '华康金文体W3', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
                         旅途总有终点，不妨停下来回顾半生。
                     </p>
                 </div>
@@ -489,13 +489,15 @@
 
                 <h2 data-selectable>友情合作</h2>
                 <div class="cards">
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px; align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/Izuno-2023.7.8 (130381086).png"
-                            height="80px" alt="白洞">
-                        <a href="https://www.ylnxcute.top/">白洞</a>
-                    </div>
+                    <a href="https://www.ylnxcute.top/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px; align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/Izuno-2023.7.8 (130381086).png"
+                                height="80px" alt="白洞">
+                            白洞
+                        </div>
+                    </a>
                     <div class="card" data-selectable data-selectable-highlight
                         style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px; align-items: center;">
                         <img data-selectable data-selectable-highlight
