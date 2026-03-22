@@ -42,14 +42,16 @@ function kappa_heavy_industries_scripts() {
     // ==========================================
     // 2. 注册并加载字体库 (统一作为样式表加载)
     // ==========================================
-    wp_enqueue_style( 'font-yishan', $theme_dir . '/asset/fonts/峄山碑篆体/result.css', array(), '1.0' );
-    wp_enqueue_style( 'font-bailu', $theme_dir . '/asset/fonts/白路彤彤手写体/result.css', array(), '1.0' );
-    wp_enqueue_style( 'font-zcool', $theme_dir . '/asset/fonts/ZCOOLQingKeHuangYou-Regular/result.css', array(), '1.0' );
-    wp_enqueue_style( 'font-megrim', $theme_dir . '/asset/fonts/Megrim-Regular/result.css', array(), '1.0' );
-    wp_enqueue_style( 'font-smooch', $theme_dir . '/asset/fonts/Smooch-Regular/result.css', array(), '1.0' );
-    wp_enqueue_style( 'font-splash', $theme_dir . '/asset/fonts/Splash-Regular/result.css', array(), '1.0' );
-    wp_enqueue_style( 'font-tradewinds', $theme_dir . '/asset/fonts/TradeWinds-Regular/result.css', array(), '1.0' );
+    wp_enqueue_style( 'font-yishan', $theme_dir . '/asset/fonts/峄山碑篆体/峄山碑篆体/result.css', array(), '1.0' );
+    wp_enqueue_style( 'font-bailu', $theme_dir . '/asset/fonts/白路彤彤手写体/白路彤彤手写体/result.css', array(), '1.0' );
+    wp_enqueue_style( 'font-zcool', $theme_dir . '/asset/fonts/ZCOOLQingKeHuangYou-Regular/ZCOOLQingKeHuangYou-Regular/result.css', array(), '1.0' );
+    wp_enqueue_style( 'font-megrim', $theme_dir . '/asset/fonts/Megrim-Regular/Megrim-Regular/result.css', array(), '1.0' );
+    wp_enqueue_style( 'font-smooch', $theme_dir . '/asset/fonts/Smooch-Regular/Smooch-Regular/result.css', array(), '1.0' );
+    wp_enqueue_style( 'font-splash', $theme_dir . '/asset/fonts/Splash-Regular/Splash-Regular/result.css', array(), '1.0' );
+    wp_enqueue_style( 'font-tradewinds', $theme_dir . '/asset/fonts/TradeWinds-Regular/TradeWinds-Regular/result.css', array(), '1.0' );
     wp_enqueue_style( 'font-YuFanXinYu-Regular', $theme_dir . '/asset/fonts/余繁新语/余繁新语-Regular/result.css', array(), '1.0' );
+    wp_enqueue_style( 'font-3-of-9-Barcode', $theme_dir . '/asset/fonts/3-of-9-Barcode/3Of9Barcode/result.css', array(), '1.0' );
+    
 
     // ==========================================
     // 3. 注册并加载 JavaScript 脚本

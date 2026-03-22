@@ -85,6 +85,7 @@
     <span class="tr">⌝</span>
     <span class="bl">⌞</span>
     <span class="br">⌟</span>
+    <div class="indicator-data"></div>
 </div>
 <div id="highlight-rect" aria-hidden="true"></div>
 
@@ -164,17 +165,20 @@
                 </div>
 
             </div>
-            <div class="info-group">
-                <div class="coord-label">Cursor</div>
-                <div class="coord-box" aria-live="polite" aria-atomic="true">
-                    <div class="coord-row">X: <span id="mx">0</span></div>
-                    <div class="coord-row">Y: <span id="my">0</span></div>
+            <div class="info-group hud-style">
+                <div class="coord-label">SYS.CURSOR_LOC</div>
+                <div class="terminal-box" aria-live="polite" aria-atomic="true">
+                    <span class="bracket">[</span> X:<span id="mx">0000</span> Y:<span id="my">0000</span> <span
+                        class="bracket">]</span>
                 </div>
             </div>
 
-            <div class="info-group">
-                <div class="coord-label">Local Time</div>
-                <div class="clock-box" id="clock" aria-live="polite" aria-atomic="true">00:00:00</div>
+            <div class="info-group hud-style">
+                <div class="coord-label">SYS.LOCAL_TIME <span class="status-dot" title="SYS.ONLINE"></span></div>
+                <div class="terminal-box" aria-live="polite" aria-atomic="true">
+                    <span class="bracket">[</span> <span id="clock">00:00:00</span><span class="blink-cursor"></span>
+                    <span class="bracket">]</span>
+                </div>
             </div>
             <div class="info-group">
                 <div id="crt-config-trigger">[特效配置]</div>

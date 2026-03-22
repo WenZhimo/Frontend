@@ -1,7 +1,7 @@
 // 鼠标坐标追踪
 const root = document.documentElement;
-const mxEl = document.getElementById('mx');
-const myEl = document.getElementById('my');
+const mxEl = document.getElementById("mx");
+const myEl = document.getElementById("my");
 
 let x = window.innerWidth / 2;
 let y = window.innerHeight / 2;
@@ -9,22 +9,26 @@ let ticking = false;
 
 function update() {
     /* 1. 驱动背景网格发光 */
-    root.style.setProperty('--cursor-x', x + 'px');
-    root.style.setProperty('--cursor-y', y + 'px');
+    root.style.setProperty("--cursor-x", x + "px");
+    root.style.setProperty("--cursor-y", y + "px");
 
-    /* 2. 更新页眉坐标显示 */
-    if (mxEl) mxEl.textContent = x;
-    if (myEl) myEl.textContent = y;
+    /* 2. 更新页眉坐标显示 (新增了 padStart 补全 4 位数) */
+    if (mxEl) mxEl.textContent = String(x).padStart(4, "0");
+    if (myEl) myEl.textContent = String(y).padStart(4, "0");
 
     ticking = false;
 }
 
-window.addEventListener('mousemove', e => {
-    x = e.clientX;
-    y = e.clientY;
+window.addEventListener(
+    "mousemove",
+    (e) => {
+        x = e.clientX;
+        y = e.clientY;
 
-    if (!ticking) {
-        ticking = true;
-        requestAnimationFrame(update);
-    }
-}, { passive: true });
+        if (!ticking) {
+            ticking = true;
+            requestAnimationFrame(update);
+        }
+    },
+    { passive: true },
+);

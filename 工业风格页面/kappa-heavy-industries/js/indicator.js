@@ -1,8 +1,8 @@
 /* js/indicator.js */
 
 // ---------- DOM 元素 ----------
-const indicator = document.getElementById('corner-indicator');
-const highlightRect = document.getElementById('highlight-rect');
+const indicator = document.getElementById("corner-indicator");
+const highlightRect = document.getElementById("highlight-rect");
 
 // ----------全局配置 ----------
 const CONFIG = {
@@ -13,11 +13,11 @@ const CONFIG = {
     // 说明：这是一个 CSS 选择器字符串。
     // 如果您想支持特定的类名（比如 .interactive），只需用逗号分隔追加在后面。
     // 示例: '[data-selectable], .my-btn, .nav-link'表示识别data属性“data-selectable”，同时识别.my-btn类和.nav-link类
-    indicatorSelector: '[data-selectable], .selectable',
+    indicatorSelector: "[data-selectable], .selectable",
 
     // 2. 高亮矩形 (Highlight Rect) 的识别规则
     // 示例: '[data-selectable-highlight], .card, .btn'
-    highlightSelector: '[data-selectable-highlight], .selectable-highlight'
+    highlightSelector: "[data-selectable-highlight], .selectable-highlight",
 };
 
 // ---------- 状态管理 ----------
@@ -34,26 +34,47 @@ let hideDebounceTimer = null;
 // ==========================================
 // 1. 角标逻辑 (Corner Indicator)
 // ==========================================
+
 function updateIndicator(el) {
     if (!el || el.offsetParent === null) {
-        if (indicator) indicator.style.opacity = '0';
+        indicator.style.opacity = "0";
         return;
     }
-    const r = el.getBoundingClientRect();
-    if (indicator) {
-        indicator.style.width = r.width + 'px';
-        indicator.style.height = r.height + 'px';
-        indicator.style.transform = `translate(${r.left}px, ${r.top}px)`;
-        indicator.style.opacity = '1';
-    }
-}
 
+    const rect = el.getBoundingClientRect();
+
+    // 1. 更新物理位置和大小
+    indicator.style.opacity = "1";
+    indicator.style.width = `${rect.width}px`;
+    indicator.style.height = `${rect.height}px`;
+    indicator.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
+
+    // 2. 更新科技感数字信息
+    // 寻找或创建数据容器
+    let dataDisplay = indicator.querySelector(".indicator-data");
+    if (!dataDisplay) {
+        dataDisplay = document.createElement("div");
+        dataDisplay.className = "indicator-data";
+        indicator.appendChild(dataDisplay);
+    }
+
+    // 格式化数值 (取整以保持整洁)
+    const x = Math.round(rect.left);
+    const y = Math.round(rect.top);
+    const w = Math.round(rect.width);
+    const h = Math.round(rect.height);
+    // 获取 Linux 风格时间戳 (13位毫秒级)
+    const ts = Date.now();
+
+    // 将时间戳 (TS) 拼接到最前面
+    dataDisplay.innerText = `X:${x} Y:${y} W:${w} H:${h} TS:${ts}`;
+}
 // ==========================================
 // 2. 高亮矩形逻辑 (Highlight Rect)
 // ==========================================
 function updateHighlight(el) {
     if (!el || el.offsetParent === null) {
-        if (highlightRect) highlightRect.style.opacity = '0';
+        if (highlightRect) highlightRect.style.opacity = "0";
         return;
     }
 
@@ -97,22 +118,23 @@ function updateHighlight(el) {
             height 0.35s cubic-bezier(.25, 1, .5, 1),
             opacity 0.2s ease`;
 
-        highlightRect.style.opacity = '1';
+        highlightRect.style.opacity = "1";
         highlightRect.style.transform = `translate(${innerX}px, ${innerY}px)`;
         highlightRect.style.width = `${innerW}px`;
         highlightRect.style.height = `${innerH}px`;
     } else {
         // [模式2] 新进入
-        highlightRect.style.transition = 'none';
+        highlightRect.style.transition = "none";
         highlightRect.style.transform = `translate(${innerX}px, ${innerY}px)`;
-        highlightRect.style.width = '0px';
-        highlightRect.style.height = '0px';
-        highlightRect.style.opacity = '1';
+        highlightRect.style.width = "0px";
+        highlightRect.style.height = "0px";
+        highlightRect.style.opacity = "1";
 
         void highlightRect.offsetHeight;
 
         highlightTimer = setTimeout(() => {
-            highlightRect.style.transition = 'width 0.2s ease-out, height 0.2s ease-out';
+            highlightRect.style.transition =
+                "width 0.2s ease-out, height 0.2s ease-out";
             highlightRect.style.width = `${innerW}px`;
             highlightRect.style.height = `${innerH}px`;
             highlightTimer = null;
@@ -132,9 +154,9 @@ function shrinkHideHighlight() {
         height 0.35s cubic-bezier(.25, 1, .5, 1),
         opacity 0.2s ease 0.1s`;
 
-    highlightRect.style.width = '0px';
-    highlightRect.style.height = '0px';
-    highlightRect.style.opacity = '0';
+    highlightRect.style.width = "0px";
+    highlightRect.style.height = "0px";
+    highlightRect.style.opacity = "0";
 
     highlightTarget = null;
 
@@ -148,9 +170,15 @@ function shrinkHideHighlight() {
  * 强制隐藏
  */
 function hideHighlight() {
-    if (highlightRect) highlightRect.style.opacity = '0';
-    if (highlightTimer) { clearTimeout(highlightTimer); highlightTimer = null; }
-    if (hideDebounceTimer) { clearTimeout(hideDebounceTimer); hideDebounceTimer = null; }
+    if (highlightRect) highlightRect.style.opacity = "0";
+    if (highlightTimer) {
+        clearTimeout(highlightTimer);
+        highlightTimer = null;
+    }
+    if (hideDebounceTimer) {
+        clearTimeout(hideDebounceTimer);
+        hideDebounceTimer = null;
+    }
     highlightTarget = null;
     lastHighlightTarget = null;
 }
@@ -167,61 +195,75 @@ function refreshAll() {
 export function clearIndicator() {
     indicatorTarget = null;
     lastIndicatorTarget = null;
-    if (indicator) indicator.style.opacity = '0';
+    if (indicator) indicator.style.opacity = "0";
     hideHighlight();
 }
 
 // 监听 Pointer Over
-document.addEventListener('pointerover', e => {
-    const target = e.target;
+document.addEventListener(
+    "pointerover",
+    (e) => {
+        const target = e.target;
 
-    // --- 逻辑A: 角标 ---
-    // [修改] 使用 CONFIG.indicatorSelector
-    const elIndicator = target.closest(CONFIG.indicatorSelector);
-    if (elIndicator && elIndicator !== indicatorTarget) {
-        lastIndicatorTarget = indicatorTarget;
-        indicatorTarget = elIndicator;
-        updateIndicator(indicatorTarget);
-    }
-
-    // --- 逻辑B: 高亮矩形 ---
-    // [修改] 使用 CONFIG.highlightSelector
-    const elHighlight = target.closest(CONFIG.highlightSelector);
-
-    if (elHighlight) {
-        // 进入有效元素：清除“准备消失”的计时器
-        if (hideDebounceTimer) {
-            clearTimeout(hideDebounceTimer);
-            hideDebounceTimer = null;
+        // --- 逻辑A: 角标 ---
+        // [修改] 使用 CONFIG.indicatorSelector
+        const elIndicator = target.closest(CONFIG.indicatorSelector);
+        if (elIndicator && elIndicator !== indicatorTarget) {
+            lastIndicatorTarget = indicatorTarget;
+            indicatorTarget = elIndicator;
+            updateIndicator(indicatorTarget);
         }
 
-        if (elHighlight !== highlightTarget) {
-            updateHighlight(elHighlight);
-        }
-    } else {
-        // 移入空白区域：开启“准备消失”倒计时
-        if (highlightTarget && !hideDebounceTimer) {
-            hideDebounceTimer = setTimeout(() => {
-                shrinkHideHighlight();
+        // --- 逻辑B: 高亮矩形 ---
+        // [修改] 使用 CONFIG.highlightSelector
+        const elHighlight = target.closest(CONFIG.highlightSelector);
+
+        if (elHighlight) {
+            // 进入有效元素：清除“准备消失”的计时器
+            if (hideDebounceTimer) {
+                clearTimeout(hideDebounceTimer);
                 hideDebounceTimer = null;
-            }, 100);
-        }
-    }
-}, true);
+            }
 
-document.addEventListener('pointerleave', () => {
+            if (elHighlight !== highlightTarget) {
+                updateHighlight(elHighlight);
+            }
+        } else {
+            // 移入空白区域：开启“准备消失”倒计时
+            if (highlightTarget && !hideDebounceTimer) {
+                hideDebounceTimer = setTimeout(() => {
+                    shrinkHideHighlight();
+                    hideDebounceTimer = null;
+                }, 100);
+            }
+        }
+    },
+    true,
+);
+
+document.addEventListener("pointerleave", () => {
     if (highlightTarget) {
         shrinkHideHighlight();
     }
 });
 
 function bindScrollTracking() {
-    const scrollables = document.querySelectorAll('.page-scroll, .page');
-    scrollables.forEach(sc => {
-        sc.addEventListener('scroll', () => { refreshAll(); }, { passive: true });
+    const scrollables = document.querySelectorAll(".page-scroll, .page");
+    scrollables.forEach((sc) => {
+        sc.addEventListener(
+            "scroll",
+            () => {
+                refreshAll();
+            },
+            { passive: true },
+        );
     });
 }
 bindScrollTracking();
 
-window.addEventListener('resize', () => { refreshAll(); });
-setInterval(() => { refreshAll(); }, 300);
+window.addEventListener("resize", () => {
+    refreshAll();
+});
+setInterval(() => {
+    refreshAll();
+}, 50);
