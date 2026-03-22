@@ -49,7 +49,7 @@ body.admin-bar .site-header {
     align-items: flex-end; /* 靠右对齐，如果是放在其他位置可改为 flex-start */
     gap: 8px;
     margin-top: 10px;
-    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace, sans-serif;
+    font-family: "ZCOOLQingKeHuangYou-Regular", monospace, sans-serif;
 }
 
 /* --- 权限监控样式 --- */
@@ -59,14 +59,31 @@ body.admin-bar .site-header {
     transition: all 0.3s;
     letter-spacing: 1px;
 }
-.auth-guest { color: #888; }
-.auth-guest:hover { color: #ccc; text-shadow: 0 0 5px rgba(204,204,204,0.5); }
+.auth-guest {
+    color: #888;
+}
+.auth-guest:hover {
+    color: #ccc;
+    text-shadow: 0 0 5px rgba(204, 204, 204, 0.5);
+}
 
-.auth-admin { color: #00ffff; } /* 授权状态用终端青色 */
-.auth-admin:hover { color: #fff; text-shadow: 0 0 8px rgba(0,255,255,0.8); }
+.auth-admin {
+    color: #00ffff;
+} /* 授权状态用终端青色 */
+.auth-admin:hover {
+    color: #fff;
+    text-shadow: 0 0 8px rgba(0, 255, 255, 0.8);
+}
 
-.auth-logout { color: #cc0000; font-size: 0.85rem; margin-left: 5px; }
-.auth-logout:hover { color: #ff4444; text-decoration: underline; }
+.auth-logout {
+    color: #cc0000;
+    font-size: 0.85rem;
+    margin-left: 5px;
+}
+.auth-logout:hover {
+    color: #ff4444;
+    text-decoration: underline;
+}
 
 /* ==========================================
    检索模块 - 终极 HUD 强化版
@@ -78,11 +95,12 @@ body.admin-bar .site-header {
     display: flex !important;
     align-items: center !important;
     background: rgba(10, 15, 10, 0.9) !important; /* 强制深色不透明底板 */
-    border: 1px solid #988b32 !important;         /* 工业金边框 */
+    border: 1px solid #988b32 !important; /* 工业金边框 */
     padding: 6px 12px !important;
-    border-radius: 0 !important;                  /* 强制直角，拒绝现代圆润感 */
-    box-shadow: 0 0 10px rgba(152, 139, 50, 0.2), 
-                inset 0 0 8px rgba(0, 0, 0, 0.8) !important; /* 外部发光 + 内部深邃阴影 */
+    border-radius: 0 !important; /* 强制直角，拒绝现代圆润感 */
+    box-shadow:
+        0 0 10px rgba(152, 139, 50, 0.2),
+        inset 0 0 8px rgba(0, 0, 0, 0.8) !important; /* 外部发光 + 内部深邃阴影 */
     transition: all 0.3s ease;
 }
 
@@ -113,15 +131,16 @@ body.admin-bar .site-header {
 /* 4. 占位符颜色调整，避免突兀 */
 .terminal-search input::placeholder {
     color: #4a5c4a !important; /* 暗绿色的占位符，符合机房显示器风格 */
-    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace !important;
+    font-family: "ZCOOLQingKeHuangYou-Regular", monospace !important;
 }
 
 /* 5. 交互高亮：当鼠标悬停或点击输入时，整个框变成青色高危状态 */
 .terminal-search form:hover,
 .terminal-search form:focus-within {
-    border-color: #00ffff !important; 
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.4), 
-                inset 0 0 10px rgba(0, 255, 255, 0.1) !important;
+    border-color: #00ffff !important;
+    box-shadow:
+        0 0 15px rgba(0, 255, 255, 0.4),
+        inset 0 0 10px rgba(0, 255, 255, 0.1) !important;
     background: rgba(0, 20, 20, 0.95) !important;
 }
 
@@ -131,8 +150,8 @@ body.admin-bar .site-header {
 
 /* 6. 解决 Chrome/Edge 自动填充表单时强制变成白底/黄底的灾难 */
 .terminal-search input:-webkit-autofill,
-.terminal-search input:-webkit-autofill:hover, 
-.terminal-search input:-webkit-autofill:focus, 
+.terminal-search input:-webkit-autofill:hover,
+.terminal-search input:-webkit-autofill:focus,
 .terminal-search input:-webkit-autofill:active {
     -webkit-transition: "color 9999s ease-out, background-color 9999s ease-out";
     -webkit-transition-delay: 9999s;
@@ -165,7 +184,7 @@ body.admin-bar .site-header {
 
 /* 标签样式 (HUD 风格字眼) */
 .nav-label {
-    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace, sans-serif;
+    font-family: "ZCOOLQingKeHuangYou-Regular", monospace, sans-serif;
     font-size: 0.9rem;
     color: #988b32; /* 工业金 */
     margin-bottom: 8px;
@@ -183,15 +202,27 @@ body.admin-bar .site-header {
 }
 
 /* 对齐方式：左边靠左，右边靠右 */
-.nav-prev { text-align: left; border-left: 3px solid #988b32; }
-.nav-next { text-align: right; border-right: 3px solid #988b32; }
-.nav-empty { cursor: not-allowed; opacity: 0.6; border-color: #222; }
+.nav-prev {
+    text-align: left;
+    border-left: 3px solid #988b32;
+}
+.nav-next {
+    text-align: right;
+    border-right: 3px solid #988b32;
+}
+.nav-empty {
+    cursor: not-allowed;
+    opacity: 0.6;
+    border-color: #222;
+}
 
 /* ======== 交互特效 ======== */
 .nav-block:not(.nav-empty):hover {
     background: rgba(0, 30, 30, 0.8);
     border-color: #00ffff;
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.15), inset 0 0 10px rgba(0, 255, 255, 0.1);
+    box-shadow:
+        0 0 15px rgba(0, 255, 255, 0.15),
+        inset 0 0 10px rgba(0, 255, 255, 0.1);
 }
 
 .nav-block:not(.nav-empty):hover .nav-label {
@@ -203,8 +234,12 @@ body.admin-bar .site-header {
     color: #fff; /* 标题亮起 */
 }
 
-.nav-prev:hover { border-left-color: #00ffff; }
-.nav-next:hover { border-right-color: #00ffff; }
+.nav-prev:hover {
+    border-left-color: #00ffff;
+}
+.nav-next:hover {
+    border-right-color: #00ffff;
+}
 
 /* ======== 移动端适配 ======== */
 @media screen and (max-width: 768px) {
@@ -212,13 +247,14 @@ body.admin-bar .site-header {
         flex-direction: column; /* 屏幕不够宽时，上下排列 */
         gap: 15px;
     }
-    .nav-prev, .nav-next, .nav-empty {
+    .nav-prev,
+    .nav-next,
+    .nav-empty {
         text-align: left; /* 手机上统一靠左对齐更利于阅读 */
         border-left: 3px solid #988b32;
         border-right: none;
     }
 }
-
 
 /* ==========================================
    外部通讯接口 (评论区 HUD 涂装)
@@ -234,8 +270,9 @@ body.admin-bar .site-header {
 }
 
 /* --- 历史记录标题 --- */
-.comments-title, #reply-title {
-    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace;
+.comments-title,
+#reply-title {
+    font-family: "ZCOOLQingKeHuangYou-Regular", monospace;
     font-size: 1.5rem;
     color: #00ffff;
     text-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
@@ -349,13 +386,21 @@ body.admin-bar .site-header {
 .terminal-input-group input[type="text"]:focus,
 .terminal-input-group textarea:focus {
     border-color: #00ffff;
-    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2), inset 0 0 5px rgba(0, 255, 255, 0.1);
+    box-shadow:
+        0 0 10px rgba(0, 255, 255, 0.2),
+        inset 0 0 5px rgba(0, 255, 255, 0.1);
     background: rgba(0, 30, 30, 0.8);
 }
 
 /* 提示信息 */
-.comment-notes { color: #666; font-size: 0.85rem; margin-bottom: 20px; }
-.required { color: #cc0000; }
+.comment-notes {
+    color: #666;
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+}
+.required {
+    color: #cc0000;
+}
 
 /* 传输按钮 */
 .terminal-submit-btn {
@@ -363,7 +408,7 @@ body.admin-bar .site-header {
     border: 1px solid #00ffff;
     color: #00ffff;
     padding: 10px 25px;
-    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace;
+    font-family: "ZCOOLQingKeHuangYou-Regular", monospace;
     font-size: 1.2rem;
     cursor: pointer;
     transition: all 0.3s;
@@ -374,4 +419,53 @@ body.admin-bar .site-header {
     background: rgba(0, 255, 255, 0.2);
     box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
     text-shadow: 0 0 5px #fff;
+}
+/* ==========================================
+   权限状态面板与动态头像加载
+   ========================================== */
+.auth-user-panel {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end; /* 保持靠右对齐 */
+    gap: 8px; /* 头像和文字的间距 */
+}
+
+/* 工业风头像外框 (占位符) */
+.auth-avatar-frame {
+    width: 24px;
+    height: 24px;
+    background: rgba(10, 15, 10, 0.6); /* 没加载出来前的深色底 */
+    border: 1px solid #988b32; /* 工业金边框 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 0 5px rgba(152, 139, 50, 0.2);
+}
+
+/* 头像图片初始状态：透明且不可见 */
+.auth-avatar.is-loading {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* 头像图片加载完毕状态：淡入并带有终端滤镜 */
+.auth-avatar.is-loaded {
+    opacity: 1;
+    visibility: visible;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: opacity 0.6s ease-in; /* 0.6秒平滑淡入 */
+    filter: grayscale(20%) contrast(120%); /* 轻微去色并增加对比度，符合终端风格 */
+}
+
+/* 悬停时头像稍微变亮 */
+.auth-user-panel:hover .auth-avatar-frame {
+    border-color: #00ffff;
+    box-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+}
+.auth-user-panel:hover .auth-avatar.is-loaded {
+    filter: grayscale(0%) contrast(100%) brightness(1.2);
 }

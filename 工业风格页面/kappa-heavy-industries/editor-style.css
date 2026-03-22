@@ -1,0 +1,81 @@
+/* ==========================================
+   河童重工：全界面暗黑编辑器 (HUD 全域涂装)
+   ========================================== */
+
+/* 1. 全局背景与基础文字 (核心护眼层) */
+body,
+.editor-styles-wrapper {
+    background-color: #0d1117 !important; /* 极深的终端底色 */
+    color: #c9d1d9 !important; /* 柔和的浅灰文字 */
+    font-family: monospace, sans-serif;
+}
+
+/* 2. 标题层级颜色映射 */
+.editor-styles-wrapper h1,
+.editor-styles-wrapper h2,
+.editor-styles-wrapper h3,
+.editor-styles-wrapper h4,
+.editor-styles-wrapper h5,
+.editor-styles-wrapper h6 {
+    color: #00ffff !important; /* 终端青色 */
+    font-weight: bold;
+}
+
+/* 3. 链接样式 */
+.editor-styles-wrapper a {
+    color: #a4612d !important; /* 工业金 */
+    text-decoration: none;
+    border-bottom: 1px dashed #a4612d;
+}
+
+/* 4. ==========================================
+      终极魔法：接管 WordPress 框架 UI (Gutenberg Shell)
+      ========================================== */
+
+/* 让全局进入深色模式 (告知 WP 这是一个深色主题) */
+body.is-dark-theme {
+    --wp-admin-theme-color: #00ffff; /* 所有的区块图标高亮变青色 */
+}
+
+/* 涂装顶部工具栏 (Top Toolbar) */
+.interface-interface-skeleton__header {
+    background-color: #161b22 !important;
+    border-bottom: 1px solid #30363d !important;
+}
+
+/* 涂装右侧边栏 (Right Sidebar) */
+.interface-interface-skeleton__sidebar {
+    background-color: #161b22 !important;
+    border-left: 1px solid #30363d !important;
+}
+
+/* 涂装右侧边栏的文本和字段标签 */
+.components-panel__body,
+.components-panel__header,
+.components-base-control__label,
+.components-base-control__help,
+.components-button {
+    color: #c9d1d9 !important;
+}
+
+/* 涂装输入框 (Input / Textarea) */
+.components-text-control__input,
+.components-textarea-control__input {
+    background-color: #0d1117 !important;
+    border: 1px solid #30363d !important;
+    color: #c9d1d9 !important;
+}
+
+/* 涂装区块插入器 (Block Inserter Search) */
+.block-editor-block-inserter__search {
+    background-color: #0d1117 !important;
+    border: 1px solid #30363d !important;
+}
+
+/* 5. 引用块 (Blockquote) */
+.editor-styles-wrapper blockquote {
+    border-left: 4px solid #a4612d !important;
+    color: #8b949e !important;
+    background: rgba(110, 118, 129, 0.1);
+    padding: 10px 20px;
+}
