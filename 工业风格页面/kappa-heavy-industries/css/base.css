@@ -1,0 +1,377 @@
+@font-face {
+    font-family: "华康金文体W3";
+    src: url("../asset/fonts/华康金文体W3.TTF") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* 全局变量 */
+:root {
+    --bg: #0a0a0a;
+    --panel: #111;
+    --text: #e5e5e5;
+    --muted: #c4ba78;
+    --accent: #ffb700;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, sans-serif;
+    overflow: hidden;
+}
+/* ==========================================
+   修复 WordPress 顶部工具栏遮挡页眉的问题
+   ========================================== */
+body.admin-bar .site-header {
+    top: 32px !important; /* 桌面端工具栏高度 */
+}
+
+@media screen and (max-width: 782px) {
+    body.admin-bar .site-header {
+        top: 46px !important; /* 移动端工具栏稍微高一点 */
+    }
+}
+/* ==========================================
+   权限与检索模块 (Terminal Status Bar)
+   ========================================== */
+.terminal-status-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end; /* 靠右对齐，如果是放在其他位置可改为 flex-start */
+    gap: 8px;
+    margin-top: 10px;
+    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace, sans-serif;
+}
+
+/* --- 权限监控样式 --- */
+.auth-status a {
+    text-decoration: none;
+    font-size: 1rem;
+    transition: all 0.3s;
+    letter-spacing: 1px;
+}
+.auth-guest { color: #888; }
+.auth-guest:hover { color: #ccc; text-shadow: 0 0 5px rgba(204,204,204,0.5); }
+
+.auth-admin { color: #00ffff; } /* 授权状态用终端青色 */
+.auth-admin:hover { color: #fff; text-shadow: 0 0 8px rgba(0,255,255,0.8); }
+
+.auth-logout { color: #cc0000; font-size: 0.85rem; margin-left: 5px; }
+.auth-logout:hover { color: #ff4444; text-decoration: underline; }
+
+/* ==========================================
+   检索模块 - 终极 HUD 强化版
+   ========================================== */
+
+/* 1. 给整个检索框外壳加装厚重的工业底板 */
+.terminal-search form {
+    position: relative;
+    display: flex !important;
+    align-items: center !important;
+    background: rgba(10, 15, 10, 0.9) !important; /* 强制深色不透明底板 */
+    border: 1px solid #988b32 !important;         /* 工业金边框 */
+    padding: 6px 12px !important;
+    border-radius: 0 !important;                  /* 强制直角，拒绝现代圆润感 */
+    box-shadow: 0 0 10px rgba(152, 139, 50, 0.2), 
+                inset 0 0 8px rgba(0, 0, 0, 0.8) !important; /* 外部发光 + 内部深邃阴影 */
+    transition: all 0.3s ease;
+}
+
+/* 2. 命令行提示符 */
+.prompt-symbol {
+    color: #988b32;
+    margin-right: 10px;
+    font-weight: bold;
+    font-size: 1.1rem;
+    font-family: monospace;
+    text-shadow: 0 0 5px rgba(152, 139, 50, 0.6);
+    animation: blink 1.2s infinite; /* 闪烁动画 */
+}
+
+/* 3. 强制剥离输入框的浏览器原生样式 */
+.terminal-search input[type="text"] {
+    background: transparent !important;
+    border: none !important;
+    color: #00ffff !important; /* 终端青色输入文字 */
+    font-family: monospace !important;
+    font-size: 1rem !important;
+    width: 200px; /* 基础宽度更宽一点，更显眼 */
+    outline: none !important;
+    box-shadow: none !important;
+    transition: width 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* 4. 占位符颜色调整，避免突兀 */
+.terminal-search input::placeholder {
+    color: #4a5c4a !important; /* 暗绿色的占位符，符合机房显示器风格 */
+    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace !important;
+}
+
+/* 5. 交互高亮：当鼠标悬停或点击输入时，整个框变成青色高危状态 */
+.terminal-search form:hover,
+.terminal-search form:focus-within {
+    border-color: #00ffff !important; 
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.4), 
+                inset 0 0 10px rgba(0, 255, 255, 0.1) !important;
+    background: rgba(0, 20, 20, 0.95) !important;
+}
+
+.terminal-search input[type="text"]:focus {
+    width: 280px; /* 点击输入时变长 */
+}
+
+/* 6. 解决 Chrome/Edge 自动填充表单时强制变成白底/黄底的灾难 */
+.terminal-search input:-webkit-autofill,
+.terminal-search input:-webkit-autofill:hover, 
+.terminal-search input:-webkit-autofill:focus, 
+.terminal-search input:-webkit-autofill:active {
+    -webkit-transition: "color 9999s ease-out, background-color 9999s ease-out";
+    -webkit-transition-delay: 9999s;
+    -webkit-text-fill-color: #00ffff !important;
+}
+
+/* ==========================================
+   档案流转枢纽 (上一篇/下一篇 导航)
+   ========================================== */
+.archive-navigation-hud {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    margin-top: 60px;
+    padding-top: 30px;
+    border-top: 1px dashed rgba(152, 139, 50, 0.5); /* 顶部的工业分割线 */
+}
+
+/* 基础导航块样式 */
+.nav-block {
+    flex: 1; /* 左右各占一半宽度 */
+    background: rgba(10, 15, 10, 0.6);
+    border: 1px solid #333;
+    padding: 15px 20px;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+/* 标签样式 (HUD 风格字眼) */
+.nav-label {
+    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace, sans-serif;
+    font-size: 0.9rem;
+    color: #988b32; /* 工业金 */
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+    transition: color 0.3s;
+}
+
+/* 文章标题样式 */
+.nav-title {
+    font-size: 1.05rem;
+    color: #ccc;
+    font-weight: bold;
+    line-height: 1.4;
+    transition: color 0.3s;
+}
+
+/* 对齐方式：左边靠左，右边靠右 */
+.nav-prev { text-align: left; border-left: 3px solid #988b32; }
+.nav-next { text-align: right; border-right: 3px solid #988b32; }
+.nav-empty { cursor: not-allowed; opacity: 0.6; border-color: #222; }
+
+/* ======== 交互特效 ======== */
+.nav-block:not(.nav-empty):hover {
+    background: rgba(0, 30, 30, 0.8);
+    border-color: #00ffff;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.15), inset 0 0 10px rgba(0, 255, 255, 0.1);
+}
+
+.nav-block:not(.nav-empty):hover .nav-label {
+    color: #00ffff; /* 标签变青色 */
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.6);
+}
+
+.nav-block:not(.nav-empty):hover .nav-title {
+    color: #fff; /* 标题亮起 */
+}
+
+.nav-prev:hover { border-left-color: #00ffff; }
+.nav-next:hover { border-right-color: #00ffff; }
+
+/* ======== 移动端适配 ======== */
+@media screen and (max-width: 768px) {
+    .archive-navigation-hud {
+        flex-direction: column; /* 屏幕不够宽时，上下排列 */
+        gap: 15px;
+    }
+    .nav-prev, .nav-next, .nav-empty {
+        text-align: left; /* 手机上统一靠左对齐更利于阅读 */
+        border-left: 3px solid #988b32;
+        border-right: none;
+    }
+}
+
+
+/* ==========================================
+   外部通讯接口 (评论区 HUD 涂装)
+   ========================================== */
+.terminal-comments-area {
+    margin-top: 60px;
+    padding: 30px 20px;
+    background: rgba(10, 15, 10, 0.4);
+    border: 1px solid #333;
+    border-top: 2px solid #988b32; /* 顶部工业金标识线 */
+    font-family: monospace, sans-serif;
+    color: #ccc;
+}
+
+/* --- 历史记录标题 --- */
+.comments-title, #reply-title {
+    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace;
+    font-size: 1.5rem;
+    color: #00ffff;
+    text-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+    margin-bottom: 30px;
+    border-bottom: 1px dashed #005555;
+    padding-bottom: 10px;
+}
+
+/* --- 评论列表结构 --- */
+.comment-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 40px 0;
+}
+
+.comment-list li {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid #444;
+    margin-bottom: 20px;
+    padding: 15px;
+    position: relative;
+    border-left: 3px solid #988b32; /* 左侧指示条 */
+    transition: all 0.3s ease;
+}
+
+.comment-list li:hover {
+    border-left-color: #00ffff;
+    box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.05);
+}
+
+/* 嵌套回复缩进 */
+.comment-list .children {
+    list-style: none;
+    margin-top: 15px;
+    padding-left: 30px;
+    border-left: 1px dashed #555;
+}
+
+/* --- 评论元数据 (头像、名字、时间) --- */
+.comment-meta {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+    color: #888;
+}
+
+.comment-meta img.avatar {
+    border-radius: 0; /* 强制方形头像，拒绝圆润 */
+    border: 1px solid #988b32;
+    margin-right: 15px;
+    filter: grayscale(30%) contrast(120%); /* 给头像加点工业滤镜 */
+}
+
+.comment-meta b.fn {
+    color: #988b32;
+    font-size: 1.1rem;
+    margin-right: 15px;
+}
+
+/* 评论正文内容 */
+.comment-content {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: #ddd;
+}
+
+/* 回复按钮 */
+.reply a {
+    display: inline-block;
+    margin-top: 10px;
+    color: #00ffff;
+    font-size: 0.85rem;
+    text-decoration: none;
+    border: 1px solid #00ffff;
+    padding: 2px 8px;
+    background: rgba(0, 255, 255, 0.1);
+    transition: all 0.3s;
+}
+.reply a:hover {
+    background: #00ffff;
+    color: #000;
+}
+
+/* --- 输入表单区域 --- */
+.terminal-input-group {
+    margin-bottom: 20px;
+}
+
+.terminal-input-group label {
+    display: block;
+    color: #988b32;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.terminal-input-group input[type="text"],
+.terminal-input-group textarea {
+    width: 100%;
+    max-width: 100%;
+    background: rgba(0, 20, 0, 0.4);
+    border: 1px solid #555;
+    color: #00ffff;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 1rem;
+    outline: none;
+    transition: all 0.3s;
+}
+
+.terminal-input-group input[type="text"]:focus,
+.terminal-input-group textarea:focus {
+    border-color: #00ffff;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2), inset 0 0 5px rgba(0, 255, 255, 0.1);
+    background: rgba(0, 30, 30, 0.8);
+}
+
+/* 提示信息 */
+.comment-notes { color: #666; font-size: 0.85rem; margin-bottom: 20px; }
+.required { color: #cc0000; }
+
+/* 传输按钮 */
+.terminal-submit-btn {
+    background: transparent;
+    border: 1px solid #00ffff;
+    color: #00ffff;
+    padding: 10px 25px;
+    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    letter-spacing: 2px;
+}
+
+.terminal-submit-btn:hover {
+    background: rgba(0, 255, 255, 0.2);
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+    text-shadow: 0 0 5px #fff;
+}
