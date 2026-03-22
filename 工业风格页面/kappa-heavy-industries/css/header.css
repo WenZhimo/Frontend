@@ -148,7 +148,7 @@
 .blink-cursor {
     display: inline-block;
     width: 8px;
-    height: 2px;
+    height: 16px;
     background-color: var(--accent);
     animation: blink 1s step-end infinite;
     vertical-align: bottom;
@@ -196,8 +196,8 @@
         padding: 0 14px;
     }
 
-    .company-name {
-        font-size: 0.88rem;
+    .company-meta {
+        display: none !important;
     }
 
     .header-right {

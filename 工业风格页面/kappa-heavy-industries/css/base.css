@@ -469,3 +469,33 @@ body.admin-bar .site-header {
 .auth-user-panel:hover .auth-avatar.is-loaded {
     filter: grayscale(0%) contrast(100%) brightness(1.2);
 }
+
+/* ==========================================
+   页面右下角标语 (响应式防碰撞涂装)
+   ========================================== */
+
+/* 1. 桌面端默认协议：绝对定位，悬浮在右下角 */
+.corner-quote {
+    position: absolute;
+    right: 3vw;
+    bottom: 3vh;
+}
+
+.corner-quote p {
+    font-size: clamp(24px, 4vw, 40px); /* 动态计算字体大小 */
+}
+
+/* 2. 移动端降级协议：屏幕宽度小于 768px 时触发 */
+@media screen and (max-width: 768px) {
+    .corner-quote {
+        position: relative !important; /* 解除绝对定位封印，回到正常排版流 */
+        right: auto;
+        bottom: auto;
+        margin-top: 60px; /* 在按钮下方强行撑开 60px 的安全距离 */
+        align-self: flex-end; /* 确保它依然靠右对齐 */
+    }
+
+    .corner-quote p {
+        font-size: 20px !important; /* 稍微缩小字体，防止在小手机上折行破相 */
+    }
+}
