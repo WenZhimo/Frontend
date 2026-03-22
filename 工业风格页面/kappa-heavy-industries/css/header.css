@@ -44,8 +44,12 @@
     align-items: center;
     justify-content: center;
     border-radius: 8px;
-    transition: transform .18s ease, box-shadow .18s ease;
-    box-shadow: 0 2px 10px rgba(15, 20, 25, 0.25), inset 0 -2px 6px rgba(0, 0, 0, 0.25);
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease;
+    box-shadow:
+        0 2px 10px rgba(15, 20, 25, 0.25),
+        inset 0 -2px 6px rgba(0, 0, 0, 0.25);
 }
 
 .header-left:hover .logo,
@@ -95,17 +99,8 @@
 .coord-label {
     font-size: 10px;
     color: #8e9aa6;
-    letter-spacing: .08em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-}
-
-.coord-box {
-    background: rgba(255, 255, 255, 0.02);
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    min-width: 84px;
-    text-align: right;
 }
 
 .coord-row {
@@ -115,14 +110,84 @@
     font-size: 13px;
 }
 
-.clock-box {
-    background: linear-gradient(90deg, rgba(111, 180, 255, 0.08), rgba(77, 168, 255, 0.06));
-    padding: 6px 10px;
-    border-radius: 8px;
-    border: 1px solid rgba(111, 180, 255, 0.12);
+/* ==========================================
+   HUD 终端风格坐标与时钟
+   ========================================== */
+.info-group.hud-style {
+    align-items: flex-start; /* 从右对齐改为左对齐，更符合代码阅读习惯 */
+    min-width: 130px;
+}
+
+.info-group.hud-style .coord-label {
+    color: var(--accent);
+    font-family: "Roboto Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.terminal-box {
+    font-family: "Roboto Mono", "Courier New", monospace;
+    font-size: 13px;
     color: #eaf6ff;
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
+    text-shadow: 0 0 4px rgba(111, 180, 255, 0.4); /* 微微的 CRT 荧光感 */
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    margin-top: 4px;
+}
+
+.terminal-box .bracket {
+    color: #4a6b8c; /* 让括号颜色暗一点，凸显中间的动态数据 */
+}
+
+/* 终端闪烁下划线 */
+.blink-cursor {
+    display: inline-block;
+    width: 8px;
+    height: 2px;
+    background-color: var(--accent);
+    animation: blink 1s step-end infinite;
+    vertical-align: bottom;
+    margin-bottom: 2px;
+    margin-left: 2px;
+    box-shadow: 0 0 4px var(--accent);
+}
+
+/* 系统在线呼吸灯 */
+.status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background-color: #00ffcc; /* 荧光绿 */
+    border-radius: 50%;
+    box-shadow: 0 0 6px #00ffcc;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes blink {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0;
+    }
+}
+
+@keyframes pulse {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.4;
+        transform: scale(0.8);
+    }
 }
 
 /* 响应式：页眉 */
@@ -132,7 +197,7 @@
     }
 
     .company-name {
-        font-size: .88rem;
+        font-size: 0.88rem;
     }
 
     .header-right {
