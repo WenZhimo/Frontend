@@ -39,19 +39,85 @@ get_header(); ?>
 
                 <?php if ( have_posts() ) : while ( have_posts() ) : the_post(); ?>
 
-                <header style="border-bottom: 1px dashed #555; margin-bottom: 30px; padding-bottom: 20px;">
-                    <h1 data-selectable
-                        style="font-family: 峄山碑篆体; color: #988b32; font-size: clamp(30px, 4vw, 50px); margin: 0 0 15px 0; text-shadow: 0 0 10px rgba(152, 139, 50, 0.5);">
-                        <?php the_title(); ?>
-                    </h1>
+                <header
+                    style="border-bottom: 1px dashed #555; margin-bottom: 30px; padding-bottom: 20px; position: relative;">
 
-                    <div
-                        style="font-family: ZCOOLQingKeHuangYou-Regular; color: #888; font-size: 1.2rem; display: flex; gap: 20px; flex-wrap: wrap;">
-                        <span data-selectable>[ 归档时间 ]：<?php the_time('Y-m-d H:i'); ?></span>
-                        <span data-selectable>[ 课题责任人 ]：<?php the_author(); ?></span>
-                        <span data-selectable>[ 档案分类 ]：<?php the_category(', '); ?></span>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+
+                        <div style="flex: 1;">
+                            <h1 data-selectable
+                                style="font-family: 峄山碑篆体; color: #988b32; font-size: clamp(30px, 4vw, 50px); margin: 0 0 15px 0; text-shadow: 0 0 10px rgba(152, 139, 50, 0.5);">
+                                <?php the_title(); ?>
+                            </h1>
+
+                            <div
+                                style="font-family: ZCOOLQingKeHuangYou-Regular; color: #888; font-size: 1.2rem; display: flex; gap: 20px; flex-wrap: wrap;">
+                                <span data-selectable>[ 归档时间 ]：<?php the_time('Y-m-d H:i'); ?></span>
+                                <span data-selectable>[ 课题责任人 ]：<?php the_author(); ?></span>
+                                <span data-selectable>[ 档案分类 ]：<?php the_category(', '); ?></span>
+                            </div>
+                        </div>
+
+                        <div class="sys-hide-mobile"
+                            style="flex-shrink: 0; border: 1px solid #988b32; padding: 5px; background: rgba(10,15,10,0.8); text-align: center; box-shadow: 0 0 10px rgba(152, 139, 50, 0.1);">
+                            <div data-selectable id="article-qrcode"
+                                data-url="<?php echo esc_url( get_permalink() ); ?>"
+                                style="padding: 4px; background: #988b32;"></div>
+                            <div
+                                style="font-family: monospace; color: #988b32; font-size: 0.75rem; margin-top: 4px; letter-spacing: 1px;">
+                                [ SCAN_URL ]
+                            </div>
+                        </div>
+
                     </div>
+
+                    <div class="sys-hide-mobile" style="text-align: right; margin-top: 15px;">
+                        <div data-selectable
+                            style="font-family: '3 of 9 Barcode', 'Free 3 of 9', monospace; font-size: 3.5rem; color: #e8eaa1; margin-top: 15px; line-height: 0.8; opacity: 0.85; user-select: none;text-align: right;">
+                            *<?php the_time('U'); ?>*
+                        </div>
+                    </div>
+
                 </header>
+
+                <script>
+                document.addEventListener("DOMContentLoaded", function() {
+                    var qrContainer = document.getElementById("article-qrcode");
+                    if (qrContainer && typeof QRCode !== 'undefined') {
+                        var articleUrl = qrContainer.getAttribute("data-url");
+                        new QRCode(qrContainer, {
+                            text: articleUrl,
+                            width: 72,
+                            height: 72,
+                            colorDark: "#0a0f0a",
+                            colorLight: "#988b32",
+                            correctLevel: QRCode.CorrectLevel.M
+                        });
+                    }
+                });
+                </script>
+
+                <script>
+                document.addEventListener("DOMContentLoaded", function() {
+                    var qrContainer = document.getElementById("article-qrcode");
+
+                    // 确保容器存在并且 qrcode.js 库已成功加载
+                    if (qrContainer && typeof QRCode !== 'undefined') {
+                        // 从 HTML 结构中提取文章的真实网址
+                        var articleUrl = qrContainer.getAttribute("data-url");
+
+                        new QRCode(qrContainer, {
+                            text: articleUrl,
+                            width: 72, // 紧凑的尺寸，刚好放在标题旁边
+                            height: 72,
+                            // 【核心高反差涂装】：工业金底色 + 墨绿/近黑线条，保证手机镜头 100% 秒扫！
+                            colorDark: "#0a0f0a",
+                            colorLight: "#988b32",
+                            correctLevel: QRCode.CorrectLevel.M // 中等容错率
+                        });
+                    }
+                });
+                </script>
 
                 <div data-selectable style="font-size: 1.1rem; line-height: 1.8; color: #ccc;">
                     <?php the_content(); ?>

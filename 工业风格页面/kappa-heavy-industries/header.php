@@ -88,6 +88,7 @@
     <div class="indicator-data"></div>
 </div>
 <div id="highlight-rect" aria-hidden="true"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <body <?php body_class(); ?>>
 
