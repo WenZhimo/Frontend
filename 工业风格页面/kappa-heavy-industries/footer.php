@@ -166,16 +166,18 @@ document.addEventListener('click', function(e) {
 <script>
 (() => {
     // 1. 原始抓取：获取容器内的所有目标标题
-  const rawHeadings = document.querySelectorAll('#article-container h1:not(.wp-block-post-title), #article-container h2, #article-container h3, #article-container h4');
-  
-  // 👇 核心修复：开启信号过滤器，剔除所有属于评论区（#comments）的标题
-  const headings = Array.from(rawHeadings).filter(h => !h.closest('#comments'));
+    const rawHeadings = document.querySelectorAll(
+        '#article-container h1:not(.wp-block-post-title), #article-container h2, #article-container h3, #article-container h4'
+        );
 
-  const tocContainer = document.getElementById('toc-container');
-  const tocRoot  = document.getElementById('toc-list');
+    // 👇 核心修复：开启信号过滤器，剔除所有属于评论区（#comments）的标题
+    const headings = Array.from(rawHeadings).filter(h => !h.closest('#comments'));
 
-  // 如果文章正文里没有小标题，则直接隐藏目录面板并退出
-  if (headings.length === 0) return;
+    const tocContainer = document.getElementById('toc-container');
+    const tocRoot = document.getElementById('toc-list');
+
+    // 如果文章正文里没有小标题，则直接隐藏目录面板并退出
+    if (headings.length === 0) return;
     tocContainer.style.display = 'block';
 
     headings.forEach((h, idx) => {
@@ -312,6 +314,123 @@ document.addEventListener('click', function(e) {
     });
     highlightAndCenter();
 })();
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const detailsElements = document.querySelectorAll('#article-container details');
+
+    detailsElements.forEach(details => {
+        const summary = details.querySelector('summary');
+        // 获取除了 summary 以外的所有正文内容
+        const contentNodes = Array.from(details.childNodes).filter(node => node !== summary);
+
+        // 创建内部包装壳 (为了精准测量高度)
+        const wrapper = document.createElement('div');
+        wrapper.className = 'sys-details-wrapper';
+
+        // 制造顶部和底部的关闭按钮
+        const btnTop = document.createElement('div');
+        btnTop.className = 'sys-close-btn';
+        btnTop.innerHTML = 'FOLD_DATA // 终止读取并折叠';
+
+        const btnBottom = document.createElement('div');
+        btnBottom.className = 'sys-close-btn';
+        btnBottom.innerHTML = 'FOLD_DATA // 终止读取并折叠';
+
+        // 将按钮和内容装填进包装壳
+        wrapper.appendChild(btnTop);
+        contentNodes.forEach(node => wrapper.appendChild(node));
+        wrapper.appendChild(btnBottom);
+        details.appendChild(wrapper);
+
+        // 动画状态锁
+        let animation = null;
+        let isClosing = false;
+        let isExpanding = false;
+
+        // 核心关门协议
+        const closeDetails = (e) => {
+            if (e) e.preventDefault();
+            if (isClosing || !details.open) return;
+            isClosing = true;
+
+            const startHeight = `${details.offsetHeight}px`;
+            const endHeight = `${summary.offsetHeight}px`;
+
+            // 防止内容溢出
+            details.style.overflow = 'hidden';
+
+            if (animation) animation.cancel();
+            // 使用原生 Web Animations API 实现绝对平滑的折叠
+            animation = details.animate({
+                height: [startHeight, endHeight]
+            }, {
+                duration: 350,
+                easing: 'cubic-bezier(0.4, 0, 0.2, 1)'
+            });
+
+            animation.onfinish = () => {
+                details.open = false; // 动画播完后再断开 DOM
+                details.style.height = '';
+                details.style.overflow = '';
+                isClosing = false;
+            };
+        };
+
+        // 核心开门协议
+        const openDetails = (e) => {
+            if (e) e.preventDefault();
+            if (isExpanding || details.open) return;
+            isExpanding = true;
+
+            details.style.height = `${details.offsetHeight}px`;
+            details.open = true; // 先接入 DOM 以获取真实高度
+            details.style.overflow = 'hidden';
+
+            window.requestAnimationFrame(() => {
+                const startHeight = `${details.offsetHeight}px`;
+                const endHeight = `${summary.offsetHeight + wrapper.offsetHeight}px`;
+
+                if (animation) animation.cancel();
+                animation = details.animate({
+                    height: [startHeight, endHeight]
+                }, {
+                    duration: 350,
+                    easing: 'cubic-bezier(0.4, 0, 0.2, 1)'
+                });
+
+                animation.onfinish = () => {
+                    details.style.height = '';
+                    details.style.overflow = '';
+                    isExpanding = false;
+                };
+            });
+        };
+
+        // 拦截原生点击事件，交由引擎接管
+        summary.addEventListener('click', (e) => {
+            if (isClosing || !details.open) {
+                openDetails(e);
+            } else if (isExpanding || details.open) {
+                closeDetails(e);
+            }
+        });
+
+        // 绑定按钮点击事件
+        btnTop.addEventListener('click', closeDetails);
+        btnBottom.addEventListener('click', (e) => {
+            closeDetails(e);
+            // 人性化细节：如果从底部点击关闭，自动将屏幕平滑滚动回标题栏，防止阅读迷失
+            setTimeout(() => {
+                summary.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            }, 50);
+        });
+    });
+});
 </script>
 
 <style>

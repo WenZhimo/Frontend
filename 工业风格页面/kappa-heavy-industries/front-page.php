@@ -102,7 +102,7 @@
                 <script type="text/javascript">
                 if (typeof createGlitch === 'function') {
                     createGlitch('#Homepage-Slogan', {
-                        phrases: ["人的野心就是力求超越俗众的欲望；", "而幸福则争取和大众一致的欲求。", ],
+                        phrases: ["人的野心就是力求超越俗众的欲望；", "而幸福则争取和大众一致的欲求。", "", ],
                         obfu_chars: "░▒▓▖▗▘▙▚▛▜▝▞▟",
                         heightMode: "wrapper",
                         color: "#988b32",
@@ -336,7 +336,7 @@
                         > 检索并收录游荡在时间废墟中的旋律。这里是我的音频中转站。
                     </p>
                     <p>
-                        > 协议目标：跨越物理介质的声波留存、高保真精神共鸣，以及建立抗解离的记忆锚点。
+                        > 跨越物理介质的声波留存、高保真精神共鸣，以及建立抗解离的记忆锚点。
                     </p>
                 </div>
 
@@ -370,7 +370,7 @@
                 style="position: relative; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 10vw;">
 
                 <h1 data-selectable
-                    style="color: #d5dffa; text-shadow: 0 0 10px rgba(0, 255, 255, 0.4); font-size: clamp(28px, 4vw, 45px); margin-bottom: 20px;">
+                    style="color: #d5dffa; text-shadow: 0 0 10px rgba(0, 255, 255, 0.4); font-family: 'Megrim';font-size: clamp(28px, 4vw, 45px); margin-bottom: 20px;">
                     Secure. Contain. Protect.
                 </h1>
 
@@ -383,7 +383,7 @@
                         > <span style="color:#a52309;"><b>你已经被警告过了。</b></span>
                     </p>
                     <p>
-                        > 归档目标：隔离、观测并分析逆熵现象与现实畸变实体。确立核心现实基准，确保系统稳定性。
+                        > 归档目标：隔离、观测并分析逆熵现象与现实扭曲实体。确立核心现实基准，确保系统稳定性。
                     </p>
                     <p>
                         > 当前状态：[ 数据库：<span style="color:#83be52;">在线</span> ] | [ 收容室状态：<span
@@ -400,7 +400,7 @@
 
                 <div class="corner-quote">
                     <p data-selectable
-                        style="font-family: '华康金文体W3', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
+                        style="font-family: 'YuFanXinYu', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
                         我们将死于黑暗，以便你们生于光明。
                     </p>
                 </div>
@@ -422,7 +422,7 @@
 
                 <h1 data-selectable
                     style="color: #00ffff; text-shadow: 0 0 10px rgba(0, 255, 255, 0.4); font-size: clamp(28px, 4vw, 45px); margin-bottom: 20px;">
-                    旁支末节 - [ INDEX ]
+                    <span style="font-family: '白路彤彤手写体';">旁支末节</span> - [ INDEX ]
                 </h1>
 
                 <div data-selectable
@@ -431,7 +431,7 @@
                         > [SYS_MSG]: 正在展开站点全局拓扑图。所有已公开档案、子系统与功能模块已汇总于此。
                     </p>
                     <p>
-                        > 协议提示：请在此查阅系统的完整系统架构，获取通往各个扇区的直达访问权限。
+                        > 提示：请在此查阅系统的完整系统架构，获取通往各个扇区的直达访问权限。
                     </p>
                 </div>
 
@@ -444,7 +444,7 @@
 
                 <div class="corner-quote">
                     <p data-selectable
-                        style="font-family: '华康金文体W3', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
+                        style="font-family: '白路彤彤手写体', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
                         旅途总有终点，不妨停下来回顾半生。
                     </p>
                 </div>
