@@ -49,7 +49,7 @@ body.admin-bar .site-header {
     align-items: flex-end; /* 靠右对齐，如果是放在其他位置可改为 flex-start */
     gap: 8px;
     margin-top: 10px;
-    font-family: "ZCOOLQingKeHuangYou-Regular", monospace, sans-serif;
+    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace, sans-serif;
 }
 
 /* --- 权限监控样式 --- */
@@ -59,31 +59,14 @@ body.admin-bar .site-header {
     transition: all 0.3s;
     letter-spacing: 1px;
 }
-.auth-guest {
-    color: #888;
-}
-.auth-guest:hover {
-    color: #ccc;
-    text-shadow: 0 0 5px rgba(204, 204, 204, 0.5);
-}
+.auth-guest { color: #888; }
+.auth-guest:hover { color: #ccc; text-shadow: 0 0 5px rgba(204,204,204,0.5); }
 
-.auth-admin {
-    color: #00ffff;
-} /* 授权状态用终端青色 */
-.auth-admin:hover {
-    color: #fff;
-    text-shadow: 0 0 8px rgba(0, 255, 255, 0.8);
-}
+.auth-admin { color: #00ffff; } /* 授权状态用终端青色 */
+.auth-admin:hover { color: #fff; text-shadow: 0 0 8px rgba(0,255,255,0.8); }
 
-.auth-logout {
-    color: #cc0000;
-    font-size: 0.85rem;
-    margin-left: 5px;
-}
-.auth-logout:hover {
-    color: #ff4444;
-    text-decoration: underline;
-}
+.auth-logout { color: #cc0000; font-size: 0.85rem; margin-left: 5px; }
+.auth-logout:hover { color: #ff4444; text-decoration: underline; }
 
 /* ==========================================
    检索模块 - 终极 HUD 强化版
@@ -95,12 +78,11 @@ body.admin-bar .site-header {
     display: flex !important;
     align-items: center !important;
     background: rgba(10, 15, 10, 0.9) !important; /* 强制深色不透明底板 */
-    border: 1px solid #988b32 !important; /* 工业金边框 */
+    border: 1px solid #988b32 !important;         /* 工业金边框 */
     padding: 6px 12px !important;
-    border-radius: 0 !important; /* 强制直角，拒绝现代圆润感 */
-    box-shadow:
-        0 0 10px rgba(152, 139, 50, 0.2),
-        inset 0 0 8px rgba(0, 0, 0, 0.8) !important; /* 外部发光 + 内部深邃阴影 */
+    border-radius: 0 !important;                  /* 强制直角，拒绝现代圆润感 */
+    box-shadow: 0 0 10px rgba(152, 139, 50, 0.2), 
+                inset 0 0 8px rgba(0, 0, 0, 0.8) !important; /* 外部发光 + 内部深邃阴影 */
     transition: all 0.3s ease;
 }
 
@@ -131,16 +113,15 @@ body.admin-bar .site-header {
 /* 4. 占位符颜色调整，避免突兀 */
 .terminal-search input::placeholder {
     color: #4a5c4a !important; /* 暗绿色的占位符，符合机房显示器风格 */
-    font-family: "ZCOOLQingKeHuangYou-Regular", monospace !important;
+    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace !important;
 }
 
 /* 5. 交互高亮：当鼠标悬停或点击输入时，整个框变成青色高危状态 */
 .terminal-search form:hover,
 .terminal-search form:focus-within {
-    border-color: #00ffff !important;
-    box-shadow:
-        0 0 15px rgba(0, 255, 255, 0.4),
-        inset 0 0 10px rgba(0, 255, 255, 0.1) !important;
+    border-color: #00ffff !important; 
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.4), 
+                inset 0 0 10px rgba(0, 255, 255, 0.1) !important;
     background: rgba(0, 20, 20, 0.95) !important;
 }
 
@@ -150,8 +131,8 @@ body.admin-bar .site-header {
 
 /* 6. 解决 Chrome/Edge 自动填充表单时强制变成白底/黄底的灾难 */
 .terminal-search input:-webkit-autofill,
-.terminal-search input:-webkit-autofill:hover,
-.terminal-search input:-webkit-autofill:focus,
+.terminal-search input:-webkit-autofill:hover, 
+.terminal-search input:-webkit-autofill:focus, 
 .terminal-search input:-webkit-autofill:active {
     -webkit-transition: "color 9999s ease-out, background-color 9999s ease-out";
     -webkit-transition-delay: 9999s;
@@ -184,7 +165,7 @@ body.admin-bar .site-header {
 
 /* 标签样式 (HUD 风格字眼) */
 .nav-label {
-    font-family: "ZCOOLQingKeHuangYou-Regular", monospace, sans-serif;
+    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace, sans-serif;
     font-size: 0.9rem;
     color: #988b32; /* 工业金 */
     margin-bottom: 8px;
@@ -202,27 +183,15 @@ body.admin-bar .site-header {
 }
 
 /* 对齐方式：左边靠左，右边靠右 */
-.nav-prev {
-    text-align: left;
-    border-left: 3px solid #988b32;
-}
-.nav-next {
-    text-align: right;
-    border-right: 3px solid #988b32;
-}
-.nav-empty {
-    cursor: not-allowed;
-    opacity: 0.6;
-    border-color: #222;
-}
+.nav-prev { text-align: left; border-left: 3px solid #988b32; }
+.nav-next { text-align: right; border-right: 3px solid #988b32; }
+.nav-empty { cursor: not-allowed; opacity: 0.6; border-color: #222; }
 
 /* ======== 交互特效 ======== */
 .nav-block:not(.nav-empty):hover {
     background: rgba(0, 30, 30, 0.8);
     border-color: #00ffff;
-    box-shadow:
-        0 0 15px rgba(0, 255, 255, 0.15),
-        inset 0 0 10px rgba(0, 255, 255, 0.1);
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.15), inset 0 0 10px rgba(0, 255, 255, 0.1);
 }
 
 .nav-block:not(.nav-empty):hover .nav-label {
@@ -234,12 +203,8 @@ body.admin-bar .site-header {
     color: #fff; /* 标题亮起 */
 }
 
-.nav-prev:hover {
-    border-left-color: #00ffff;
-}
-.nav-next:hover {
-    border-right-color: #00ffff;
-}
+.nav-prev:hover { border-left-color: #00ffff; }
+.nav-next:hover { border-right-color: #00ffff; }
 
 /* ======== 移动端适配 ======== */
 @media screen and (max-width: 768px) {
@@ -247,14 +212,13 @@ body.admin-bar .site-header {
         flex-direction: column; /* 屏幕不够宽时，上下排列 */
         gap: 15px;
     }
-    .nav-prev,
-    .nav-next,
-    .nav-empty {
+    .nav-prev, .nav-next, .nav-empty {
         text-align: left; /* 手机上统一靠左对齐更利于阅读 */
         border-left: 3px solid #988b32;
         border-right: none;
     }
 }
+
 
 /* ==========================================
    外部通讯接口 (评论区 HUD 涂装)
@@ -270,9 +234,8 @@ body.admin-bar .site-header {
 }
 
 /* --- 历史记录标题 --- */
-.comments-title,
-#reply-title {
-    font-family: "ZCOOLQingKeHuangYou-Regular", monospace;
+.comments-title, #reply-title {
+    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace;
     font-size: 1.5rem;
     color: #00ffff;
     text-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
@@ -386,21 +349,13 @@ body.admin-bar .site-header {
 .terminal-input-group input[type="text"]:focus,
 .terminal-input-group textarea:focus {
     border-color: #00ffff;
-    box-shadow:
-        0 0 10px rgba(0, 255, 255, 0.2),
-        inset 0 0 5px rgba(0, 255, 255, 0.1);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2), inset 0 0 5px rgba(0, 255, 255, 0.1);
     background: rgba(0, 30, 30, 0.8);
 }
 
 /* 提示信息 */
-.comment-notes {
-    color: #666;
-    font-size: 0.85rem;
-    margin-bottom: 20px;
-}
-.required {
-    color: #cc0000;
-}
+.comment-notes { color: #666; font-size: 0.85rem; margin-bottom: 20px; }
+.required { color: #cc0000; }
 
 /* 传输按钮 */
 .terminal-submit-btn {
@@ -408,7 +363,7 @@ body.admin-bar .site-header {
     border: 1px solid #00ffff;
     color: #00ffff;
     padding: 10px 25px;
-    font-family: "ZCOOLQingKeHuangYou-Regular", monospace;
+    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace;
     font-size: 1.2rem;
     cursor: pointer;
     transition: all 0.3s;
@@ -435,7 +390,7 @@ body.admin-bar .site-header {
     width: 24px;
     height: 24px;
     background: rgba(10, 15, 10, 0.6); /* 没加载出来前的深色底 */
-    border: 1px solid #988b32; /* 工业金边框 */
+    border: 1px solid #988b32;         /* 工业金边框 */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -491,12 +446,12 @@ body.admin-bar .site-header {
         position: relative !important; /* 解除绝对定位封印，回到正常排版流 */
         right: auto;
         bottom: auto;
-        margin-top: 60px; /* 在按钮下方强行撑开 60px 的安全距离 */
-        align-self: flex-end; /* 确保它依然靠右对齐 */
+        margin-top: 60px;              /* 在按钮下方强行撑开 60px 的安全距离 */
+        align-self: flex-end;          /* 确保它依然靠右对齐 */
     }
-
+    
     .corner-quote p {
-        font-size: 20px !important; /* 稍微缩小字体，防止在小手机上折行破相 */
+        font-size: 20px !important;    /* 稍微缩小字体，防止在小手机上折行破相 */
     }
 }
 
@@ -506,14 +461,10 @@ body.admin-bar .site-header {
 article blockquote,
 .page-scroll blockquote {
     position: relative;
-    font-size: 1.5rem; /* 👈 放大字体：比正文大 50% 左右，保证醒目但不会突兀 */
+    font-size: 1.50rem; /* 👈 放大字体：比正文大 50% 左右，保证醒目但不会突兀 */
     line-height: 1.8;
     color: #e0e0e0; /* 文字颜色比普通正文更亮一点 */
-    background: linear-gradient(
-        90deg,
-        rgba(152, 139, 50, 0.1) 0%,
-        rgba(10, 15, 10, 0.2) 100%
-    ); /* 渐变底色，左侧微微泛金光 */
+    background: linear-gradient(90deg, rgba(152, 139, 50, 0.1) 0%, rgba(10, 15, 10, 0.2) 100%); /* 渐变底色，左侧微微泛金光 */
     border-left: 4px solid #988b32; /* 工业金左指示线 */
     border-right: 1px solid rgba(152, 139, 50, 0.2); /* 右侧加一条微弱的闭合线 */
     margin: 30px 0 40px 0; /* 上下留出足够的呼吸空间 */
@@ -536,7 +487,7 @@ article blockquote p:last-child,
 /* 👇 核心交互细节：右上角的终端分类标签 👇 */
 article blockquote::after,
 .page-scroll blockquote::after {
-    content: "[ SYS_SUMMARY ]"; /* 伪造一个系统摘要标签 */
+    content: '[ SYS_SUMMARY ]'; /* 伪造一个系统摘要标签 */
     position: absolute;
     top: -12px;
     right: 20px;
@@ -553,21 +504,83 @@ article blockquote::after,
 }
 
 /* 悬停时的呼吸发光反馈 */
+
 article blockquote:hover,
 .page-scroll blockquote:hover {
     border-left-color: #00ffff !important; /* 悬停时指示线变青色，加 !important 确保优先极 */
-    background: linear-gradient(
-        90deg,
-        rgba(0, 255, 255, 0.08) 0%,
-        rgba(10, 15, 10, 0.2) 100%
-    );
+    background: linear-gradient(90deg, rgba(0, 255, 255, 0.08) 0%, rgba(10, 15, 10, 0.2) 100%);
 }
 
 article blockquote:hover::after,
 .page-scroll blockquote:hover::after {
-    content: "[ DATA_ACTIVE ]"; /* 悬停时文字变化，增加互动感 */
+    content: '[ DATA_ACTIVE ]'; /* 悬停时文字变化，增加互动感 */
     color: #00ffff;
     border-color: #00ffff;
     box-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
     opacity: 1;
+}
+
+/* ==========================================
+   移动端降级协议：抹除不必要的物理扫描元件
+   ========================================== */
+@media screen and (max-width: 768px) {
+    .sys-hide-mobile {
+        display: none !important; /* 强制从物理渲染层抹除 */
+    }
+}
+
+/* ==========================================
+   文章移动端视觉空间优化 
+   ========================================== */
+
+@media screen and (max-width: 768px) {
+    /* 1. 确保外层控制台底板没有任何隐藏的左右约束 */
+    .page-frame {
+        padding: 30px 0 0 0 !important; /* 仅保留顶部 30px 安全区，左右强制归零 */
+        width: 100% !important;
+        overflow-x: hidden !important; /* 斩断可能引发的底层横向滚动条 */
+    }
+
+    /* 2. 核心档案容器：打破 Flex 束缚，接管全部屏幕 */
+    #article-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important; /* 核心修复：强制在 Flex 父级中膨胀至 100% 空间 */
+        box-sizing: border-box !important; /* 将内部 Padding 算入总体积，防止撑爆边缘 */
+        padding: 15px 12px !important; /* 上下 15px，左右 12px 的极限安全距离 */
+        margin: 0 0 20px 0 !important; /* 彻底抹杀左右外边距 */
+    }
+
+    /* 3. 修复超长英文字符（如 EUBF 标题）导致的容器畸变 */
+    header h1 {
+        word-break: break-word !important; 
+        overflow-wrap: anywhere !important; /* 允许过长的英文单词在触碰边缘时安全断行 */
+    }
+
+    /* 4. 压缩头部多余断层 */
+    header[style] {
+        margin-bottom: 15px !important;
+        padding-bottom: 15px !important;
+    }
+
+    /* 5. 压缩导航与评论接口的超大间距 */
+    .archive-navigation-hud,
+    .terminal-comments-area {
+        margin-top: 30px !important;
+        padding-top: 20px !important;
+    }
+    
+    /* 6. 精准打击“返回主控制台”按钮的硬编码留白 */
+    div[style*="margin-top: 60px;"] {
+        margin-top: 30px !important;
+        padding-top: 15px !important;
+    }
+
+    /* 7. 优化摘要区块 (Blockquote) */
+    article blockquote,
+    .page-scroll blockquote {
+        padding: 12px 12px 12px 15px !important;
+        margin: 20px 0 !important;
+        font-size: 1.1rem !important;
+    }
 }

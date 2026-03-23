@@ -6,7 +6,7 @@
 body,
 .editor-styles-wrapper {
     background-color: #0d1117 !important; /* 极深的终端底色 */
-    color: #c9d1d9 !important; /* 柔和的浅灰文字 */
+    color: #c9d1d9 !important;            /* 柔和的浅灰文字 */
     font-family: monospace, sans-serif;
 }
 
