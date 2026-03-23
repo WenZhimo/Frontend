@@ -274,11 +274,20 @@
 
                             <div class="card-meta-links"
                                 style="font-size: 0.85rem; color: #888; border-top: 1px dashed #444; padding-top: 12px; margin-top: 15px; line-height: 1.6; position: relative; z-index: 3; pointer-events: auto;">
-                                <span>[责任人]：<?php the_author(); ?></span><br>
 
+                                <span>[责任人]：<?php the_author(); ?></span><br>
                                 <span>[所属域]：<?php the_category(' / '); ?></span><br>
 
-                                <span>[发布于]：<?php the_modified_time('Y-m-d H:i'); ?></span>
+                                <span>[发布于]：<?php the_modified_time('Y-m-d H:i:s'); ?>
+                                    <span style="color: #444; font-size: 0.8em; margin-left: 5px;">[ UNIX:
+                                        <?php the_modified_time('U'); ?> ]</span>
+                                </span><br>
+
+                                <div
+                                    style="font-family: '3 of 9 Barcode', 'Free 3 of 9', monospace; font-size: 2.8rem; color: #988b32; margin-top: 10px; line-height: 0.8;">
+                                    *<?php the_modified_time('U'); ?>*
+                                </div>
+
                             </div>
                         </div>
                     </div>
