@@ -499,3 +499,75 @@ body.admin-bar .site-header {
         font-size: 20px !important; /* 稍微缩小字体，防止在小手机上折行破相 */
     }
 }
+
+/* ==========================================
+   文章摘要 / 重点标注 (Blockquote 终端涂装)
+   ========================================== */
+article blockquote,
+.page-scroll blockquote {
+    position: relative;
+    font-size: 1.5rem; /* 👈 放大字体：比正文大 50% 左右，保证醒目但不会突兀 */
+    line-height: 1.8;
+    color: #e0e0e0; /* 文字颜色比普通正文更亮一点 */
+    background: linear-gradient(
+        90deg,
+        rgba(152, 139, 50, 0.1) 0%,
+        rgba(10, 15, 10, 0.2) 100%
+    ); /* 渐变底色，左侧微微泛金光 */
+    border-left: 4px solid #988b32; /* 工业金左指示线 */
+    border-right: 1px solid rgba(152, 139, 50, 0.2); /* 右侧加一条微弱的闭合线 */
+    margin: 30px 0 40px 0; /* 上下留出足够的呼吸空间 */
+    padding: 20px 25px 20px 30px;
+    /*font-style: italic; /* 使用斜体增加“引用”的文学感 */
+    box-shadow: inset 2px 0 10px rgba(152, 139, 50, 0.05);
+    clear: both;
+}
+
+/* 移除 WordPress 编辑器可能自动生成的冗余外边距 */
+article blockquote p:first-child,
+.page-scroll blockquote p:first-child {
+    margin-top: 0;
+}
+article blockquote p:last-child,
+.page-scroll blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+/* 👇 核心交互细节：右上角的终端分类标签 👇 */
+article blockquote::after,
+.page-scroll blockquote::after {
+    content: "[ SYS_SUMMARY ]"; /* 伪造一个系统摘要标签 */
+    position: absolute;
+    top: -12px;
+    right: 20px;
+    background: #0a0f0a; /* 你的全局底色，用来遮挡边框 */
+    color: #988b32;
+    font-size: 0.8rem;
+    font-family: monospace;
+    font-style: normal; /* 标签不需要斜体 */
+    padding: 0 8px;
+    border: 1px solid #988b32;
+    letter-spacing: 1px;
+    opacity: 0.8;
+    transition: all 0.3s ease;
+}
+
+/* 悬停时的呼吸发光反馈 */
+article blockquote:hover,
+.page-scroll blockquote:hover {
+    border-left-color: #00ffff !important; /* 悬停时指示线变青色，加 !important 确保优先极 */
+    background: linear-gradient(
+        90deg,
+        rgba(0, 255, 255, 0.08) 0%,
+        rgba(10, 15, 10, 0.2) 100%
+    );
+}
+
+article blockquote:hover::after,
+.page-scroll blockquote:hover::after {
+    content: "[ DATA_ACTIVE ]"; /* 悬停时文字变化，增加互动感 */
+    color: #00ffff;
+    border-color: #00ffff;
+    box-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
+    opacity: 1;
+}
