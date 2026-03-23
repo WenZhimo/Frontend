@@ -85,8 +85,10 @@
                     </h1>
                 </div>
 
-                <div data-selectable id="Homepage-Slogan" style="text-align: center; min-height: 50px;">
+
+                <div data-selectable id="Homepage-Slogan" style="text-align: center;">
                 </div>
+
 
                 <div class="slogan-source">
                     —— [ 三岛由纪夫《仲夏之死》 ]
@@ -102,7 +104,7 @@
                 <script type="text/javascript">
                 if (typeof createGlitch === 'function') {
                     createGlitch('#Homepage-Slogan', {
-                        phrases: ["人的野心就是力求超越俗众的欲望；", "而幸福则争取和大众一致的欲求。", "", ],
+                        phrases: ["人的野心就是力求超越俗众的欲望；", "而幸福则争取和大众一致的欲求。", " ", ],
                         obfu_chars: "░▒▓▖▗▘▙▚▛▜▝▞▟",
                         heightMode: "wrapper",
                         color: "#988b32",
@@ -507,111 +509,168 @@
                             白洞
                         </div>
                     </a>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px; align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/幽香农业.png" height="80px"
-                            alt="幽香农业">
-                        <p>幽香农业</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/八云交通.png" height="80px"
-                            alt="幽香农业">
-                        <p>八云交通</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/香霖零售.png" height="80px"
-                            alt="幽香农业">
-                        <p>香霖零售</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/夜雀饮食.png" height="80px"
-                            alt="幽香农业">
-                        <p>夜雀饮食</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/博丽专制.png" height="80px"
-                            alt="幽香农业">
-                        <p>博丽专制</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/白泽乳业.png" height="80px"
-                            alt="幽香农业">
-                        <p>白泽乳业</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/三途川律师事务所.png" height="80px"
-                            alt="幽香农业">
-                        <p>三途川律师事务所</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/永江气象站.png" height="80px"
-                            alt="幽香农业">
-                        <p>永江气象站</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/藤原煤炭厂.png" height="80px"
-                            alt="幽香农业">
-                        <p>藤原煤炭厂</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/八意制药.png" height="80px"
-                            alt="幽香农业">
-                        <p>八意制药</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/雾之湖冰棒小摊.png" height="80px"
-                            alt="幽香农业">
-                        <p>雾之湖冰棒小摊</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/文文报社.png" height="80px"
-                            alt="幽香农业">
-                        <p>文文报社</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/地灵殿火葬场.png" height="80px"
-                            alt="幽香农业">
-                        <p>地灵殿火葬场</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/红魔馆家政.png" height="80px"
-                            alt="幽香农业">
-                        <p>红魔馆家政</p>
-                    </div>
-                    <div class="card" data-selectable data-selectable-highlight
-                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
-                        <img data-selectable data-selectable-highlight
-                            src="<?php echo get_template_directory_uri(); ?>/asset/img/爱丽丝工坊.png" height="80px"
-                            alt="幽香农业">
-                        <p>爱丽丝工坊</p>
-                    </div>
+
+
+                    <a href="https://www.wenzhimo.xyz/kappa-heavy-industries-precision-manufacturing/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/logo.svg" height="80px"
+                                alt="河童重工">
+                            <p>河童重工</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/yuuka-agriculture/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px; align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/幽香农业.png" height="80px"
+                                alt="幽香农业">
+                            <p>幽香农业</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/yakumo-transit/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/八云交通.png" height="80px"
+                                alt="八云交通">
+                            <p>八云交通</p>
+                        </div>
+                    </a>
+
+
+                    <a href="https://www.wenzhimo.xyz/kourin-retail-group/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/香霖零售.png" height="80px"
+                                alt="香霖零售">
+                            <p>香霖零售</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/night-sparrow-catering-group/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/夜雀食堂.png" height="80px"
+                                alt="夜雀食堂">
+                            <p>夜雀食堂</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/hakurei-autocracy-security-commission/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/博丽专制.png" height="80px"
+                                alt="博丽专制">
+                            <p>博丽专制</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/hakutaku-dairy-education-group/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/白泽乳业.png" height="80px"
+                                alt="白泽乳业">
+                            <p>白泽乳业</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/sanzu-river-legal-karma-auditing-firm/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/三途川律师事务所.png" height="80px"
+                                alt="三途川律师事务所">
+                            <p>三途川律师事务所</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/nagae-meteorological-environmental-monitoring-bureau/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/永江气象站.png" height="80px"
+                                alt="永江气象站">
+                            <p>永江气象站</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/fujiwara-thermal-coal-group/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/藤原煤炭厂.png" height="80px"
+                                alt="藤原煤炭厂">
+                            <p>藤原煤炭厂</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/yagokoro-pharmaceutical-life-sciences/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/八意制药.png" height="80px"
+                                alt="八意制药">
+                            <p>八意制药</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/mist-lake-strongest-popsicle-stand/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/雾之湖冰棒小摊.png" height="80px"
+                                alt="雾之湖冰棒小摊">
+                            <p>雾之湖冰棒小摊</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/bunbunmaru-media-group/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/文文报社.png" height="80px"
+                                alt="文文报社">
+                            <p>文文报社</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/chireiden-nuclear-cremation-biomass-energy-corp/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/地灵殿火葬场.png" height="80px"
+                                alt="地灵殿火葬场">
+                            <p>地灵殿火葬场</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/scarlet-estate-domestic-services-group/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/红魔馆家政.png" height="80px"
+                                alt="红魔馆家政">
+                            <p>红魔馆家政</p>
+                        </div>
+                    </a>
+
+                    <a href="https://www.wenzhimo.xyz/alices-workshop-artisanal-automata-guild/">
+                        <div class="card" data-selectable data-selectable-highlight
+                            style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
+                            <img data-selectable data-selectable-highlight
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/爱丽丝工坊.png" height="80px"
+                                alt="爱丽丝工坊">
+                            <p>爱丽丝工坊</p>
+                        </div>
+                    </a>
                 </div>
             </div>
         </div>
