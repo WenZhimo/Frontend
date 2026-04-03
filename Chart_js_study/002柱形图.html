@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Document</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </head>
+    <!--
+    柱形图是一种以长方形的长度为变量的统计图表。
+
+    柱形图用来比较两个或以上的价值（不同时间或者不同条件），只有一个变量，通常利用于较小的数据集分析。
+
+    柱形图的 type 属性为 bar ，type 描述了图表类型。
+
+    const config = {
+        type: 'bar',
+        data: data,
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        },
+    };
+    -->
+    <body>
+        <canvas id="myChart" width="400" height="400"></canvas>
+        <script>
+            const ctx = document.getElementById("myChart");
+            const labels = [
+                "一月份",
+                "二月份",
+                "三月份",
+                "四月份",
+                "五月份",
+                "六月份",
+                "七月份",
+            ]; // 设置 X 轴上对应的标签
+            const data = {
+                labels: labels,
+                datasets: [
+                    {
+                        label: "我的第一个柱形图",
+                        data: [65, 59, 80, 81, 56, 55, 40],
+                        backgroundColor: [
+                            // 设置每个柱形图的背景颜色
+                            "rgba(255, 99, 132, 0.2)",
+                            "rgba(255, 159, 64, 0.2)",
+                            "rgba(255, 205, 86, 0.2)",
+                            "rgba(75, 192, 192, 0.2)",
+                            "rgba(54, 162, 235, 0.2)",
+                            "rgba(153, 102, 255, 0.2)",
+                            "rgba(201, 203, 207, 0.2)",
+                        ],
+                        borderColor: [
+                            //设置每个柱形图边框线条颜色
+                            "rgb(255, 99, 132)",
+                            "rgb(255, 159, 64)",
+                            "rgb(255, 205, 86)",
+                            "rgb(75, 192, 192)",
+                            "rgb(54, 162, 235)",
+                            "rgb(153, 102, 255)",
+                            "rgb(201, 203, 207)",
+                        ],
+                        borderWidth: 1, // 设置线条宽度
+                    },
+                ],
+            };
+            const config = {
+                type: "bar", // 设置图表类型
+                data: data, // 设置数据集
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true, // 设置 y 轴从 0 开始
+                        },
+                    },
+                },
+            };
+            const myChart = new Chart(ctx, config);
+        </script>
+
+        <!--
+        水平柱形图是垂直条形图的变，常用于显示数据趋势，以及并排比较多个数据集。
+
+        设置水平柱形图需要将选项对象中的 indexAxis 属性设置为 y，indexAxis 属性的默认值为 x。
+-->
+        <canvas id="myChart2" width="400" height="400"></canvas>
+        <script>
+            const ctx2 = document.getElementById("myChart2");
+            const labels2 = [
+                "一月份",
+                "二月份",
+                "三月份",
+                "四月份",
+                "五月份",
+                "六月份",
+                "七月份",
+            ]; // 设置 X 轴上对应的标签
+            const data2 = {
+                labels: labels2,
+                datasets: [
+                    {
+                        axis: "y",
+                        label: "我的第二个柱形图",
+                        data: [65, 59, 80, 81, 56, 55, 40],
+                        fill: false,
+                        backgroundColor: [
+                            // 设置每个柱形图的背景颜色
+                            "rgba(255, 99, 132, 0.2)",
+                            "rgba(255, 159, 64, 0.2)",
+                            "rgba(255, 205, 86, 0.2)",
+                            "rgba(75, 192, 192, 0.2)",
+                            "rgba(54, 162, 235, 0.2)",
+                            "rgba(153, 102, 255, 0.2)",
+                            "rgba(201, 203, 207, 0.2)",
+                        ],
+                        borderColor: [
+                            //设置每个柱形图边框线条颜色
+                            "rgb(255, 99, 132)",
+                            "rgb(255, 159, 64)",
+                            "rgb(255, 205, 86)",
+                            "rgb(75, 192, 192)",
+                            "rgb(54, 162, 235)",
+                            "rgb(153, 102, 255)",
+                            "rgb(201, 203, 207)",
+                        ],
+                        borderWidth: 1, // 设置线条宽度
+                    },
+                ],
+            };
+            const config2 = {
+                type: "bar", // 设置图表类型
+                data: data2, // 设置数据集
+                options: {
+                    indexAxis: "y", // 设置水平柱形图
+                },
+            };
+            const myChart2 = new Chart(ctx2, config2);
+        </script>
+    </body>
+</html>
