@@ -21,7 +21,8 @@ get_header(); ?>
             <?php if ( have_posts() ) : while ( have_posts() ) : the_post(); ?>
                 
                 <header style="border-bottom: 1px dashed #555; margin-bottom: 30px; padding-bottom: 20px;">
-                    <h1 data-selectable style="font-family: 峄山碑篆体; color: #988b32; font-size: clamp(30px, 4vw, 50px); margin: 0 0 15px 0; text-shadow: 0 0 10px rgba(152, 139, 50, 0.5);">
+                    <h1 data-selectable class="wp-block-post-title"
+                            style="font-family: 峄山碑篆体; color: #988b32; font-size: clamp(30px, 4vw, 50px); margin: 0 0 15px 0; text-shadow: 0 0 10px rgba(152, 139, 50, 0.5);">
                         <?php the_title(); ?>
                     </h1>
                 </header>
