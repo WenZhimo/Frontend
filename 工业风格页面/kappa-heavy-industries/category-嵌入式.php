@@ -21,7 +21,7 @@ get_header(); ?>
                 ?>
                 <p>虽然大体适配了个人博客，不过这些文章都是在语雀上写的。</p>
                 <p>建议在语雀上以黑色配色查看，需要语雀账户。</p>
-                <a href="https://www.yuque.com/g/wenzhimo/qianrushi/collaborator/join?token=jJbeqT6BIV3fngcc&source=book_collaborator">语雀-嵌入式</a>
+                <a href="https://www.yuque.com/wenzhimo/qianrushi">语雀-嵌入式</a>
             </header>
 
             <style>

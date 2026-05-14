@@ -1,7 +1,7 @@
 /**
  * ===================================================================
  * [ 河童重工 ] HUD 音频终端与声呐矩阵模块 (KappaAudioTerminal)
- * 版本: V7.1 (语法修复 - [像素声呐] - 能量反馈连发版)
+ * 版本: V11.1 (V7.1 视觉核心 + V10 穿透引擎 + 绝对字符安全版)
  * ===================================================================
  */
 class KappaAudioTerminal {
@@ -23,6 +23,7 @@ class KappaAudioTerminal {
 
         this.isPlaying = false;
         this.isEngineReady = false;
+        this.isLoaded = false; // 新增：资源是否加载完毕状态锁
         this.rings = [];
         this.lastPulseTime = 0;
 
@@ -40,6 +41,7 @@ class KappaAudioTerminal {
             document.body.appendChild(this.canvas);
         }
 
+        // 严格保留 V7.1 的样式配置
         Object.assign(this.canvas.style, {
             position: "fixed",
             top: "0",
@@ -49,12 +51,12 @@ class KappaAudioTerminal {
             zIndex: "0",
             pointerEvents: "none",
             opacity: "0.3",
-            imageRendering: "pixelated", // 使用标准的像素化属性
+            imageRendering: "pixelated", 
         });
 
-        // 兼容性补充写法 (安全的方式)
         this.canvas.style.setProperty("image-rendering", "crisp-edges");
 
+        // 严格保留 V7.1 的画布分辨率
         this.canvas.width = 64;
         this.canvas.height = 32;
 
@@ -70,18 +72,19 @@ class KappaAudioTerminal {
     initUI() {
         this.audioCore = new Audio();
         this.audioCore.preload = "metadata";
-        this.audioCore.src = this.audioUrl;
+        // 注意：这里移除了 this.audioCore.src = this.audioUrl，交由 fetch 处理
 
+        // 注入带有 CONNECTING 状态的 V10 UI
         this.container.innerHTML = `
             <div class="hud-audio-terminal">
                 <div class="hud-player-core">
-                    <button class="hud-btn hud-play-toggle">
-                        <span class="cmd-prompt">C:\\></span> <span class="hud-btn-text">PLAY_AUDIO</span>
+                    <button class="hud-btn hud-play-toggle" style="opacity: 0.5; pointer-events: none;">
+                        <span class="cmd-prompt">C:\\></span> <span class="hud-btn-text">CONNECTING...</span>
                     </button>
                     <div class="hud-progress-track">
                         <div class="hud-progress-fill"></div>
                     </div>
-                    <div class="hud-time-display">00:00 / 00:00</div>
+                    <div class="hud-time-display">LOADING DATA...</div>
                 </div>
             </div>
         `;
@@ -93,6 +96,37 @@ class KappaAudioTerminal {
             fill: this.container.querySelector(".hud-progress-fill"),
             timeDisplay: this.container.querySelector(".hud-time-display"),
         };
+
+        // 启动内存级资源抓取
+        this.fetchAudioData();
+    }
+
+    // [ 核心融合 ] V10 的 Blob 抓取与优雅降级技术
+    async fetchAudioData() {
+        try {
+            const response = await fetch(this.audioUrl);
+            if (!response.ok) throw new Error("HTTP 状态错误");
+            const blob = await response.blob();
+            const localUrl = URL.createObjectURL(blob);
+            this.audioCore.src = localUrl;
+
+            this.isLoaded = true;
+            this.ui.playBtn.style.opacity = "1";
+            this.ui.playBtn.style.pointerEvents = "auto";
+            this.ui.btnText.textContent = "PLAY_AUDIO";
+            this.ui.timeDisplay.textContent = "00:00 / 00:00";
+            console.log("[SYS_MSG] 资源已转为内存 Blob，声呐阵列解锁。");
+        } catch (e) {
+            console.warn("[SYS_WARN] 跨域拦截！降级为普通播放模式 (无波纹)。");
+            this.audioCore.src = this.audioUrl;
+
+            this.isLoaded = true;
+            this.ui.playBtn.style.opacity = "1";
+            this.ui.playBtn.style.pointerEvents = "auto";
+            this.ui.btnText.textContent = "PLAY(NO_SONAR)";
+            this.ui.playBtn.style.color = "#ffaa00";
+            this.ui.timeDisplay.textContent = "CORS_BLOCKED";
+        }
     }
 
     initEngine() {
@@ -110,7 +144,7 @@ class KappaAudioTerminal {
                 this.audioCore,
             );
             this.analyser = this.audioCtx.createAnalyser();
-            this.analyser.fftSize = 512;
+            this.analyser.fftSize = 128;
 
             this.source.connect(this.analyser);
             this.analyser.connect(this.audioCtx.destination);
@@ -125,7 +159,6 @@ class KappaAudioTerminal {
         }
     }
 
-    // [ 模块 4 ] 渲染循环
     renderLoop() {
         requestAnimationFrame(() => this.renderLoop());
 
@@ -150,7 +183,6 @@ class KappaAudioTerminal {
                 }
                 bassEnergy /= bins.length;
 
-                // 只要超过阈值就触发，没有冷却时间，实现致密波纹
                 if (bassEnergy > this.config.energyThreshold) {
                     this.createRing(bassEnergy);
                 }
@@ -160,7 +192,6 @@ class KappaAudioTerminal {
         for (let i = this.rings.length - 1; i >= 0; i--) {
             let r = this.rings[i];
 
-            // 👇 核心修正：所有波纹使用绝对一致的步进速度，彻底杜绝“超车”
             r.radius += r.fixedSpeed;
 
             r.opacity = 1 - r.radius / r.maxRadius;
@@ -171,10 +202,8 @@ class KappaAudioTerminal {
                 this.offScreenCtx.beginPath();
                 this.offScreenCtx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
 
-                // 亮度由实时能量映射
+                // 严格保留 V7.1 的金色涂装
                 this.offScreenCtx.strokeStyle = `rgba(233, 200, 90, ${r.initialOpacity * r.opacity})`;
-
-                // 👇 线宽：能量越高，像素边框越厚 (在 64x36 画面下，2 已经是巨厚了)
                 this.offScreenCtx.lineWidth = 1;
                 this.offScreenCtx.stroke();
             }
@@ -183,7 +212,6 @@ class KappaAudioTerminal {
     }
 
     createRing(energy) {
-        // 归一化亮度：能量越高，波纹越亮
         let norm =
             (energy - this.config.energyThreshold) /
             (255 - this.config.energyThreshold);
@@ -193,6 +221,7 @@ class KappaAudioTerminal {
             x: this.offScreenCanvas.width / 2,
             y: this.offScreenCanvas.height / 2,
             radius: 1,
+            // 严格保留 V7.1 的完美对角线计算公式，解决椭圆裁切 Bug
             maxRadius:
                 Math.max(
                     this.offScreenCanvas.width,
@@ -200,12 +229,8 @@ class KappaAudioTerminal {
                 ) * 0.9,
 
             initialEnergy: energy,
-            initialOpacity: norm * 0.7, // 基础亮度 0.2 + 能量增益
-
-            // 👇 物理常量：设定一个固定速度（例如每帧扩散 0.6 像素）
-            // 如果觉得波纹扩散太慢，就调大这个数字；觉得太快就调小。
-            // 只要它是固定的，波纹就永远不会互相穿插。
-            fixedSpeed: 0.4,
+            initialOpacity: norm * 0.7, 
+            fixedSpeed: 0.4, // 严格保留 V7.1 的完美扩散速度
         });
     }
 
@@ -222,6 +247,9 @@ class KappaAudioTerminal {
         };
 
         this.ui.playBtn.addEventListener("click", () => {
+            // 新增：拦截点击，直到音频 Blob 下载完毕
+            if (!this.isLoaded) return; 
+
             if (this.audioCore.paused) {
                 this.audioCore.play();
             } else {
@@ -267,7 +295,7 @@ class KappaAudioTerminal {
 
         const seek = (e) => {
             const rect = this.ui.track.getBoundingClientRect();
-            const clientX = e.touches ? e.touches.clientX : e.clientX;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             let clickX = Math.max(0, Math.min(clientX - rect.left, rect.width));
             this.audioCore.currentTime =
                 (clickX / rect.width) * this.audioCore.duration;
