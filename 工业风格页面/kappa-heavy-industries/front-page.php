@@ -2,7 +2,7 @@
 <style>
 /* --- 出处文本样式 --- */
 .slogan-source {
-    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace, sans-serif;
+    font-family: 'ZCOOL QingKe HuangYou', monospace, sans-serif;
     color: #666;
     /* 降低亮度 */
     font-size: clamp(14px, 2vw, 20px);
@@ -72,6 +72,9 @@
     color: #00ffff;
 }
 </style>
+<!-- 条形码生成库-->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
 <div id="pager">
     <section class="page active">
         <div class="page-frame">
@@ -85,13 +88,13 @@
                     </h1>
                 </div>
 
-
+               
                 <div data-selectable id="Homepage-Slogan" style="text-align: center;">
                 </div>
-
+                
 
                 <div class="slogan-source">
-                    —— [ 三岛由纪夫《仲夏之死》 ]
+                   ——伊壁鸠鲁- 致美诺西斯的信 
                 </div>
 
                 <div class="slogan-archive-entry">
@@ -104,11 +107,11 @@
                 <script type="text/javascript">
                 if (typeof createGlitch === 'function') {
                     createGlitch('#Homepage-Slogan', {
-                        phrases: ["人的野心就是力求超越俗众的欲望；", "而幸福则争取和大众一致的欲求。", " ", ],
+                        phrases: ["让人在年轻时莫迟缓追求智慧，年老时莫厌倦探索真理。", "因为灵魂的健康，无论何时开始都不为早，亦不为晚。","", ],
                         obfu_chars: "░▒▓▖▗▘▙▚▛▜▝▞▟",
                         heightMode: "wrapper",
                         color: "#988b32",
-                        fontFamily: "Smooch,华康金文体W3",
+                        fontFamily: "Smooch,DFJinWenW3-GB",
                         fontSize: "clamp(24px, 10vw, 100px)",
                         //fontWeight: "bold",
                         disp_time: 3000,
@@ -139,56 +142,68 @@
                     </p>
                     <p>
                         有关嵌入式的内容，建议在 <a
-                            href="https://www.yuque.com/g/wenzhimo/qianrushi/collaborator/join?token=jJbeqT6BIV3fngcc&source=book_collaborator">语雀-嵌入式</a>查看。
+                            href="https://www.yuque.com/wenzhimo/qianrushi">语雀-嵌入式</a>查看。
                     </p>
 
                 </div>
 
                 <div class="cards">
-                    <div class="card" data-selectable data-selectable-highlight style="background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.85)), url('https://www.wenzhimo.xyz/wp-content/uploads/2024/10/2566B02C88E0D556AAD62E5F9B131F17.jpg') center / cover no-repeat; 
-                                    position: relative; 
-                                    min-height: 300px; /* 增加最小高度 */
-                                    display: flex; 
-                                    flex-direction: column;">
-
+                    <div data-selectable data-selectable-highlight <?php echo kappa_get_homepage_bg_attrs( array(
+                        'variant'       => 'card',
+                        'desktop_image' => 'https://www.wenzhimo.xyz/wp-content/uploads/2024/10/2566B02C88E0D556AAD62E5F9B131F17.jpg',
+                        'mobile_image'  => 'https://www.wenzhimo.xyz/wp-content/uploads/2024/10/2566B02C88E0D556AAD62E5F9B131F17.jpg',
+                        'position'      => 'center',
+                        'overlay_start' => 'rgba(0,0,0,0.6)',
+                        'overlay_end'   => 'rgba(0,0,0,0.85)',
+                        'extra_classes' => 'card',
+                    ) ); ?>>
+                        <div class="homepage-bg-layer" aria-hidden="true"></div>
                         <a href="https://www.wenzhimo.xyz/%E6%9C%80%E8%BF%91%E6%9B%B4%E6%96%B0/"
-                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></a>
 
                         <div
-                            style="position: relative; z-index: 2; pointer-events: none; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
+                            style="min-height: 300px; pointer-events: none; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
                             <h3>最近更新<p class="note">按照发布顺序排序</p>
                             </h3>
                             <p style="flex-grow: 1;">旅途总是有新的发现。</p>
                         </div>
                     </div>
 
-                    <div class="card" data-selectable data-selectable-highlight style="background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.85)), url('https://www.wenzhimo.xyz/wp-content/uploads/2024/10/紺屋鴉江_鉛の冠_99161141_p0-scaled.jpg') center / cover no-repeat; 
-                                    position: relative; 
-                                    min-height: 350px; 
-                                    display: flex; 
-                                    flex-direction: column;">
-
+                    <div data-selectable data-selectable-highlight <?php echo kappa_get_homepage_bg_attrs( array(
+                        'variant'       => 'card',
+                        'desktop_image' => 'https://www.wenzhimo.xyz/wp-content/uploads/2024/10/紺屋鴉江_鉛の冠_99161141_p0-scaled.jpg',
+                        'mobile_image'  => 'https://www.wenzhimo.xyz/wp-content/uploads/2024/10/紺屋鴉江_鉛の冠_99161141_p0-scaled.jpg',
+                        'position'      => 'center',
+                        'overlay_start' => 'rgba(0,0,0,0.6)',
+                        'overlay_end'   => 'rgba(0,0,0,0.85)',
+                        'extra_classes' => 'card',
+                    ) ); ?>>
+                        <div class="homepage-bg-layer" aria-hidden="true"></div>
                         <a href="https://www.wenzhimo.xyz/%e9%9f%b3%e4%b9%90%e5%a4%87%e5%bf%98%e5%bd%95/"
-                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></a>
 
                         <div
-                            style="position: relative; z-index: 2; pointer-events: none; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
+                            style="min-height: 350px; pointer-events: none; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
                             <h3>音乐分享</h3>
                             <p style="flex-grow: 1;">心灵的碰撞。</p>
                         </div>
                     </div>
 
-                    <div class="card" data-selectable data-selectable-highlight style="background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.85)), url('https://www.wenzhimo.xyz/wp-content/uploads/2024/08/SCP-LOGO-2-scaled.jpg') center / cover no-repeat; 
-                                    position: relative; 
-                                    min-height: 350px; 
-                                    display: flex; 
-                                    flex-direction: column;">
-
+                    <div data-selectable data-selectable-highlight <?php echo kappa_get_homepage_bg_attrs( array(
+                        'variant'       => 'card',
+                        'desktop_image' => 'https://www.wenzhimo.xyz/wp-content/uploads/2024/08/SCP-LOGO-2-scaled.jpg',
+                        'mobile_image'  => 'https://www.wenzhimo.xyz/wp-content/uploads/2024/08/SCP-LOGO-2-scaled.jpg',
+                        'position'      => 'center',
+                        'overlay_start' => 'rgba(0,0,0,0.6)',
+                        'overlay_end'   => 'rgba(0,0,0,0.85)',
+                        'extra_classes' => 'card',
+                    ) ); ?>>
+                        <div class="homepage-bg-layer" aria-hidden="true"></div>
                         <a href="https://www.wenzhimo.xyz/scp-foundation-cn-branch/"
-                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></a>
 
                         <div
-                            style="position: relative; z-index: 2; pointer-events: none; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
+                            style="min-height: 350px; pointer-events: none; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
                             <h3>SCP基金会</h3>
                             <p style="flex-grow: 1;">最大的去中心化创作平台。</p>
                         </div>
@@ -251,19 +266,27 @@
                             while ( $recent_query->have_posts() ) : $recent_query->the_post();
 
                                 // 3. 处理文章封面背景
-                                $card_bg_style = '';
+                                $card_bg_attrs = 'class="card"';
                                 if ( has_post_thumbnail() ) {
                                     $thumbnail_url = get_the_post_thumbnail_url( get_the_ID(), 'medium_large' );
-                                    $card_bg_style = 'style="background: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.9)), url(\'' . esc_url($thumbnail_url) . '\') center / cover no-repeat; position: relative;"';
-                                } else {
-                                    // 即使没有背景图，也必须加上 position: relative
-                                    $card_bg_style = 'style="position: relative;"';
+                                    $card_bg_attrs = kappa_get_homepage_bg_attrs( array(
+                                        'variant'       => 'card',
+                                        'desktop_image' => $thumbnail_url,
+                                        'mobile_image'  => $thumbnail_url,
+                                        'position'      => 'center',
+                                        'overlay_start' => 'rgba(0, 0, 0, 0.65)',
+                                        'overlay_end'   => 'rgba(0, 0, 0, 0.9)',
+                                        'extra_classes' => 'card',
+                                    ) );
                                 }
                         ?>
-                    <div class="card" data-selectable data-selectable-highlight <?php echo $card_bg_style; ?>>
+                    <div data-selectable data-selectable-highlight <?php echo $card_bg_attrs; ?>>
+                        <?php if ( has_post_thumbnail() ) : ?>
+                        <div class="homepage-bg-layer" aria-hidden="true"></div>
+                        <?php endif; ?>
 
                         <a href="<?php the_permalink(); ?>"
-                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></a>
+                            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></a>
 
                         <div style="display: flex; flex-direction: column; height: 100%; pointer-events: none;">
 
@@ -282,14 +305,34 @@
 
                                 <span>[发布于]：<?php the_modified_time('Y-m-d H:i:s'); ?>
                                     <span style="color: #444; font-size: 0.8em; margin-left: 5px;">[ UNIX:
-                                        <?php the_modified_time('U'); ?> ]</span>
-                                </span><br>
-
-                                <div
-                                    style="font-family: '3 of 9 Barcode', 'Free 3 of 9', monospace; font-size: 2.8rem; color: #988b32; margin-top: 10px; line-height: 0.8;">
-                                    *<?php the_modified_time('U'); ?>*
+                                        <?php the_modified_time('U'); ?> ]
+                                    </span>
+                                </span>
+                                <br>
+                                <div id="barcode-container-<?php the_ID(); ?>" style="text-align: right; width: 100%; margin-top: 15px;">
+    
+                                    <img id="barcode-img-<?php the_ID(); ?>" style="max-width: 100%; height: auto; display: inline-block; opacity: 0.85;" />
+                                    
                                 </div>
-
+                                
+                                <script>
+                                    (function() {
+                                        var unixTimestamp = "<?php the_time('U'); ?>";
+                                        // 目标指向 img 标签
+                                        var imgSelector = "#barcode-img-<?php the_ID(); ?>";
+                                        
+                                        // JsBarcode 检测到是 img 标签，会自动输出 base64 图像
+                                        JsBarcode(imgSelector, unixTimestamp, {
+                                            format: "CODE39",           
+                                            width: 2.5,
+                                            height: 50,                
+                                            displayValue: false,       
+                                            lineColor: "#988b32",       
+                                            background: "transparent",
+                                            margin: 0
+                                        });
+                                    })();
+                                </script>
                             </div>
                         </div>
                     </div>
@@ -318,14 +361,18 @@
 
     <!-- 音乐分享 -->
     <section class="page">
-        <div class="page-frame" style="
-              background:
-                linear-gradient(rgba(10, 15, 10, 0.7), rgba(10, 15, 10, 0.85)),
-                url('https://www.wenzhimo.xyz/wp-content/uploads/2024/10/紺屋鴉江_鉛の冠_99161141_p0-scaled.jpg')
-                center 25% / cover no-repeat; position: absolute; width: 100%; height: 100%;
-            ">
+        <div <?php echo kappa_get_homepage_bg_attrs( array(
+            'variant'       => 'hero',
+            'desktop_image' => 'https://www.wenzhimo.xyz/wp-content/uploads/2024/10/紺屋鴉江_鉛の冠_99161141_p0-scaled.jpg',
+            'mobile_image'  => 'https://www.wenzhimo.xyz/wp-content/uploads/2024/10/紺屋鴉江_鉛の冠_99161141_p0-scaled.jpg',
+            'position'      => 'center 25%',
+            'overlay_start' => 'rgba(10, 15, 10, 0.7)',
+            'overlay_end'   => 'rgba(10, 15, 10, 0.85)',
+            'extra_classes' => 'page-frame',
+        ) ); ?>>
+            <div class="homepage-bg-layer" aria-hidden="true"></div>
             <div class="page-scroll"
-                style="position: relative; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 10vw;">
+                style="height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 10vw;">
 
                 <h1 data-selectable
                     style="color: #c7e6e8; text-shadow: 0 0 10px rgba(0, 255, 255, 0.4); font-size: clamp(28px, 4vw, 45px); margin-bottom: 20px;">
@@ -351,7 +398,7 @@
 
                 <div class="corner-quote">
                     <p data-selectable
-                        style="font-family: '华康金文体W3', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
+                        style="font-family: 'DFJinWenW3-GB', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
                         让频率震荡，让杂音沉寂。
                     </p>
                 </div>
@@ -362,14 +409,18 @@
 
     <!-- SCP基金会 -->
     <section class="page">
-        <div class="page-frame" style="
-              background:
-                linear-gradient(rgba(10, 15, 10, 0.75), rgba(10, 15, 10, 0.9)),
-                url('https://www.wenzhimo.xyz/wp-content/uploads/2024/08/SCP-LOGO-2-scaled.jpg')
-                center / cover no-repeat; position: absolute; width: 100%; height: 100%;
-            ">
+        <div <?php echo kappa_get_homepage_bg_attrs( array(
+            'variant'       => 'hero',
+            'desktop_image' => 'https://www.wenzhimo.xyz/wp-content/uploads/2024/08/SCP-LOGO-2-scaled.jpg',
+            'mobile_image'  => 'https://www.wenzhimo.xyz/wp-content/uploads/2024/08/SCP-LOGO-2-scaled.jpg',
+            'position'      => 'center',
+            'overlay_start' => 'rgba(10, 15, 10, 0.75)',
+            'overlay_end'   => 'rgba(10, 15, 10, 0.9)',
+            'extra_classes' => 'page-frame',
+        ) ); ?>>
+            <div class="homepage-bg-layer" aria-hidden="true"></div>
             <div class="page-scroll"
-                style="position: relative; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 10vw;">
+                style="height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 10vw;">
 
                 <h1 data-selectable
                     style="color: #d5dffa; text-shadow: 0 0 10px rgba(0, 255, 255, 0.4); font-family: 'Megrim';font-size: clamp(28px, 4vw, 45px); margin-bottom: 20px;">
@@ -413,18 +464,22 @@
 
     <!-- 页面一览 -->
     <section class="page">
-        <div class="page-frame" style="
-              background:
-                linear-gradient(rgba(10, 15, 10, 0.65), rgba(10, 15, 10, 0.85)),
-                url('https://www.wenzhimo.xyz/wp-content/uploads/2025/09/SCP-CN-027-scaled.jpg')
-                center 40% / cover no-repeat; position: absolute; width: 100%; height: 100%;
-            ">
+        <div <?php echo kappa_get_homepage_bg_attrs( array(
+            'variant'       => 'hero',
+            'desktop_image' => 'https://www.wenzhimo.xyz/wp-content/uploads/2025/09/SCP-CN-027-scaled.jpg',
+            'mobile_image'  => 'https://www.wenzhimo.xyz/wp-content/uploads/2025/09/SCP-CN-027-scaled.jpg',
+            'position'      => 'center 40%',
+            'overlay_start' => 'rgba(10, 15, 10, 0.65)',
+            'overlay_end'   => 'rgba(10, 15, 10, 0.85)',
+            'extra_classes' => 'page-frame',
+        ) ); ?>>
+            <div class="homepage-bg-layer" aria-hidden="true"></div>
             <div class="page-scroll"
-                style="position: relative; height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 10vw;">
+                style="height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 0 10vw;">
 
                 <h1 data-selectable
                     style="color: #00ffff; text-shadow: 0 0 10px rgba(0, 255, 255, 0.4); font-size: clamp(28px, 4vw, 45px); margin-bottom: 20px;">
-                    <span style="font-family: '白路彤彤手写体';">旁支末节</span> - [ INDEX ]
+                    <span style="font-family: 'bailutongtongshouxieti';">旁支末节</span> - [ INDEX ]
                 </h1>
 
                 <div data-selectable
@@ -446,7 +501,7 @@
 
                 <div class="corner-quote">
                     <p data-selectable
-                        style="font-family: '白路彤彤手写体', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
+                        style="font-family: 'bailutongtongshouxieti', serif; font-weight: bold; text-align: end; color: #988b32; text-shadow: 0 0 8px rgba(152, 139, 50, 0.5); margin: 0;">
                         旅途总有终点，不妨停下来回顾半生。
                     </p>
                 </div>
@@ -456,8 +511,19 @@
     </section>
 
     <!-- 技术能力 -->
-    <section class="page">
-        <div class="page-frame">
+    <section class="page page--tech-capability">
+        <div <?php echo kappa_get_homepage_bg_attrs( array(
+            'variant'       => 'hero',
+            'desktop_image' => '',
+            'mobile_image'  => '',
+            'position'      => 'center',
+            'overlay_start' => 'rgba(12, 12, 12, 0.82)',
+            'overlay_end'   => 'rgba(26, 26, 26, 0.92)',
+            'extra_classes' => 'page-frame page-frame--tech-capability',
+        ) ); ?>>
+            <div class="homepage-bg-layer homepage-bg-layer--tech-capability" aria-hidden="true">
+                <div class="homepage-bg-animation-host" data-homepage-bg-animation="tech-capability"></div>
+            </div>
             <div class="page-scroll">
                 <h1 data-selectable>技术与能力</h1>
                 <div data-selectable>
@@ -509,8 +575,8 @@
                             白洞
                         </div>
                     </a>
-
-
+                    
+                    
                     <a href="https://www.wenzhimo.xyz/kappa-heavy-industries-precision-manufacturing/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -520,7 +586,7 @@
                             <p>河童重工</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/yuuka-agriculture/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px; align-items: center;">
@@ -530,7 +596,7 @@
                             <p>幽香农业</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/yakumo-transit/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -540,8 +606,8 @@
                             <p>八云交通</p>
                         </div>
                     </a>
-
-
+                    
+                    
                     <a href="https://www.wenzhimo.xyz/kourin-retail-group/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -551,7 +617,7 @@
                             <p>香霖零售</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/night-sparrow-catering-group/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -561,7 +627,7 @@
                             <p>夜雀食堂</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/hakurei-autocracy-security-commission/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -571,7 +637,7 @@
                             <p>博丽专制</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/hakutaku-dairy-education-group/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -581,7 +647,7 @@
                             <p>白泽乳业</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/sanzu-river-legal-karma-auditing-firm/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -591,7 +657,7 @@
                             <p>三途川律师事务所</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/nagae-meteorological-environmental-monitoring-bureau/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -601,7 +667,7 @@
                             <p>永江气象站</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/fujiwara-thermal-coal-group/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -611,7 +677,7 @@
                             <p>藤原煤炭厂</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/yagokoro-pharmaceutical-life-sciences/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -621,7 +687,7 @@
                             <p>八意制药</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/mist-lake-strongest-popsicle-stand/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -631,7 +697,7 @@
                             <p>雾之湖冰棒小摊</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/bunbunmaru-media-group/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -641,7 +707,7 @@
                             <p>文文报社</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/chireiden-nuclear-cremation-biomass-energy-corp/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -651,7 +717,7 @@
                             <p>地灵殿火葬场</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/scarlet-estate-domestic-services-group/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
@@ -661,7 +727,7 @@
                             <p>红魔馆家政</p>
                         </div>
                     </a>
-
+                    
                     <a href="https://www.wenzhimo.xyz/alices-workshop-artisanal-automata-guild/">
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">

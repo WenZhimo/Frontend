@@ -31,13 +31,24 @@ let highlightTimer = null;
 // 消失防抖计时器
 let hideDebounceTimer = null;
 
+function isTargetRenderable(el) {
+    if (!el || el.offsetParent === null) return false;
+
+    const page = el.closest('.page');
+    if (page && !page.classList.contains('active')) return false;
+
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+}
+
 // ==========================================
 // 1. 角标逻辑 (Corner Indicator)
 // ==========================================
 
 function updateIndicator(el) {
-    if (!el || el.offsetParent === null) {
-        indicator.style.opacity = "0";
+    if (!isTargetRenderable(el)) {
+        indicatorTarget = null;
+        if (indicator) indicator.style.opacity = "0";
         return;
     }
 
@@ -73,8 +84,10 @@ function updateIndicator(el) {
 // 2. 高亮矩形逻辑 (Highlight Rect)
 // ==========================================
 function updateHighlight(el) {
-    if (!el || el.offsetParent === null) {
+    if (!isTargetRenderable(el)) {
         if (highlightRect) highlightRect.style.opacity = "0";
+        highlightTarget = null;
+        lastHighlightTarget = null;
         return;
     }
 
@@ -188,6 +201,16 @@ function hideHighlight() {
 // ==========================================
 
 function refreshAll() {
+    if (indicatorTarget && !isTargetRenderable(indicatorTarget)) {
+        indicatorTarget = null;
+        lastIndicatorTarget = null;
+        if (indicator) indicator.style.opacity = "0";
+    }
+
+    if (highlightTarget && !isTargetRenderable(highlightTarget)) {
+        hideHighlight();
+    }
+
     if (indicatorTarget) updateIndicator(indicatorTarget);
     if (highlightTarget) updateHighlight(highlightTarget);
 }
@@ -264,6 +287,11 @@ bindScrollTracking();
 window.addEventListener("resize", () => {
     refreshAll();
 });
+
+window.addEventListener("kappa:pager-change", () => {
+    clearIndicator();
+});
+
 setInterval(() => {
     refreshAll();
 }, 50);

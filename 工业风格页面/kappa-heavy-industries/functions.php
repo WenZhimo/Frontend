@@ -35,21 +35,34 @@ function kappa_heavy_industries_scripts() {
     wp_enqueue_style( 'kappa-background', $theme_dir . '/css/background.css', array(), '1.0' );
     wp_enqueue_style( 'kappa-header', $theme_dir . '/css/header.css', array(), '1.0' );
     wp_enqueue_style( 'kappa-pager', $theme_dir . '/css/pager.css', array(), '1.0' );
-    wp_enqueue_style( 'kappa-indicator', $theme_dir . '/css/indicator.css', array(), '1.0' );
+    if ( ! wp_is_mobile() ) {
+        wp_enqueue_style( 'kappa-indicator', $theme_dir . '/css/indicator.css', array(), '1.0' );
+    }
     wp_enqueue_style( 'kappa-footer', $theme_dir . '/css/footer.css', array(), '1.0' );
     wp_enqueue_style( 'kappa-footnote', $theme_dir . '/css/footnote.css', array(), '1.0' );
 
     // ==========================================
     // 2. 注册并加载字体库 (统一作为样式表加载)
     // ==========================================
+    //峄山碑篆体
     wp_enqueue_style( 'font-yishan', $theme_dir . '/asset/fonts/峄山碑篆体/峄山碑篆体/result.css', array(), '1.0' );
-    wp_enqueue_style( 'font-bailu', $theme_dir . '/asset/fonts/白路彤彤手写体/白路彤彤手写体/result.css', array(), '1.0' );
+    //bailutongtongshouxieti
+    wp_enqueue_style( 'font-bailutongtong', $theme_dir . '/asset/fonts/白路彤彤手写体/白路彤彤手写体/result.css', array(), '1.0' );
+    //ZCOOL QingKe HuangYou
     wp_enqueue_style( 'font-zcool', $theme_dir . '/asset/fonts/ZCOOLQingKeHuangYou-Regular/ZCOOLQingKeHuangYou-Regular/result.css', array(), '1.0' );
+    //DFJinWenW3-GB
+    wp_enqueue_style( 'font-huakangjinwen', $theme_dir . '/asset/fonts/华康金文体W3/华康金文体W3/result.css', array(), '1.0' );
+    //Megrim
     wp_enqueue_style( 'font-megrim', $theme_dir . '/asset/fonts/Megrim-Regular/Megrim-Regular/result.css', array(), '1.0' );
+    //Smooch
     wp_enqueue_style( 'font-smooch', $theme_dir . '/asset/fonts/Smooch-Regular/Smooch-Regular/result.css', array(), '1.0' );
+    //Splash
     wp_enqueue_style( 'font-splash', $theme_dir . '/asset/fonts/Splash-Regular/Splash-Regular/result.css', array(), '1.0' );
+    //Trade Winds
     wp_enqueue_style( 'font-tradewinds', $theme_dir . '/asset/fonts/TradeWinds-Regular/TradeWinds-Regular/result.css', array(), '1.0' );
+    //YuFanXinYu
     wp_enqueue_style( 'font-YuFanXinYu-Regular', $theme_dir . '/asset/fonts/余繁新语/余繁新语-Regular/result.css', array(), '1.0' );
+    //3 of 9 Barcode
     wp_enqueue_style( 'font-3-of-9-Barcode', $theme_dir . '/asset/fonts/3-of-9-Barcode/3Of9Barcode/result.css', array(), '1.0' );
     
 
@@ -59,37 +72,52 @@ function kappa_heavy_industries_scripts() {
     // ==========================================
     
     // 头部/核心特效脚本 (在 <head> 或 <body> 顶部运行)
-    wp_enqueue_script( 'crt-monitor-fx', $theme_dir . '/js/CRTMonitorFX.js', array(), '1.0', false );
+    if ( ! wp_is_mobile() ) {
+        wp_enqueue_script( 'crt-monitor-fx', $theme_dir . '/js/CRTMonitorFX.js', array(), '1.0', false );
+    }
     wp_enqueue_script( 'glitch-text', $theme_dir . '/asset/javascript/glitch-text.js', array(), '1.0', false );
     wp_enqueue_script( 'footnote-gen', $theme_dir . '/asset/javascript/FootnoteGenerator.js', array(), '1.0', false );
     wp_enqueue_script( 'footnote-preview', $theme_dir . '/asset/javascript/FootnotePreview.js', array(), '1.0', false );
 
     // 底部交互脚本模块 (在 <footer> 运行)
-    wp_enqueue_script( 'kappa-indicator-js', $theme_dir . '/js/indicator.js', array(), '1.0', true );
+    if ( ! wp_is_mobile() ) {
+        wp_enqueue_script( 'kappa-indicator-js', $theme_dir . '/js/indicator.js', array(), '1.0', true );
+    }
     //wp_enqueue_script( 'kappa-pager-js', $theme_dir . '/js/pager.js', array(), '1.0', true );
     wp_enqueue_script( 'kappa-clock-js', $theme_dir . '/js/clock.js', array(), '1.0', true );
     wp_enqueue_script( 'kappa-nav-js', $theme_dir . '/js/navigation.js', array(), '1.0', true );
-    wp_enqueue_script( 'kappa-cursor-js', $theme_dir . '/js/cursor.js', array(), '1.0', true );
+    wp_enqueue_script( 'kappa-progress-controller', $theme_dir . '/js/progress-controller.js', array(), '1.0', true );
+    if ( ! wp_is_mobile() ) {
+        wp_enqueue_script( 'kappa-cursor-js', $theme_dir . '/js/cursor.js', array(), '1.0', true );
+    }
     
    // ==========================================
     // 智能路由：只有【首页】才加载卡片翻页特效，其余全部正常滚动
     // ==========================================
     if ( is_front_page() ) {
         wp_enqueue_script( 'kappa-pager-js', $theme_dir . '/js/pager.js', array(), '1.0', true );
+
+        if ( ! wp_is_mobile() ) {
+            wp_enqueue_script( 'kappa-p5-js', 'https://cdn.jsdelivr.net/npm/p5@1.9.3/lib/p5.min.js', array(), '1.9.3', true );
+            wp_enqueue_script( 'kappa-tech-capability-bg', $theme_dir . '/js/homepage-tech-capability-bg.js', array( 'kappa-p5-js', 'kappa-pager-js' ), '1.0', true );
+        }
     } else {
         // 如果【是】单篇文章、页面，不仅不加载翻页脚本，还要动态注入解锁高度的 CSS
         $single_override_css = "
             html, body { overflow-y: auto !important; height: auto !important; }
-            #pager, .page, .page-frame, .page-scroll { 
-                position: relative !important; 
-                height: auto !important; 
-                min-height: 100vh; 
-                overflow: visible !important; 
-                display: block !important; 
-                opacity: 1 !important; 
-                visibility: visible !important; 
-                transform: none !important; 
-                z-index: 1; 
+            html { scrollbar-width: none; }
+            body { -ms-overflow-style: none; }
+            html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display: none; }
+            #pager, .page, .page-frame, .page-scroll {
+                position: relative !important;
+                height: auto !important;
+                min-height: 100vh;
+                overflow: visible !important;
+                display: block !important;
+                opacity: 1 !important;
+                visibility: visible !important;
+                transform: none !important;
+                z-index: 1;
             }
             .page-frame { background-attachment: fixed !important; }
         ";
@@ -100,6 +128,58 @@ function kappa_heavy_industries_scripts() {
 // 将上述函数挂载到 WordPress 的资源加载钩子上
 add_action( 'wp_enqueue_scripts', 'kappa_heavy_industries_scripts' );
 
+function kappa_get_homepage_bg_attrs( $args = array() ) {
+    $defaults = array(
+        'variant'       => 'card',
+        'desktop_image' => '',
+        'mobile_image'  => '',
+        'position'      => 'center',
+        'overlay_start' => 'rgba(0, 0, 0, 0.6)',
+        'overlay_end'   => 'rgba(0, 0, 0, 0.85)',
+        'extra_classes' => '',
+    );
+
+    $args = wp_parse_args( $args, $defaults );
+
+    $mode      = wp_is_mobile() ? 'static' : 'dynamic-ready';
+    $image_url = wp_is_mobile() && ! empty( $args['mobile_image'] ) ? $args['mobile_image'] : $args['desktop_image'];
+
+    $classes = array(
+        'homepage-bg',
+        'homepage-bg--' . sanitize_html_class( $args['variant'] ),
+    );
+
+    if ( 'dynamic-ready' === $mode ) {
+        $classes[] = 'homepage-bg--dynamic-ready';
+    }
+
+    if ( ! empty( $args['extra_classes'] ) ) {
+        $classes[] = $args['extra_classes'];
+    }
+
+    $style_parts = array(
+        '--homepage-bg-position: ' . esc_attr( $args['position'] ),
+        '--homepage-bg-overlay-start: ' . esc_attr( $args['overlay_start'] ),
+        '--homepage-bg-overlay-end: ' . esc_attr( $args['overlay_end'] ),
+    );
+
+    if ( ! empty( $image_url ) ) {
+        $style_parts[] = '--homepage-bg-image: url(\'' . esc_url( $image_url ) . '\')';
+    } else {
+        $style_parts[] = '--homepage-bg-image: none';
+    }
+
+    return sprintf(
+        'class="%1$s" data-bg-mode="%2$s" data-bg-desktop="%3$s" data-bg-mobile="%4$s" data-bg-position="%5$s" style="%6$s"',
+        esc_attr( trim( implode( ' ', array_filter( $classes ) ) ) ),
+        esc_attr( $mode ),
+        esc_url( $args['desktop_image'] ),
+        esc_url( $args['mobile_image'] ),
+        esc_attr( $args['position'] ),
+        esc_attr( implode( '; ', $style_parts ) )
+    );
+}
+
 
 // ==========================================
 // 4. 为底部的 JS 模块添加 type="module" 属性
@@ -108,12 +188,13 @@ add_action( 'wp_enqueue_scripts', 'kappa_heavy_industries_scripts' );
 // ==========================================
 function kappa_add_type_attribute( $tag, $handle, $src ) {
     // 定义哪些脚本需要 type="module"
-    $module_scripts = array( 
-        'kappa-indicator-js', 
-        'kappa-pager-js', 
-        'kappa-clock-js', 
-        'kappa-nav-js', 
-        'kappa-cursor-js' 
+    $module_scripts = array(
+        'kappa-indicator-js',
+        'kappa-pager-js',
+        'kappa-clock-js',
+        'kappa-nav-js',
+        'kappa-cursor-js',
+        'kappa-tech-capability-bg'
     );
     
     if ( in_array( $handle, $module_scripts ) ) {
