@@ -9,6 +9,12 @@ if (goHomeBtn) {
                 // 清所有 active/fading 并激活首页（非破坏性）
                 document.querySelectorAll('.page').forEach(p => p.classList.remove('active', 'fading', 'prev'));
                 first.classList.add('active');
+                window.dispatchEvent(new CustomEvent('kappa:pager-change', {
+                    detail: {
+                        index: 0,
+                        total: document.querySelectorAll('.page').length,
+                    },
+                }));
             }
         }
 
