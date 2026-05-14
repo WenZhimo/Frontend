@@ -25,6 +25,33 @@ footer {
     height: 4px;
     background: rgba(255, 255, 255, 0.15);
     position: relative;
+    cursor: pointer;
+    margin: 10px 0;
+    transition: height .18s ease, filter .18s ease;
+}
+
+footer:hover #progress,
+#progress[data-dragging="true"] {
+    height: 8px;
+}
+
+#progress::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 24px;
+    transform: translateY(-50%);
+}
+
+#progress:hover {
+    filter: brightness(1.1);
+}
+
+#progress[data-dragging="true"] {
+    filter: brightness(1.15);
+    cursor: ew-resize;
 }
 
 #progress span {
@@ -33,6 +60,10 @@ footer {
     width: 0%;
     background: var(--accent);
     transition: width .4s ease;
+}
+
+#progress[data-mode="scroll"] span {
+    transition: none;
 }
 
 /* 响应式：页脚 */

@@ -80,6 +80,7 @@
     }
     </style>
 </head>
+<?php if ( ! wp_is_mobile() ) : ?>
 <div id="corner-indicator" aria-hidden="true">
     <span class="tl">⌜</span>
     <span class="tr">⌝</span>
@@ -88,7 +89,10 @@
     <div class="indicator-data"></div>
 </div>
 <div id="highlight-rect" aria-hidden="true"></div>
+<?php endif; ?>
+<?php if ( is_single() && ! wp_is_mobile() ) : ?>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<?php endif; ?>
 <body <?php body_class(); ?>>
 
     <div class="grid-base"></div>
@@ -165,6 +169,7 @@
                 </div>
 
             </div>
+            <?php if ( ! wp_is_mobile() ) : ?>
             <div class="info-group hud-style">
                 <div class="coord-label">SYS.CURSOR_LOC</div>
                 <div class="terminal-box" aria-live="polite" aria-atomic="true">
@@ -172,6 +177,7 @@
                         class="bracket">]</span>
                 </div>
             </div>
+            <?php endif; ?>
 
             <div class="info-group hud-style">
                 <div class="coord-label">SYS.LOCAL_TIME <span class="status-dot" title="SYS.ONLINE"></span></div>
@@ -180,6 +186,7 @@
                     <span class="bracket">]</span>
                 </div>
             </div>
+            <?php if ( ! wp_is_mobile() ) : ?>
             <div class="info-group">
                 <div id="crt-config-trigger">[特效配置]</div>
                 <script>
@@ -187,6 +194,7 @@
                 new CRTMonitorFX('crt-config-trigger');
                 </script>
             </div>
+            <?php endif; ?>
         </div>
 
     </header>
