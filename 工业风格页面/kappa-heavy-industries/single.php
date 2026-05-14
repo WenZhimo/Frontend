@@ -15,14 +15,19 @@ get_header(); ?>
         style="width: 100%; max-height: 900px; object-fit: cover; display: block; opacity: 0.85; filter: contrast(1.1) grayscale(10%);">
 </div>
 <?php endif; ?>
+<?php if ( ! wp_is_mobile() ) : ?>
+<!-- 条形码生成库-->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<?php endif; ?>
+
 <div id="pager">
     <section class="page active">
 
         <div class="page-frame"
-            style="background: rgba(10, 10, 10, 0.9); display: flex; align-items: flex-start; justify-content: center; padding-top: 120px; overflow-y: auto;">
+            style="background: rgba(10, 10, 10, 0.2); display: flex; align-items: flex-start; justify-content: center; padding-top: 120px; overflow-y: auto;">
 
             <div id="article-container" class="page-scroll"
-                style="width: 100%; max-width: 900px; margin: 0 auto 100px auto; background: rgba(0, 20, 0, 0.6); border: 1px solid #988b32; box-shadow: 0 0 20px rgba(152, 139, 50, 0.2); padding: 50px; position: relative;">
+                style="width: 100%; max-width: 900px; margin: 0 auto 100px auto; background: rgba(0, 20, 0, 1); border: 1px solid #988b32; box-shadow: 0 0 20px rgba(152, 139, 50, 0.2); padding: 50px; position: relative;">
 
                 <div
                     style="position: absolute; top: 0; left: 0; width: 15px; height: 15px; border-top: 2px solid #988b32; border-left: 2px solid #988b32;">
@@ -45,7 +50,7 @@ get_header(); ?>
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
 
                         <div style="flex: 1;">
-                            <h1 data-selectable
+                            <h1 data-selectable class="wp-block-post-title"
                                 style="font-family: 峄山碑篆体; color: #988b32; font-size: clamp(30px, 4vw, 50px); margin: 0 0 15px 0; text-shadow: 0 0 10px rgba(152, 139, 50, 0.5);">
                                 <?php the_title(); ?>
                             </h1>
@@ -53,6 +58,7 @@ get_header(); ?>
                             
                         </div>
 
+                        <?php if ( ! wp_is_mobile() ) : ?>
                         <div data-selectable class="sys-hide-mobile"
                             style="flex-shrink: 0; border: 1px solid #988b32; padding: 5px; background: rgba(10,15,10,0.8); text-align: center; box-shadow: 0 0 10px rgba(152, 139, 50, 0.1);">
                             <div data-selectable id="article-qrcode"
@@ -63,10 +69,11 @@ get_header(); ?>
                                 [ SCAN_URL ]
                             </div>
                         </div>
+                        <?php endif; ?>
 
                     </div>
                     
-                    <div
+                    <div 
                         style="font-family: ZCOOLQingKeHuangYou-Regular; color: #888; font-size: 1.2rem; display: flex; gap: 20px; flex-wrap: wrap;">
                         <span data-selectable>[ 归档时间 ]：<?php the_time('Y-m-d H:i'); ?></span>
                         <span data-selectable>[ 课题责任人 ]：<?php the_author(); ?></span>
@@ -74,13 +81,35 @@ get_header(); ?>
                     </div>
                     
                     
-                    <div data-selectable class="sys-hide-mobile" style="width: fit-content; margin-left: auto; font-family: '3 of 9 Barcode', 'Free 3 of 9', monospace; font-size: 3.5rem; color: #e8eaa1; margin-top: 15px; line-height: 0.8; opacity: 0.85; user-select: none;">
-                        *<?php the_time('U'); ?>*
+                    <?php if ( ! wp_is_mobile() ) : ?>
+                    <div id="barcode-container" class="sys-hide-mobile" style="text-align: right; width: fit-content; max-width: 100%;margin-left: auto; opacity: 0.85; margin-top: 15px;">
+                        <svg id="barcode-svg"></svg>
                     </div>
-                    
+
+                    <script>
+                        // 在这里，我们将 PHP 的 Unix 时间戳通过 PHP 写入 JavaScript 变量中
+                        // 我们只将 PHP 的纯数字传给 JS，而不包含星号 *
+                        var unixTimestamp = "<?php the_time('U'); ?>";
+
+                        // 使用 JsBarcode 生成精确的 Code 39 条形码
+                        // 并设置颜色和背景
+                        JsBarcode("#barcode-svg", unixTimestamp, {
+                            format: "CODE39",           // 强制使用 Code 39
+                            width: 4,                  // 单个线条的宽度（像素），增加此值可放大条码
+                            height: 60,                // 条形码的高度（像素）
+                            displayValue: false,       // 隐藏下方人眼可读的数字
+                            // 关键设置：精确设置颜色和背景
+                            // lineColor 用于条（Bar），background 用于间隙（Space）
+                            // 反色设计
+                            lineColor: "#988b32",       // 条形码线条颜色（浅黄绿色）
+                            background: "transparent",      // 条形码背景颜色（黑色）
+                        });
+                    </script>
+                    <?php endif; ?>
 
                 </header>
 
+                <?php if ( ! wp_is_mobile() ) : ?>
                 <script>
                 document.addEventListener("DOMContentLoaded", function() {
                     var qrContainer = document.getElementById("article-qrcode");
@@ -97,6 +126,7 @@ get_header(); ?>
                     }
                 });
                 </script>
+                <?php endif; ?>
 
 
 
