@@ -1204,7 +1204,59 @@
 
             let models = [];
 
-            const LOAD_STEPS = 8; // logo + 7 external point-cloud models
+            const EXTERNAL_MODEL_DEFS = [
+                ["bin", "models/spaceship.bin", "dijiang", "DIJIANG 帝江号", 1],
+                [
+                    "bin",
+                    "models/anchor.bin",
+                    "anchor",
+                    "ANCHOR 锚地模块",
+                    ORG_REST_SCALE,
+                ],
+                [
+                    "bin",
+                    "models/factory.bin",
+                    "factory",
+                    "FACTORY 工厂模块",
+                    ORG_REST_SCALE,
+                ],
+                [
+                    "bin",
+                    "models/pile.bin",
+                    "pile",
+                    "PILE 桩基阵列",
+                    ORG_REST_SCALE,
+                ],
+                [
+                    "bin",
+                    "models/trinity.bin",
+                    "trinity",
+                    "TRINITY 三联结构",
+                    ORG_REST_SCALE,
+                ],
+                [
+                    "bin",
+                    "models/enemy.bin",
+                    "enemy",
+                    "ENEMY 敌对单元",
+                    ORG_REST_SCALE,
+                ],
+                [
+                    "bin",
+                    "models/hyperion_v3.bin",
+                    "hk3",
+                    "HK3 HYPERION",
+                    ORG_REST_SCALE,
+                ],
+                [
+                    "glb",
+                    "models/mesh_textured_pbr.glb",
+                    "customglb",
+                    "CUSTOM GLB",
+                    ORG_REST_SCALE,
+                ],
+            ];
+            const LOAD_STEPS = 1 + EXTERNAL_MODEL_DEFS.length; // logo + external models
             function setLoadingProgress(done, label = "") {
                 const p = Math.max(0, Math.min(1, done / LOAD_STEPS));
                 const percent = Math.round(p * 100);
@@ -1787,10 +1839,8 @@
             }
 
             // 目标顺序：
-            // 1) logo 采样模型（你的第一个）
-            // 2) spaceship / DIJIANG（你的第二个）
-            // 3~8) 原站剩余5个 bin 模型 + 最后一个 hk3
-            // 只保留前两个核心模型：Logo 和 帝江号
+            // 1) logo 采样模型
+            // 2+) EXTERNAL_MODEL_DEFS 中定义的 bin / glb 模型
             async function loadExternalModels() {
                 let loadDone = 0;
                 setLoadingProgress(loadDone, "Loading Core Assets");
@@ -1807,39 +1857,42 @@
                     console.warn("Failed to load logo.png");
                 }
                 loadDone++;
+                setLoadingProgress(loadDone, "Loading Logo");
 
                 const loaded = [];
-                const modelDefs = [
-                    [
-                        "bin",
-                        "models/spaceship.bin",
-                        "dijiang",
-                        "DIJIANG 帝江号",
-                        1,
-                    ],
-                ];
 
-                for (let i = 0; i < modelDefs.length; i++) {
+                for (let i = 0; i < EXTERNAL_MODEL_DEFS.length; i++) {
                     const [kind, path, key, name, scale, meshName] =
-                        modelDefs[i];
+                        EXTERNAL_MODEL_DEFS[i];
                     try {
                         const shiftDown = BIN_MODEL_SHIFT_DOWN_Y[key] ?? 0;
-                        const model = await loadBinModel(
-                            path,
-                            key,
-                            name,
-                            scale,
-                            shiftDown,
-                        );
+                        let model;
+                        if (kind === "glb" || kind === "gltf") {
+                            model = await loadGlbPointCloud(
+                                path,
+                                key,
+                                name,
+                                meshName,
+                                scale,
+                                shiftDown,
+                            );
+                        } else {
+                            model = await loadBinModel(
+                                path,
+                                key,
+                                name,
+                                scale,
+                                shiftDown,
+                            );
+                        }
                         loaded.push(model);
                     } catch (err) {
-                        console.warn("Failed to load model:", path);
+                        console.warn("Failed to load model:", path, err);
                     }
                     loadDone++;
-                    setLoadingProgress(loadDone, "Synchronizing");
+                    setLoadingProgress(loadDone, `Loading ${name}`);
                 }
 
-                // 仅保留 Logo 和 帝江号
                 models = logoModel ? [logoModel, ...loaded] : loaded;
             }
 
