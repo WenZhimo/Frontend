@@ -1,0 +1,68 @@
+/* --- 出处文本样式 --- */
+.slogan-source {
+    font-family: 'ZCOOL QingKe HuangYou', monospace, sans-serif;
+    color: #666;
+    font-size: clamp(14px, 2vw, 20px);
+    letter-spacing: 2px;
+    text-align: center;
+    margin-top: 2vh;
+    margin-bottom: 6vh;
+    text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+    display: block !important;
+    opacity: 1 !important;
+}
+
+.slogan-archive-entry {
+    text-align: center;
+}
+
+.hud-terminal-btn {
+    display: inline-block;
+    padding: 10px 25px;
+    background: rgba(10, 15, 10, 0.4);
+    border: 1px solid #444;
+    color: #aaa;
+    text-decoration: none;
+    font-family: monospace, sans-serif;
+    font-size: 0.95rem;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    position: relative;
+    opacity: 1 !important;
+}
+
+.hud-terminal-btn:hover {
+    border-color: #00ffff;
+    color: #fff;
+    background: rgba(0, 30, 30, 0.8);
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.2), inset 0 0 10px rgba(0, 255, 255, 0.1);
+}
+
+.hud-terminal-btn .cmd-prompt {
+    color: #988b32;
+    font-weight: bold;
+    margin-right: 8px;
+    transition: color 0.3s;
+}
+
+.hud-terminal-btn .btn-eng {
+    color: #555;
+    font-size: 0.8em;
+    margin-left: 8px;
+    transition: color 0.3s;
+}
+
+.hud-terminal-btn:hover .cmd-prompt,
+.hud-terminal-btn:hover .btn-eng {
+    color: #00ffff;
+}
+
+.card-meta-links a {
+    color: #988b32;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.card-meta-links a:hover {
+    color: #fff;
+    text-shadow: 0 0 8px rgba(152, 139, 50, 0.8);
+}

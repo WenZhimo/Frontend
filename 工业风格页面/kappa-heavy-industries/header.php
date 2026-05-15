@@ -6,79 +6,8 @@
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <style>
-
-    </style>
     <?php wp_head(); ?>
 
-    <?php if ( is_admin_bar_showing() ) : ?>
-    <style>
-    /* 强制覆盖所有的固定定位规则，防止被顶部黑条遮挡 */
-    html {
-        margin-top: 0 !important;
-    }
-
-    body {
-        margin-top: 0 !important;
-        padding-top: 32px !important;
-    }
-
-    .site-header {
-        top: 32px !important;
-    }
-
-    /* 强制提权：让管理员工具栏穿透所有全屏背景 */
-    #wpadminbar {
-        z-index: 2147483647 !important;
-        pointer-events: auto !important;
-        transform: translateZ(0);
-    }
-
-    @media screen and (max-width: 782px) {
-        body {
-            padding-top: 46px !important;
-        }
-
-        .site-header {
-            top: 46px !important;
-        }
-    }
-    </style>
-    <?php endif; ?>
-    <style>
-    /* ==========================================
-       全局链接样式
-       ========================================== */
-    a:link,
-    a:visited {
-        color: #a4612d;
-        /* 设置链接颜色 */
-        font-weight: bold;
-        /* 加粗显示 */
-        text-decoration: none;
-    }
-
-    /* ==========================================
-       修复动态 Logo 尺寸失控问题
-       ========================================== */
-    .logo img {
-        max-height: 45px;
-        /* 👈 核心限制：高度锁死在 45 像素 */
-        width: auto;
-        /* 宽度自动计算，保持图片原本的比例不变 */
-        display: block;
-        /* 去除图片底部自带的几个像素的幽灵空白 */
-        object-fit: contain;
-        /* 确保无论是长条形还是方形 Logo 都能完美塞进这个高度里 */
-        transition: filter 0.3s ease;
-        /* 给悬停加个平滑过渡 */
-    }
-
-    /* 工业风的悬停交互：鼠标放上去时会稍微发光或变亮 */
-    .logo a:hover img {
-        filter: drop-shadow(0 0 8px rgba(152, 139, 50, 0.6)) brightness(1.2);
-    }
-    </style>
 </head>
 <?php if ( ! wp_is_mobile() ) : ?>
 <div id="corner-indicator" aria-hidden="true">
@@ -189,10 +118,6 @@
             <?php if ( ! wp_is_mobile() ) : ?>
             <div class="info-group">
                 <div id="crt-config-trigger">[特效配置]</div>
-                <script>
-                // 传入您刚才创建的 DIV 的 ID
-                new CRTMonitorFX('crt-config-trigger');
-                </script>
             </div>
             <?php endif; ?>
         </div>

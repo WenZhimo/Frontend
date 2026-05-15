@@ -1,0 +1,50 @@
+/* 管理员工具栏适配 */
+html {
+    margin-top: 0 !important;
+}
+
+body.admin-bar {
+    margin-top: 0 !important;
+    padding-top: 32px !important;
+}
+
+body.admin-bar .site-header {
+    top: 32px !important;
+}
+
+#wpadminbar {
+    z-index: 2147483647 !important;
+    pointer-events: auto !important;
+    transform: translateZ(0);
+}
+
+@media screen and (max-width: 782px) {
+    body.admin-bar {
+        padding-top: 46px !important;
+    }
+
+    body.admin-bar .site-header {
+        top: 46px !important;
+    }
+}
+
+/* 全局链接样式 */
+a:link,
+a:visited {
+    color: #a4612d;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+/* 修复动态 Logo 尺寸失控问题 */
+.logo img {
+    max-height: 45px;
+    width: auto;
+    display: block;
+    object-fit: contain;
+    transition: filter 0.3s ease;
+}
+
+.logo a:hover img {
+    filter: drop-shadow(0 0 8px rgba(152, 139, 50, 0.6)) brightness(1.2);
+}
