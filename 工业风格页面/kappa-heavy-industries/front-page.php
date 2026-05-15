@@ -97,10 +97,9 @@
         <div class="page-frame">
             <div class="page-scroll">
 
-                <div style="height: 35vh;align-items: center;">
-                    <div style="height: 10vh;"></div>
-                    <h1 data-selectable
-                        style="margin: 0 auto;width: 40vw;text-align: justify;text-align-last: justify;font-family: 峄山碑篆体;font-size:clamp(40px, 10vw, 100px);">
+                <div id="homepage-hero-intro">
+                    <div id="homepage-hero-spacer"></div>
+                    <h1 id="homepage-hero-title" data-selectable>
                         文于止墨
                     </h1>
                 </div>
@@ -247,7 +246,7 @@
     <section class="page">
         <div class="page-frame">
             <div class="page-scroll">
-                <div style="display: grid;grid-template-columns: 3fr 1fr;gap: 16px;">
+                <div style="display: grid;grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));gap: 16px;">
                     <div>
                         <h1 data-selectable>最近更新</h1>
                     </div>
@@ -366,7 +365,7 @@
                     <?php endif; ?>
                 </div>
 
-                <div style="margin-top: 50px; text-align: center;">
+                <div class="homepage-recent-updates-footer" style="margin-top: 50px; text-align: center; padding-bottom: calc(var(--footer-h) + 32px);">
                     <a data-selectable data-selectable-highlight
                         href="https://www.wenzhimo.xyz/%E6%9C%80%E8%BF%91%E6%9B%B4%E6%96%B0/"
                         style="display: inline-block; font-family: ZCOOLQingKeHuangYou-Regular; color: #988b32; text-decoration: none; border: 1px solid #988b32; padding: 10px 30px; font-size: 1.2rem; transition: all 0.3s; background: rgba(152, 139, 50, 0.1);">

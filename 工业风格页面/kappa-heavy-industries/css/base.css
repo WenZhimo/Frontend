@@ -13,6 +13,8 @@
     --text: #e5e5e5;
     --muted: #c4ba78;
     --accent: #ffb700;
+    --header-h: 72px;
+    --footer-h: 80px;
 }
 
 * {
@@ -165,6 +167,87 @@ code {
     -webkit-transition: "color 9999s ease-out, background-color 9999s ease-out";
     -webkit-transition-delay: 9999s;
     -webkit-text-fill-color: #00ffff !important;
+}
+
+/* ==========================================
+   通用内页容器与页头骨架
+   ========================================== */
+.inner-page-shell {
+    width: 100%;
+    margin: 0 auto;
+}
+
+.inner-page-shell--narrow {
+    max-width: 900px;
+}
+
+.inner-page-shell--wide {
+    max-width: 1200px;
+}
+
+.inner-page-shell--spaced {
+    padding: clamp(120px, 16vh, 180px) 20px 100px;
+}
+
+.inner-page-header {
+    border-bottom: 1px dashed #555;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+}
+
+.inner-page-header--wide {
+    margin-bottom: 40px;
+}
+
+.inner-page-title {
+    font-family: 峄山碑篆体;
+    color: #988b32;
+    font-size: clamp(30px, 4vw, 50px);
+    margin: 0 0 15px;
+    text-shadow: 0 0 10px rgba(152, 139, 50, 0.5);
+}
+
+.inner-page-content {
+    font-size: 1.1rem;
+    line-height: 1.8;
+    color: #ccc;
+    text-align: justify;
+}
+
+.inner-page-return {
+    margin-top: 60px;
+    text-align: center;
+    border-top: 1px solid #333;
+    padding-top: 30px;
+}
+
+.inner-page-return-link {
+    display: inline-block;
+    font-family: ZCOOLQingKeHuangYou-Regular;
+    color: #988b32;
+    text-decoration: none;
+    border: 1px solid #988b32;
+    padding: 10px 30px;
+    font-size: 1.2rem;
+    transition: all 0.3s;
+    background: rgba(152, 139, 50, 0.1);
+}
+
+@media (max-width: 768px) {
+    .inner-page-shell--spaced {
+        padding: clamp(104px, 14vh, 140px) 18px 88px;
+    }
+
+    .inner-page-content {
+        font-size: 1rem;
+        line-height: 1.7;
+    }
+}
+
+@media (max-width: 480px) {
+    .inner-page-shell--spaced {
+        padding: clamp(96px, 12vh, 120px) 12px 76px;
+    }
 }
 
 /* ==========================================

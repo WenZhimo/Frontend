@@ -7,10 +7,10 @@ get_header(); ?>
 <div id="pager">
     <section class="page active">
         
-        <div style="width: 100%; max-width: 1200px; margin: 0 auto; padding: 180px 20px 100px 20px;">
-            
-            <header style="border-bottom: 1px dashed #555; margin-bottom: 40px; padding-bottom: 20px;">
-                <h1 data-selectable style="font-family: 峄山碑篆体; color: #988b32; font-size: clamp(30px, 4vw, 50px); margin: 0 0 15px 0; text-shadow: 0 0 10px rgba(152, 139, 50, 0.5);">
+        <div class="inner-page-shell inner-page-shell--wide inner-page-shell--spaced">
+
+            <header class="inner-page-header inner-page-header--wide">
+                <h1 data-selectable class="inner-page-title">
                     [ 检索域 ]：<?php the_archive_title(); ?>
                 </h1>
                 <?php 

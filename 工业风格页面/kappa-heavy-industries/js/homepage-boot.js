@@ -19,26 +19,15 @@ if (overlay && logRoot && progressFill && statusText) {
     let isPrinting = false;
     const logQueue = [];
 
-    function typeLine(message, done) {
+    function printLine(message, done) {
         const line = document.createElement('div');
         line.className = 'homepage-boot-log-line';
+        line.textContent = message;
         logRoot.appendChild(line);
-
-        let index = 0;
-        const tick = () => {
-            line.textContent = message.slice(0, index);
-            logRoot.scrollTop = logRoot.scrollHeight;
-
-            if (index >= message.length) {
-                done?.();
-                return;
-            }
-
-            index += 1;
-            window.setTimeout(tick, 12);
-        };
-
-        tick();
+        logRoot.scrollTop = logRoot.scrollHeight;
+        window.setTimeout(() => {
+            done?.();
+        }, 80);
     }
 
     function flushLogQueue() {
@@ -46,7 +35,7 @@ if (overlay && logRoot && progressFill && statusText) {
         isPrinting = true;
 
         const { message, done } = logQueue.shift();
-        typeLine(message, () => {
+        printLine(message, () => {
             isPrinting = false;
             done?.();
             flushLogQueue();

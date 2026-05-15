@@ -24,10 +24,10 @@ get_header(); ?>
     <section class="page active">
 
         <div class="page-frame"
-            style="background: rgba(10, 10, 10, 0.2); display: flex; align-items: flex-start; justify-content: center; padding-top: 120px; overflow-y: auto;">
+            style="background: rgba(10, 10, 10, 0.2); display: flex; align-items: flex-start; justify-content: center; padding-top: clamp(96px, 14vh, 120px); overflow-y: auto;">
 
             <div id="article-container" class="page-scroll"
-                style="width: 100%; max-width: 900px; margin: 0 auto 100px auto; background: rgba(0, 20, 0, 1); border: 1px solid #988b32; box-shadow: 0 0 20px rgba(152, 139, 50, 0.2); padding: 50px; position: relative;">
+                style="width: 100%; max-width: 900px; margin: 0 auto 100px auto; background: rgba(0, 20, 0, 1); border: 1px solid #988b32; box-shadow: 0 0 20px rgba(152, 139, 50, 0.2); padding: clamp(24px, 4vw, 50px); position: relative;">
 
                 <div
                     style="position: absolute; top: 0; left: 0; width: 15px; height: 15px; border-top: 2px solid #988b32; border-left: 2px solid #988b32;">
@@ -47,7 +47,7 @@ get_header(); ?>
                 <header
                     style="border-bottom: 1px dashed #555; margin-bottom: 30px; padding-bottom: 20px; position: relative;">
 
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap;">
 
                         <div style="flex: 1;">
                             <h1 data-selectable class="wp-block-post-title"
