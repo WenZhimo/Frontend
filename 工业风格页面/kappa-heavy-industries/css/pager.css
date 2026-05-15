@@ -1,3 +1,287 @@
+/* ---------- 首页启动层 ---------- */
+#homepage-boot-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    background: rgba(7, 7, 7, 0.92);
+    opacity: 1;
+    transition: opacity 0.55s ease, visibility 0.55s ease;
+}
+
+#homepage-boot-overlay.is-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.homepage-boot-terminal {
+    width: min(900px, 100%);
+    min-height: 320px;
+    max-height: min(76vh, 580px);
+    position: relative;
+    overflow: hidden;
+    background: #110d00;
+    border: 18px solid #1f1f1f;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.75);
+}
+
+.homepage-boot-terminal::before,
+.homepage-boot-terminal::after {
+    content: "";
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    z-index: 22;
+    border-color: rgba(255, 176, 0, 0.82);
+    border-style: solid;
+    pointer-events: none;
+}
+
+.homepage-boot-terminal::before {
+    top: 12px;
+    left: 12px;
+    border-width: 2px 0 0 2px;
+}
+
+.homepage-boot-terminal::after {
+    right: 12px;
+    bottom: 12px;
+    border-width: 0 2px 2px 0;
+}
+
+.homepage-boot-screen {
+    position: relative;
+    z-index: 2;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 32px 30px 24px;
+    box-sizing: border-box;
+    color: #ffb000;
+    font-family: 'ZCOOLQingKeHuangYou-Regular', 'VT323', monospace;
+    text-shadow: 0 0 4px rgba(153, 106, 0, 0.95);
+}
+
+.homepage-boot-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 2px solid #ffb000;
+    padding-bottom: 10px;
+    font-size: 1.15rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.homepage-boot-log {
+    flex: 1;
+    overflow: auto;
+    padding: 14px 16px;
+    border: 1px solid rgba(255, 176, 0, 0.22);
+    background: rgba(0, 0, 0, 0.24);
+    font-family: 'VT323', 'Consolas', monospace;
+    font-size: 1.3rem;
+    line-height: 1.25;
+    color: #ffcf73;
+    scrollbar-width: none;
+}
+
+.homepage-boot-log::-webkit-scrollbar {
+    display: none;
+}
+
+.homepage-boot-log-line::before {
+    content: '> ';
+    color: #ffb000;
+    opacity: 0.95;
+}
+
+.homepage-boot-log-line + .homepage-boot-log-line {
+    margin-top: 7px;
+}
+
+.homepage-boot-progress {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    position: relative;
+    border: 1px solid rgba(255, 176, 0, 0.24);
+}
+
+.homepage-boot-progress span {
+    position: absolute;
+    inset: 0;
+    width: 0%;
+    background: #ffb000;
+    box-shadow: 0 0 12px rgba(255, 176, 0, 0.32);
+    transition: width 0.3s ease;
+}
+
+.homepage-boot-scanlines,
+.homepage-boot-beam,
+.homepage-boot-flicker,
+.homepage-boot-vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.homepage-boot-scanlines {
+    z-index: 10;
+    background: linear-gradient(to bottom, rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+    background-size: 100% 4px;
+}
+
+.homepage-boot-beam {
+    z-index: 10;
+    background: linear-gradient(to bottom, transparent 0%, rgba(255, 255, 255, 0.05) 50%, transparent 100%);
+    background-size: 100% 20%;
+    background-repeat: no-repeat;
+    animation: homepage-boot-beam-scan 8s linear infinite;
+    mix-blend-mode: overlay;
+}
+
+.homepage-boot-flicker {
+    z-index: 11;
+    background: rgba(255, 176, 0, 0.02);
+    animation: homepage-boot-flicker 0.15s infinite;
+}
+
+.homepage-boot-vignette {
+    z-index: 12;
+    background: radial-gradient(circle, transparent 52%, rgba(0, 0, 0, 0.18) 82%, rgba(0, 0, 0, 0.62) 100%);
+}
+
+.homepage-boot-label {
+    position: absolute;
+    right: 24px;
+    bottom: 14px;
+    z-index: 20;
+    padding: 5px 14px;
+    background: #ece6d2;
+    color: #141414;
+    font-family: sans-serif;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.4px;
+    transform: rotate(-2deg);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.35);
+    opacity: 0.9;
+}
+
+@keyframes homepage-boot-beam-scan {
+    0% { background-position: 0 -20%; }
+    100% { background-position: 0 120%; }
+}
+
+@keyframes homepage-boot-flicker {
+    0% { opacity: 0.94; }
+    50% { opacity: 1; }
+    100% { opacity: 0.97; }
+}
+
+@media (max-width: 900px) {
+    #homepage-boot-overlay {
+        padding: 20px;
+    }
+
+    .homepage-boot-terminal {
+        min-height: 280px;
+        max-height: min(78vh, 520px);
+        border-width: 14px;
+    }
+
+    .homepage-boot-screen {
+        padding: 24px 22px 20px;
+    }
+
+    .homepage-boot-header {
+        font-size: 1rem;
+    }
+
+    .homepage-boot-log {
+        font-size: 1.15rem;
+    }
+}
+
+@media (max-width: 640px) {
+    #homepage-boot-overlay {
+        padding: 14px;
+        align-items: flex-start;
+        justify-content: center;
+    }
+
+    .homepage-boot-terminal {
+        width: 100%;
+        min-height: 240px;
+        max-height: min(72vh, 460px);
+        margin-top: 20px;
+        border-width: 10px;
+    }
+
+    .homepage-boot-screen {
+        padding: 18px 16px 16px;
+        gap: 10px;
+    }
+
+    .homepage-boot-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        font-size: 0.92rem;
+    }
+
+    .homepage-boot-log {
+        padding: 12px 12px;
+        font-size: 1rem;
+        line-height: 1.35;
+    }
+
+    .homepage-boot-progress {
+        height: 6px;
+    }
+
+    .homepage-boot-terminal::before,
+    .homepage-boot-terminal::after {
+        width: 16px;
+        height: 16px;
+        top: 8px;
+        left: 8px;
+    }
+
+    .homepage-boot-terminal::after {
+        top: auto;
+        left: auto;
+        right: 8px;
+        bottom: 8px;
+    }
+
+    .homepage-boot-label {
+        right: 12px;
+        bottom: 10px;
+        padding: 4px 10px;
+        font-size: 10px;
+    }
+}
+
+@media (max-width: 420px) {
+    .homepage-boot-terminal {
+        max-height: min(68vh, 400px);
+    }
+
+    .homepage-boot-log {
+        font-size: 0.92rem;
+    }
+
+    .homepage-boot-header {
+        font-size: 0.86rem;
+    }
+}
+
 /* ---------- 页面容器 ---------- */
 #pager {
     position: relative;

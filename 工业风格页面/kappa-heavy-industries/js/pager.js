@@ -52,15 +52,16 @@ function updatePages() {
 function initPagerSystem() {
     // 此时再抓取页面元素，确保骨架绝对 100% 构建完毕
     pages = [...document.querySelectorAll('.page')];
-    
+
     // 防御性退出：万一获取不到，直接终止，避免报错卡死
-    if (pages.length === 0) return; 
+    if (pages.length === 0) return;
 
     // 智能校准：寻找 HTML 中是否已经有默认带 active 类的页面，如果没有就强制从 0 开始
     const activeIndex = pages.findIndex(p => p.classList.contains('active'));
     index = activeIndex > -1 ? activeIndex : 0;
 
     updatePages();
+    window.dispatchEvent(new CustomEvent('kappa:home-ready-pager'));
 }
 
 /* ==========================================

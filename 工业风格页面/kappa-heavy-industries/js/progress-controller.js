@@ -61,9 +61,16 @@ function updateDocumentProgress() {
     setProgressRatio(scrollTop / scrollMax);
 }
 
+let hasEmittedHomeProgressReady = false;
+
 function syncProgress() {
     if (isFrontPageMode()) {
         updateFrontPageProgress();
+
+        if (!hasEmittedHomeProgressReady) {
+            hasEmittedHomeProgressReady = true;
+            window.dispatchEvent(new CustomEvent('kappa:home-ready-progress'));
+        }
     } else {
         updateDocumentProgress();
     }
