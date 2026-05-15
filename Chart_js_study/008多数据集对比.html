@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 8 课：多数据集对比</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="badge">Chart.js 系列课程</div>
+            <h1>第 8 课：多数据集对比</h1>
+            <p>在同一张图中放入多个 dataset，比对不同对象在同一组标签下的表现。</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="panel">
+            <h2>本课你会学到什么</h2>
+            <ul class="learn-list">
+                <li>多数据集对比的关键是：同一个 labels，共享多个 dataset。</li>
+                <li>这是做“多个班级、多个年份、多个产品组”对比时最常见的写法。</li>
+                <li>本课会用 grouped bar（并列柱形图）做演示。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>图表示例</h2>
+            <div class="chart-grid">
+                <article class="chart-card">
+                    <h3>多数据集并列柱形图</h3>
+                    <p>把多个对象放在同一组标签下比较，是最常见的数据分析图。</p>
+                    <div class="chart-shell">
+                        <canvas id="multiBar"></canvas>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>如何自定义成你自己的图表</h2>
+            <ul class="tip-list">
+                <li>增加对比对象时，不要改 labels，而是继续往 <code>datasets</code> 里添加对象。</li>
+                <li>每个 dataset 都可以有自己的 <code>label</code>、<code>data</code> 和颜色。</li>
+                <li>如果你想比较“同一批月份下的三条产品线”，这种写法最合适。</li>
+                <li>如果你想把它们堆起来而不是并列展示，请看第 13 课。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>课后练习建议</h2>
+            <ol class="exercise-list">
+                <li>增加第三组数据，例如“高三（3）班”。</li>
+                <li>把颜色改成你项目的品牌色。</li>
+                <li>把图例放到底部，观察布局变化。</li>
+            </ol>
+        </section>
+
+        <section class="panel">
+            <h2>课程导航</h2>
+            <div class="nav-links">
+                <a href="007散点图与气泡图.html">上一课</a>
+                <a href="index.html">返回首页</a>
+                <a href="009图表样式美化.html">下一课</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>建议一边运行、一边修改源码中的 labels、datasets 和 options 练习。源码注释里写明了每个参数的含义和可选值。</footer>
+
+    <script>
+        new Chart(document.getElementById('multiBar'), {
+            type: 'bar',
+            data: {
+                // 共享的 labels：所有 dataset 都按这套分类来对应数据
+                labels: ['语文', '数学', '英语', '物理', '化学'],
+
+                // datasets：多个对象 → 多组对比柱子
+                //   - 默认会自动并列显示（grouped bar）
+                //   - 想堆叠显示，请见第 13 课
+                datasets: [
+                    {
+                        // 第 1 组：高三（1）班
+                        label: '高三（1）班',
+                        data: [92, 88, 95, 84, 90],
+                        backgroundColor: 'rgba(79, 124, 255, 0.60)',
+                        borderColor: 'rgb(79, 124, 255)',
+                        borderWidth: 1,
+                    },
+                    {
+                        // 第 2 组：高三（2）班
+                        //   - 注意：data 长度必须与 labels 一致
+                        label: '高三（2）班',
+                        data: [86, 91, 89, 87, 85],
+                        backgroundColor: 'rgba(52, 211, 153, 0.60)',
+                        borderColor: 'rgb(5, 150, 105)',
+                        borderWidth: 1,
+                    },
+                    // 想加第 3 组？复制上面的对象，改 label/data/颜色即可。
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        // max：纵轴最大值（数字）
+                        //   - 没设置时，Chart.js 自动选择
+                        //   - 这里固定 100，让两个班的对比更稳定
+                        max: 100,
+                    },
+                },
+                plugins: {
+                    title: { display: true, text: '两个班级的科目成绩对比' },
+                    legend: {
+                        // legend.position：图例位置
+                        //   - 'top' / 'bottom' / 'left' / 'right'
+                        position: 'top',
+                    },
+                },
+            },
+        });
+    </script>
+</body>
+</html>

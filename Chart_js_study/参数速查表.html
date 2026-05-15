@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chart.js 参数速查表</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="badge">Chart.js 参数速查表</div>
+            <h1>Chart.js 参数速查表</h1>
+            <p>这份速查表覆盖 Chart.js 中最常用的配置参数，按 <code>type</code>、<code>data</code>、<code>options</code> 三大类整理，给出每个参数的含义、类型、可选值、默认值与推荐用法，方便你在写图表时随时查阅。</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="panel">
+            <h2>目录</h2>
+            <div class="toc">
+                <a href="#type">1. type 图表类型</a>
+                <a href="#data">2. data 数据结构</a>
+                <a href="#dataset">3. datasets 通用参数</a>
+                <a href="#dataset-bar">4. 柱形图专属参数</a>
+                <a href="#dataset-line">5. 折线图专属参数</a>
+                <a href="#dataset-pie">6. 饼图/环形图参数</a>
+                <a href="#dataset-radar">7. 雷达图参数</a>
+                <a href="#dataset-scatter">8. 散点图/气泡图参数</a>
+                <a href="#options-top">9. options 顶层参数</a>
+                <a href="#scales">10. scales 坐标轴</a>
+                <a href="#plugins-title">11. plugins.title 标题</a>
+                <a href="#plugins-legend">12. plugins.legend 图例</a>
+                <a href="#plugins-tooltip">13. plugins.tooltip 提示框</a>
+                <a href="#animation">14. 动画与交互</a>
+                <a href="#instance">15. Chart 实例方法</a>
+                <a href="#colors">16. 颜色取值规则</a>
+            </div>
+        </section>
+
+        <!-- ========== 1. type ========== -->
+        <section class="panel" id="type">
+            <h2>1. <code>type</code> 图表类型</h2>
+            <p class="small">写在 <code>config.type</code>，决定图表整体形态。</p>
+            <table class="params">
+                <tr>
+                    <th>取值</th><th>含义</th><th>典型用途</th>
+                </tr>
+                <tr><td><code>'bar'</code></td><td>柱形图</td><td>分类对比（销量、人数、得分）</td></tr>
+                <tr><td><code>'line'</code></td><td>折线图</td><td>趋势变化（时间序列）</td></tr>
+                <tr><td><code>'pie'</code></td><td>饼图</td><td>占比 / 构成关系</td></tr>
+                <tr><td><code>'doughnut'</code></td><td>环形图</td><td>占比，且中心可放说明文字</td></tr>
+                <tr><td><code>'radar'</code></td><td>雷达图</td><td>多维度对比</td></tr>
+                <tr><td><code>'polarArea'</code></td><td>极地区域图</td><td>分类强弱 + 占比感</td></tr>
+                <tr><td><code>'scatter'</code></td><td>散点图</td><td>两变量关系（x, y）</td></tr>
+                <tr><td><code>'bubble'</code></td><td>气泡图</td><td>三变量关系（x, y, r）</td></tr>
+            </table>
+        </section>
+
+        <!-- ========== 2. data ========== -->
+        <section class="panel" id="data">
+            <h2>2. <code>data</code> 数据结构</h2>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>取值示例</th>
+                </tr>
+                <tr>
+                    <td><code>labels</code></td>
+                    <td>string[]</td>
+                    <td>横轴 / 分类标签数组（pie/doughnut 中是每个扇区的名字）</td>
+                    <td><code>['1月','2月','3月']</code></td>
+                </tr>
+                <tr>
+                    <td><code>datasets</code></td>
+                    <td>object[]</td>
+                    <td>必须是数组，每个元素代表一组数据。多 dataset 可以做分组对比 / 堆叠 / 组合图</td>
+                    <td><code>[{ label, data, ... }]</code></td>
+                </tr>
+            </table>
+            <p class="small">注意：scatter / bubble 不需要 <code>labels</code>，因为每个数据点自带坐标。</p>
+        </section>
+
+        <!-- ========== 3. dataset 通用 ========== -->
+        <section class="panel" id="dataset">
+            <h2>3. <code>datasets</code> 通用参数</h2>
+            <p class="small">所有图表类型都通用的 dataset 字段。</p>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>默认值 / 取值范围</th>
+                </tr>
+                <tr>
+                    <td><code>label</code></td><td>string</td>
+                    <td>这组数据的名字，显示在图例和 tooltip 中</td>
+                    <td>无默认，建议必填</td>
+                </tr>
+                <tr>
+                    <td><code>data</code></td><td>number[] 或 object[]</td>
+                    <td>数值数组（柱/线/饼）或对象数组（散点/气泡）</td>
+                    <td>必填</td>
+                </tr>
+                <tr>
+                    <td><code>backgroundColor</code></td><td>string 或 string[]</td>
+                    <td>填充色。单值 → 全部同色；数组 → 每项一色</td>
+                    <td>颜色字符串，如 <code>'rgba(79,124,255,0.55)'</code></td>
+                </tr>
+                <tr>
+                    <td><code>borderColor</code></td><td>string 或 string[]</td>
+                    <td>边框 / 折线颜色</td>
+                    <td>颜色字符串</td>
+                </tr>
+                <tr>
+                    <td><code>borderWidth</code></td><td>number</td>
+                    <td>边框 / 折线粗细（像素）</td>
+                    <td>柱图默认 0；折线默认 3</td>
+                </tr>
+                <tr>
+                    <td><code>hidden</code></td><td>boolean</td>
+                    <td>是否在图中隐藏这组数据</td>
+                    <td>默认 <code>false</code></td>
+                </tr>
+                <tr>
+                    <td><code>order</code></td><td>number</td>
+                    <td>多 dataset 的绘制顺序，数字越小越先画（被覆盖）</td>
+                    <td>默认 0</td>
+                </tr>
+                <tr>
+                    <td><code>stack</code></td><td>string</td>
+                    <td>堆叠分组名，相同 stack 名的 dataset 会堆在一起</td>
+                    <td>无</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- ========== 4. bar ========== -->
+        <section class="panel" id="dataset-bar">
+            <h2>4. 柱形图（bar）专属参数</h2>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>取值范围</th>
+                </tr>
+                <tr>
+                    <td><code>borderRadius</code></td><td>number 或 object</td>
+                    <td>柱子圆角；对象形式可分别设置 4 个角</td>
+                    <td>数字 ≥ 0；推荐 8~12</td>
+                </tr>
+                <tr>
+                    <td><code>borderSkipped</code></td><td>string 或 false</td>
+                    <td>哪一侧不绘制边框；设为 false 时四角都画（配合圆角能让顶/底都圆）</td>
+                    <td><code>'start'</code>(默认) / <code>'end'</code> / <code>'top'</code> / <code>'bottom'</code> / <code>'left'</code> / <code>'right'</code> / <code>false</code></td>
+                </tr>
+                <tr>
+                    <td><code>barPercentage</code></td><td>number</td>
+                    <td>柱子占用类别宽度的比例</td>
+                    <td>0~1，默认 <code>0.9</code></td>
+                </tr>
+                <tr>
+                    <td><code>categoryPercentage</code></td><td>number</td>
+                    <td>类别本身占用刻度宽度的比例</td>
+                    <td>0~1，默认 <code>0.8</code></td>
+                </tr>
+                <tr>
+                    <td><code>barThickness</code></td><td>number 或 'flex'</td>
+                    <td>固定柱宽（像素）；<code>'flex'</code> 时自动均匀分布</td>
+                    <td>正整数 / <code>'flex'</code></td>
+                </tr>
+                <tr>
+                    <td><code>maxBarThickness</code></td><td>number</td>
+                    <td>柱子最大像素宽度，避免在宽屏上过粗</td>
+                    <td>正整数</td>
+                </tr>
+                <tr>
+                    <td><code>indexAxis</code> <span class="small">(写在 options)</span></td><td>string</td>
+                    <td>切换垂直 / 水平柱形图</td>
+                    <td><code>'x'</code>(默认) / <code>'y'</code></td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- ========== 5. line ========== -->
+        <section class="panel" id="dataset-line">
+            <h2>5. 折线图（line）专属参数</h2>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>取值范围</th>
+                </tr>
+                <tr>
+                    <td><code>tension</code></td><td>number</td>
+                    <td>曲线张力，越大越平滑</td>
+                    <td>0~1，默认 0；推荐 0.3~0.4</td>
+                </tr>
+                <tr>
+                    <td><code>fill</code></td><td>boolean / string / number</td>
+                    <td>是否填充线下方区域</td>
+                    <td><code>true</code> / <code>false</code> / <code>'origin'</code> / <code>'start'</code> / <code>'end'</code> / 数据集索引</td>
+                </tr>
+                <tr>
+                    <td><code>stepped</code></td><td>boolean / string</td>
+                    <td>阶梯折线</td>
+                    <td><code>false</code>(默认) / <code>true</code> / <code>'before'</code> / <code>'after'</code> / <code>'middle'</code></td>
+                </tr>
+                <tr>
+                    <td><code>spanGaps</code></td><td>boolean / number</td>
+                    <td>是否跨过 null/NaN 数据点画线；数字时表示最大跨距（毫秒）</td>
+                    <td>默认 <code>false</code></td>
+                </tr>
+                <tr>
+                    <td><code>cubicInterpolationMode</code></td><td>string</td>
+                    <td>曲线插值模式</td>
+                    <td><code>'default'</code> / <code>'monotone'</code></td>
+                </tr>
+                <tr>
+                    <td><code>pointRadius</code></td><td>number</td>
+                    <td>数据点半径（像素），0 = 隐藏</td>
+                    <td>≥ 0，默认 3</td>
+                </tr>
+                <tr>
+                    <td><code>pointHoverRadius</code></td><td>number</td>
+                    <td>悬停时数据点半径</td>
+                    <td>≥ 0，默认 4</td>
+                </tr>
+                <tr>
+                    <td><code>pointStyle</code></td><td>string 或 Image</td>
+                    <td>数据点形状</td>
+                    <td><code>'circle'</code>(默认) / <code>'cross'</code> / <code>'crossRot'</code> / <code>'dash'</code> / <code>'line'</code> / <code>'rect'</code> / <code>'rectRounded'</code> / <code>'rectRot'</code> / <code>'star'</code> / <code>'triangle'</code> / 自定义图片</td>
+                </tr>
+                <tr>
+                    <td><code>pointBackgroundColor</code></td><td>string 或 string[]</td>
+                    <td>数据点填充色</td>
+                    <td>颜色字符串</td>
+                </tr>
+                <tr>
+                    <td><code>pointBorderColor</code></td><td>string 或 string[]</td>
+                    <td>数据点边框色</td>
+                    <td>颜色字符串</td>
+                </tr>
+                <tr>
+                    <td><code>showLine</code></td><td>boolean</td>
+                    <td>是否显示连线（false 即只显示点）</td>
+                    <td>默认 <code>true</code></td>
+                </tr>
+                <tr>
+                    <td><code>borderDash</code></td><td>number[]</td>
+                    <td>虚线样式 <code>[实线长, 间隔长]</code></td>
+                    <td>例：<code>[6, 4]</code></td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- ========== 6. pie / doughnut ========== -->
+        <section class="panel" id="dataset-pie">
+            <h2>6. 饼图 / 环形图（pie / doughnut）参数</h2>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>取值范围</th>
+                </tr>
+                <tr>
+                    <td><code>cutout</code> <span class="small">(options)</span></td><td>string 或 number</td>
+                    <td>环形图中心空洞大小</td>
+                    <td>百分比 <code>'0%'</code>~<code>'99%'</code> 或像素数；pie 默认 0，doughnut 默认 50%</td>
+                </tr>
+                <tr>
+                    <td><code>radius</code> <span class="small">(options)</span></td><td>string 或 number</td>
+                    <td>整个饼图的外半径</td>
+                    <td>百分比或像素，默认 <code>'100%'</code></td>
+                </tr>
+                <tr>
+                    <td><code>rotation</code> <span class="small">(options)</span></td><td>number</td>
+                    <td>起始角度（度）</td>
+                    <td>默认 0（12 点方向）</td>
+                </tr>
+                <tr>
+                    <td><code>circumference</code> <span class="small">(options)</span></td><td>number</td>
+                    <td>总弧度（度），可用来做半圆图</td>
+                    <td>默认 360；半圆写 180</td>
+                </tr>
+                <tr>
+                    <td><code>borderColor</code></td><td>string</td>
+                    <td>扇区之间的分隔线颜色，常用白色</td>
+                    <td>颜色字符串</td>
+                </tr>
+                <tr>
+                    <td><code>borderWidth</code></td><td>number</td>
+                    <td>分隔线粗细</td>
+                    <td>≥ 0</td>
+                </tr>
+                <tr>
+                    <td><code>offset</code></td><td>number 或 number[]</td>
+                    <td>扇区向外突出的像素距离</td>
+                    <td>默认 0</td>
+                </tr>
+                <tr>
+                    <td><code>spacing</code></td><td>number</td>
+                    <td>扇区之间的额外间距</td>
+                    <td>默认 0</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- ========== 7. radar ========== -->
+        <section class="panel" id="dataset-radar">
+            <h2>7. 雷达图（radar）参数</h2>
+            <p class="small">雷达图只有一条径向轴 <code>scales.r</code>，与 x/y 轴写法不同。</p>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>取值范围</th>
+                </tr>
+                <tr>
+                    <td><code>scales.r.min</code></td><td>number</td><td>径向轴最小值</td><td>建议 0</td>
+                </tr>
+                <tr>
+                    <td><code>scales.r.max</code></td><td>number</td><td>径向轴最大值（满分）</td><td>例：100、10</td>
+                </tr>
+                <tr>
+                    <td><code>scales.r.beginAtZero</code></td><td>boolean</td><td>是否从 0 开始</td><td>默认 <code>false</code>，建议 <code>true</code></td>
+                </tr>
+                <tr>
+                    <td><code>scales.r.ticks.stepSize</code></td><td>number</td><td>刻度间隔</td><td>正数</td>
+                </tr>
+                <tr>
+                    <td><code>scales.r.angleLines</code></td><td>object</td><td>从中心射出的辐射线</td><td>例：<code>{ color: '#eee' }</code></td>
+                </tr>
+                <tr>
+                    <td><code>scales.r.pointLabels</code></td><td>object</td><td>每个轴顶端的维度文字</td><td>例：<code>{ font: { size: 14 } }</code></td>
+                </tr>
+                <tr>
+                    <td><code>pointBackgroundColor</code></td><td>string</td><td>顶点颜色</td><td>颜色字符串</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- ========== 8. scatter / bubble ========== -->
+        <section class="panel" id="dataset-scatter">
+            <h2>8. 散点图 / 气泡图参数</h2>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th>
+                </tr>
+                <tr>
+                    <td><code>data</code> 元素</td><td><code>{ x, y }</code> 或 <code>{ x, y, r }</code></td>
+                    <td>scatter 用 x/y；bubble 多一个 r（气泡半径，单位像素，<strong>不会随坐标缩放</strong>）</td>
+                </tr>
+                <tr>
+                    <td><code>scales.x.title.text</code></td><td>string</td>
+                    <td>横轴含义说明（强烈建议写）</td>
+                </tr>
+                <tr>
+                    <td><code>scales.y.title.text</code></td><td>string</td>
+                    <td>纵轴含义说明</td>
+                </tr>
+                <tr>
+                    <td><code>scales.x.type</code></td><td>string</td>
+                    <td>轴类型：<code>'linear'</code>(默认) / <code>'logarithmic'</code> / <code>'time'</code> / <code>'category'</code></td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- ========== 9. options 顶层 ========== -->
+        <section class="panel" id="options-top">
+            <h2>9. <code>options</code> 顶层参数</h2>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>取值 / 默认</th>
+                </tr>
+                <tr>
+                    <td><code>responsive</code></td><td>boolean</td>
+                    <td>是否随容器尺寸变化自动重绘</td>
+                    <td>默认 <code>true</code></td>
+                </tr>
+                <tr>
+                    <td><code>maintainAspectRatio</code></td><td>boolean</td>
+                    <td>是否保持默认 2:1 宽高比；设 false 后充满容器高度</td>
+                    <td>默认 <code>true</code></td>
+                </tr>
+                <tr>
+                    <td><code>aspectRatio</code></td><td>number</td>
+                    <td>当 maintainAspectRatio 为 true 时的宽高比</td>
+                    <td>默认 2</td>
+                </tr>
+                <tr>
+                    <td><code>resizeDelay</code></td><td>number</td>
+                    <td>窗口变化后多少毫秒才重绘（防抖）</td>
+                    <td>默认 0</td>
+                </tr>
+                <tr>
+                    <td><code>devicePixelRatio</code></td><td>number</td>
+                    <td>渲染分辨率倍数，默认跟随屏幕</td>
+                    <td>≥ 1</td>
+                </tr>
+                <tr>
+                    <td><code>indexAxis</code></td><td>string</td>
+                    <td>分类轴方向（柱形图水平 / 垂直）</td>
+                    <td><code>'x'</code>(默认) / <code>'y'</code></td>
+                </tr>
+                <tr>
+                    <td><code>locale</code></td><td>string</td>
+                    <td>数字格式化所用区域</td>
+                    <td>例：<code>'zh-CN'</code></td>
+                </tr>
+                <tr>
+                    <td><code>layout.padding</code></td><td>number 或 object</td>
+                    <td>图表外边距</td>
+                    <td>例：<code>{ top: 8, right: 12 }</code></td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- ========== 10. scales ========== -->
+        <section class="panel" id="scales">
+            <h2>10. <code>scales</code> 坐标轴</h2>
+            <p class="small">写在 <code>options.scales.x</code> / <code>.y</code>（雷达图为 <code>.r</code>）。每个轴都支持下面这些字段。</p>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>取值 / 默认</th>
+                </tr>
+                <tr>
+                    <td><code>type</code></td><td>string</td>
+                    <td>轴类型</td>
+                    <td><code>'linear'</code> / <code>'logarithmic'</code> / <code>'category'</code> / <code>'time'</code> / <code>'timeseries'</code> / <code>'radialLinear'</code></td>
+                </tr>
+                <tr>
+                    <td><code>display</code></td><td>boolean / 'auto'</td>
+                    <td>是否显示该轴</td>
+                    <td>默认 <code>true</code></td>
+                </tr>
+                <tr>
+                    <td><code>position</code></td><td>string</td>
+                    <td>轴位置</td>
+                    <td><code>'left'</code> / <code>'right'</code> / <code>'top'</code> / <code>'bottom'</code> / <code>'center'</code></td>
+                </tr>
+                <tr>
+                    <td><code>min</code> / <code>max</code></td><td>number</td>
+                    <td>手动指定数值范围</td>
+                    <td>不写则自动</td>
+                </tr>
+                <tr>
+                    <td><code>suggestedMin</code> / <code>suggestedMax</code></td><td>number</td>
+                    <td>建议的范围（数据超出仍会扩展）</td>
+                    <td>—</td>
+                </tr>
+                <tr>
+                    <td><code>beginAtZero</code></td><td>boolean</td>
+                    <td>是否从 0 起</td>
+                    <td>默认 <code>false</code></td>
+                </tr>
+                <tr>
+                    <td><code>reverse</code></td><td>boolean</td>
+                    <td>是否反向</td>
+                    <td>默认 <code>false</code></td>
+                </tr>
+                <tr>
+                    <td><code>stacked</code></td><td>boolean</td>
+                    <td>多 dataset 是否堆叠</td>
+                    <td>默认 <code>false</code></td>
+                </tr>
+                <tr>
+                    <td><code>ticks.stepSize</code></td><td>number</td>
+                    <td>刻度间隔</td>
+                    <td>默认自动</td>
+                </tr>
+                <tr>
+                    <td><code>ticks.maxTicksLimit</code></td><td>number</td>
+                    <td>刻度数量上限</td>
+                    <td>默认 11</td>
+                </tr>
+                <tr>
+                    <td><code>ticks.callback</code></td><td>function</td>
+                    <td>自定义刻度文本，例：<code>v => v + ' 元'</code></td>
+                    <td>—</td>
+                </tr>
+                <tr>
+                    <td><code>ticks.color</code> / <code>ticks.font</code></td><td>string / object</td>
+                    <td>刻度颜色和字体</td>
+                    <td>例：<code>{ size: 12, weight: '600' }</code></td>
+                </tr>
+                <tr>
+                    <td><code>title.display</code></td><td>boolean</td><td>是否显示轴标题</td><td>默认 <code>false</code></td>
+                </tr>
+                <tr>
+                    <td><code>title.text</code></td><td>string</td><td>轴标题文本</td><td>—</td>
+                </tr>
+                <tr>
+                    <td><code>grid.display</code></td><td>boolean</td><td>是否绘制网格线</td><td>默认 <code>true</code></td>
+                </tr>
+                <tr>
+                    <td><code>grid.color</code></td><td>string / function</td><td>网格线颜色</td><td>颜色字符串</td>
+                </tr>
+                <tr>
+                    <td><code>grid.lineWidth</code></td><td>number</td><td>网格线粗细</td><td>默认 1</td>
+                </tr>
+                <tr>
+                    <td><code>grid.drawOnChartArea</code></td><td>boolean</td>
+                    <td>是否在图表内部绘制网格线（双 y 轴时副轴常设 false）</td>
+                    <td>默认 <code>true</code></td>
+                </tr>
+                <tr>
+                    <td><code>grid.drawTicks</code></td><td>boolean</td><td>是否在轴上绘制小短线</td><td>默认 <code>true</code></td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- ========== 11. plugins.title ========== -->
+        <section class="panel" id="plugins-title">
+            <h2>11. <code>plugins.title</code> 标题</h2>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>取值 / 默认</th>
+                </tr>
+                <tr><td><code>display</code></td><td>boolean</td><td>是否显示标题</td><td>默认 <code>false</code></td></tr>
+                <tr><td><code>text</code></td><td>string 或 string[]</td><td>标题文本，数组实现多行</td><td>—</td></tr>
+                <tr><td><code>position</code></td><td>string</td><td>标题位置</td><td><code>'top'</code>(默认) / <code>'bottom'</code> / <code>'left'</code> / <code>'right'</code></td></tr>
+                <tr><td><code>align</code></td><td>string</td><td>对齐方式</td><td><code>'start'</code> / <code>'center'</code>(默认) / <code>'end'</code></td></tr>
+                <tr><td><code>color</code></td><td>string</td><td>文字颜色</td><td>颜色字符串</td></tr>
+                <tr><td><code>font</code></td><td>object</td><td>字体配置</td><td>例：<code>{ size: 18, weight: 'bold' }</code></td></tr>
+                <tr><td><code>padding</code></td><td>number 或 object</td><td>标题与图之间的间距</td><td>默认 10</td></tr>
+                <tr><td><code>fullSize</code></td><td>boolean</td><td>是否占满整行</td><td>默认 <code>true</code></td></tr>
+            </table>
+        </section>
+
+        <!-- ========== 12. plugins.legend ========== -->
+        <section class="panel" id="plugins-legend">
+            <h2>12. <code>plugins.legend</code> 图例</h2>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>取值 / 默认</th>
+                </tr>
+                <tr><td><code>display</code></td><td>boolean</td><td>是否显示图例</td><td>默认 <code>true</code></td></tr>
+                <tr><td><code>position</code></td><td>string</td><td>图例位置</td><td><code>'top'</code>(默认) / <code>'bottom'</code> / <code>'left'</code> / <code>'right'</code> / <code>'chartArea'</code></td></tr>
+                <tr><td><code>align</code></td><td>string</td><td>对齐方式</td><td><code>'start'</code> / <code>'center'</code>(默认) / <code>'end'</code></td></tr>
+                <tr><td><code>reverse</code></td><td>boolean</td><td>是否反序</td><td>默认 <code>false</code></td></tr>
+                <tr><td><code>maxHeight</code> / <code>maxWidth</code></td><td>number</td><td>最大宽高（像素）</td><td>—</td></tr>
+                <tr><td><code>fullSize</code></td><td>boolean</td><td>是否占满整行</td><td>默认 <code>true</code></td></tr>
+                <tr><td><code>labels.color</code></td><td>string</td><td>图例文字颜色</td><td>颜色字符串</td></tr>
+                <tr><td><code>labels.font</code></td><td>object</td><td>图例字体</td><td>例：<code>{ size: 13 }</code></td></tr>
+                <tr><td><code>labels.boxWidth</code></td><td>number</td><td>颜色块宽度</td><td>默认 40</td></tr>
+                <tr><td><code>labels.boxHeight</code></td><td>number</td><td>颜色块高度</td><td>默认与字体相近</td></tr>
+                <tr><td><code>labels.padding</code></td><td>number</td><td>每项的间距</td><td>默认 10</td></tr>
+                <tr><td><code>labels.usePointStyle</code></td><td>boolean</td><td>是否用点样式代替方块</td><td>默认 <code>false</code></td></tr>
+                <tr><td><code>onClick</code></td><td>function</td><td>自定义点击图例的行为</td><td>—</td></tr>
+            </table>
+        </section>
+
+        <!-- ========== 13. plugins.tooltip ========== -->
+        <section class="panel" id="plugins-tooltip">
+            <h2>13. <code>plugins.tooltip</code> 提示框</h2>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>取值 / 默认</th>
+                </tr>
+                <tr><td><code>enabled</code></td><td>boolean</td><td>是否启用</td><td>默认 <code>true</code></td></tr>
+                <tr><td><code>mode</code></td><td>string</td>
+                    <td>命中模式（决定显示哪些项）</td>
+                    <td><code>'point'</code> / <code>'nearest'</code>(默认) / <code>'index'</code> / <code>'dataset'</code> / <code>'x'</code> / <code>'y'</code></td>
+                </tr>
+                <tr><td><code>intersect</code></td><td>boolean</td><td>是否必须真正悬停在元素上</td><td>默认 <code>true</code></td></tr>
+                <tr><td><code>position</code></td><td>string</td><td>定位策略</td><td><code>'average'</code>(默认) / <code>'nearest'</code></td></tr>
+                <tr><td><code>backgroundColor</code></td><td>string</td><td>背景色</td><td>默认半透明黑</td></tr>
+                <tr><td><code>titleColor</code> / <code>bodyColor</code> / <code>footerColor</code></td><td>string</td><td>各部分文字颜色</td><td>颜色字符串</td></tr>
+                <tr><td><code>titleFont</code> / <code>bodyFont</code></td><td>object</td><td>字体配置</td><td>例：<code>{ size: 14 }</code></td></tr>
+                <tr><td><code>padding</code></td><td>number 或 object</td><td>内边距</td><td>默认 6</td></tr>
+                <tr><td><code>cornerRadius</code></td><td>number</td><td>圆角</td><td>默认 6</td></tr>
+                <tr><td><code>displayColors</code></td><td>boolean</td><td>是否显示左侧的颜色色块</td><td>默认 <code>true</code></td></tr>
+                <tr><td><code>callbacks.title</code></td><td>function</td><td>自定义提示框顶部文字</td><td><code>(items) => string</code></td></tr>
+                <tr><td><code>callbacks.label</code></td><td>function</td><td>自定义每行文字（最常改）</td><td><code>(ctx) => string</code></td></tr>
+                <tr><td><code>callbacks.afterLabel</code></td><td>function</td><td>每行下方追加内容</td><td>—</td></tr>
+                <tr><td><code>callbacks.footer</code></td><td>function</td><td>底部文字</td><td>—</td></tr>
+            </table>
+            <p class="small"><code>callbacks.label</code> 的 <code>context</code> 上常用字段：<code>context.dataset.label</code>、<code>context.label</code>、<code>context.parsed.x</code>、<code>context.parsed.y</code>、<code>context.formattedValue</code>、<code>context.dataIndex</code>。</p>
+        </section>
+
+        <!-- ========== 14. animation / interaction ========== -->
+        <section class="panel" id="animation">
+            <h2>14. 动画与交互</h2>
+            <table class="params">
+                <tr>
+                    <th>参数</th><th>类型</th><th>说明</th><th>取值 / 默认</th>
+                </tr>
+                <tr><td><code>animation.duration</code></td><td>number</td><td>动画时长（毫秒）</td><td>默认 1000；设 0 关闭</td></tr>
+                <tr><td><code>animation.easing</code></td><td>string</td>
+                    <td>缓动函数</td>
+                    <td><code>'linear'</code> / <code>'easeInQuad'</code> / <code>'easeOutQuad'</code> / <code>'easeInOutQuad'</code> 等（共 30+ 种）</td>
+                </tr>
+                <tr><td><code>animation.delay</code></td><td>number</td><td>延迟开始（毫秒）</td><td>默认 0</td></tr>
+                <tr><td><code>animation.loop</code></td><td>boolean</td><td>是否循环</td><td>默认 <code>false</code></td></tr>
+                <tr><td><code>animations.<em>属性名</em></code></td><td>object</td>
+                    <td>针对单个动画属性（如 <code>colors</code>、<code>numbers</code>）单独配置</td>
+                    <td>例：<code>{ colors: { duration: 0 } }</code></td>
+                </tr>
+                <tr><td><code>interaction.mode</code></td><td>string</td>
+                    <td>悬停命中模式（同 tooltip.mode）</td>
+                    <td>默认 <code>'nearest'</code></td>
+                </tr>
+                <tr><td><code>interaction.intersect</code></td><td>boolean</td><td>是否必须命中元素</td><td>默认 <code>true</code></td></tr>
+                <tr><td><code>interaction.axis</code></td><td>string</td>
+                    <td>命中按哪个轴判断</td>
+                    <td><code>'x'</code> / <code>'y'</code> / <code>'xy'</code> / <code>'r'</code></td>
+                </tr>
+                <tr><td><code>onClick</code></td><td>function</td>
+                    <td>点击图表的回调 <code>(event, elements, chart) => void</code></td>
+                    <td>—</td>
+                </tr>
+                <tr><td><code>onHover</code></td><td>function</td><td>悬停回调，同样签名</td><td>—</td></tr>
+            </table>
+        </section>
+
+        <!-- ========== 15. instance ========== -->
+        <section class="panel" id="instance">
+            <h2>15. <code>Chart</code> 实例方法</h2>
+            <p class="small">通过 <code>const chart = new Chart(ctx, config)</code> 拿到实例后，可以调用以下方法。</p>
+            <table class="params">
+                <tr>
+                    <th>方法</th><th>说明</th><th>常用参数</th>
+                </tr>
+                <tr><td><code>chart.update(mode?)</code></td>
+                    <td>修改 data / options 后调用，重新渲染</td>
+                    <td><code>'none'</code>(无动画) / <code>'show'</code> / <code>'hide'</code> / <code>'active'</code> / <code>'reset'</code> / <code>'resize'</code></td>
+                </tr>
+                <tr><td><code>chart.reset()</code></td><td>重置到初始状态</td><td>—</td></tr>
+                <tr><td><code>chart.render()</code></td><td>仅重绘，不更新数据</td><td>—</td></tr>
+                <tr><td><code>chart.resize(w?, h?)</code></td><td>手动触发尺寸刷新</td><td>可选宽高</td></tr>
+                <tr><td><code>chart.destroy()</code></td><td>销毁图表，释放 canvas</td><td>—</td></tr>
+                <tr><td><code>chart.toBase64Image(type?, quality?)</code></td>
+                    <td>导出图片</td>
+                    <td>例：<code>'image/png'</code>, <code>0.92</code></td>
+                </tr>
+                <tr><td><code>chart.getElementsAtEventForMode(e, mode, options, useFinal)</code></td>
+                    <td>查询某次事件命中的元素</td>
+                    <td>—</td>
+                </tr>
+                <tr><td><code>Chart.getChart(canvasOrId)</code> <span class="small">(静态)</span></td>
+                    <td>通过 canvas 获取已存在的实例</td>
+                    <td>—</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- ========== 16. colors ========== -->
+        <section class="panel" id="colors">
+            <h2>16. 颜色取值规则</h2>
+            <p class="small">所有颜色字段都接受 CSS 颜色字符串，下面是常用写法。</p>
+            <table class="params">
+                <tr>
+                    <th>写法</th><th>示例</th><th>说明</th>
+                </tr>
+                <tr><td>命名颜色</td><td><code>'red'</code> / <code>'steelblue'</code></td><td>简单但不灵活</td></tr>
+                <tr><td>十六进制</td><td><code>'#4f7cff'</code> / <code>'#fff'</code></td><td>常用，无透明度</td></tr>
+                <tr><td>带透明度十六进制</td><td><code>'#4f7cff80'</code></td><td>最后两位是 alpha (00~ff)</td></tr>
+                <tr><td><code>rgb()</code></td><td><code>'rgb(79, 124, 255)'</code></td><td>0~255</td></tr>
+                <tr><td><code>rgba()</code></td><td><code>'rgba(79, 124, 255, 0.55)'</code></td><td>第 4 位 alpha 0~1（推荐）</td></tr>
+                <tr><td><code>hsl()</code> / <code>hsla()</code></td><td><code>'hsla(220, 100%, 65%, 0.5)'</code></td><td>方便统一色相</td></tr>
+                <tr><td>函数式（条件配色）</td><td><code>(ctx) => ctx.parsed.y &gt; 100 ? 'red' : 'green'</code></td><td>scriptable options，部分字段支持</td></tr>
+            </table>
+            <div class="callout" style="margin-top: 16px;">
+                <strong>建议：</strong>填充类参数（<code>backgroundColor</code>）使用 <code>rgba()</code> 配 0.4~0.7 的透明度，边框类（<code>borderColor</code>）使用对应不透明色，配色更协调。
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>课程导航</h2>
+            <div class="nav-links">
+                <a href="index.html">返回首页</a>
+                <a href="001认识Chart.js.html">从第 1 课开始学</a>
+                <a href="015实战案例.html">看实战案例</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>提示：参数较多时，先记常用的（type / labels / data / scales / plugins），其它用到再查表。</footer>
+</body>
+</html>

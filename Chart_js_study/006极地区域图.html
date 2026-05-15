@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 6 课：极地区域图</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="badge">Chart.js 系列课程</div>
+            <h1>第 6 课：极地区域图</h1>
+            <p>认识 polarArea 图表，它适合展示不同类别的强弱与占比感。</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="panel">
+            <h2>本课你会学到什么</h2>
+            <ul class="learn-list">
+                <li>极地区域图（polarArea）也在展示组成，但它更强调每个类别的强弱感。</li>
+                <li>和饼图不同，它主要通过“半径大小”来表现数值。</li>
+                <li>当你想做一个更有视觉张力的分类比较图时，可以试试 polarArea。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>图表示例</h2>
+            <div class="chart-grid">
+                <article class="chart-card">
+                    <h3>极地区域图</h3>
+                    <p>不同类别的半径大小不同，视觉上更强调强弱。</p>
+                    <div class="chart-shell">
+                        <canvas id="polarChart"></canvas>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>如何自定义成你自己的图表</h2>
+            <ul class="tip-list">
+                <li>改分类名称时，还是优先改 <code>labels</code>。</li>
+                <li>改半径大小时，改 <code>data</code> 数组。数值越大，扇区越长。</li>
+                <li>想做更鲜明的视觉对比，可以把高值项的颜色写得更深或更暖。</li>
+                <li>如果你更关心严格的百分比阅读，通常饼图或柱形图更直观。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>课后练习建议</h2>
+            <ol class="exercise-list">
+                <li>用 polarArea 画“各渠道线索质量评分”。</li>
+                <li>尝试把最低的两个分类颜色改成浅灰色。</li>
+                <li>把标签数量增加到 8 个，观察画面是否仍然易读。</li>
+            </ol>
+        </section>
+
+        <section class="panel">
+            <h2>课程导航</h2>
+            <div class="nav-links">
+                <a href="005雷达图.html">上一课</a>
+                <a href="index.html">返回首页</a>
+                <a href="007散点图与气泡图.html">下一课</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>建议一边运行、一边修改源码中的 labels、datasets 和 options 练习。源码注释里写明了每个参数的含义和可选值。</footer>
+
+    <script>
+        new Chart(document.getElementById('polarChart'), {
+            // type='polarArea'：极地区域图
+            //   - 与饼图相比：扇区角度都相同，靠半径长度区分数值大小
+            //   - 与雷达图相比：用扇区代替多边形
+            type: 'polarArea',
+            data: {
+                // labels：每个扇区的分类名
+                labels: ['阅读', '练习', '复盘', '项目', '提问', '分享'],
+                datasets: [{
+                    label: '学习投入度',
+                    // data：每个扇区的数值
+                    //   - 数值越大 → 该扇区半径越长
+                    //   - 不需要预先归一化，Chart.js 会自动按最大值缩放
+                    data: [18, 22, 12, 28, 9, 15],
+                    // backgroundColor：每个扇区的颜色（数组）
+                    //   - 推荐 0.6~0.8 的透明度，看起来更有层次
+                    backgroundColor: [
+                        'rgba(79, 124, 255, 0.70)',
+                        'rgba(56, 189, 248, 0.70)',
+                        'rgba(52, 211, 153, 0.70)',
+                        'rgba(250, 204, 21, 0.70)',
+                        'rgba(244, 114, 182, 0.70)',
+                        'rgba(251, 146, 60, 0.70)',
+                    ],
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: { display: true, text: '不同学习方式的投入度' },
+                    legend: {
+                        // legend.position：图例位置
+                        //   - 可选值：'top'（默认） / 'bottom' / 'left' / 'right'
+                        //   - 当分类多时，'right' 比 'top' 更省空间
+                        position: 'right',
+                    },
+                },
+            },
+        });
+    </script>
+</body>
+</html>
