@@ -282,12 +282,31 @@
     }
 }
 
+#homepage-hero-title {
+    margin: 0 auto;
+    width: min(40vw, 620px);
+    text-align: justify;
+    text-align-last: justify;
+    font-family: 峄山碑篆体;
+    font-size: clamp(40px, 10vw, 100px);
+}
+
+#homepage-hero-intro {
+    height: 35vh;
+    align-items: center;
+}
+
+#homepage-hero-spacer {
+    height: 10vh;
+}
+
 /* ---------- 页面容器 ---------- */
 #pager {
     position: relative;
     width: 100%;
-    height: calc(100% - 64px - 80px);
-    margin-top: 64px;
+    height: calc(100dvh - var(--header-h) - var(--footer-h));
+    min-height: calc(100vh - var(--header-h) - var(--footer-h));
+    margin-top: var(--header-h);
     z-index: 1;
 }
 
@@ -401,7 +420,6 @@
 h1 {
     font-size: 48px;
     margin: 30px 0 20px;
-
 }
 
 p {
@@ -412,11 +430,9 @@ p {
 
 .cards {
     display: grid;
-    /* 优化 1：使用 minmax(0, 1fr) 允许网格列缩小到 0，防止被内部超宽元素撑爆 */
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 20px;
     margin-top: 40px;
-    /* 优化 2：加上这两行，确保 padding 不会额外增加元素的总宽度 */
     box-sizing: border-box;
     width: 100%;
 }
@@ -425,28 +441,26 @@ p {
     background: rgba(255, 255, 255, 0.03);
     padding: 24px;
     border: 1px solid rgba(255, 225, 0, 0.381);
-    /* 确保卡片自身也采用 border-box */
     box-sizing: border-box;
-    /* 防止卡片内容溢出 */
-    overflow: hidden; 
+    overflow: hidden;
 }
 
 /* 响应式：页面内容 */
 @media (max-width: 1024px) {
-    .page {
-        padding: 48px;
-        box-sizing: border-box;
+    .page-frame {
+        padding-right: 32px;
+        padding-left: 32px;
     }
 
     .cards {
-        /* 核心修复：防止切换为两列时，第二列撑破屏幕 */
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 768px) {
-    .page {
-        padding: 24px;
+    .page-frame {
+        padding-right: 18px;
+        padding-left: 18px;
     }
 
     h1 {
@@ -459,18 +473,55 @@ p {
     }
 
     .cards {
-        /* 单列时可以保持 1fr，因为通常不会超出单列最大宽度，但稳妥起见也可以改 */
-        grid-template-columns: minmax(0, 1fr); 
+        grid-template-columns: minmax(0, 1fr);
         gap: 16px;
+    }
+
+    #homepage-hero-title {
+        width: min(78vw, 420px);
+        font-size: clamp(34px, 12vw, 68px);
+    }
+
+    #homepage-hero-intro {
+        height: auto;
+        min-height: 28vh;
+    }
+
+    #homepage-hero-spacer {
+        height: 7vh;
     }
 }
 
 @media (max-width: 480px) {
-    .page {
-        padding: 16px;
+    .page-frame {
+        padding-right: 12px;
+        padding-left: 12px;
     }
 
     h1 {
         font-size: 26px;
+    }
+
+    #homepage-hero-title {
+        width: min(84vw, 320px);
+        font-size: clamp(28px, 13vw, 52px);
+    }
+
+    #homepage-hero-spacer {
+        height: 5vh;
+    }
+
+    .homepage-recent-updates-footer {
+        padding-bottom: calc(var(--footer-h) + 20px) !important;
+    }
+}
+
+@media (max-height: 820px) {
+    #homepage-hero-intro {
+        min-height: 22vh;
+    }
+
+    .cards {
+        margin-top: 24px;
     }
 }

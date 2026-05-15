@@ -17,22 +17,21 @@ get_header(); ?>
 <div id="pager">
     <section class="page active">
         
-        <div id="article-container" style="width: 100%; max-width: 900px; margin: 0 auto; padding: 180px 20px 100px 20px;">
+        <div id="article-container" class="inner-page-shell inner-page-shell--narrow inner-page-shell--spaced">
             <?php if ( have_posts() ) : while ( have_posts() ) : the_post(); ?>
-                
-                <header style="border-bottom: 1px dashed #555; margin-bottom: 30px; padding-bottom: 20px;">
-                    <h1 data-selectable class="wp-block-post-title"
-                            style="font-family: 峄山碑篆体; color: #988b32; font-size: clamp(30px, 4vw, 50px); margin: 0 0 15px 0; text-shadow: 0 0 10px rgba(152, 139, 50, 0.5);">
+
+                <header class="inner-page-header">
+                    <h1 data-selectable class="wp-block-post-title inner-page-title">
                         <?php the_title(); ?>
                     </h1>
                 </header>
 
-                <div data-selectable style="font-size: 1.1rem; line-height: 1.8; color: #ccc; text-align: justify;">
+                <div data-selectable class="inner-page-content">
                     <?php the_content(); ?>
                 </div>
 
-                <div style="margin-top: 60px; text-align: center; border-top: 1px solid #333; padding-top: 30px;">
-                    <a data-selectable href="<?php echo home_url(); ?>" style="display: inline-block; font-family: ZCOOLQingKeHuangYou-Regular; color: #988b32; text-decoration: none; border: 1px solid #988b32; padding: 10px 30px; font-size: 1.2rem; transition: all 0.3s; background: rgba(152, 139, 50, 0.1);">
+                <div class="inner-page-return">
+                    <a data-selectable href="<?php echo home_url(); ?>" class="inner-page-return-link">
                         > 返回主控制台 <
                     </a>
                 </div>
