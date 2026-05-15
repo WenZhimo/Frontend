@@ -293,12 +293,16 @@ class KappaAudioTerminal {
             this.ui.timeDisplay.textContent = `00:00 / ${formatTime(this.audioCore.duration)}`;
         });
 
-        const seek = (e) => {
+        const seekFromClientX = (clientX) => {
             const rect = this.ui.track.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            let clickX = Math.max(0, Math.min(clientX - rect.left, rect.width));
+            const clickX = Math.max(0, Math.min(clientX - rect.left, rect.width));
             this.audioCore.currentTime =
                 (clickX / rect.width) * this.audioCore.duration;
+        };
+
+        const seek = (event) => {
+            const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+            seekFromClientX(clientX);
         };
 
         this.ui.track.addEventListener("click", seek);
@@ -311,11 +315,11 @@ class KappaAudioTerminal {
         );
         document.addEventListener("mouseup", () => (isDragging = false));
         document.addEventListener("touchend", () => (isDragging = false));
-        document.addEventListener("mousemove", (e) => {
-            if (isDragging) seek(e);
-        });
-        document.addEventListener("touchmove", (e) => {
-            if (isDragging) seek(e);
-        });
+
+        const handlePointerMove = (event) => {
+            if (isDragging) seekFromClientX(event.clientX);
+        };
+
+        document.addEventListener("pointermove", handlePointerMove, { passive: true });
     }
 }

@@ -86,9 +86,10 @@ function kappa_heavy_industries_scripts() {
     //wp_enqueue_script( 'kappa-pager-js', $theme_dir . '/js/pager.js', array(), '1.0', true );
     wp_enqueue_script( 'kappa-clock-js', $theme_dir . '/js/clock.js', array(), '1.0', true );
     wp_enqueue_script( 'kappa-nav-js', $theme_dir . '/js/navigation.js', array(), '1.0', true );
-    wp_enqueue_script( 'kappa-progress-controller', $theme_dir . '/js/progress-controller.js', array(), '1.0', true );
+    wp_enqueue_script( 'kappa-pointer-service', $theme_dir . '/js/pointer-service.js', array(), '1.0', true );
+    wp_enqueue_script( 'kappa-progress-controller', $theme_dir . '/js/progress-controller.js', array( 'kappa-pointer-service' ), '1.0', true );
     if ( ! wp_is_mobile() ) {
-        wp_enqueue_script( 'kappa-cursor-js', $theme_dir . '/js/cursor.js', array(), '1.0', true );
+        wp_enqueue_script( 'kappa-cursor-js', $theme_dir . '/js/cursor.js', array( 'kappa-pointer-service' ), '1.0', true );
     }
     
    // ==========================================
@@ -98,8 +99,7 @@ function kappa_heavy_industries_scripts() {
         wp_enqueue_script( 'kappa-pager-js', $theme_dir . '/js/pager.js', array(), '1.0', true );
 
         if ( ! wp_is_mobile() ) {
-            wp_enqueue_script( 'kappa-p5-js', 'https://cdn.jsdelivr.net/npm/p5@1.9.3/lib/p5.min.js', array(), '1.9.3', true );
-            wp_enqueue_script( 'kappa-tech-capability-bg', $theme_dir . '/js/homepage-tech-capability-bg.js', array( 'kappa-p5-js', 'kappa-pager-js' ), '1.0', true );
+            wp_enqueue_script( 'kappa-tech-capability-bg', $theme_dir . '/js/homepage-tech-capability-bg.js', array( 'kappa-pager-js', 'kappa-pointer-service' ), '1.0', true );
         }
     } else {
         // 如果【是】单篇文章、页面，不仅不加载翻页脚本，还要动态注入解锁高度的 CSS
@@ -191,10 +191,10 @@ function kappa_add_type_attribute( $tag, $handle, $src ) {
     $module_scripts = array(
         'kappa-indicator-js',
         'kappa-pager-js',
-        'kappa-clock-js',
-        'kappa-nav-js',
         'kappa-cursor-js',
-        'kappa-tech-capability-bg'
+        'kappa-tech-capability-bg',
+        'kappa-pointer-service',
+        'kappa-progress-controller'
     );
     
     if ( in_array( $handle, $module_scripts ) ) {

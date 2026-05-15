@@ -517,8 +517,8 @@
             'desktop_image' => '',
             'mobile_image'  => '',
             'position'      => 'center',
-            'overlay_start' => 'rgba(12, 12, 12, 0.82)',
-            'overlay_end'   => 'rgba(26, 26, 26, 0.92)',
+            'overlay_start' => 'rgba(24, 18, 10, 0.84)',
+            'overlay_end'   => 'rgba(34, 22, 12, 0.94)',
             'extra_classes' => 'page-frame page-frame--tech-capability',
         ) ); ?>>
             <div class="homepage-bg-layer homepage-bg-layer--tech-capability" aria-hidden="true">
