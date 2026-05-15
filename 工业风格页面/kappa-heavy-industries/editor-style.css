@@ -1,81 +1,425 @@
 /* ==========================================
-   河童重工：全界面暗黑编辑器 (HUD 全域涂装)
+   河童重工：现代化编辑器体验
+   目标：保留深色工业气质，同时提升写作舒适度、层级感与可读性
    ========================================== */
 
-/* 1. 全局背景与基础文字 (核心护眼层) */
-body,
-.editor-styles-wrapper {
-    background-color: #0d1117 !important; /* 极深的终端底色 */
-    color: #c9d1d9 !important;            /* 柔和的浅灰文字 */
-    font-family: monospace, sans-serif;
+:root {
+    --editor-bg: #0f131a;
+    --editor-bg-elevated: #151b24;
+    --editor-surface: #1a2230;
+    --editor-surface-soft: rgba(255, 255, 255, 0.04);
+    --editor-text: #d7deea;
+    --editor-text-soft: #9aa7ba;
+    --editor-heading: #f3f7fd;
+    --editor-accent: #c39b39;
+    --editor-accent-soft: rgba(195, 155, 57, 0.16);
+    --editor-link: #77d7ff;
+    --editor-link-hover: #b7efff;
+    --editor-border: rgba(154, 167, 186, 0.22);
+    --editor-selection: rgba(119, 215, 255, 0.22);
+    --editor-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+    --editor-radius: 14px;
+    --editor-content-width: 760px;
+    --editor-wide-width: 1100px;
 }
 
-/* 2. 标题层级颜色映射 */
+/* ==========================================
+   1. 编辑器整体观感
+   ========================================== */
+body.block-editor-page {
+    background: var(--editor-bg);
+}
+
+body.is-dark-theme {
+    --wp-admin-theme-color: #77d7ff;
+}
+
+.editor-styles-wrapper {
+    color-scheme: dark;
+    background:
+        radial-gradient(circle at top, rgba(119, 215, 255, 0.08), transparent 26%),
+        linear-gradient(180deg, #0c1016 0%, var(--editor-bg) 100%);
+    color: var(--editor-text);
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.8;
+    padding: 32px clamp(20px, 4vw, 48px) 96px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+.editor-styles-wrapper ::selection {
+    background: var(--editor-selection);
+}
+
+.editor-styles-wrapper .is-root-container {
+    max-width: var(--editor-content-width);
+    margin: 0 auto;
+}
+
+.editor-styles-wrapper .wp-block {
+    max-width: var(--editor-content-width);
+}
+
+.editor-styles-wrapper .wp-block[data-align="wide"],
+.editor-styles-wrapper .alignwide {
+    max-width: min(var(--editor-wide-width), calc(100vw - 96px));
+}
+
+.editor-styles-wrapper .wp-block[data-align="full"],
+.editor-styles-wrapper .alignfull {
+    max-width: none;
+}
+
+/* ==========================================
+   2. 标题与正文排版
+   ========================================== */
+.editor-styles-wrapper .editor-post-title__block,
+.editor-styles-wrapper .wp-block-post-title {
+    margin-bottom: 1.75rem;
+}
+
+.editor-styles-wrapper .editor-post-title__input,
+.editor-styles-wrapper .wp-block-post-title {
+    color: var(--editor-heading);
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: clamp(2.4rem, 5vw, 3.4rem);
+    font-weight: 750;
+    letter-spacing: -0.035em;
+    line-height: 1.08;
+}
+
 .editor-styles-wrapper h1,
 .editor-styles-wrapper h2,
 .editor-styles-wrapper h3,
 .editor-styles-wrapper h4,
 .editor-styles-wrapper h5,
 .editor-styles-wrapper h6 {
-    color: #00ffff !important; /* 终端青色 */
-    font-weight: bold;
+    color: var(--editor-heading);
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-weight: 720;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+    margin: 1.75em 0 0.65em;
 }
 
-/* 3. 链接样式 */
+.editor-styles-wrapper h1 {
+    font-size: clamp(2.2rem, 4vw, 3rem);
+}
+
+.editor-styles-wrapper h2 {
+    font-size: clamp(1.7rem, 3vw, 2.2rem);
+}
+
+.editor-styles-wrapper h3 {
+    font-size: clamp(1.35rem, 2.2vw, 1.7rem);
+}
+
+.editor-styles-wrapper h4,
+.editor-styles-wrapper h5,
+.editor-styles-wrapper h6 {
+    font-size: 1.1rem;
+}
+
+.editor-styles-wrapper p,
+.editor-styles-wrapper ul,
+.editor-styles-wrapper ol,
+.editor-styles-wrapper pre,
+.editor-styles-wrapper table,
+.editor-styles-wrapper figure,
+.editor-styles-wrapper blockquote {
+    margin-top: 0;
+    margin-bottom: 1.3em;
+}
+
+.editor-styles-wrapper p,
+.editor-styles-wrapper li {
+    color: var(--editor-text);
+}
+
+.editor-styles-wrapper strong {
+    color: #f7fbff;
+    font-weight: 700;
+}
+
+.editor-styles-wrapper em {
+    color: #dce8f8;
+}
+
+.editor-styles-wrapper small,
+.editor-styles-wrapper figcaption,
+.editor-styles-wrapper cite {
+    color: var(--editor-text-soft);
+}
+
+/* ==========================================
+   3. 链接、列表与分隔元素
+   ========================================== */
 .editor-styles-wrapper a {
-    color: #a4612d !important; /* 工业金 */
-    text-decoration: none;
-    border-bottom: 1px dashed #a4612d;
+    color: var(--editor-link);
+    text-decoration: underline;
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.18em;
+    transition: color 0.2s ease, text-decoration-color 0.2s ease;
 }
 
-/* 4. ==========================================
-      终极魔法：接管 WordPress 框架 UI (Gutenberg Shell)
-      ========================================== */
-
-/* 让全局进入深色模式 (告知 WP 这是一个深色主题) */
-body.is-dark-theme {
-    --wp-admin-theme-color: #00ffff; /* 所有的区块图标高亮变青色 */
+.editor-styles-wrapper a:hover,
+.editor-styles-wrapper a:focus {
+    color: var(--editor-link-hover);
+    text-decoration-color: var(--editor-link-hover);
 }
 
-/* 涂装顶部工具栏 (Top Toolbar) */
-.interface-interface-skeleton__header {
-    background-color: #161b22 !important;
-    border-bottom: 1px solid #30363d !important;
+.editor-styles-wrapper ul,
+.editor-styles-wrapper ol {
+    padding-left: 1.5rem;
 }
 
-/* 涂装右侧边栏 (Right Sidebar) */
-.interface-interface-skeleton__sidebar {
-    background-color: #161b22 !important;
-    border-left: 1px solid #30363d !important;
+.editor-styles-wrapper li + li {
+    margin-top: 0.35em;
 }
 
-/* 涂装右侧边栏的文本和字段标签 */
+.editor-styles-wrapper hr,
+.editor-styles-wrapper .wp-block-separator {
+    border: 0;
+    border-top: 1px solid var(--editor-border);
+    opacity: 1;
+}
+
+/* ==========================================
+   4. 引用、代码、表格等内容块
+   ========================================== */
+.editor-styles-wrapper blockquote {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--editor-border);
+    border-left: 4px solid var(--editor-accent);
+    border-radius: var(--editor-radius);
+    color: var(--editor-text);
+    padding: 1rem 1.25rem;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+
+.editor-styles-wrapper blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+.editor-styles-wrapper code,
+.editor-styles-wrapper kbd,
+.editor-styles-wrapper samp {
+    background: rgba(119, 215, 255, 0.08);
+    color: #dff7ff;
+    border: 1px solid rgba(119, 215, 255, 0.16);
+    border-radius: 8px;
+    padding: 0.15em 0.45em;
+    font-family: "JetBrains Mono", "SFMono-Regular", Consolas, Monaco, monospace;
+    font-size: 0.92em;
+}
+
+.editor-styles-wrapper pre {
+    background: #0b1017;
+    color: #dce8f6;
+    border: 1px solid var(--editor-border);
+    border-radius: 16px;
+    padding: 1rem 1.1rem;
+    overflow: auto;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.editor-styles-wrapper pre code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font-size: 0.95em;
+}
+
+.editor-styles-wrapper table {
+    width: 100%;
+    border-collapse: collapse;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid var(--editor-border);
+}
+
+.editor-styles-wrapper th,
+.editor-styles-wrapper td {
+    border: 1px solid var(--editor-border);
+    padding: 0.75rem 0.85rem;
+    text-align: left;
+}
+
+.editor-styles-wrapper th {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--editor-heading);
+    font-weight: 650;
+}
+
+.editor-styles-wrapper tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.editor-styles-wrapper img {
+    border-radius: 12px;
+}
+
+.editor-styles-wrapper .wp-block-image img,
+.editor-styles-wrapper .wp-block-cover,
+.editor-styles-wrapper .wp-block-gallery,
+.editor-styles-wrapper .wp-block-group,
+.editor-styles-wrapper .wp-block-columns {
+    border-radius: 14px;
+}
+
+.editor-styles-wrapper .wp-block-group.has-background,
+.editor-styles-wrapper .wp-block-cover,
+.editor-styles-wrapper .wp-block-pullquote {
+    border: 1px solid var(--editor-border);
+    box-shadow: var(--editor-shadow);
+}
+
+.editor-styles-wrapper .wp-block-pullquote {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 18px;
+    padding: 1.5rem;
+}
+
+.editor-styles-wrapper .wp-block-pullquote blockquote {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+}
+
+.editor-styles-wrapper details {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--editor-border);
+    border-radius: 14px;
+    padding: 0.9rem 1rem;
+}
+
+.editor-styles-wrapper details summary {
+    cursor: pointer;
+    color: var(--editor-heading);
+    font-weight: 650;
+}
+
+/* ==========================================
+   5. 常用区块增强
+   ========================================== */
+.editor-styles-wrapper .wp-block-button__link {
+    background: linear-gradient(180deg, rgba(119, 215, 255, 0.18), rgba(119, 215, 255, 0.1));
+    border: 1px solid rgba(119, 215, 255, 0.28);
+    border-radius: 999px;
+    color: #effaff;
+    padding: 0.72em 1.2em;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.16);
+}
+
+.editor-styles-wrapper .wp-block-button__link:hover,
+.editor-styles-wrapper .wp-block-button__link:focus {
+    color: #ffffff;
+    background: linear-gradient(180deg, rgba(119, 215, 255, 0.24), rgba(119, 215, 255, 0.14));
+}
+
+.editor-styles-wrapper .wp-block-quote.is-large,
+.editor-styles-wrapper .wp-block-quote.is-style-large {
+    padding: 1.25rem 1.5rem;
+}
+
+.editor-styles-wrapper .wp-block-quote.is-large p,
+.editor-styles-wrapper .wp-block-quote.is-style-large p {
+    font-size: 1.2rem;
+    line-height: 1.7;
+}
+
+.editor-styles-wrapper .wp-block-file {
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--editor-border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.editor-styles-wrapper .wp-block-embed,
+.editor-styles-wrapper .wp-block-table,
+.editor-styles-wrapper .wp-block-media-text,
+.editor-styles-wrapper .wp-block-latest-posts,
+.editor-styles-wrapper .wp-block-latest-comments {
+    color: var(--editor-text);
+}
+
+/* ==========================================
+   6. 编辑器外壳与表单观感（若当前 WP 版本允许这些选择器生效）
+   ========================================== */
+.interface-interface-skeleton__header,
+.interface-interface-skeleton__sidebar,
+.interface-complementary-area,
+.edit-post-header,
+.edit-post-sidebar,
+.editor-post-publish-panel,
+.components-popover__content {
+    background: var(--editor-bg-elevated) !important;
+    color: var(--editor-text) !important;
+    border-color: var(--editor-border) !important;
+}
+
 .components-panel__body,
 .components-panel__header,
 .components-base-control__label,
 .components-base-control__help,
-.components-button {
-    color: #c9d1d9 !important;
+.components-button,
+.components-toggle-control__label,
+.components-input-control__label {
+    color: var(--editor-text) !important;
 }
 
-/* 涂装输入框 (Input / Textarea) */
 .components-text-control__input,
-.components-textarea-control__input {
-    background-color: #0d1117 !important;
-    border: 1px solid #30363d !important;
-    color: #c9d1d9 !important;
-}
-
-/* 涂装区块插入器 (Block Inserter Search) */
+.components-textarea-control__input,
+.components-select-control__input,
+.components-input-control__backdrop,
+.block-editor-url-input input[type="text"],
 .block-editor-block-inserter__search {
-    background-color: #0d1117 !important;
-    border: 1px solid #30363d !important;
+    background: #0d1219 !important;
+    color: var(--editor-text) !important;
+    border: 1px solid var(--editor-border) !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
 }
 
-/* 5. 引用块 (Blockquote) */
-.editor-styles-wrapper blockquote {
-    border-left: 4px solid #a4612d !important;
-    color: #8b949e !important;
-    background: rgba(110, 118, 129, 0.1);
-    padding: 10px 20px;
+.components-text-control__input:focus,
+.components-textarea-control__input:focus,
+.components-select-control__input:focus,
+.block-editor-url-input input[type="text"]:focus,
+.block-editor-block-inserter__search:focus {
+    border-color: rgba(119, 215, 255, 0.6) !important;
+    box-shadow: 0 0 0 1px rgba(119, 215, 255, 0.35) !important;
+}
+
+.components-button.is-primary {
+    background: #77d7ff !important;
+    border-color: #77d7ff !important;
+    color: #071018 !important;
+}
+
+.components-button.is-secondary,
+.components-button.is-tertiary {
+    color: var(--editor-text) !important;
+}
+
+/* ==========================================
+   7. 小屏与窄屏优化
+   ========================================== */
+@media (max-width: 782px) {
+    .editor-styles-wrapper {
+        padding: 20px 16px 64px;
+        font-size: 15px;
+    }
+
+    .editor-styles-wrapper .wp-block[data-align="wide"],
+    .editor-styles-wrapper .alignwide {
+        max-width: 100%;
+    }
+
+    .editor-styles-wrapper .editor-post-title__input,
+    .editor-styles-wrapper .wp-block-post-title {
+        font-size: clamp(2rem, 9vw, 2.6rem);
+    }
 }
