@@ -97,6 +97,7 @@ function kappa_heavy_industries_scripts() {
     // ==========================================
     if ( is_front_page() ) {
         wp_enqueue_script( 'kappa-pager-js', $theme_dir . '/js/pager.js', array(), '1.0', true );
+        wp_enqueue_script( 'kappa-homepage-boot', $theme_dir . '/js/homepage-boot.js', array(), '1.0', true );
 
         if ( ! wp_is_mobile() ) {
             wp_enqueue_script( 'kappa-tech-capability-bg', $theme_dir . '/js/homepage-tech-capability-bg.js', array( 'kappa-pager-js', 'kappa-pointer-service' ), '1.0', true );
@@ -194,7 +195,8 @@ function kappa_add_type_attribute( $tag, $handle, $src ) {
         'kappa-cursor-js',
         'kappa-tech-capability-bg',
         'kappa-pointer-service',
-        'kappa-progress-controller'
+        'kappa-progress-controller',
+        'kappa-homepage-boot'
     );
     
     if ( in_array( $handle, $module_scripts ) ) {
