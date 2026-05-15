@@ -1,249 +1,310 @@
+import { getLocalPoint, subscribePointer } from './pointer-service.js';
+
 const PAGE_SELECTOR = '.page--tech-capability';
 const HOST_SELECTOR = '.homepage-bg-animation-host[data-homepage-bg-animation="tech-capability"]';
+const CELL_SIZE = 52;
+const INITIAL_SNAKE_LENGTH = 1;
+const GROWTH_STEP = 1;
 
-const shadertoy = `
-vec3 colorA = vec3(0.05);
-vec3 colorB = vec3(0.15);
-vec3 colorC = vec3(0.30);
-float random(vec2 st){
-    return fract(sin(dot(st,vec2(12.9898,78.233))) * 43758.5453123);
+let host = null;
+let page = null;
+let canvas = null;
+let ctx = null;
+let resizeObserver = null;
+let animationFrameId = null;
+let isRunning = false;
+
+let columns = 0;
+let rows = 0;
+let pointerInside = false;
+let snakeLength = INITIAL_SNAKE_LENGTH;
+let snakeBody = [];
+let foodCell = null;
+let targetCell = null;
+
+function getCellKey(cell) {
+    return `${cell.x},${cell.y}`;
 }
 
-vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x,289.0);}
-vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
-vec3 fade(vec3 t){return t*t*t*(t*(t*6.0-15.0)+10.0);}
-
-float cnoise(vec3 P){
-    vec3 Pi0 = floor(P);
-    vec3 Pi1 = Pi0 + 1.0;
-    Pi0 = mod(Pi0,289.0);
-    Pi1 = mod(Pi1,289.0);
-    vec3 Pf0 = fract(P);
-    vec3 Pf1 = Pf0 - 1.0;
-
-    vec4 ix = vec4(Pi0.x,Pi1.x,Pi0.x,Pi1.x);
-    vec4 iy = vec4(Pi0.yy,Pi1.yy);
-    vec4 iz0 = Pi0.zzzz;
-    vec4 iz1 = Pi1.zzzz;
-
-    vec4 ixy = permute(permute(ix)+iy);
-    vec4 ixy0 = permute(ixy+iz0);
-    vec4 ixy1 = permute(ixy+iz1);
-
-    vec4 gx0 = ixy0/7.0;
-    vec4 gy0 = fract(floor(gx0)/7.0)-0.5;
-    gx0 = fract(gx0);
-    vec4 gz0 = 0.5-abs(gx0)-abs(gy0);
-    vec4 sz0 = step(gz0,vec4(0.0));
-    gx0 -= sz0*(step(0.0,gx0)-0.5);
-    gy0 -= sz0*(step(0.0,gy0)-0.5);
-
-    vec4 gx1 = ixy1/7.0;
-    vec4 gy1 = fract(floor(gx1)/7.0)-0.5;
-    gx1 = fract(gx1);
-    vec4 gz1 = 0.5-abs(gx1)-abs(gy1);
-    vec4 sz1 = step(gz1,vec4(0.0));
-    gx1 -= sz1*(step(0.0,gx1)-0.5);
-    gy1 -= sz1*(step(0.0,gy1)-0.5);
-
-    vec3 g000 = vec3(gx0.x,gy0.x,gz0.x);
-    vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
-    vec3 g010 = vec3(gx0.z,gy0.z,gz0.z);
-    vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
-    vec3 g001 = vec3(gx1.x,gy1.x,gz1.x);
-    vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
-    vec3 g011 = vec3(gx1.z,gy1.z,gz1.z);
-    vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
-
-    vec4 norm0 = taylorInvSqrt(vec4(dot(g000,g000),dot(g010,g010),dot(g100,g100),dot(g110,g110)));
-    g000 *= norm0.x;
-    g010 *= norm0.y;
-    g100 *= norm0.z;
-    g110 *= norm0.w;
-
-    vec4 norm1 = taylorInvSqrt(vec4(dot(g001,g001),dot(g011,g011),dot(g101,g101),dot(g111,g111)));
-    g001 *= norm1.x;
-    g011 *= norm1.y;
-    g101 *= norm1.z;
-    g111 *= norm1.w;
-
-    float n000 = dot(g000,Pf0);
-    float n100 = dot(g100,vec3(Pf1.x,Pf0.yz));
-    float n010 = dot(g010,vec3(Pf0.x,Pf1.y,Pf0.z));
-    float n110 = dot(g110,vec3(Pf1.xy,Pf0.z));
-    float n001 = dot(g001,vec3(Pf0.xy,Pf1.z));
-    float n101 = dot(g101,vec3(Pf1.x,Pf0.y,Pf1.z));
-    float n011 = dot(g011,vec3(Pf0.x,Pf1.yz));
-    float n111 = dot(g111,Pf1);
-
-    vec3 f = fade(Pf0);
-    vec4 nz = mix(vec4(n000,n100,n010,n110),vec4(n001,n101,n011,n111),f.z);
-    vec2 nyz = mix(nz.xy,nz.zw,f.y);
-    return 2.2 * mix(nyz.x,nyz.y,f.x);
+function randomCell() {
+    return {
+        x: Math.floor(Math.random() * columns),
+        y: Math.floor(Math.random() * rows),
+    };
 }
 
-vec2 rotate(vec2 p, float a){
-    float c = cos(a), s = sin(a);
-    return vec2(p.x*c - p.y*s, p.x*s + p.y*c);
-}
-
-void mainImage(out vec4 fragColor, in vec2 fragCoord){
-    vec3 bgColor = vec3(43.0, 43.0, 43.0) / 255.0;
-
-    vec2 center = iResolution * 0.5;
-    vec2 uv = fragCoord - center;
-    float r = length(uv);
-
-    float twist =
-        r * 0.002 +
-        cnoise(vec3(r * 0.06 - iTime * 3.0, 0.0, iTime * 0.25)) +
-        iTime * 0.5;
-
-    uv = rotate(uv, twist);
-
-    const float PI = 3.1415926;
-    float angle = atan(uv.y, uv.x);
-    float sector = floor((angle + PI) / (2.0 * PI / 5.0));
-
-    float t = sector / 5.0;
-    t += random(fragCoord * 0.5) * 0.15;
-    t = fract(t);
-
-    vec3 fgColor;
-    if (t < 0.5) {
-        fgColor = mix(colorA, colorB, t * 2.0);
-    } else {
-        fgColor = mix(colorB, colorC, (t - 0.5) * 2.0);
+function spawnFood() {
+    if (!columns || !rows) {
+        foodCell = null;
+        return;
     }
 
-    float weight = smoothstep(
-        0.0,
-        min(iResolution.x, iResolution.y) * 0.7,
-        r
-    );
+    const occupied = new Set(snakeBody.map(getCellKey));
+    const maxAttempts = columns * rows;
 
-    vec3 color = mix(bgColor, fgColor, weight);
-    fragColor = vec4(color, 1.0);
+    for (let i = 0; i < maxAttempts; i += 1) {
+        const nextFood = randomCell();
+        if (!occupied.has(getCellKey(nextFood))) {
+            foodCell = nextFood;
+            return;
+        }
+    }
+
+    foodCell = null;
 }
-`;
 
-const frag = `
-#ifdef GL_ES
-precision mediump float;
-#endif
-
-uniform vec2 iResolution;
-uniform vec2 iMouse;
-uniform float iTime;
-
-${shadertoy}
-
-void main(){
-    mainImage(gl_FragColor, gl_FragCoord.xy);
+function resetGameState() {
+    snakeLength = INITIAL_SNAKE_LENGTH;
+    snakeBody = [];
+    pointerInside = false;
+    targetCell = null;
+    spawnFood();
 }
-`;
 
-const vert = `
-#ifdef GL_ES
-precision highp float;
-#endif
-
-attribute vec3 aPosition;
-
-uniform mat4 uModelViewMatrix;
-uniform mat4 uProjectionMatrix;
-
-void main(){
-    gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
+function stopLoop() {
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+    isRunning = false;
 }
-`;
 
-let instance = null;
+function isPageActive() {
+    return !!page && page.classList.contains('active');
+}
+
+function getHostSize() {
+    const rect = host.getBoundingClientRect();
+    return {
+        width: Math.max(1, Math.floor(rect.width)),
+        height: Math.max(1, Math.floor(rect.height)),
+    };
+}
+
+function syncCanvasSize() {
+    if (!canvas || !host) return;
+
+    const { width, height } = getHostSize();
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    columns = Math.max(1, Math.floor(width / CELL_SIZE));
+    rows = Math.max(1, Math.floor(height / CELL_SIZE));
+
+    resetGameState();
+    drawFrame();
+}
+
+function drawGrid() {
+    const { width, height } = canvas;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+
+    for (let x = 0; x <= columns; x += 1) {
+        const px = Math.round(x * CELL_SIZE) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(px, 0);
+        ctx.lineTo(px, height);
+        ctx.stroke();
+    }
+
+    for (let y = 0; y <= rows; y += 1) {
+        const py = Math.round(y * CELL_SIZE) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, py);
+        ctx.lineTo(width, py);
+        ctx.stroke();
+    }
+}
+
+function drawFood() {
+    if (!foodCell) return;
+
+    const x = foodCell.x * CELL_SIZE;
+    const y = foodCell.y * CELL_SIZE;
+    const padding = Math.max(6, CELL_SIZE * 0.18);
+
+    ctx.fillStyle = 'rgba(110, 24, 18, 0.96)';
+    ctx.shadowColor = 'rgba(145, 38, 28, 0.38)';
+    ctx.shadowBlur = 12;
+    ctx.fillRect(x + padding, y + padding, CELL_SIZE - padding * 2, CELL_SIZE - padding * 2);
+    ctx.shadowBlur = 0;
+}
+
+function drawSnake() {
+    snakeBody.forEach((cell, index) => {
+        const ratio = snakeBody.length <= 1 ? 1 : (index + 1) / snakeBody.length;
+        const alpha = 0.16 + ratio * 0.5;
+        const x = cell.x * CELL_SIZE;
+        const y = cell.y * CELL_SIZE;
+        const padding = Math.max(4, CELL_SIZE * 0.12);
+
+        ctx.fillStyle = `rgba(196, 138, 28, ${alpha.toFixed(3)})`;
+        ctx.strokeStyle = `rgba(255, 196, 72, ${(alpha + 0.08).toFixed(3)})`;
+        ctx.lineWidth = 1;
+        ctx.fillRect(x + padding, y + padding, CELL_SIZE - padding * 2, CELL_SIZE - padding * 2);
+        ctx.strokeRect(x + padding, y + padding, CELL_SIZE - padding * 2, CELL_SIZE - padding * 2);
+    });
+}
+
+function drawFrame() {
+    if (!canvas || !ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawGrid();
+    drawSnake();
+    drawFood();
+}
+
+function getSnakeHead() {
+    return snakeBody[snakeBody.length - 1] || null;
+}
+
+function moveSnakeTowardsTarget() {
+    if (!pointerInside || !targetCell) return;
+
+    const head = getSnakeHead();
+    if (!head) {
+        appendSnakeCell({ ...targetCell });
+        return;
+    }
+
+    if (head.x === targetCell.x && head.y === targetCell.y) {
+        return;
+    }
+
+    const nextCell = { ...head };
+
+    if (head.x !== targetCell.x) {
+        nextCell.x += Math.sign(targetCell.x - head.x);
+    } else if (head.y !== targetCell.y) {
+        nextCell.y += Math.sign(targetCell.y - head.y);
+    }
+
+    appendSnakeCell(nextCell);
+}
+
+function renderLoop() {
+    if (!isRunning) return;
+    moveSnakeTowardsTarget();
+    drawFrame();
+    animationFrameId = requestAnimationFrame(renderLoop);
+}
+
+function startLoop() {
+    if (isRunning || !isPageActive()) return;
+    isRunning = true;
+    renderLoop();
+}
+
+function appendSnakeCell(cell) {
+    const head = getSnakeHead();
+    if (head && head.x === cell.x && head.y === cell.y) return;
+
+    snakeBody.push(cell);
+
+    if (foodCell && cell.x === foodCell.x && cell.y === foodCell.y) {
+        snakeLength += GROWTH_STEP;
+        spawnFood();
+    }
+
+    if (snakeBody.length > snakeLength) {
+        snakeBody = snakeBody.slice(snakeBody.length - snakeLength);
+    }
+}
+
+function getCellFromPointerState(state) {
+    const { x: localX, y: localY, inside } = getLocalPoint(host, state);
+
+    if (!inside) {
+        return null;
+    }
+
+    const x = Math.min(columns - 1, Math.max(0, Math.floor(localX / CELL_SIZE)));
+    const y = Math.min(rows - 1, Math.max(0, Math.floor(localY / CELL_SIZE)));
+
+    return { x, y };
+}
+
+function handlePointerUpdate(state) {
+    if (!host || !isPageActive()) return;
+
+    const cell = getCellFromPointerState(state);
+    if (!cell) {
+        pointerInside = false;
+        targetCell = null;
+        return;
+    }
+
+    pointerInside = true;
+    targetCell = cell;
+}
+
+function resetAndPause() {
+    resetGameState();
+    drawFrame();
+    stopLoop();
+}
+
+function pauseWithoutReset() {
+    stopLoop();
+}
+
+function resumeIfNeeded() {
+    if (!page || !host) return;
+    if (!isPageActive() || document.hidden) return;
+    startLoop();
+}
+
+function handlePagerChange() {
+    if (!page || !host) return;
+
+    if (isPageActive()) {
+        resetGameState();
+        drawFrame();
+        resumeIfNeeded();
+    } else {
+        resetAndPause();
+    }
+}
+
+function handleVisibilityChange() {
+    if (document.hidden) {
+        pauseWithoutReset();
+    } else {
+        resumeIfNeeded();
+    }
+}
 
 function initTechCapabilityBackground() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-    const page = document.querySelector(PAGE_SELECTOR);
-    const host = document.querySelector(HOST_SELECTOR);
-    if (!page || !host || typeof window.p5 !== 'function') return;
-    if (instance) return;
+    page = document.querySelector(PAGE_SELECTOR);
+    host = document.querySelector(HOST_SELECTOR);
 
-    const sketch = (p) => {
-        let shaderProgram;
-        let resizeObserver = null;
-        let hostWidth = 1;
-        let hostHeight = 1;
-        let mouseX = 0;
-        let mouseY = 0;
+    if (!page || !host) return;
+    if (canvas) return;
 
-        const syncCanvasSize = () => {
-            const rect = host.getBoundingClientRect();
-            hostWidth = Math.max(1, Math.floor(rect.width));
-            hostHeight = Math.max(1, Math.floor(rect.height));
-            p.resizeCanvas(hostWidth, hostHeight);
-        };
+    canvas = document.createElement('canvas');
+    canvas.setAttribute('aria-hidden', 'true');
+    host.appendChild(canvas);
+    ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-        const syncLoopState = () => {
-            const isActive = page.classList.contains('active') && !document.hidden;
-            if (isActive) {
-                p.loop();
-            } else {
-                p.noLoop();
-            }
-        };
+    subscribePointer(handlePointerUpdate);
+    window.addEventListener('kappa:pager-change', handlePagerChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('resize', syncCanvasSize);
 
-        p.setup = () => {
-            const rect = host.getBoundingClientRect();
-            hostWidth = Math.max(1, Math.floor(rect.width));
-            hostHeight = Math.max(1, Math.floor(rect.height));
+    if ('ResizeObserver' in window) {
+        resizeObserver = new ResizeObserver(syncCanvasSize);
+        resizeObserver.observe(host);
+    }
 
-            const canvas = p.createCanvas(hostWidth, hostHeight, p.WEBGL);
-            canvas.parent(host);
-            canvas.style('position', 'absolute');
-            canvas.style('inset', '0');
-            canvas.style('pointer-events', 'none');
-            canvas.style('width', '100%');
-            canvas.style('height', '100%');
-            p.noStroke();
-            shaderProgram = p.createShader(vert, frag);
-
-            if ('ResizeObserver' in window) {
-                resizeObserver = new ResizeObserver(syncCanvasSize);
-                resizeObserver.observe(host);
-            }
-
-            window.addEventListener('kappa:pager-change', syncLoopState);
-            window.addEventListener('resize', syncCanvasSize);
-            document.addEventListener('visibilitychange', syncLoopState);
-            host.addEventListener('pointermove', (event) => {
-                const bounds = host.getBoundingClientRect();
-                mouseX = event.clientX - bounds.left;
-                mouseY = event.clientY - bounds.top;
-            }, { passive: true });
-
-            syncLoopState();
-        };
-
-        p.draw = () => {
-            p.shader(shaderProgram);
-            shaderProgram.setUniform('iResolution', [p.width, p.height]);
-            shaderProgram.setUniform('iTime', p.millis() * 0.001);
-            shaderProgram.setUniform('iMouse', [mouseX, hostHeight - mouseY]);
-            p.rect(-p.width / 2, -p.height / 2, p.width, p.height);
-        };
-
-        p.windowResized = syncCanvasSize;
-
-        p.remove = ((originalRemove) => () => {
-            window.removeEventListener('kappa:pager-change', syncLoopState);
-            window.removeEventListener('resize', syncCanvasSize);
-            document.removeEventListener('visibilitychange', syncLoopState);
-            resizeObserver?.disconnect();
-            originalRemove.call(p);
-        })(p.remove);
-    };
-
-    instance = new window.p5(sketch);
+    syncCanvasSize();
+    syncLoopState();
 }
 
 if (document.readyState === 'loading') {
@@ -255,5 +316,6 @@ if (document.readyState === 'loading') {
 window.addEventListener('pageshow', (event) => {
     if (event.persisted) {
         initTechCapabilityBackground();
+        syncLoopState();
     }
 });

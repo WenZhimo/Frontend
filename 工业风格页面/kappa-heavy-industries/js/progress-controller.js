@@ -1,3 +1,5 @@
+import { subscribePointer } from './pointer-service.js';
+
 const progress = document.getElementById('progress');
 const progressFill = progress?.querySelector('span') ?? null;
 let isDraggingProgress = false;
@@ -67,11 +69,15 @@ function syncProgress() {
     }
 }
 
-function getSeekRatio(event) {
+function getSeekRatioFromX(clientX) {
     if (!progress) return 0;
     const rect = progress.getBoundingClientRect();
     if (rect.width <= 0) return 0;
-    return Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
+    return Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+}
+
+function getSeekRatio(event) {
+    return getSeekRatioFromX(event.clientX);
 }
 
 function seekProgress(ratio, behavior = 'smooth') {
@@ -115,14 +121,9 @@ function handleProgressPointerDown(event) {
     seekProgress(getSeekRatio(event), 'auto');
 }
 
-function handleProgressPointerMove(event) {
+function handleProgressPointerMove(clientX) {
     if (!isDraggingProgress) return;
-    seekProgress(getSeekRatio(event), 'auto');
-}
-
-function handleWindowPointerMove(event) {
-    if (!isDraggingProgress) return;
-    seekProgress(getSeekRatio(event), 'auto');
+    seekProgress(getSeekRatioFromX(clientX), 'auto');
 }
 
 function stopProgressDrag(event) {
@@ -137,6 +138,10 @@ function stopProgressDrag(event) {
     }
 }
 
+subscribePointer(({ x }) => {
+    handleProgressPointerMove(x);
+});
+
 if (progress) {
     progress.addEventListener('click', handleProgressSeek);
     progress.addEventListener('pointerdown', handleProgressPointerDown);
@@ -144,7 +149,6 @@ if (progress) {
     progress.addEventListener('pointercancel', stopProgressDrag);
 }
 
-window.addEventListener('pointermove', handleWindowPointerMove);
 window.addEventListener('pointerup', stopProgressDrag);
 window.addEventListener('pointercancel', stopProgressDrag);
 
