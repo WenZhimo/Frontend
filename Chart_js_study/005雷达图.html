@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 5 课：雷达图</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="badge">Chart.js 系列课程</div>
+            <h1>第 5 课：雷达图</h1>
+            <p>用雷达图比较多个维度的数据，例如技能、能力、指标完成度。</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="panel">
+            <h2>本课你会学到什么</h2>
+            <ul class="learn-list">
+                <li>雷达图适合比较多个维度，例如语言能力、产品能力、运动能力。</li>
+                <li>每个轴代表一个维度，离中心越远通常表示数值越高。</li>
+                <li>本课会演示一组能力评估数据，并说明如何加入第二组对象做对比。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>图表示例</h2>
+            <div class="chart-grid">
+                <article class="chart-card">
+                    <h3>能力雷达图</h3>
+                    <p>一张图同时比较多个维度的表现。</p>
+                    <div class="chart-shell">
+                        <canvas id="radarChart"></canvas>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>如何自定义成你自己的图表</h2>
+            <ul class="tip-list">
+                <li>如果你要换成自己的评价维度，修改 <code>labels</code>，例如“速度、质量、成本、稳定性”。</li>
+                <li>如果你要比较另一个人或另一个产品，只需要在 <code>datasets</code> 中再加一个对象。</li>
+                <li>想让区域更透明或更明显，可以修改 <code>backgroundColor</code> 的透明度。</li>
+                <li>如果你发现图太拥挤，减少维度数量通常比继续加样式更有效。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>课后练习建议</h2>
+            <ol class="exercise-list">
+                <li>增加第二组数据，例如“同学 B”或“竞品 B”。</li>
+                <li>把维度改成你自己的技能项。</li>
+                <li>把数值范围改到 0~10，并同步调整刻度设置。</li>
+            </ol>
+        </section>
+
+        <section class="panel">
+            <h2>课程导航</h2>
+            <div class="nav-links">
+                <a href="004饼图与环形图.html">上一课</a>
+                <a href="index.html">返回首页</a>
+                <a href="006极地区域图.html">下一课</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>建议一边运行、一边修改源码中的 labels、datasets 和 options 练习。源码注释里写明了每个参数的含义和可选值。</footer>
+
+    <script>
+        new Chart(document.getElementById('radarChart'), {
+            // type='radar'：雷达图（多维度对比）
+            type: 'radar',
+            data: {
+                // labels：每个轴的名字（即每个维度）
+                //   - 维度个数 = 轴的个数
+                //   - 推荐 4~8 个，过多会拥挤
+                labels: ['HTML', 'CSS', 'JavaScript', 'Chart.js', '审美', '表达'],
+                datasets: [{
+                    label: '当前掌握度',
+                    // data：对应每个维度的分值
+                    //   - 长度必须等于 labels 长度
+                    data: [85, 78, 72, 60, 68, 74],
+
+                    // backgroundColor：包围多边形的填充色
+                    //   - 推荐低透明度，叠加多组数据时不会互相遮挡
+                    backgroundColor: 'rgba(79, 124, 255, 0.20)',
+
+                    // borderColor：多边形边线颜色
+                    borderColor: 'rgb(79, 124, 255)',
+
+                    // pointBackgroundColor：每个顶点的填充色
+                    pointBackgroundColor: 'rgb(79, 124, 255)',
+
+                    // borderWidth：边线粗细
+                    borderWidth: 2,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                // scales.r：雷达图唯一的轴（径向轴）
+                //   - 与 x、y 不同，雷达图只有一个轴 r
+                scales: {
+                    r: {
+                        // beginAtZero：是否从 0 开始（推荐 true）
+                        beginAtZero: true,
+                        // min / max：轴的最小值 / 最大值
+                        //   - 自定义建议：根据你的评分体系修改
+                        //     例：100 分制写 0~100，10 分制写 0~10
+                        min: 0,
+                        max: 100,
+                        // ticks.stepSize：刻度间隔
+                        ticks: { stepSize: 20 },
+                    },
+                },
+                plugins: {
+                    title: { display: true, text: '前端学习能力雷达图' },
+                },
+            },
+        });
+
+        // 拓展：要新增一组对比对象，只需在 datasets 里再加一个对象，例如：
+        // {
+        //     label: '同学 B',
+        //     data: [70, 82, 88, 50, 75, 60],
+        //     backgroundColor: 'rgba(244, 114, 182, 0.20)',
+        //     borderColor: 'rgb(244, 114, 182)',
+        //     pointBackgroundColor: 'rgb(244, 114, 182)',
+        //     borderWidth: 2,
+        // }
+    </script>
+</body>
+</html>

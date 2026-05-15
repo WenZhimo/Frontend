@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 15 课：实战案例</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="badge">Chart.js 系列课程</div>
+            <h1>第 15 课：实战案例</h1>
+            <p>把前面学过的图表知识拼起来，做一个简单的业务看板页面。</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="panel">
+            <h2>本课你会学到什么</h2>
+            <ul class="learn-list">
+                <li>真实业务页面通常不只一张图，而是“指标卡片 + 多张图表”的组合。</li>
+                <li>本课会用柱形图、折线图、环形图拼一个简化的业务看板。</li>
+                <li>你要重点观察：不同图表是如何分工协作讲故事的。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>图表示例</h2>
+            <div class="chart-grid">
+                <article class="chart-card">
+                    <h3>渠道线索来源</h3>
+                    <p>用柱形图比较各渠道带来的线索量。</p>
+                    <div class="chart-shell">
+                        <canvas id="dashboardBar"></canvas>
+                    </div>
+                </article>
+                <article class="chart-card">
+                    <h3>近 7 天成交趋势</h3>
+                    <p>用折线图看趋势和波动。</p>
+                    <div class="chart-shell">
+                        <canvas id="dashboardLine"></canvas>
+                    </div>
+                </article>
+                <article class="chart-card">
+                    <h3>客户类型占比</h3>
+                    <p>用环形图看整体构成。</p>
+                    <div class="chart-shell">
+                        <canvas id="dashboardDoughnut"></canvas>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>如何自定义成你自己的图表</h2>
+            <ul class="tip-list">
+                <li>如果你要做自己的看板，先想清楚“这张图回答什么问题”，再决定图表类型。</li>
+                <li>柱形图通常回答“谁更多”，折线图通常回答“最近怎么变了”，环形图通常回答“整体由什么组成”。</li>
+                <li>如果你的项目有品牌色，优先统一所有图表的主色和辅助色。</li>
+                <li>实战页最重要的不只是配置参数，而是每张图承担的业务叙事角色。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>课后练习建议</h2>
+            <ol class="exercise-list">
+                <li>把卡片数据改成你自己的业务指标。</li>
+                <li>把其中一张图替换成雷达图或散点图，看是否更适合你的场景。</li>
+                <li>尝试给看板增加一个日期筛选器，配合第 14 课的 update 思路。</li>
+            </ol>
+        </section>
+
+        <section class="panel">
+            <h2>课程导航</h2>
+            <div class="nav-links">
+                <a href="014数据更新与动态图.html">上一课</a>
+                <a href="index.html">返回首页</a>
+                <a href="index.html">完成本系列</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>建议一边运行、一边修改源码中的 labels、datasets 和 options 练习。源码注释里写明了每个参数的含义和可选值。</footer>
+
+    <script>
+        // ============================================================
+        // 第 1 步：动态插入“关键指标卡片”
+        //   - 真实看板的固定套路：先用大数字告诉读者整体情况
+        // ============================================================
+        const summaryPanel = document.createElement('section');
+        summaryPanel.className = 'panel';
+        summaryPanel.innerHTML = `
+            <h2>本周关键指标</h2>
+            <div class="cards">
+                <div class="mini-card"><span>新增线索</span><strong>430</strong><div>较上周 +12%</div></div>
+                <div class="mini-card"><span>成交订单</span><strong>126</strong><div>较上周 +8%</div></div>
+                <div class="mini-card"><span>平均客单价</span><strong>¥468</strong><div>较上周 +5%</div></div>
+                <div class="mini-card"><span>复购率</span><strong>31%</strong><div>较上周 +3pt</div></div>
+            </div>
+        `;
+        document.querySelector('.main').insertBefore(
+            summaryPanel,
+            document.querySelectorAll('.panel')[1],
+        );
+
+        // ============================================================
+        // 第 2 步：图 1 —— 柱形图（“谁更多”）
+        //   - 适合横向对比若干分类
+        // ============================================================
+        new Chart(document.getElementById('dashboardBar'), {
+            type: 'bar',
+            data: {
+                labels: ['短视频', '图文', '直播', '社群', '老带新'],
+                datasets: [{
+                    label: '线索量',
+                    data: [120, 86, 104, 72, 48],
+                    backgroundColor: 'rgba(79, 124, 255, 0.60)',
+                    borderRadius: 10,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true } },
+                plugins: {
+                    title: { display: true, text: '各渠道带来的线索量' },
+                },
+            },
+        });
+
+        // ============================================================
+        // 第 3 步：图 2 —— 折线图（“最近怎么变了”）
+        //   - 适合时间维度的趋势观察
+        // ============================================================
+        new Chart(document.getElementById('dashboardLine'), {
+            type: 'line',
+            data: {
+                labels: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
+                datasets: [{
+                    label: '成交订单',
+                    data: [12, 18, 15, 20, 22, 17, 22],
+                    borderColor: 'rgb(52, 211, 153)',
+                    backgroundColor: 'rgba(52, 211, 153, 0.14)',
+                    fill: true,
+                    tension: 0.3,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true } },
+                plugins: {
+                    title: { display: true, text: '近 7 天成交趋势' },
+                },
+            },
+        });
+
+        // ============================================================
+        // 第 4 步：图 3 —— 环形图（“整体由什么组成”）
+        //   - 适合展示构成比例
+        // ============================================================
+        new Chart(document.getElementById('dashboardDoughnut'), {
+            type: 'doughnut',
+            data: {
+                labels: ['新客户', '复购客户', '会员客户'],
+                datasets: [{
+                    label: '客户结构',
+                    data: [46, 34, 20],
+                    backgroundColor: ['#4f7cff', '#34d399', '#f59e0b'],
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: { display: true, text: '客户类型占比' },
+                    // 圆形/环形图分类多时，图例放底部最稳
+                    legend: { position: 'bottom' },
+                },
+            },
+        });
+    </script>
+</body>
+</html>

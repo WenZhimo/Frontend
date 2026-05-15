@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 13 课：堆叠图与组合图</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="badge">Chart.js 系列课程</div>
+            <h1>第 13 课：堆叠图与组合图</h1>
+            <p>学习 stacked bar 与 bar + line 组合图，适合做综合对比图。</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="panel">
+            <h2>本课你会学到什么</h2>
+            <ul class="learn-list">
+                <li>堆叠图适合看“总量由哪些部分组成”，组合图适合把两个维度放在同一画面里。</li>
+                <li>stacked bar 的重点是 <code>scales.x.stacked</code> 与 <code>scales.y.stacked</code>。</li>
+                <li>组合图的重点是：不同 dataset 可以写不同的 <code>type</code>。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>图表示例</h2>
+            <div class="chart-grid">
+                <article class="chart-card">
+                    <h3>堆叠柱形图</h3>
+                    <p>适合看总量组成，比如不同来源共同构成总销售额。</p>
+                    <div class="chart-shell">
+                        <canvas id="stackedChart"></canvas>
+                    </div>
+                </article>
+                <article class="chart-card">
+                    <h3>柱形图 + 折线图组合</h3>
+                    <p>适合把销量和转化率放在一起看。</p>
+                    <div class="chart-shell">
+                        <canvas id="comboChart"></canvas>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>如何自定义成你自己的图表</h2>
+            <ul class="tip-list">
+                <li>如果你要看“总量结构”，优先考虑堆叠图。</li>
+                <li>如果你既想看绝对值又想看趋势或比率，优先考虑组合图。</li>
+                <li>组合图中每个 dataset 都能单独指定 <code>type</code>。</li>
+                <li>图层多了以后，标题和图例就更重要，因为读者需要知道每一层代表什么。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>课后练习建议</h2>
+            <ol class="exercise-list">
+                <li>给堆叠图增加第三组来源数据。</li>
+                <li>把组合图里的折线数据改成真实转化率。</li>
+                <li>尝试把组合图的柱形数据改成两组产品线。</li>
+            </ol>
+        </section>
+
+        <section class="panel">
+            <h2>课程导航</h2>
+            <div class="nav-links">
+                <a href="012响应式布局.html">上一课</a>
+                <a href="index.html">返回首页</a>
+                <a href="014数据更新与动态图.html">下一课</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>建议一边运行、一边修改源码中的 labels、datasets 和 options 练习。源码注释里写明了每个参数的含义和可选值。</footer>
+
+    <script>
+        // ============================================================
+        // 示例 1：堆叠柱形图
+        // ------------------------------------------------------------
+        // 多个 dataset + scales.x.stacked / scales.y.stacked = 堆叠效果
+        // ============================================================
+        new Chart(document.getElementById('stackedChart'), {
+            type: 'bar',
+            data: {
+                labels: ['1 月', '2 月', '3 月', '4 月'],
+                datasets: [
+                    {
+                        label: '线上订单',
+                        data: [120, 150, 170, 190],
+                        backgroundColor: 'rgba(79, 124, 255, 0.65)',
+                    },
+                    {
+                        label: '线下订单',
+                        data: [80, 70, 90, 95],
+                        backgroundColor: 'rgba(52, 211, 153, 0.65)',
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    // stacked：堆叠开关（重点）
+                    //   - 默认 false（默认是并列 grouped 显示）
+                    //   - 设为 true 时，多个 dataset 会按相同分类叠加
+                    x: { stacked: true },
+                    y: { stacked: true, beginAtZero: true },
+                },
+                plugins: {
+                    title: { display: true, text: '堆叠柱形图：总订单由哪些部分组成' },
+                },
+            },
+        });
+
+        // ============================================================
+        // 示例 2：柱形图 + 折线图组合
+        // ------------------------------------------------------------
+        // 关键点：
+        //   1) 顶层不写 type，由每个 dataset 自己指定 type
+        //   2) 用第二条 y 轴（y1）展示量纲不同的数据（这里是百分比）
+        // ============================================================
+        new Chart(document.getElementById('comboChart'), {
+            // 顶层不写 type → 由 dataset.type 决定每条数据的画法
+            data: {
+                labels: ['1 月', '2 月', '3 月', '4 月', '5 月'],
+                datasets: [
+                    {
+                        // 第 1 组：柱形图
+                        type: 'bar',
+                        label: '成交单数',
+                        data: [120, 150, 180, 170, 210],
+                        backgroundColor: 'rgba(56, 189, 248, 0.60)',
+                    },
+                    {
+                        // 第 2 组：折线图
+                        type: 'line',
+                        label: '转化率（%）',
+                        data: [18, 22, 24, 23, 27],
+                        borderColor: 'rgb(244, 114, 182)',
+                        backgroundColor: 'rgba(244, 114, 182, 0.12)',
+
+                        // yAxisID：把这条数据绑定到名为 'y1' 的轴
+                        //   - 默认会绑定到 'y'（左侧轴）
+                        //   - 设置后必须在 scales 中定义同名轴
+                        yAxisID: 'y1',
+                        tension: 0.3,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    // 默认主轴 y（左侧）：用于柱形图绝对值
+                    y: {
+                        beginAtZero: true,
+                        // position：轴显示在哪一侧
+                        //   - 'left'（默认） / 'right' / 'top' / 'bottom'
+                        position: 'left',
+                        title: { display: true, text: '成交单数' },
+                    },
+                    // 第二条 y 轴：用于折线图的百分比
+                    //   - id 与 dataset 的 yAxisID 对应
+                    y1: {
+                        beginAtZero: true,
+                        position: 'right',
+                        // grid.drawOnChartArea：是否在图表区域绘制网格线
+                        //   - 双 y 轴时，关掉副轴的网格线，避免与主轴重叠
+                        grid: { drawOnChartArea: false },
+                        title: { display: true, text: '转化率（%）' },
+                    },
+                },
+                plugins: {
+                    title: { display: true, text: '组合图：销量与转化率' },
+                },
+            },
+        });
+    </script>
+</body>
+</html>

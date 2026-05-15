@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 3 课：折线图</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="badge">Chart.js 系列课程</div>
+            <h1>第 3 课：折线图</h1>
+            <p>用折线图表达趋势，并掌握 tension、fill、pointRadius 等常见参数。</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="panel">
+            <h2>本课你会学到什么</h2>
+            <ul class="learn-list">
+                <li>折线图适合展示随时间变化的趋势，例如温度、访问量、销售额。</li>
+                <li>本课重点学习 <code>tension</code>、<code>fill</code>、<code>pointRadius</code> 和线条颜色配置。</li>
+                <li>理解折线图和柱形图的区别：柱形图更适合分类对比，折线图更适合看变化趋势。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>图表示例</h2>
+            <div class="chart-grid">
+                <article class="chart-card">
+                    <h3>访问量趋势图</h3>
+                    <p>折线图最常见的用法是观察一段时间内的数据起伏。</p>
+                    <div class="chart-shell">
+                        <canvas id="lineTrend"></canvas>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>如何自定义成你自己的图表</h2>
+            <ul class="tip-list">
+                <li>如果你要换自己的时间维度，先改 <code>labels</code>，例如从“周一~周日”改成“1 月~12 月”。</li>
+                <li>如果你想让线更平滑，增大 <code>tension</code>；如果想更硬朗的折线，可以把它改成 <code>0</code>。</li>
+                <li>如果你不想要面积填充，把 <code>fill</code> 改成 <code>false</code>。</li>
+                <li>如果数据点太明显或太小，可以调 <code>pointRadius</code>、<code>pointHoverRadius</code>。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>课后练习建议</h2>
+            <ol class="exercise-list">
+                <li>把本课数据改成你最近 7 天的真实访问量。</li>
+                <li>把曲线改成完全折线，比较视觉差异。</li>
+                <li>再添加一组数据，例如“注册人数”，做双折线对比。</li>
+            </ol>
+        </section>
+
+        <section class="panel">
+            <h2>课程导航</h2>
+            <div class="nav-links">
+                <a href="002基础柱形图.html">上一课</a>
+                <a href="index.html">返回首页</a>
+                <a href="004饼图与环形图.html">下一课</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>建议一边运行、一边修改源码中的 labels、datasets 和 options 练习。源码注释里写明了每个参数的含义和可选值。</footer>
+
+    <script>
+        const ctx = document.getElementById('lineTrend');
+
+        new Chart(ctx, {
+            // type='line'：折线图
+            type: 'line',
+            data: {
+                labels: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
+                datasets: [{
+                    label: '网站访问量',
+                    data: [180, 220, 210, 260, 300, 280, 340],
+
+                    // borderColor：折线本身的颜色（折线图主色）
+                    //   - 可写颜色字符串：'red'、'#4f7cff'、'rgb(...)' 等
+                    borderColor: 'rgb(79, 124, 255)',
+
+                    // backgroundColor：折线图中是“线下方填充区”的颜色
+                    //   - 配合 fill 一起使用
+                    //   - 建议用低透明度的 rgba()，避免太抢眼
+                    backgroundColor: 'rgba(79, 124, 255, 0.18)',
+
+                    // fill：是否填充线下方区域
+                    //   - 可选值：
+                    //       true       → 填充到 0 基线
+                    //       false      → 不填充
+                    //       'origin'   → 等价于 true
+                    //       'start'    → 填充到坐标轴起点
+                    //       'end'      → 填充到坐标轴终点
+                    //       数字（dataset 索引）→ 填充到指定 dataset 之间
+                    fill: true,
+
+                    // tension：曲线的张力 / 平滑度
+                    //   - 取值范围：0 ~ 1
+                    //   - 0 → 完全折线（拐角硬）
+                    //   - 0.4 左右 → 自然的平滑曲线（推荐）
+                    //   - 1 → 很圆滑，但容易“失真”
+                    tension: 0.35,
+
+                    // pointRadius：每个数据点的半径（像素）
+                    //   - 默认：3
+                    //   - 设为 0 可以隐藏数据点
+                    pointRadius: 4,
+
+                    // pointHoverRadius：鼠标悬停时数据点的半径
+                    //   - 通常比 pointRadius 大一些，用来强调
+                    pointHoverRadius: 7,
+
+                    // borderWidth：折线的粗细（像素）
+                    //   - 折线图默认：3
+                    borderWidth: 3,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true },
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: '最近一周访问量趋势',
+                    },
+                },
+            },
+        });
+    </script>
+</body>
+</html>

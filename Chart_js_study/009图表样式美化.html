@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 9 课：图表样式美化</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="badge">Chart.js 系列课程</div>
+            <h1>第 9 课：图表样式美化</h1>
+            <p>学习如何美化图表，包括圆角、透明度、线条粗细、点样式和配色。</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="panel">
+            <h2>本课你会学到什么</h2>
+            <ul class="learn-list">
+                <li>同一份数据，换一套样式，图表的气质会差很多。</li>
+                <li>本课重点学习 <code>borderRadius</code>、<code>borderSkipped</code>、<code>pointStyle</code> 等美化参数。</li>
+                <li>注意：美化应该服务于可读性，不要为了花哨而牺牲信息表达。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>图表示例</h2>
+            <div class="chart-grid">
+                <article class="chart-card">
+                    <h3>圆角柱形图</h3>
+                    <p>让柱子更柔和、更接近现代看板视觉。</p>
+                    <div class="chart-shell">
+                        <canvas id="prettyBar"></canvas>
+                    </div>
+                </article>
+                <article class="chart-card">
+                    <h3>带点样式的折线图</h3>
+                    <p>通过点样式和颜色层次增强趋势图的识别度。</p>
+                    <div class="chart-shell">
+                        <canvas id="prettyLine"></canvas>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>如何自定义成你自己的图表</h2>
+            <ul class="tip-list">
+                <li>柱形图想更圆润，优先改 <code>borderRadius</code>。</li>
+                <li>如果柱子顶部和底部都要圆角，可以加 <code>borderSkipped: false</code>。</li>
+                <li>折线图想让数据点更醒目，可以调 <code>pointRadius</code>、<code>pointStyle</code>、<code>pointBackgroundColor</code>。</li>
+                <li>如果你想统一整套项目风格，最值得沉淀的是颜色方案和图例位置。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>课后练习建议</h2>
+            <ol class="exercise-list">
+                <li>把柱形图颜色换成一组冷色系品牌色。</li>
+                <li>把折线图点样式从 circle 改成 rectRounded 或 triangle。</li>
+                <li>把两张图都做成深色背景版。</li>
+            </ol>
+        </section>
+
+        <section class="panel">
+            <h2>课程导航</h2>
+            <div class="nav-links">
+                <a href="008多数据集对比.html">上一课</a>
+                <a href="index.html">返回首页</a>
+                <a href="010坐标轴与刻度.html">下一课</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>建议一边运行、一边修改源码中的 labels、datasets 和 options 练习。源码注释里写明了每个参数的含义和可选值。</footer>
+
+    <script>
+        // ============================================================
+        // 示例 1：圆角柱形图
+        // ============================================================
+        new Chart(document.getElementById('prettyBar'), {
+            type: 'bar',
+            data: {
+                labels: ['A 版', 'B 版', 'C 版', 'D 版', 'E 版'],
+                datasets: [{
+                    label: '点击率',
+                    data: [12, 19, 16, 24, 21],
+                    backgroundColor: [
+                        'rgba(79, 124, 255, 0.65)',
+                        'rgba(56, 189, 248, 0.65)',
+                        'rgba(52, 211, 153, 0.65)',
+                        'rgba(250, 204, 21, 0.65)',
+                        'rgba(244, 114, 182, 0.65)',
+                    ],
+
+                    // borderRadius：柱子的圆角半径（像素）
+                    //   - 默认：0
+                    //   - 推荐：8~12，看起来更现代
+                    //   - 也可以写成对象，针对单角设置：
+                    //       { topLeft: 12, topRight: 12, bottomLeft: 0, bottomRight: 0 }
+                    borderRadius: 12,
+
+                    // borderSkipped：哪一侧不画边框（柱形图常用于圆角控制）
+                    //   - 默认：'start'（柱底不画，所以底部不会出现圆角）
+                    //   - 设为 false：四个角都画 → 顶部和底部都圆
+                    //   - 其它可选：'top' / 'bottom' / 'left' / 'right'
+                    borderSkipped: false,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true } },
+                plugins: {
+                    title: { display: true, text: '圆角柱形图样式' },
+                },
+            },
+        });
+
+        // ============================================================
+        // 示例 2：带点样式的折线图
+        // ============================================================
+        new Chart(document.getElementById('prettyLine'), {
+            type: 'line',
+            data: {
+                labels: ['第 1 周', '第 2 周', '第 3 周', '第 4 周', '第 5 周'],
+                datasets: [{
+                    label: '满意度',
+                    data: [72, 78, 75, 86, 91],
+                    borderColor: 'rgb(99, 102, 241)',
+                    backgroundColor: 'rgba(99, 102, 241, 0.14)',
+                    fill: true,
+                    borderWidth: 3,
+
+                    // pointRadius：数据点半径（像素）
+                    pointRadius: 5,
+                    // pointHoverRadius：鼠标悬停时数据点半径
+                    pointHoverRadius: 8,
+
+                    // pointStyle：数据点形状
+                    //   - 可选值：'circle'（默认）、'cross'、'crossRot'、'dash'、
+                    //              'line'、'rect'、'rectRounded'、'rectRot'、
+                    //              'star'、'triangle'、'rotate'
+                    //   - 也可以传一个 Image 对象自定义图标
+                    pointStyle: 'rectRounded',
+
+                    // pointBackgroundColor：数据点的填充色
+                    pointBackgroundColor: 'rgb(99, 102, 241)',
+
+                    // tension：曲线平滑度（0~1）
+                    tension: 0.3,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 100 },
+                },
+                plugins: {
+                    title: { display: true, text: '带点样式的折线图' },
+                },
+            },
+        });
+    </script>
+</body>
+</html>

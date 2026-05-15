@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chart.js 从入门到应用</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="badge">Chart.js 学习地图</div>
+            <h1>Chart.js 从入门到应用</h1>
+            <p>这是一个纯静态 HTML 的学习系列。你不需要安装 npm，也不需要配置构建工具，直接用浏览器打开页面即可学习。建议按顺序从第 1 课开始，边看边改源码里的 labels、data、datasets 和 options，每个参数旁边都有详细注释告诉你它的含义和可选值。</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="panel">
+            <h2>学习方式建议</h2>
+            <div class="callout">
+                <strong>推荐顺序：</strong>先学 001 ~ 008 掌握常见图表类型，再学 009 ~ 014 理解样式、坐标轴、交互与组合图，最后用 015 实战案例把知识串起来。
+            </div>
+            <ul class="learn-list">
+                <li>先运行，再修改：每一课都能直接打开并看到结果。</li>
+                <li>优先练这四处：<code>type</code>、<code>labels</code>、<code>datasets</code>、<code>options</code>。</li>
+                <li>每个参数都有中文注释，边学边照着注释改。</li>
+                <li>遇到忘记的参数？查阅 <a href="参数速查表.html"><strong>📋 Chart.js 参数速查表</strong></a>，按类别列出所有常用参数、取值范围与默认值。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>15 课完整目录</h2>
+            <div class="course-grid">
+                <a class="course-card" href="001认识Chart.js.html">
+                    <div class="num">LESSON 01</div>
+                    <h3>第 1 课：认识 Chart.js</h3>
+                    <p>先跑通一个最小可运行示例，理解 Chart.js 最核心的 4 个部分：type、data、options 与 new Chart(...)。</p>
+                </a>
+                <a class="course-card" href="002基础柱形图.html">
+                    <div class="num">LESSON 02</div>
+                    <h3>第 2 课：基础柱形图</h3>
+                    <p>学习柱形图最常见的配置：标签、数据、颜色、边框，以及如何切换为水平柱形图。</p>
+                </a>
+                <a class="course-card" href="003折线图.html">
+                    <div class="num">LESSON 03</div>
+                    <h3>第 3 课：折线图</h3>
+                    <p>用折线图表达趋势，并掌握 tension、fill、pointRadius 等常见参数。</p>
+                </a>
+                <a class="course-card" href="004饼图与环形图.html">
+                    <div class="num">LESSON 04</div>
+                    <h3>第 4 课：饼图与环形图</h3>
+                    <p>学习 pie 与 doughnut 两种占比类图表，以及它们适合什么场景。</p>
+                </a>
+                <a class="course-card" href="005雷达图.html">
+                    <div class="num">LESSON 05</div>
+                    <h3>第 5 课：雷达图</h3>
+                    <p>用雷达图比较多个维度的数据，例如技能、能力、指标完成度。</p>
+                </a>
+                <a class="course-card" href="006极地区域图.html">
+                    <div class="num">LESSON 06</div>
+                    <h3>第 6 课：极地区域图</h3>
+                    <p>认识 polarArea 图表，它适合展示不同类别的强弱与占比感。</p>
+                </a>
+                <a class="course-card" href="007散点图与气泡图.html">
+                    <div class="num">LESSON 07</div>
+                    <h3>第 7 课：散点图与气泡图</h3>
+                    <p>学习如何用 x/y 坐标表示二维关系，以及如何用 r 表示第三维大小。</p>
+                </a>
+                <a class="course-card" href="008多数据集对比.html">
+                    <div class="num">LESSON 08</div>
+                    <h3>第 8 课：多数据集对比</h3>
+                    <p>在同一张图中放入多个 dataset，比对不同对象在同一组标签下的表现。</p>
+                </a>
+                <a class="course-card" href="009图表样式美化.html">
+                    <div class="num">LESSON 09</div>
+                    <h3>第 9 课：图表样式美化</h3>
+                    <p>学习如何美化图表，包括圆角、透明度、线条粗细、点样式和配色。</p>
+                </a>
+                <a class="course-card" href="010坐标轴与刻度.html">
+                    <div class="num">LESSON 10</div>
+                    <h3>第 10 课：坐标轴与刻度</h3>
+                    <p>掌握 scales 配置，控制坐标轴标题、刻度、网格线与最值范围。</p>
+                </a>
+                <a class="course-card" href="011标题图例提示框.html">
+                    <div class="num">LESSON 11</div>
+                    <h3>第 11 课：标题、图例与提示框</h3>
+                    <p>理解 plugins 区域中 title、legend、tooltip 的作用与常见改法。</p>
+                </a>
+                <a class="course-card" href="012响应式布局.html">
+                    <div class="num">LESSON 12</div>
+                    <h3>第 12 课：响应式布局</h3>
+                    <p>让图表跟着容器自适应，并理解 responsive 与 maintainAspectRatio。</p>
+                </a>
+                <a class="course-card" href="013堆叠图与组合图.html">
+                    <div class="num">LESSON 13</div>
+                    <h3>第 13 课：堆叠图与组合图</h3>
+                    <p>学习 stacked bar 与 bar + line 组合图，适合做综合对比图。</p>
+                </a>
+                <a class="course-card" href="014数据更新与动态图.html">
+                    <div class="num">LESSON 14</div>
+                    <h3>第 14 课：数据更新与动态图</h3>
+                    <p>点击按钮后动态更新图表数据，理解为什么更新后要调用 chart.update()。</p>
+                </a>
+                <a class="course-card" href="015实战案例.html">
+                    <div class="num">LESSON 15</div>
+                    <h3>第 15 课：实战案例</h3>
+                    <p>把前面学过的图表知识拼起来，做一个简单的业务看板页面。</p>
+                </a>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>这个系列会覆盖什么</h2>
+            <div class="cards">
+                <div class="mini-card"><span>基础图表</span><strong>8 类</strong><div>柱形图、折线图、饼图、环形图、雷达图、极地区域图、散点图、气泡图</div></div>
+                <div class="mini-card"><span>配置重点</span><strong>options</strong><div>坐标轴、刻度、标题、图例、提示框、响应式布局</div></div>
+                <div class="mini-card"><span>进阶能力</span><strong>动态更新</strong><div>堆叠图、组合图、按钮切换数据、业务看板</div></div>
+            </div>
+        </section>
+    </main>
+
+    <footer>提示：所有页面共享 css/style.css，如果你想换主题色，只改这一个文件即可。</footer>
+</body>
+</html>

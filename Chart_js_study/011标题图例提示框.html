@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 11 课：标题、图例与提示框</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="badge">Chart.js 系列课程</div>
+            <h1>第 11 课：标题、图例与提示框</h1>
+            <p>理解 plugins 区域中 title、legend、tooltip 的作用与常见改法。</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="panel">
+            <h2>本课你会学到什么</h2>
+            <ul class="learn-list">
+                <li>plugins 是 Chart.js 很重要的配置区，常见功能都在这里。</li>
+                <li>title 控制图标题，legend 控制图例，tooltip 控制鼠标悬停时的提示内容。</li>
+                <li>本课会演示如何把 tooltip 文案改得更像真实业务图表。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>图表示例</h2>
+            <div class="chart-grid">
+                <article class="chart-card">
+                    <h3>标题、图例与提示框</h3>
+                    <p>把图做得更“像一个正式产品里的图表”。</p>
+                    <div class="chart-shell">
+                        <canvas id="pluginChart"></canvas>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>如何自定义成你自己的图表</h2>
+            <ul class="tip-list">
+                <li>如果你想隐藏图例，把 <code>legend.display</code> 改成 <code>false</code>。</li>
+                <li>如果你想改变图例位置，改 <code>legend.position</code>。</li>
+                <li>如果提示框里默认文案不够友好，可以在 <code>tooltip.callbacks</code> 里自定义。</li>
+                <li>标题建议写“图表要回答的问题”，而不只是一个很泛的名字。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>课后练习建议</h2>
+            <ol class="exercise-list">
+                <li>把 tooltip 文案改成带“元”或“人”的单位。</li>
+                <li>把图例移到底部。</li>
+                <li>把标题改成更像报告风格的句子。</li>
+            </ol>
+        </section>
+
+        <section class="panel">
+            <h2>课程导航</h2>
+            <div class="nav-links">
+                <a href="010坐标轴与刻度.html">上一课</a>
+                <a href="index.html">返回首页</a>
+                <a href="012响应式布局.html">下一课</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>建议一边运行、一边修改源码中的 labels、datasets 和 options 练习。源码注释里写明了每个参数的含义和可选值。</footer>
+
+    <script>
+        new Chart(document.getElementById('pluginChart'), {
+            type: 'bar',
+            data: {
+                labels: ['短视频', '图文', '直播', '社群'],
+                datasets: [{
+                    label: '新增线索',
+                    data: [86, 62, 108, 74],
+                    backgroundColor: 'rgba(79, 124, 255, 0.6)',
+                    borderColor: 'rgb(79, 124, 255)',
+                    borderWidth: 1,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true } },
+
+                // ============================================================
+                // plugins：本课重点
+                //   - title    图表标题
+                //   - legend   图例
+                //   - tooltip  鼠标悬停提示框
+                // ============================================================
+                plugins: {
+                    title: {
+                        // display：是否显示标题
+                        display: true,
+                        // text：标题内容
+                        //   - 写成字符串数组可以多行：['第一行', '第二行']
+                        text: '哪个内容渠道带来的新增线索最多？',
+                        // 可选：
+                        //   position: 'top' / 'bottom' / 'left' / 'right'
+                        //   font: { size: 18, weight: 'bold' }
+                        //   color: '#1f2a44'
+                        //   padding: 12
+                    },
+
+                    legend: {
+                        // display：是否显示图例
+                        display: true,
+                        // position：图例位置
+                        //   - 'top'（默认） / 'bottom' / 'left' / 'right' / 'chartArea'
+                        position: 'top',
+                        // 可选：
+                        //   align：'start' / 'center' / 'end'
+                        //   labels.color：图例文字颜色
+                        //   labels.font：图例字体
+                        //   labels.usePointStyle：是否用点样式代替方块
+                    },
+
+                    tooltip: {
+                        // tooltip 默认就会显示，主要靠 callbacks 自定义文案
+                        //   - 还可以配置：
+                        //       enabled: false → 关闭 tooltip
+                        //       backgroundColor、titleColor、bodyColor 控制颜色
+                        //       padding、cornerRadius 控制外观
+                        //       mode: 'index' / 'point' / 'nearest' / 'dataset'
+                        callbacks: {
+                            // label 回调：自定义每行文字
+                            //   - context.dataset.label → 当前 dataset 的 label
+                            //   - context.parsed.y      → 当前柱子的数值（柱形图）
+                            //   - context.parsed.x      → 横轴数值（散点图等）
+                            //   - context.label         → 当前柱子的分类名
+                            label(context) {
+                                return `${context.dataset.label}：${context.parsed.y} 条`;
+                            },
+                            // 还可以重写：
+                            //   title(items) → 自定义提示框顶部文字
+                            //   afterLabel(context) → 在主文案下方追加内容
+                        },
+                    },
+                },
+            },
+        });
+    </script>
+</body>
+</html>

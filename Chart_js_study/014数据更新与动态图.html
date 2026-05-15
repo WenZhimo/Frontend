@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 14 课：数据更新与动态图</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="hero">
+        <div class="hero-inner">
+            <div class="badge">Chart.js 系列课程</div>
+            <h1>第 14 课：数据更新与动态图</h1>
+            <p>点击按钮后动态更新图表数据，理解为什么更新后要调用 chart.update()。</p>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="panel">
+            <h2>本课你会学到什么</h2>
+            <ul class="learn-list">
+                <li>Chart.js 不只是静态画图，也可以在用户点击后更新内容。</li>
+                <li>本课最关键的一句是：数据改完以后，要调用 <code>chart.update()</code> 才会重新渲染。</li>
+                <li>这正是你未来接真实接口、筛选器、时间范围切换时的基本思路。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>图表示例</h2>
+            <div class="chart-grid">
+                <article class="chart-card">
+                    <h3>可交互动态图表</h3>
+                    <p>点击按钮切换数据，观察图表是如何重新绘制的。</p>
+                    <div class="chart-shell">
+                        <canvas id="dynamicChart"></canvas>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>如何自定义成你自己的图表</h2>
+            <ul class="tip-list">
+                <li>如果你想切换不同的数据方案，常见做法是准备多个数组，然后在点击事件里替换进去。</li>
+                <li>修改 <code>chart.data.labels</code> 可以切换横轴文字，修改 <code>chart.data.datasets[0].data</code> 可以切换数值。</li>
+                <li>调用 <code>chart.update()</code> 的原因是：Chart.js 不会自动猜到你已经改完数据，它需要一个“重新渲染”的指令。</li>
+                <li>未来接后端接口时，通常是“请求数据 → 填入 chart.data → chart.update()”。</li>
+            </ul>
+        </section>
+
+        <section class="panel">
+            <h2>课后练习建议</h2>
+            <ol class="exercise-list">
+                <li>增加一个“季度数据”按钮。</li>
+                <li>增加第二个 dataset，切换时同时修改两组数据。</li>
+                <li>把按钮改成下拉菜单或日期筛选器。</li>
+            </ol>
+        </section>
+
+        <section class="panel">
+            <h2>课程导航</h2>
+            <div class="nav-links">
+                <a href="013堆叠图与组合图.html">上一课</a>
+                <a href="index.html">返回首页</a>
+                <a href="015实战案例.html">下一课</a>
+            </div>
+        </section>
+    </main>
+
+    <footer>建议一边运行、一边修改源码中的 labels、datasets 和 options 练习。源码注释里写明了每个参数的含义和可选值。</footer>
+
+    <script>
+        // ============================================================
+        // 第 1 步：准备多套数据
+        //   - 每套数据里都包含：labels、values、title
+        //   - 切换时，把这三项写回 chart.data 即可
+        // ============================================================
+        const weeklyPlanA = {
+            labels: ['周一', '周二', '周三', '周四', '周五'],
+            values: [32, 48, 41, 55, 62],
+            title: '本周任务完成数',
+        };
+        const weeklyPlanB = {
+            labels: ['周一', '周二', '周三', '周四', '周五'],
+            values: [28, 36, 52, 47, 70],
+            title: '下周任务完成数',
+        };
+
+        // ============================================================
+        // 第 2 步：先用方案 A 创建图表
+        //   - 这里跟前面几课一样，没有特殊配置
+        // ============================================================
+        const chart = new Chart(document.getElementById('dynamicChart'), {
+            type: 'bar',
+            data: {
+                labels: weeklyPlanA.labels,
+                datasets: [{
+                    label: '完成数',
+                    data: weeklyPlanA.values,
+                    backgroundColor: 'rgba(79, 124, 255, 0.60)',
+                    borderColor: 'rgb(79, 124, 255)',
+                    borderWidth: 1,
+                    borderRadius: 10,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true } },
+                plugins: {
+                    title: { display: true, text: weeklyPlanA.title },
+                },
+            },
+        });
+
+        // ============================================================
+        // 第 3 步：动态插入按钮（也可以直接在 HTML 写 <button>）
+        // ============================================================
+        const panel = document.querySelector('.chart-card');
+        const controls = document.createElement('div');
+        controls.className = 'button-row';
+        controls.innerHTML = `
+            <button id="showWeekA">显示本周</button>
+            <button id="showWeekB">显示下周</button>
+            <button id="randomize" class="secondary">随机生成一组新数据</button>
+        `;
+        panel.appendChild(controls);
+
+        // ============================================================
+        // 第 4 步：封装“替换数据并重绘”的函数
+        // ------------------------------------------------------------
+        // 核心套路（务必记住）：
+        //   1) 修改 chart.data.labels / chart.data.datasets[i].data
+        //   2) 修改 chart.options（如标题）
+        //   3) 调用 chart.update() 触发重新渲染
+        // ============================================================
+        function applyData(plan) {
+            // ① 改 labels：横轴文字
+            chart.data.labels = plan.labels;
+
+            // ② 改 data：第 0 个 dataset 的数值
+            //    - 多个 dataset 时，可以分别改 datasets[0]、datasets[1]
+            chart.data.datasets[0].data = plan.values;
+
+            // ③ 改 options：这里是顺便改一下标题文字
+            chart.options.plugins.title.text = plan.title;
+
+            // ④ 关键：调用 update()
+            //    - 如果不调用，画面不会刷新
+            //    - update() 还可以传配置：
+            //        chart.update('none')   → 跳过动画
+            //        chart.update('show')   → 用显示动画
+            //        chart.update('hide')   → 用隐藏动画
+            chart.update();
+        }
+
+        // ============================================================
+        // 第 5 步：绑定按钮点击事件
+        // ============================================================
+        document.getElementById('showWeekA').addEventListener('click', () => applyData(weeklyPlanA));
+        document.getElementById('showWeekB').addEventListener('click', () => applyData(weeklyPlanB));
+        document.getElementById('randomize').addEventListener('click', () => {
+            applyData({
+                labels: ['周一', '周二', '周三', '周四', '周五'],
+                // Math.random() 范围 0~1，乘 50 后取整 + 20 → 得到 20~69 的整数
+                values: Array.from({ length: 5 }, () => Math.floor(Math.random() * 50) + 20),
+                title: '随机生成的数据样例',
+            });
+        });
+    </script>
+</body>
+</html>
