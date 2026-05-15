@@ -3,18 +3,9 @@
  * 单篇文章/档案详情模板
  */
 get_header(); ?>
-<?php if ( has_post_thumbnail() ) : ?>
-<div data-selectable
-    style="margin-top: 80px;margin-bottom: 40px; border: 1px solid #988b32; padding: 4px; background: rgba(0, 20, 0, 0.5); box-shadow: 0 0 15px rgba(152, 139, 50, 0.15); position: relative;">
-    <div
-        style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: #988b32; padding: 2px 8px; font-family: 'ZCOOLQingKeHuangYou-Regular'; font-size: 0.9rem; z-index: 2; border: 1px solid #988b32;">
-        [ 附件影像 RECORD ]
-    </div>
-
-    <img src="<?php echo get_the_post_thumbnail_url(get_the_ID(), 'full'); ?>" alt="<?php the_title_attribute(); ?>"
-        style="width: 100%; max-height: 900px; object-fit: cover; display: block; opacity: 0.85; filter: contrast(1.1) grayscale(10%);">
+<div style="margin-top: 80px;">
+    <?php get_template_part( 'template-parts/content/featured-record-banner' ); ?>
 </div>
-<?php endif; ?>
 <?php if ( ! wp_is_mobile() ) : ?>
 <!-- 条形码生成库-->
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
@@ -85,48 +76,13 @@ get_header(); ?>
                     <div id="barcode-container" class="sys-hide-mobile" style="text-align: right; width: fit-content; max-width: 100%;margin-left: auto; opacity: 0.85; margin-top: 15px;">
                         <svg id="barcode-svg"></svg>
                     </div>
-
                     <script>
-                        // 在这里，我们将 PHP 的 Unix 时间戳通过 PHP 写入 JavaScript 变量中
-                        // 我们只将 PHP 的纯数字传给 JS，而不包含星号 *
-                        var unixTimestamp = "<?php the_time('U'); ?>";
-
-                        // 使用 JsBarcode 生成精确的 Code 39 条形码
-                        // 并设置颜色和背景
-                        JsBarcode("#barcode-svg", unixTimestamp, {
-                            format: "CODE39",           // 强制使用 Code 39
-                            width: 4,                  // 单个线条的宽度（像素），增加此值可放大条码
-                            height: 60,                // 条形码的高度（像素）
-                            displayValue: false,       // 隐藏下方人眼可读的数字
-                            // 关键设置：精确设置颜色和背景
-                            // lineColor 用于条（Bar），background 用于间隙（Space）
-                            // 反色设计
-                            lineColor: "#988b32",       // 条形码线条颜色（浅黄绿色）
-                            background: "transparent",      // 条形码背景颜色（黑色）
-                        });
+                        window.kappaSingleUnixTimestamp = "<?php the_time('U'); ?>";
                     </script>
                     <?php endif; ?>
 
                 </header>
 
-                <?php if ( ! wp_is_mobile() ) : ?>
-                <script>
-                document.addEventListener("DOMContentLoaded", function() {
-                    var qrContainer = document.getElementById("article-qrcode");
-                    if (qrContainer && typeof QRCode !== 'undefined') {
-                        var articleUrl = qrContainer.getAttribute("data-url");
-                        new QRCode(qrContainer, {
-                            text: articleUrl,
-                            width: 72,
-                            height: 72,
-                            colorDark: "#0a0f0a",
-                            colorLight: "#988b32",
-                            correctLevel: QRCode.CorrectLevel.M
-                        });
-                    }
-                });
-                </script>
-                <?php endif; ?>
 
 
 
@@ -177,9 +133,11 @@ get_header(); ?>
                     endif;
                     ?>
                     <div style="margin-top: 60px; text-align: center; border-top: 1px solid #333; padding-top: 30px;">
-                        <a data-selectable href="<?php echo home_url(); ?>"
-                            style="display: inline-block; font-family: ZCOOLQingKeHuangYou-Regular; color: #988b32; text-decoration: none; border: 1px solid #988b32; padding: 10px 30px; font-size: 1.2rem; transition: all 0.3s; background: rgba(152, 139, 50, 0.1);">
-                            > 终止读取并返回主控制台 < </a>
+                        <?php get_template_part( 'template-parts/common/return-console-link', null, array(
+                            'href'  => home_url(),
+                            'label' => '> 终止读取并返回主控制台 <',
+                            'style' => 'display: inline-block; font-family: ZCOOLQingKeHuangYou-Regular; color: #988b32; text-decoration: none; border: 1px solid #988b32; padding: 10px 30px; font-size: 1.2rem; transition: all 0.3s; background: rgba(152, 139, 50, 0.1);'
+                        ) ); ?>
                     </div>
 
                     <?php endwhile; else : ?>

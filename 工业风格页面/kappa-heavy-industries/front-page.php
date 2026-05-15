@@ -16,79 +16,6 @@
         </div>
     </div>
 </div>
-<style>
-/* --- 出处文本样式 --- */
-.slogan-source {
-    font-family: 'ZCOOL QingKe HuangYou', monospace, sans-serif;
-    color: #666;
-    /* 降低亮度 */
-    font-size: clamp(14px, 2vw, 20px);
-    letter-spacing: 2px;
-    text-align: center;
-    /* 确保自身居中 */
-    margin-top: 2vh;
-    /* 调整间距 */
-    margin-bottom: 6vh;
-    /* 与下方按钮拉开距离 */
-    text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
-    display: block !important;
-    /* 强制显示 */
-    opacity: 1 !important;
-    /* 强制显示 */
-}
-
-/* --- HUD 终端风格跳转按钮样式 --- */
-.slogan-archive-entry {
-    text-align: center;
-    /* 确保容器居中 */
-}
-
-.hud-terminal-btn {
-    display: inline-block;
-    padding: 10px 25px;
-    background: rgba(10, 15, 10, 0.4);
-    border: 1px solid #444;
-    color: #aaa;
-    text-decoration: none;
-    font-family: monospace, sans-serif;
-    font-size: 0.95rem;
-    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-    position: relative;
-    opacity: 1 !important;
-    /* 强制显示 */
-}
-
-/* 悬停交互：充能发光效果 */
-.hud-terminal-btn:hover {
-    border-color: #00ffff;
-    /* 终端青色 */
-    color: #fff;
-    background: rgba(0, 30, 30, 0.8);
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.2), inset 0 0 10px rgba(0, 255, 255, 0.1);
-}
-
-/* 按钮内部的命令提示符 */
-.hud-terminal-btn .cmd-prompt {
-    color: #988b32;
-    /* 工业金 */
-    font-weight: bold;
-    margin-right: 8px;
-    transition: color 0.3s;
-}
-
-/* 按钮内部的英文后缀 */
-.hud-terminal-btn .btn-eng {
-    color: #555;
-    font-size: 0.8em;
-    margin-left: 8px;
-    transition: color 0.3s;
-}
-
-.hud-terminal-btn:hover .cmd-prompt,
-.hud-terminal-btn:hover .btn-eng {
-    color: #00ffff;
-}
-</style>
 <!-- 条形码生成库-->
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
@@ -120,23 +47,6 @@
                     </a>
                 </div>
 
-                <script type="text/javascript">
-                if (typeof createGlitch === 'function') {
-                    createGlitch('#Homepage-Slogan', {
-                        phrases: ["让人在年轻时莫迟缓追求智慧，年老时莫厌倦探索真理。", "因为灵魂的健康，无论何时开始都不为早，亦不为晚。","", ],
-                        obfu_chars: "░▒▓▖▗▘▙▚▛▜▝▞▟",
-                        heightMode: "wrapper",
-                        color: "#988b32",
-                        fontFamily: "Smooch,DFJinWenW3-GB",
-                        fontSize: "clamp(24px, 10vw, 100px)",
-                        //fontWeight: "bold",
-                        disp_time: 3000,
-                        start_time: 80,
-                        end_time: 80
-                    });
-                }
-                window.dispatchEvent(new CustomEvent('kappa:home-ready-hero'));
-                </script>
             </div>
         </div>
     </section>
@@ -228,17 +138,6 @@
                 </div>
 
                 <div id="page2-footnotes"></div>
-                <script>
-                new FootnoteGenerator(
-                    'note', // 目标类名
-                    'page2', // 作用域 ID
-                    'page2-footnotes', // 容器ID
-                    '壹', // 数字类型
-                    'footnotes-sub-style',
-                    'footnotes-item-style'
-                );
-                new FootnotePreview('page2', 'footnotes-sub-style', 'page2-footnotes');
-                </script>
             </div>
         </div>
     </section>
@@ -251,20 +150,6 @@
                         <h1 data-selectable>最近更新</h1>
                     </div>
                 </div>
-
-                <style>
-                .card-meta-links a {
-                    color: #988b32;
-                    /* 工业金 */
-                    text-decoration: none;
-                    transition: all 0.3s ease;
-                }
-
-                .card-meta-links a:hover {
-                    color: #fff;
-                    text-shadow: 0 0 8px rgba(152, 139, 50, 0.8);
-                }
-                </style>
 
                 <div class="cards">
                     <?php
@@ -328,28 +213,9 @@
                                 <br>
                                 <div id="barcode-container-<?php the_ID(); ?>" style="text-align: right; width: 100%; margin-top: 15px;">
     
-                                    <img id="barcode-img-<?php the_ID(); ?>" style="max-width: 100%; height: auto; display: inline-block; opacity: 0.85;" />
-                                    
+                                    <img id="barcode-img-<?php the_ID(); ?>" data-unix-timestamp="<?php the_time('U'); ?>" style="max-width: 100%; height: auto; display: inline-block; opacity: 0.85;" />
+
                                 </div>
-                                
-                                <script>
-                                    (function() {
-                                        var unixTimestamp = "<?php the_time('U'); ?>";
-                                        // 目标指向 img 标签
-                                        var imgSelector = "#barcode-img-<?php the_ID(); ?>";
-                                        
-                                        // JsBarcode 检测到是 img 标签，会自动输出 base64 图像
-                                        JsBarcode(imgSelector, unixTimestamp, {
-                                            format: "CODE39",           
-                                            width: 2.5,
-                                            height: 50,                
-                                            displayValue: false,       
-                                            lineColor: "#988b32",       
-                                            background: "transparent",
-                                            margin: 0
-                                        });
-                                    })();
-                                </script>
                             </div>
                         </div>
                     </div>
@@ -587,7 +453,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px; align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/Izuno-2023.7.8 (130381086).png"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/Izuno-2023.7.8 (130381086).webp"
                                 height="80px" alt="白洞">
                             白洞
                         </div>
@@ -608,7 +474,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px; align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/幽香农业.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/幽香农业.webp" height="80px"
                                 alt="幽香农业">
                             <p>幽香农业</p>
                         </div>
@@ -618,7 +484,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/八云交通.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/八云交通.webp" height="80px"
                                 alt="八云交通">
                             <p>八云交通</p>
                         </div>
@@ -629,7 +495,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/香霖零售.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/香霖零售.webp" height="80px"
                                 alt="香霖零售">
                             <p>香霖零售</p>
                         </div>
@@ -639,7 +505,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/夜雀食堂.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/夜雀食堂.webp" height="80px"
                                 alt="夜雀食堂">
                             <p>夜雀食堂</p>
                         </div>
@@ -649,7 +515,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/博丽专制.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/博丽专制.webp" height="80px"
                                 alt="博丽专制">
                             <p>博丽专制</p>
                         </div>
@@ -659,7 +525,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/白泽乳业.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/白泽乳业.webp" height="80px"
                                 alt="白泽乳业">
                             <p>白泽乳业</p>
                         </div>
@@ -669,7 +535,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/三途川律师事务所.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/三途川律师事务所.webp" height="80px"
                                 alt="三途川律师事务所">
                             <p>三途川律师事务所</p>
                         </div>
@@ -679,7 +545,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/永江气象站.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/永江气象站.webp" height="80px"
                                 alt="永江气象站">
                             <p>永江气象站</p>
                         </div>
@@ -689,7 +555,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/藤原煤炭厂.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/藤原煤炭厂.webp" height="80px"
                                 alt="藤原煤炭厂">
                             <p>藤原煤炭厂</p>
                         </div>
@@ -699,7 +565,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/八意制药.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/八意制药.webp" height="80px"
                                 alt="八意制药">
                             <p>八意制药</p>
                         </div>
@@ -709,7 +575,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/雾之湖冰棒小摊.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/雾之湖冰棒小摊.webp" height="80px"
                                 alt="雾之湖冰棒小摊">
                             <p>雾之湖冰棒小摊</p>
                         </div>
@@ -719,7 +585,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/文文报社.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/文文报社.webp" height="80px"
                                 alt="文文报社">
                             <p>文文报社</p>
                         </div>
@@ -729,7 +595,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/地灵殿火葬场.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/地灵殿火葬场.webp" height="80px"
                                 alt="地灵殿火葬场">
                             <p>地灵殿火葬场</p>
                         </div>
@@ -739,7 +605,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/红魔馆家政.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/红魔馆家政.webp" height="80px"
                                 alt="红魔馆家政">
                             <p>红魔馆家政</p>
                         </div>
@@ -749,7 +615,7 @@
                         <div class="card" data-selectable data-selectable-highlight
                             style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
                             <img data-selectable data-selectable-highlight
-                                src="<?php echo get_template_directory_uri(); ?>/asset/img/爱丽丝工坊.png" height="80px"
+                                src="<?php echo get_template_directory_uri(); ?>/asset/img/爱丽丝工坊.webp" height="80px"
                                 alt="爱丽丝工坊">
                             <p>爱丽丝工坊</p>
                         </div>

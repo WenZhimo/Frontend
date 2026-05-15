@@ -1,0 +1,118 @@
+/* 面板主体：悬浮于右侧 */
+.table-of-contents {
+    position: fixed;
+    top: 150px;
+    right: 2vw;
+    width: 260px;
+    z-index: 998;
+    background: rgba(10, 15, 10, 0.85);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid #988b32;
+    box-shadow: inset 0 0 10px rgba(152, 139, 50, 0.1), 0 5px 15px rgba(0, 0, 0, 0.5);
+    padding: 0 0 15px 0;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    font-family: monospace, sans-serif;
+}
+
+@media screen and (max-width: 1350px) {
+    .table-of-contents.mobile-hide {
+        display: none !important;
+    }
+}
+
+.toc-header {
+    background: #988b32;
+    color: #000;
+    padding: 6px 15px;
+    font-family: 'ZCOOLQingKeHuangYou-Regular', monospace;
+    font-size: 1.1rem;
+    letter-spacing: 1px;
+    margin-bottom: 15px;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.table-of-contents ol {
+    padding-left: 25px;
+    margin: 0;
+    padding-right: 15px;
+}
+
+.table-of-contents li {
+    list-style: none;
+    position: relative;
+    margin-bottom: 6px;
+}
+
+.table-of-contents a {
+    color: #888;
+    text-decoration: none;
+    display: block;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    transition: all 0.2s;
+}
+
+.table-of-contents a:hover {
+    color: #ccc;
+    text-shadow: 0 0 5px rgba(204, 204, 204, 0.5);
+}
+
+.table-of-contents a.active {
+    color: #00ffff;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(0, 255, 255, 0.6);
+}
+
+.table-of-contents a.active::before {
+    content: '>';
+    position: absolute;
+    left: -12px;
+    color: #00ffff;
+    animation: blink 1s infinite;
+}
+
+.toggle {
+    cursor: pointer;
+    position: absolute;
+    left: -18px;
+    top: 0px;
+    width: 15px;
+    text-align: center;
+    user-select: none;
+    color: #988b32;
+    font-family: monospace;
+    font-weight: bold;
+    transition: color 0.2s;
+}
+
+.toggle.has-child:hover {
+    color: #fff;
+}
+
+.table-of-contents::-webkit-scrollbar {
+    width: 4px;
+}
+
+.table-of-contents::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.table-of-contents::-webkit-scrollbar-thumb {
+    background: #988b32;
+}
+
+@keyframes blink {
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0;
+    }
+}
