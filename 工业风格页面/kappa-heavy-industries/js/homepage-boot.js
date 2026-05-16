@@ -5,6 +5,7 @@ const progressFill = progress?.querySelector('span') ?? null;
 const statusText = document.getElementById('homepage-boot-status-text');
 
 if (overlay && logRoot && progressFill && statusText) {
+    const initialBootMessage = '[INIT] 开始加载系统资源';
     const steps = [
         { id: 'dom', message: '[BOOT] 核心总线已接通 // CORE BUS LINKED // document skeleton online' },
         { id: 'shell', message: '[CHK ] 首屏视口已校验 // PRIMARY VIEWPORT VERIFIED // active shell mounted' },
@@ -19,10 +20,25 @@ if (overlay && logRoot && progressFill && statusText) {
     let isPrinting = false;
     const logQueue = [];
 
-    function printLine(message, done) {
+    function printLine(message, done, options = {}) {
         const line = document.createElement('div');
         line.className = 'homepage-boot-log-line';
-        line.textContent = message;
+
+        if (options.showSpinner) {
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = message;
+
+            const spinner = document.createElement('span');
+            spinner.className = 'homepage-boot-inline-spinner';
+            spinner.setAttribute('aria-hidden', 'true');
+            spinner.innerHTML = '<span></span><span></span><span></span>';
+
+            line.appendChild(messageSpan);
+            line.appendChild(spinner);
+        } else {
+            line.textContent = message;
+        }
+
         logRoot.appendChild(line);
         logRoot.scrollTop = logRoot.scrollHeight;
         window.setTimeout(() => {
@@ -34,16 +50,16 @@ if (overlay && logRoot && progressFill && statusText) {
         if (isPrinting || logQueue.length === 0) return;
         isPrinting = true;
 
-        const { message, done } = logQueue.shift();
+        const { message, done, options } = logQueue.shift();
         printLine(message, () => {
             isPrinting = false;
             done?.();
             flushLogQueue();
-        });
+        }, options);
     }
 
-    function appendLog(message, done) {
-        logQueue.push({ message, done });
+    function appendLog(message, done, options = {}) {
+        logQueue.push({ message, done, options });
         flushLogQueue();
     }
 
@@ -90,6 +106,11 @@ if (overlay && logRoot && progressFill && statusText) {
         });
     }
 
+    if (!logRoot.querySelector('[data-boot-initial="true"]')) {
+        appendLog(initialBootMessage, undefined, { showSpinner: true });
+    }
+
+    logRoot.scrollTop = logRoot.scrollHeight;
     markStepDone('dom');
 
     if (document.querySelector('#pager .page.active') && document.getElementById('Homepage-Slogan')) {

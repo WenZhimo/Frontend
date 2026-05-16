@@ -35,7 +35,7 @@
                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></a>
 
                     <div
-                        style="min-height: 300px; pointer-events: none; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
+                        style="min-height: 300px; pointer-events: none; position: relative; z-index: 3; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
                         <h3>最近更新<p class="note">按照发布顺序排序</p>
                         </h3>
                         <p style="flex-grow: 1;">旅途总是有新的发现。</p>
@@ -56,7 +56,7 @@
                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></a>
 
                     <div
-                        style="min-height: 350px; pointer-events: none; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
+                        style="min-height: 350px; pointer-events: none; position: relative; z-index: 3; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
                         <h3>音乐分享</h3>
                         <p style="flex-grow: 1;">心灵的碰撞。</p>
                     </div>
@@ -76,7 +76,7 @@
                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></a>
 
                     <div
-                        style="min-height: 350px; pointer-events: none; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
+                        style="min-height: 350px; pointer-events: none; position: relative; z-index: 3; display: flex; flex-direction: column; height: 100%; flex-grow: 1;">
                         <h3>SCP基金会</h3>
                         <p style="flex-grow: 1;">最大的去中心化创作平台。</p>
                     </div>
@@ -84,6 +84,7 @@
             </div>
 
             <div id="page2-footnotes"></div>
+            <div aria-hidden="true" style="height: calc(var(--footer-h) + 120px);"></div>
         </div>
     </div>
 </section>

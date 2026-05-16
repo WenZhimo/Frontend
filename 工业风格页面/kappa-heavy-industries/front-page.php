@@ -11,7 +11,12 @@
                 <span>系统启动 / SYS_BOOT // 首页初始化 / HOMEPAGE_INIT</span>
                 <span id="homepage-boot-status-text">同步总线中 / SYNCING BUS...</span>
             </div>
-            <div id="homepage-boot-log" class="homepage-boot-log"></div>
+            <div id="homepage-boot-log" class="homepage-boot-log">
+                <div class="homepage-boot-log-line homepage-boot-log-line--initial" data-boot-initial="true">
+                    <span>[INIT] 开始加载系统资源</span>
+                    <span class="homepage-boot-inline-spinner" aria-hidden="true"><span></span><span></span><span></span></span>
+                </div>
+            </div>
             <div id="homepage-boot-progress" class="homepage-boot-progress"><span></span></div>
         </div>
     </div>
