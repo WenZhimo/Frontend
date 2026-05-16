@@ -27,7 +27,7 @@ function bootStory() {
     });
 }
 
-fetch('./stories/磁带主义story.json')
+fetch('./stories/巡逻舰经过时_story.v2.json')
     .then(response => {
         if (!response.ok) {
             throw new Error(`HTTP error ${response.status}`);
