@@ -461,34 +461,65 @@
         </section>
 
         <section id="docs">
-            <div class="section-title">DATA_PROTOCOL // 数据协议示例</div>
-            <p>请遵循以下协议定义您的故事节点：</p>
+            <div class="section-title">DATA_PROTOCOL // v2 正式规范</div>
+            <p>当前推荐使用 <strong>cassette-if v2</strong> 协议。运行时暂时兼容旧版 keyed-object，但新故事与大模型生成内容都应输出为以下结构。</p>
 
             <div class="code-display">
-                {
-                <span class="token-key">"start"</span>: {
-                <span class="token-key">"image"</span>:
-                <span class="token-str">"images/city_ruins.jpg"</span>,
-                <span class="token-key">"text"</span>:
-                <span class="token-str">"系统初始化中... <span class="token-cmd">\\.</span> \n欢迎来到
-                    <span class="token-cmd">\\C[#0f0]{第七扇区}</span>。"</span>, <span class="token-key">"options"</span>: [
-                {
-                <span class="token-key">"text"</span>:
-                <span class="token-str">"检查系统日志"</span>,
-                <span class="token-key">"nextNode"</span>:
-                <span class="token-str">"logs_entry"</span>
-                } ] } }
+{
+  <span class="token-key">"schemaId"</span>: <span class="token-str">"cassette-if.story/v2"</span>,
+  <span class="token-key">"format"</span>: <span class="token-str">"cassette-if"</span>,
+  <span class="token-key">"version"</span>: 2,
+  <span class="token-key">"title"</span>: <span class="token-str">"第七扇区"</span>,
+  <span class="token-key">"startNodeId"</span>: <span class="token-str">"start"</span>,
+  <span class="token-key">"nodes"</span>: [
+    {
+      <span class="token-key">"id"</span>: <span class="token-str">"start"</span>,
+      <span class="token-key">"image"</span>: <span class="token-str">"images/city_ruins.jpg"</span>,
+      <span class="token-key">"content"</span>: [
+        { <span class="token-key">"type"</span>: <span class="token-str">"text"</span>, <span class="token-key">"value"</span>: <span class="token-str">"系统初始化中..."</span> },
+        { <span class="token-key">"type"</span>: <span class="token-str">"pause"</span>, <span class="token-key">"ms"</span>: 500 },
+        {
+          <span class="token-key">"type"</span>: <span class="token-str">"styled"</span>,
+          <span class="token-key">"color"</span>: <span class="token-str">"#0f0"</span>,
+          <span class="token-key">"underline"</span>: false,
+          <span class="token-key">"strike"</span>: false,
+          <span class="token-key">"children"</span>: [
+            { <span class="token-key">"type"</span>: <span class="token-str">"text"</span>, <span class="token-key">"value"</span>: <span class="token-str">"欢迎来到第七扇区"</span> }
+          ]
+        }
+      ],
+      <span class="token-key">"options"</span>: [
+        { <span class="token-key">"text"</span>: <span class="token-str">"检查系统日志"</span>, <span class="token-key">"target"</span>: <span class="token-str">"logs_entry"</span> }
+      ]
+    }
+  ],
+  <span class="token-key">"editor"</span>: {
+    <span class="token-key">"nodePositions"</span>: {
+      <span class="token-key">"start"</span>: { <span class="token-key">"x"</span>: 100, <span class="token-key">"y"</span>: 100 }
+    }
+  }
+}
             </div>
 
-            <p style="
-            margin-top: 20px;
-            color: var(--phosphor-dim);
-            font-size: 0.9rem;
-          ">
-                * 使用 <span class="token-cmd">\\.</span> 插入 0.5 秒的打字停顿。<br />
-                * 使用
-                <span class="token-cmd">\\C[color]{...}</span> 改变文字颜色。<br />
-                * 图片将自动应用 16-bit 像素化与 CRT 滤镜处理。
+            <p style="margin-top: 20px; color: var(--phosphor-dim); font-size: 0.9rem; line-height: 1.8;">
+                <strong>字段说明：</strong><br />
+                * <span class="token-key">format</span>：固定为 <span class="token-str">"cassette-if"</span>。<br />
+                * <span class="token-key">version</span>：当前版本号，固定为 <span class="token-str">2</span>。<br />
+                * <span class="token-key">title</span>：故事标题。<br />
+                * <span class="token-key">startNodeId</span>：入口节点 ID，必须指向一个已存在节点。<br />
+                * <span class="token-key">nodes</span>：节点数组，每个节点都必须有唯一 <span class="token-key">id</span>。<br />
+                * <span class="token-key">content</span>：按顺序渲染的 token 列表，只允许 <span class="token-cmd">text</span>、<span class="token-cmd">pause</span>、<span class="token-cmd">styled</span> 三种类型。<br />
+                * <span class="token-key">options</span>：分支按钮数组，使用 <span class="token-key">target</span> 指向目标节点。<br />
+                * <span class="token-key">editor.nodePositions</span>：编辑器布局元数据，不参与剧情逻辑。<br /><br />
+                <strong>content token 规则：</strong><br />
+                * <span class="token-cmd">text</span>：普通文本，使用 <span class="token-key">value</span> 存储字符串。<br />
+                * <span class="token-cmd">pause</span>：停顿，使用 <span class="token-key">ms</span> 指定毫秒数。<br />
+                * <span class="token-cmd">styled</span>：样式块，可包含 <span class="token-key">color</span>、<span class="token-key">underline</span>、<span class="token-key">strike</span>，并通过 <span class="token-key">children</span> 递归嵌套内容。<br /><br />
+                <strong>从 v1 迁移到 v2：</strong><br />
+                * 顶层 <span class="token-key">"start": { ... }</span> 形式改为 <span class="token-key">nodes[]</span> + <span class="token-key">startNodeId</span>。<br />
+                * <span class="token-key">text</span> 字符串改为 <span class="token-key">content[]</span> token。<br />
+                * <span class="token-key">nextNode</span> 改为 <span class="token-key">target</span>。<br />
+                * 旧版 <span class="token-cmd">\\.</span>、<span class="token-cmd">\\C[color]{...}</span>、<span class="token-cmd">\\_{...}</span>、<span class="token-cmd">\\-{...}</span> 不再直接出现在 v2 中，而是被转换为显式 token。<br />
             </p>
         </section>
 

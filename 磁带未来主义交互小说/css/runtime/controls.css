@@ -1,0 +1,31 @@
+#choices {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 50px;
+}
+
+button {
+    background: transparent;
+    border: 2px solid var(--phosphor-dim);
+    color: var(--phosphor-main);
+    font-family: 'VT323', monospace;
+    font-size: 1.2rem;
+    padding: 10px 20px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.1s;
+    text-transform: uppercase;
+    position: relative;
+}
+
+button:hover {
+    background-color: var(--phosphor-main);
+    color: var(--bg-color);
+    border-color: var(--phosphor-main);
+    box-shadow: 0 0 15px var(--phosphor-main);
+}
+
+button::before {
+    content: '> ';
+}

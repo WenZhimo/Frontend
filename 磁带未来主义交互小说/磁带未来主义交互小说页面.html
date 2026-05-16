@@ -7,219 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-    
-    <style>
-        :root {
-            --phosphor-main: #ffb000;
-            --phosphor-dim: #996a00;
-            --bg-color: #0a0a0a;
-            --screen-bg: #110d00;
-            --scanline-color: rgba(0, 0, 0, 0.5);
-            --crt-curvature: inset 0 0 100px rgba(0,0,0,0.9);
-        }
-
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-color);
-            color: var(--phosphor-main);
-            font-family: 'VT323', monospace;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-            user-select: none;
-            cursor: pointer;
-        }
-
-        /* CRT 容器 */
-        .crt-container {
-            width: 90vw;
-            height: 80vh;
-            max-width: 800px;
-            background-color: var(--screen-bg);
-            border: 20px solid #222;
-            border-radius: 20px;
-            position: relative;
-            box-shadow: 0 0 50px rgba(0,0,0,0.8);
-            overflow: hidden;
-            /* 这种变形能让屏幕看起来微微凸起，更像球面屏 */
-            transform: perspective(1000px); 
-        }
-
-        .screen {
-            padding: 40px;
-            height: 100%;
-            box-sizing: border-box;
-            position: relative;
-            z-index: 2; /* 内容层级较低，被特效覆盖 */
-            display: flex;
-            flex-direction: column;
-            font-size: 1.4rem;
-            line-height: 1.2;
-            text-shadow: 0 0 5px var(--phosphor-dim);
-        }
-
-        /* --- 特效层开始 --- */
-
-        /* 1. 静态扫描纹理 (横线) */
-        .scanlines {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            /* 创建精细的横条纹 */
-            background: linear-gradient(
-                to bottom,
-                rgba(18, 16, 16, 0) 50%, 
-                rgba(0, 0, 0, 0.25) 50%
-            );
-            background-size: 100% 4px; /* 每4像素重复一次 */
-            z-index: 10;
-            pointer-events: none; /* 点击穿透 */
-        }
-
-        /* 2. 动态扫描光带 (刷新线) */
-        .scan-beam {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%; /* 充满容器，通过gradient控制显示区域 */
-            z-index: 10;
-            background: linear-gradient(
-                to bottom,
-                transparent 0%,
-                rgba(255, 255, 255, 0.05) 50%, /* 淡淡的白光 */
-                transparent 100%
-            );
-            background-size: 100% 20%; /* 光带高度为屏幕的20% */
-            background-repeat: no-repeat;
-            animation: beam-scan 8s linear infinite; /* 8秒扫描一次 */
-            pointer-events: none;
-            mix-blend-mode: overlay; /* 叠加模式，增强亮度 */
-        }
-
-        /* 3. 屏幕闪烁与辉光 */
-        .flicker-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 176, 0, 0.02);
-            z-index: 11;
-            pointer-events: none;
-            animation: flicker 0.15s infinite;
-        }
-
-        /* 4. 暗角 (Vignette) */
-        .vignette {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            box-shadow: var(--crt-curvature);
-            z-index: 12; /* 最高层级，遮盖边缘 */
-            pointer-events: none;
-        }
-
-        /* --- 动画定义 --- */
-        @keyframes beam-scan {
-            0% { background-position: 0 -20%; }
-            100% { background-position: 0 120%; }
-        }
-
-        @keyframes flicker {
-            0% { opacity: 0.9; }
-            50% { opacity: 1; }
-            100% { opacity: 0.95; }
-        }
-
-        /* --- 界面元素样式 --- */
-
-        .header {
-            border-bottom: 2px solid var(--phosphor-main);
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        #story-text {
-            flex-grow: 1;
-            overflow-y: auto;
-            margin-bottom: 20px;
-            white-space: pre-wrap;
-        }
-
-        .char-span {
-            text-shadow: 0 0 5px currentColor; 
-        }
-
-        #choices {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            min-height: 50px;
-        }
-
-        button {
-            background: transparent;
-            border: 2px solid var(--phosphor-dim);
-            color: var(--phosphor-main);
-            font-family: 'VT323', monospace;
-            font-size: 1.2rem;
-            padding: 10px 20px;
-            cursor: pointer;
-            text-align: left;
-            transition: all 0.1s;
-            text-transform: uppercase;
-            position: relative;
-        }
-
-        button:hover {
-            background-color: var(--phosphor-main);
-            color: var(--bg-color);
-            border-color: var(--phosphor-main);
-            box-shadow: 0 0 15px var(--phosphor-main);
-        }
-
-        button::before { content: "> "; }
-
-        /* 自定义滚动条 */
-        ::-webkit-scrollbar { width: 10px; }
-        ::-webkit-scrollbar-track { background: var(--screen-bg); }
-        ::-webkit-scrollbar-thumb { background: var(--phosphor-dim); border: 1px solid var(--screen-bg); }
-
-        .cursor::after {
-            content: '█';
-            animation: blink 1s step-end infinite;
-            margin-left: 5px;
-        }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
-        .tape-label {
-            position: absolute;
-            bottom: -50px;
-            right: 20px;
-            background: #eee;
-            color: #000;
-            padding: 5px 15px;
-            transform: rotate(-2deg);
-            font-family: sans-serif;
-            font-weight: bold;
-            font-size: 12px;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
-            z-index: 20;
-            opacity: 0.8;
-        }
-    </style>
+    <link rel="stylesheet" href="./css/runtime/index.css">
 </head>
 <body>
 
@@ -245,233 +33,204 @@
     </div>
 
     <script>
-        // --- 游戏数据 (保持双反斜杠转义) ---
-        const storyNodes = {
-            start: {
-                text: "系统初始化... \\. 内存完整性检查... \\C[#0f0]{通过}。\n加载磁带数据 [SIDE A]...\\.\n\n你在一阵低沉的嗡嗡声中醒来。你的视觉传感器正在校准。这里是 \\_{24 号观察站}。空气中弥漫着陈旧的臭氧味。",
-                options: [
-                    { text: "检查系统日志", nextNode: "logs" },
-                    { text: "观察四周", nextNode: "look_around" }
-                ]
-            },
-            logs: {
-                text: "访问中...\\. \\C[red]{> 错误：部分扇区已损坏。}\n> 最新条目：\n“如果你读到这条信息，说明 \\-{协议已被打破}。不要相信外面的声音。只相信磁带。”\n\n日志结束。",
-                options: [
-                    { text: "弹出磁带", nextNode: "eject" },
-                    { text: "观察四周", nextNode: "look_around" }
-                ]
-            },
-            look_around: {
-                text: "昏暗的琥珀色灯光照亮了控制台。桌面上散落着几张软盘和一个半满的合成咖啡杯。\\.\n窗外不是星空，而是无尽的 \\C[#aaa]{静态雪花噪点}。",
-                options: [
-                    { text: "检查软盘", nextNode: "floppy" },
-                    { text: "坐回终端前", nextNode: "start_loop" }
-                ]
-            },
-            floppy: {
-                text: "你拿起一张标签模糊的软盘。上面手写着：“重启密钥”。\n\\C[red]{警告：这可能会覆盖当前的人格矩阵。}\\.",
-                options: [
-                    { text: "插入软盘 [危险]", nextNode: "reboot" },
-                    { text: "放下软盘", nextNode: "look_around" }
-                ]
-            },
-            eject: {
-                text: "咔嚓。\\.\n磁带仓弹开。这是你唯一的存储介质。\n\\C[red]{系统警告：将在 5 秒后丢失所有记忆。}",
-                options: [
-                    { text: "立即推回磁带", nextNode: "start" },
-                    { text: "接受虚无", nextNode: "game_over" }
-                ]
-            },
-            start_loop: {
-                text: "你感觉刚才发生的一切似乎都发生过。\\_{既视感} 充斥着你的逻辑电路。",
-                options: [
-                    { text: "重新初始化", nextNode: "start" }
-                ]
-            },
-            reboot: {
-                text: "读取中...\\.\n\\C[red]{FATAL ERROR.}\n系统核心转储。\\.\n\n新的意识正在覆写...\\.\n\n\\C[#fff]{你好，世界。}",
-                options: [
-                    { text: "重新开始", nextNode: "start" }
-                ]
-            },
-            game_over: {
-                text: "信号丢失...\\.\n连接断开。\n\n\\-{USER DISCONNECTED}",
-                options: [
-                    { text: "重置模拟", nextNode: "start" }
-                ]
-            }
-        };
-
-        const textElement = document.getElementById('story-text');
-        const choicesElement = document.getElementById('choices');
-        
-        let typeQueue = [];
-        let typeIndex = 0;
-        let typeCallback = null;
-        let typeTimer = null;
-        let isTyping = false;
-
-        function updateClock() {
-            const now = new Date();
-            document.getElementById('clock').innerText = now.toLocaleTimeString('en-US', {hour12: false});
-        }
-        setInterval(updateClock, 1000);
-        updateClock();
-
-        function parseScript(text) {
-            const queue = [];
-            let i = 0;
-            const len = text.length;
-            while (i < len) {
-                if (text.startsWith('\\.', i)) {
-                    queue.push({ type: 'wait', ms: 500 });
-                    i += 2;
-                } else if (text.startsWith('\\C[', i)) {
-                    const colorEnd = text.indexOf(']', i);
-                    if (colorEnd > -1 && text[colorEnd + 1] === '{') {
-                        const contentEnd = findClosingBrace(text, colorEnd + 1);
-                        if (contentEnd > -1) {
-                            const color = text.substring(i + 3, colorEnd);
-                            const content = text.substring(colorEnd + 2, contentEnd);
-                            for (let char of content) queue.push({ type: 'char', char: char, style: `color: ${color};` });
-                            i = contentEnd + 1;
-                            continue;
+        window.__INLINE_STORY__ = {
+            schemaId: 'cassette-if.story/v2',
+            format: 'cassette-if',
+            version: 2,
+            title: '24 号观察站',
+            startNodeId: 'start',
+            nodes: [
+                {
+                    id: 'start',
+                    image: '',
+                    content: [
+                        { type: 'text', value: '系统初始化... ' },
+                        { type: 'pause', ms: 500 },
+                        { type: 'text', value: ' 内存完整性检查... ' },
+                        {
+                            type: 'styled',
+                            color: '#0f0',
+                            underline: false,
+                            strike: false,
+                            children: [{ type: 'text', value: '通过' }]
+                        },
+                        { type: 'text', value: '。\n加载磁带数据 [SIDE A]...' },
+                        { type: 'pause', ms: 500 },
+                        { type: 'text', value: '\n\n你在一阵低沉的嗡嗡声中醒来。你的视觉传感器正在校准。这里是 ' },
+                        {
+                            type: 'styled',
+                            color: '',
+                            underline: true,
+                            strike: false,
+                            children: [{ type: 'text', value: '24 号观察站' }]
+                        },
+                        { type: 'text', value: '。空气中弥漫着陈旧的臭氧味。' }
+                    ],
+                    options: [
+                        { text: '检查系统日志', target: 'logs' },
+                        { text: '观察四周', target: 'look_around' }
+                    ]
+                },
+                {
+                    id: 'logs',
+                    image: '',
+                    content: [
+                        { type: 'text', value: '访问中...' },
+                        { type: 'pause', ms: 500 },
+                        { type: 'text', value: ' ' },
+                        {
+                            type: 'styled',
+                            color: 'red',
+                            underline: false,
+                            strike: false,
+                            children: [{ type: 'text', value: '> 错误：部分扇区已损坏。' }]
+                        },
+                        { type: 'text', value: '\n> 最新条目：\n“如果你读到这条信息，说明 ' },
+                        {
+                            type: 'styled',
+                            color: '',
+                            underline: false,
+                            strike: true,
+                            children: [{ type: 'text', value: '协议已被打破' }]
+                        },
+                        { type: 'text', value: '。不要相信外面的声音。只相信磁带。”\n\n日志结束。' }
+                    ],
+                    options: [
+                        { text: '弹出磁带', target: 'eject' },
+                        { text: '观察四周', target: 'look_around' }
+                    ]
+                },
+                {
+                    id: 'look_around',
+                    image: '',
+                    content: [
+                        { type: 'text', value: '昏暗的琥珀色灯光照亮了控制台。桌面上散落着几张软盘和一个半满的合成咖啡杯。' },
+                        { type: 'pause', ms: 500 },
+                        { type: 'text', value: '\n窗外不是星空，而是无尽的 ' },
+                        {
+                            type: 'styled',
+                            color: '#aaa',
+                            underline: false,
+                            strike: false,
+                            children: [{ type: 'text', value: '静态雪花噪点' }]
+                        },
+                        { type: 'text', value: '。' }
+                    ],
+                    options: [
+                        { text: '检查软盘', target: 'floppy' },
+                        { text: '坐回终端前', target: 'start_loop' }
+                    ]
+                },
+                {
+                    id: 'floppy',
+                    image: '',
+                    content: [
+                        { type: 'text', value: '你拿起一张标签模糊的软盘。上面手写着：“重启密钥”。\n' },
+                        {
+                            type: 'styled',
+                            color: 'red',
+                            underline: false,
+                            strike: false,
+                            children: [{ type: 'text', value: '警告：这可能会覆盖当前的人格矩阵。' }]
+                        },
+                        { type: 'pause', ms: 500 }
+                    ],
+                    options: [
+                        { text: '插入软盘 [危险]', target: 'reboot' },
+                        { text: '放下软盘', target: 'look_around' }
+                    ]
+                },
+                {
+                    id: 'eject',
+                    image: '',
+                    content: [
+                        { type: 'text', value: '咔嚓。' },
+                        { type: 'pause', ms: 500 },
+                        { type: 'text', value: '\n磁带仓弹开。这是你唯一的存储介质。\n' },
+                        {
+                            type: 'styled',
+                            color: 'red',
+                            underline: false,
+                            strike: false,
+                            children: [{ type: 'text', value: '系统警告：将在 5 秒后丢失所有记忆。' }]
                         }
-                    }
-                    queue.push({ type: 'char', char: text[i] }); i++;
-                } else if (text.startsWith('\\-{', i)) {
-                    const contentEnd = findClosingBrace(text, i + 2);
-                    if (contentEnd > -1) {
-                        const content = text.substring(i + 3, contentEnd);
-                        for (let char of content) queue.push({ type: 'char', char: char, style: 'text-decoration: line-through;' });
-                        i = contentEnd + 1; continue;
-                    }
-                    queue.push({ type: 'char', char: text[i] }); i++;
-                } else if (text.startsWith('\\_{', i)) {
-                    const contentEnd = findClosingBrace(text, i + 2);
-                    if (contentEnd > -1) {
-                        const content = text.substring(i + 3, contentEnd);
-                        for (let char of content) queue.push({ type: 'char', char: char, style: 'text-decoration: underline;' });
-                        i = contentEnd + 1; continue;
-                    }
-                    queue.push({ type: 'char', char: text[i] }); i++;
-                } else {
-                    queue.push({ type: 'char', char: text[i] }); i++;
+                    ],
+                    options: [
+                        { text: '立即推回磁带', target: 'start' },
+                        { text: '接受虚无', target: 'game_over' }
+                    ]
+                },
+                {
+                    id: 'start_loop',
+                    image: '',
+                    content: [
+                        { type: 'text', value: '你感觉刚才发生的一切似乎都发生过。' },
+                        {
+                            type: 'styled',
+                            color: '',
+                            underline: true,
+                            strike: false,
+                            children: [{ type: 'text', value: '既视感' }]
+                        },
+                        { type: 'text', value: ' 充斥着你的逻辑电路。' }
+                    ],
+                    options: [
+                        { text: '重新初始化', target: 'start' }
+                    ]
+                },
+                {
+                    id: 'reboot',
+                    image: '',
+                    content: [
+                        { type: 'text', value: '读取中...' },
+                        { type: 'pause', ms: 500 },
+                        { type: 'text', value: '\n' },
+                        {
+                            type: 'styled',
+                            color: 'red',
+                            underline: false,
+                            strike: false,
+                            children: [{ type: 'text', value: 'FATAL ERROR.' }]
+                        },
+                        { type: 'text', value: '\n系统核心转储。' },
+                        { type: 'pause', ms: 500 },
+                        { type: 'text', value: '\n\n新的意识正在覆写...' },
+                        { type: 'pause', ms: 500 },
+                        { type: 'text', value: '\n\n' },
+                        {
+                            type: 'styled',
+                            color: '#fff',
+                            underline: false,
+                            strike: false,
+                            children: [{ type: 'text', value: '你好，世界。' }]
+                        }
+                    ],
+                    options: [
+                        { text: '重新开始', target: 'start' }
+                    ]
+                },
+                {
+                    id: 'game_over',
+                    image: '',
+                    content: [
+                        { type: 'text', value: '信号丢失...' },
+                        { type: 'pause', ms: 500 },
+                        { type: 'text', value: '\n连接断开。\n\n' },
+                        {
+                            type: 'styled',
+                            color: '',
+                            underline: false,
+                            strike: true,
+                            children: [{ type: 'text', value: 'USER DISCONNECTED' }]
+                        }
+                    ],
+                    options: [
+                        { text: '重置模拟', target: 'start' }
+                    ]
                 }
-            }
-            return queue;
-        }
-
-        function findClosingBrace(str, startIndex) {
-            let depth = 0;
-            for (let k = startIndex; k < str.length; k++) {
-                if (str[k] === '{') depth++;
-                if (str[k] === '}') {
-                    depth--;
-                    if (depth === 0) return k;
-                }
-            }
-            return -1;
-        }
-
-        function startTypewriter(queue, callback) {
-            if (typeTimer) clearTimeout(typeTimer);
-            typeQueue = queue;
-            typeIndex = 0;
-            typeCallback = callback;
-            isTyping = true;
-            processNext();
-        }
-
-        function processNext() {
-            if (typeIndex >= typeQueue.length) {
-                isTyping = false;
-                if (typeCallback) typeCallback();
-                return;
-            }
-
-            const item = typeQueue[typeIndex];
-            typeIndex++;
-
-            if (item.type === 'wait') {
-                typeTimer = setTimeout(processNext, item.ms);
-            } else if (item.type === 'char') {
-                appendCharToScreen(item);
-                textElement.scrollTop = textElement.scrollHeight;
-                let speed = Math.random() * 30 + 10;
-                if (['.', '?', '!', '\n'].includes(item.char)) speed += 200;
-                typeTimer = setTimeout(processNext, speed);
-            }
-        }
-
-        function appendCharToScreen(item) {
-            const span = document.createElement('span');
-            span.textContent = item.char;
-            span.className = 'char-span';
-            if (item.style) {
-                span.style.cssText = item.style;
-            }
-            textElement.appendChild(span);
-        }
-
-        function instantFinish() {
-            if (!isTyping) return;
-            clearTimeout(typeTimer);
-            while (typeIndex < typeQueue.length) {
-                const item = typeQueue[typeIndex];
-                typeIndex++;
-                if (item.type === 'char') {
-                    appendCharToScreen(item);
-                }
-            }
-            textElement.scrollTop = textElement.scrollHeight;
-            isTyping = false;
-            if (typeCallback) typeCallback();
-        }
-
-        document.body.addEventListener('click', (e) => {
-            if (e.target.tagName === 'BUTTON') return;
-            if (isTyping) {
-                instantFinish();
-            }
-        });
-
-        function showNode(nodeKey) {
-            const node = storyNodes[nodeKey];
-            if (!node) return;
-
-            textElement.innerHTML = "";
-            choicesElement.innerHTML = "";
-
-            const queue = parseScript(node.text);
-            
-            startTypewriter(queue, () => {
-                node.options.forEach(option => {
-                    const button = document.createElement('button');
-                    button.innerText = option.text;
-                    button.onclick = (e) => {
-                        e.stopPropagation();
-                        showNode(option.nextNode);
-                    };
-                    choicesElement.appendChild(button);
-                });
-                textElement.scrollTop = textElement.scrollHeight;
-            });
-        }
-
-        function bootSequence() {
-            const bootText = "BIOS DATE 01/01/1985 14:22:56 VER 1.02\nCPU: NEC V20, SPEED: 8 MHz\n640K RAM SYSTEM... \\C[#0f0]{OK}\nLOADING CASSETTE INTERFACE...\\.\\.\\.";
-            
-            const queue = parseScript(bootText);
-            startTypewriter(queue, () => {
-                setTimeout(() => {
-                    showNode('start');
-                }, 1000);
-            });
-        }
-
-        window.onload = bootSequence;
-
+            ]
+        };
     </script>
+    <script type="module" src="./js/pages/runtime-inline.js"></script>
 </body>
 </html>

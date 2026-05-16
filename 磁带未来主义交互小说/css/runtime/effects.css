@@ -1,0 +1,60 @@
+.scanlines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+    background-size: 100% 4px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.scan-beam {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    background: linear-gradient(to bottom, transparent 0%, rgba(255, 255, 255, 0.05) 50%, transparent 100%);
+    background-size: 100% 20%;
+    background-repeat: no-repeat;
+    animation: beam-scan 8s linear infinite;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+}
+
+.flicker-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 176, 0, 0.02);
+    z-index: 11;
+    pointer-events: none;
+    animation: flicker 0.15s infinite;
+}
+
+.vignette {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    box-shadow: var(--crt-curvature);
+    z-index: 12;
+    pointer-events: none;
+}
+
+@keyframes beam-scan {
+    0% { background-position: 0 -20%; }
+    100% { background-position: 0 120%; }
+}
+
+@keyframes flicker {
+    0% { opacity: 0.9; }
+    50% { opacity: 1; }
+    100% { opacity: 0.95; }
+}
