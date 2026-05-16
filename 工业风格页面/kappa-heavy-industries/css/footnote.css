@@ -1,6 +1,13 @@
 /*脚注样式*/
+.footnotes-sub-style {
+    position: relative;
+    z-index: 5;
+    pointer-events: auto;
+}
+
 .footnotes-sub-style a {
     color: var(--accent);
+    pointer-events: auto;
 }
 
 .footnotes-item-style {
@@ -25,10 +32,15 @@
     height: 0;
 
     /* 关键 2: 背景色和边框加在最外层，这样它们才会随 width/height 展开 */
-    background: rgba(10, 10, 10, 0.95);
-    border: 1px solid rgba(255, 183, 0, 0.3);
-    /* 金色边框 */
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    background:
+        linear-gradient(180deg, rgba(255, 191, 73, 0.1), rgba(255, 191, 73, 0.04)),
+        rgba(6, 6, 6, 0.96);
+    border: 1px solid rgba(255, 191, 73, 0.36);
+    /* 琥珀黄边框 */
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.6),
+        0 0 22px rgba(255, 191, 73, 0.12),
+        inset 0 0 24px rgba(255, 191, 73, 0.05);
 
     /* 关键 3: 隐藏溢出，防止文字在盒子还很小时就露出来 */
     overflow: hidden;
@@ -57,7 +69,8 @@
     /* 限制最大宽度 */
     padding: 16px 20px;
 
-    color: #e5e5e5;
+    background: linear-gradient(180deg, rgba(255, 191, 73, 0.05), rgba(255, 191, 73, 0.015));
+    color: #f1e6c8;
     font-size: 14px;
     line-height: 1.6;
 
