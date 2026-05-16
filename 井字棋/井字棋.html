@@ -16,7 +16,9 @@
             --win-color: #fff;
         }
 
-        body {
+        #game-wrapper {
+            position: relative;
+            overflow: hidden;
             font-family: 'Segoe UI', sans-serif;
             background: radial-gradient(circle at center, var(--bg-grad-2), var(--bg-grad-1));
             color: var(--text-color);
@@ -24,14 +26,12 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            width: 100%;
             height: 100vh;
-            margin: 0;
-            overflow: hidden;
             user-select: none;
-            transition: background-color 0.5s; 
         }
 
-        body.screen-shake {
+        #game-wrapper.screen-shake {
             animation: heavyShake 0.5s cubic-bezier(.36,.07,.19,.97) both;
         }
 
@@ -48,12 +48,12 @@
 
         /* --- 爆炸容器 --- */
         #cartoon-explosion {
-            position: fixed;
+            position: absolute;
             top: 50%;
             left: 50%;
             width: 0;
             height: 0;
-            z-index: 5; 
+            z-index: 5;
             pointer-events: none;
             display: flex;
             justify-content: center;
@@ -155,7 +155,7 @@
             cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.2s; z-index: 20;
         }
         .restart-btn:hover { transform: translateY(-2px); }
-        #confetti-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
+        #confetti-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
         
         @keyframes popIn { 0% { transform: scale(0) rotate(-45deg); opacity: 0; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
         @keyframes pulse { 0% { transform: scale(0.95); } 50% { transform: scale(0.98); box-shadow: 0 0 10px rgba(255,255,255,0.1); } 100% { transform: scale(0.95); } }
@@ -165,31 +165,33 @@
 </head>
 <body>
 
-    <div id="cartoon-explosion">
-        <div class="spikes"></div>
-        <div class="cloud-blob"></div>
-    </div>
-
-    <canvas id="confetti-canvas"></canvas>
-
-    <h1>CYBER TIC-TAC-TOE</h1>
-    <div class="status" id="status">TURN: <span class="highlight X">X</span></div>
-
-    <div class="board-container">
-        <div class="board" id="board">
-            <div class="cell" data-index="0"></div>
-            <div class="cell" data-index="1"></div>
-            <div class="cell" data-index="2"></div>
-            <div class="cell" data-index="3"></div>
-            <div class="cell" data-index="4"></div>
-            <div class="cell" data-index="5"></div>
-            <div class="cell" data-index="6"></div>
-            <div class="cell" data-index="7"></div>
-            <div class="cell" data-index="8"></div>
+    <div id="game-wrapper">
+        <div id="cartoon-explosion">
+            <div class="spikes"></div>
+            <div class="cloud-blob"></div>
         </div>
-    </div>
 
-    <button class="restart-btn" onclick="restartGame()">RESET SYSTEM</button>
+        <canvas id="confetti-canvas"></canvas>
+
+        <h1>CYBER TIC-TAC-TOE</h1>
+        <div class="status" id="status">TURN: <span class="highlight X">X</span></div>
+
+        <div class="board-container">
+            <div class="board" id="board">
+                <div class="cell" data-index="0"></div>
+                <div class="cell" data-index="1"></div>
+                <div class="cell" data-index="2"></div>
+                <div class="cell" data-index="3"></div>
+                <div class="cell" data-index="4"></div>
+                <div class="cell" data-index="5"></div>
+                <div class="cell" data-index="6"></div>
+                <div class="cell" data-index="7"></div>
+                <div class="cell" data-index="8"></div>
+            </div>
+        </div>
+
+        <button class="restart-btn" onclick="restartGame()">RESET SYSTEM</button>
+    </div>
 
     <!-- 引用外部脚本 -->
     <script src="井字棋.js"></script>
