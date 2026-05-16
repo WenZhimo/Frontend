@@ -16,7 +16,9 @@
             --win-color: #fff;
         }
 
-        body {
+        #game-wrapper {
+            position: relative;
+            overflow: hidden;
             font-family: 'Segoe UI', sans-serif;
             background: radial-gradient(circle at center, var(--bg-grad-2), var(--bg-grad-1));
             color: var(--text-color);
@@ -24,14 +26,12 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            width: 100%;
             height: 100vh;
-            margin: 0;
-            overflow: hidden;
             user-select: none;
-            transition: background-color 0.5s; 
         }
 
-        body.screen-shake {
+        #game-wrapper.screen-shake {
             animation: heavyShake 0.5s cubic-bezier(.36,.07,.19,.97) both;
         }
 
@@ -48,13 +48,12 @@
 
         /* --- 爆炸容器 --- */
         #cartoon-explosion {
-            position: fixed;
+            position: absolute;
             top: 50%;
             left: 50%;
             width: 0;
             height: 0;
-            /* 修改点 1: z-index 设为 5，小于棋盘的 10 */
-            z-index: 5; 
+            z-index: 5;
             pointer-events: none;
             display: flex;
             justify-content: center;
@@ -163,7 +162,7 @@
             cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: transform 0.2s; z-index: 20;
         }
         .restart-btn:hover { transform: translateY(-2px); }
-        #confetti-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
+        #confetti-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
         
         @keyframes popIn { 0% { transform: scale(0) rotate(-45deg); opacity: 0; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
         @keyframes pulse { 0% { transform: scale(0.95); } 50% { transform: scale(0.98); box-shadow: 0 0 10px rgba(255,255,255,0.1); } 100% { transform: scale(0.95); } }
@@ -173,37 +172,40 @@
 </head>
 <body>
 
-    <div id="cartoon-explosion">
-        <div class="spikes"></div>
-        <div class="cloud-blob"></div>
-    </div>
-
-    <canvas id="confetti-canvas"></canvas>
-
-    <h1>CYBER TIC-TAC-TOE</h1>
-    <div class="status" id="status">TURN: <span class="highlight X">X</span></div>
-
-    <div class="board-container">
-        <div class="board" id="board">
-            <div class="cell" data-index="0"></div>
-            <div class="cell" data-index="1"></div>
-            <div class="cell" data-index="2"></div>
-            <div class="cell" data-index="3"></div>
-            <div class="cell" data-index="4"></div>
-            <div class="cell" data-index="5"></div>
-            <div class="cell" data-index="6"></div>
-            <div class="cell" data-index="7"></div>
-            <div class="cell" data-index="8"></div>
+    <div id="game-wrapper">
+        <div id="cartoon-explosion">
+            <div class="spikes"></div>
+            <div class="cloud-blob"></div>
         </div>
-    </div>
 
-    <button class="restart-btn" onclick="restartGame()">RESET SYSTEM</button>
+        <canvas id="confetti-canvas"></canvas>
+
+        <h1>CYBER TIC-TAC-TOE</h1>
+        <div class="status" id="status">TURN: <span class="highlight X">X</span></div>
+
+        <div class="board-container">
+            <div class="board" id="board">
+                <div class="cell" data-index="0"></div>
+                <div class="cell" data-index="1"></div>
+                <div class="cell" data-index="2"></div>
+                <div class="cell" data-index="3"></div>
+                <div class="cell" data-index="4"></div>
+                <div class="cell" data-index="5"></div>
+                <div class="cell" data-index="6"></div>
+                <div class="cell" data-index="7"></div>
+                <div class="cell" data-index="8"></div>
+            </div>
+        </div>
+
+        <button class="restart-btn" onclick="restartGame()">RESET SYSTEM</button>
+    </div>
 
     <script>
         const cells = document.querySelectorAll('.cell');
         const statusText = document.getElementById('status');
         const boardElement = document.getElementById('board');
         const explosionContainer = document.getElementById('cartoon-explosion');
+        const gameWrapper = document.getElementById('game-wrapper');
         const root = document.documentElement; 
         
         let currentPlayer = 'X';
@@ -382,9 +384,9 @@
             void explosionContainer.offsetWidth; 
             explosionContainer.classList.add('active');
 
-            document.body.classList.add('screen-shake');
+            gameWrapper.classList.add('screen-shake');
             setTimeout(() => {
-                document.body.classList.remove('screen-shake');
+                gameWrapper.classList.remove('screen-shake');
             }, 500);
 
             fireConfetti();
@@ -421,15 +423,15 @@
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            document.body.classList.remove('screen-shake');
+            gameWrapper.classList.remove('screen-shake');
             explosionContainer.classList.remove('active');
         }
 
         function fireConfetti() {
             const canvas = document.getElementById('confetti-canvas');
             const ctx = canvas.getContext('2d');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.width = gameWrapper.clientWidth;
+            canvas.height = gameWrapper.clientHeight;
 
             const particles = [];
             const winColorHex = currentPlayer === 'X' ? '#ff2e63' : '#08d9d6';
@@ -437,8 +439,8 @@
 
             for (let i = 0; i < 400; i++) {
                 particles.push({
-                    x: window.innerWidth / 2,
-                    y: window.innerHeight / 2,
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
                     w: Math.random() * 10 + 5,
                     h: Math.random() * 10 + 5,
                     vx: (Math.random() - 0.5) * 40,
@@ -476,8 +478,8 @@
         cells.forEach(cell => cell.addEventListener('click', handleCellClick));
         window.addEventListener('resize', () => {
             const canvas = document.getElementById('confetti-canvas');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.width = gameWrapper.clientWidth;
+            canvas.height = gameWrapper.clientHeight;
         });
 
     </script>

@@ -2,6 +2,7 @@ const cells = document.querySelectorAll('.cell');
 const statusText = document.getElementById('status');
 const boardElement = document.getElementById('board');
 const explosionContainer = document.getElementById('cartoon-explosion');
+const gameWrapper = document.getElementById('game-wrapper');
 const root = document.documentElement; 
 
 let currentPlayer = 'X';
@@ -188,9 +189,9 @@ function endGame() {
     void explosionContainer.offsetWidth; // 触发重绘以重启动画
     explosionContainer.classList.add('active');
 
-    document.body.classList.add('screen-shake');
+    gameWrapper.classList.add('screen-shake');
     setTimeout(() => {
-        document.body.classList.remove('screen-shake');
+        gameWrapper.classList.remove('screen-shake');
     }, 500);
 
     fireConfetti();
@@ -227,16 +228,16 @@ window.restartGame = function() {
     const canvas = document.getElementById('confetti-canvas');
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    document.body.classList.remove('screen-shake');
+
+    gameWrapper.classList.remove('screen-shake');
     explosionContainer.classList.remove('active');
 }
 
 function fireConfetti() {
     const canvas = document.getElementById('confetti-canvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.width = gameWrapper.clientWidth;
+    canvas.height = gameWrapper.clientHeight;
 
     const particles = [];
     const winColorHex = currentPlayer === 'X' ? '#ff2e63' : '#08d9d6';
@@ -244,8 +245,8 @@ function fireConfetti() {
 
     for (let i = 0; i < 400; i++) {
         particles.push({
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
+            x: canvas.width / 2,
+            y: canvas.height / 2,
             w: Math.random() * 10 + 5,
             h: Math.random() * 10 + 5,
             vx: (Math.random() - 0.5) * 40,
@@ -286,6 +287,6 @@ cells.forEach(cell => cell.addEventListener('click', handleCellClick));
 // 窗口大小调整时重置Canvas尺寸
 window.addEventListener('resize', () => {
     const canvas = document.getElementById('confetti-canvas');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.width = gameWrapper.clientWidth;
+    canvas.height = gameWrapper.clientHeight;
 });
