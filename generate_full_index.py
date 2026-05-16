@@ -4,7 +4,7 @@ import datetime
 
 # ================= 配置区域 =================
 # 你的 GitHub Pages 基础 URL
-BASE_URL = "https://s-r-afraid.github.io/Frontend/"
+BASE_URL = "https://wenzhimo.github.io/Frontend/"
 
 # 输出文件名
 OUTPUT_FILENAME = "index.html"
