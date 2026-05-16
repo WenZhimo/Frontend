@@ -1,0 +1,34 @@
+#story-text {
+    flex-grow: 1;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    white-space: pre-wrap;
+}
+
+.char-span {
+    text-shadow: 0 0 5px currentColor;
+}
+
+.cursor::after {
+    content: '█';
+    animation: blink 1s step-end infinite;
+    margin-left: 5px;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--screen-bg);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--phosphor-dim);
+    border: 1px solid var(--screen-bg);
+}

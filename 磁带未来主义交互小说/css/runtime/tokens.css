@@ -1,0 +1,8 @@
+:root {
+    --phosphor-main: #ffb000;
+    --phosphor-dim: #996a00;
+    --bg-color: #0a0a0a;
+    --screen-bg: #110d00;
+    --scanline-color: rgba(0, 0, 0, 0.5);
+    --crt-curvature: inset 0 0 100px rgba(0, 0, 0, 0.9);
+}
