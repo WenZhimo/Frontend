@@ -1,31 +1,84 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仿来自星尘摇杆 UI</title>
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at center, #101625 0%, #090d16 42%, #03050a 100%);
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+
+        body {
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        .hint {
+            position: absolute;
+            left: 50%;
+            bottom: 32px;
+            transform: translateX(-50%);
+            padding: 10px 16px;
+            border: 1px solid rgba(180, 232, 255, 0.16);
+            border-radius: 999px;
+            background: rgba(4, 8, 18, 0.48);
+            color: rgba(220, 244, 255, 0.78);
+            font-size: 13px;
+            letter-spacing: 0.08em;
+            backdrop-filter: blur(10px);
+            user-select: none;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+    </style>
 </head>
 
-<body style="margin:0;background:black;">
+<body>
     <canvas id="c"></canvas>
+    <div class="hint">按住并拖动，观察同心圆扩散、方向性流动与内层律动</div>
 
     <script>
         const canvas = document.getElementById("c");
-        const gl = canvas.getContext("webgl");
+        const gl = canvas.getContext("webgl", {
+            antialias: true,
+            alpha: false,
+            preserveDrawingBuffer: true
+        });
 
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            gl.viewport(0, 0, canvas.width, canvas.height);
+        if (!gl) {
+            throw new Error("当前环境不支持 WebGL");
         }
-        resize();
-        window.addEventListener("resize", resize);
 
         const vertexSrc = `
 attribute vec2 position;
 varying vec2 vUV;
-void main(){
+
+void main() {
     vUV = position * 0.5 + 0.5;
-    gl_Position = vec4(position,0.0,1.0);
+    gl_Position = vec4(position, 0.0, 1.0);
 }
 `;
 
@@ -38,104 +91,172 @@ uniform vec2 uCenter;
 uniform vec2 uPointer;
 uniform vec2 uResolution;
 uniform float uTime;
+uniform float uMaxDrag;
+uniform vec2 uRadiusScale;
 
-float variation(vec2 v1, vec2 v2, float frequency, float speed, float amplitude){
-    float v = dot(normalize(v1), normalize(v2));
+float saturate1(float x) {
+    return clamp(x, 0.0, 1.0);
+}
+
+vec2 safeNormalize(vec2 v) {
+    float len = max(length(v), 1e-6);
+    return v / len;
+}
+
+vec2 aspectSpace(vec2 uv) {
+    vec2 d = uv - uCenter;
+    d.x *= uResolution.x / uResolution.y;
+    return d;
+}
+
+float ringMask(float len, float outerRadius, float innerRadius) {
+    float aa = max(1.5 / min(uResolution.x, uResolution.y), 0.0012);
+    float outerMask = 1.0 - smoothstep(outerRadius - aa, outerRadius + aa, len);
+    float innerMask = smoothstep(innerRadius - aa, innerRadius + aa, len);
+    return outerMask * innerMask;
+}
+
+float variation(vec2 v1, vec2 v2, float frequency, float speed, float amplitude) {
+    float v = dot(safeNormalize(v1), safeNormalize(v2));
     float waves =
         sin(v * frequency - uTime * speed) / 50.0 +
-        sin(v * frequency * 3.0 - uTime * speed) / 500.0;
+        sin(v * frequency * 3.0 - uTime * speed * 1.05) / 500.0;
     return amplitude * waves;
 }
 
-vec2 fixAspect(vec2 uv, vec2 center){
-    vec2 d = uv - center;
-    d.x *= uResolution.x / uResolution.y;
-    return d + center;
-}
+float drawCircle(vec2 uv, float r1, float r2, float remapLen,
+                 float frequency, float speed, float amplitude) {
+    vec2 pointerDelta = aspectSpace(uPointer);
+    float strength = saturate1(length(pointerDelta) / uMaxDrag);
+    vec2 direct = safeNormalize(pointerDelta);
 
-float drawCircle(vec2 uv, float r1, float r2, float remap_len,
-                 float frequency, float speed, float amplitude){
+    vec2 uvCenter = aspectSpace(uv);
+    float defaultLen = length(uvCenter);
 
-    vec2 direct = normalize(uPointer - uCenter);
-    float strength = min(length(uPointer - uCenter), 0.5) * 2.0;
+    vec2 remapPointer = direct * strength * remapLen;
 
-    vec2 remap_pointer = direct * strength * remap_len + uCenter;
+    float maskCenter = step(0.0, dot(-direct, safeNormalize(uvCenter)));
 
-    vec2 uv_fixed = fixAspect(uv, uCenter);
-    vec2 remap_fixed = fixAspect(remap_pointer, uCenter);
-
-    vec2 uv_center = uv_fixed - uCenter;
-    vec2 uv_pointer = uv_fixed - remap_fixed;
-
-    float mask_center = step(0.0, dot(-direct, normalize(uv_center)));
-    float mask_pointer = step(0.0, dot(direct, normalize(uv_pointer)));
+    vec2 uvPointer = uvCenter - remapPointer;
+    float maskPointer = step(0.0, dot(direct, safeNormalize(uvPointer)));
 
     float len = max(
-        length(uv_center) * mask_center +
-        length(uv_pointer) * mask_pointer,
-        abs(uv_center.x * direct.y - uv_center.y * direct.x)
+        length(uvCenter) * maskCenter + length(uvPointer) * maskPointer,
+        abs(uvCenter.x * direct.y - uvCenter.y * direct.x)
     );
 
-    vec2 back_center = uCenter - direct * 0.1;
-    vec2 back_fixed = fixAspect(back_center, uCenter);
-
-    float mask_diff = step(0.0, dot(-direct, normalize(uv_fixed - back_fixed)));
-    float diff = (1.0 - mask_diff) * dot(uv_fixed - back_fixed, direct);
+    vec2 backCenter = -direct * 0.1;
+    float maskDiff = step(0.0, dot(-direct, safeNormalize(uvCenter - backCenter)));
+    float diff = (1.0 - maskDiff) * dot(uvCenter - backCenter, direct);
     diff *= diff;
 
-    len += variation(uv_center, direct, frequency, speed, amplitude) * diff;
-    len -= variation(vec2(uv_center.y, -uv_center.x),
-                     direct, frequency, speed, amplitude) * diff;
+    len += variation(uvCenter, direct, frequency, speed, amplitude) * diff;
+    len -= variation(vec2(uvCenter.y, -uvCenter.x), direct, frequency, speed, amplitude) * diff;
 
-    return step(r2, len) * step(len, r1);
+    float dis = dot(uvCenter, direct) / (0.2 + (r1 + r2) * 0.5);
+    float taper = saturate1((1.0 - maskCenter) * dis * strength);
+    float r1Fixed = mix(r1, r1 * uRadiusScale.x, taper);
+    float r2Fixed = mix(r2, r2 * uRadiusScale.y, taper);
+
+    float capsuleRing = ringMask(len, r1Fixed, r2Fixed);
+    float idleRing = ringMask(defaultLen, r1, r2);
+    float activeMix = smoothstep(0.02, 0.12, strength);
+
+    return mix(idleRing, capsuleRing, activeMix);
 }
 
-void main(){
-
+void main() {
     vec2 uv = vUV;
+    vec2 uvCenter = aspectSpace(uv);
+    vec2 pointerDelta = aspectSpace(uPointer);
 
-    float strength = min(length(uPointer - uCenter), 0.5) * 2.0;
-    float s = mix(0.0, 10.0, strength);
+    float len = length(pointerDelta);
+    float strength = saturate1(len / uMaxDrag);
+    vec2 direct = safeNormalize(pointerDelta);
 
+    vec2 backCenter = -direct * 0.22;
+    float maskDiff = step(0.0, dot(-direct, safeNormalize(uvCenter - backCenter)));
+    float diff = (1.0 - maskDiff) * dot(uvCenter - backCenter, direct);
+    diff = (1.0 - diff) * (1.0 - diff);
+    diff = mix(1.0, diff, step(0.0001, strength));
+
+    float amplitude = mix(0.0, 10.0, strength);
     float width = 0.0045;
-    float r1 = 0.16;
+    float baseRadius = 0.16;
 
-    float color = drawCircle(uv, r1, r1-width, 0.12, 5.0, 7.2, s);
-    color += mix(0.0,
-        drawCircle(uv, r1, r1-4.0*width, 0.10, 4.0, 6.8, s),
-        strength);
+    float rings = drawCircle(uv, baseRadius, baseRadius - width, 0.12, 5.0, 7.2, amplitude);
 
-    float r2 = mix(r1, 0.17, strength);
-    color = max(color,
-        drawCircle(uv, r2, r2-width, 0.14, 6.5, 7.8, s));
+    float pulse = 0.72 + 0.28 * sin(uTime * 6.2);
+    rings += strength * pulse * drawCircle(
+        uv,
+        baseRadius,
+        baseRadius - mix(2.0, 4.8, pulse) * width,
+        0.10,
+        4.0,
+        6.8,
+        amplitude
+    );
 
-    float r3 = mix(r1, 0.18, strength);
-    color = max(color,
-        drawCircle(uv, r3, r3-width, 0.16, 6.5, 8.4, s));
+    float r2 = mix(baseRadius, 0.17, strength);
+    rings = max(rings, drawCircle(uv, r2, r2 - width, 0.14, 6.5, 7.8, amplitude));
 
-    float r4 = mix(r1, 0.19, strength);
-    color = max(color,
-        drawCircle(uv, r4, r4-width, 0.18, 7.0, 9.0, s));
+    float r3 = mix(baseRadius, 0.18, strength);
+    rings = max(rings, drawCircle(uv, r3, r3 - width, 0.16, 6.5, 8.4, amplitude));
 
-    gl_FragColor = vec4(color, color*0.8, color*0.8, color);
+    float r4 = mix(baseRadius, 0.19, strength);
+    rings = max(rings, drawCircle(uv, r4, r4 - width, 0.18, 7.0, 9.0, amplitude));
+
+    float baseGlow = (1.0 - smoothstep(0.03, 0.34, length(uvCenter))) * 0.08;
+    float coreGlow = (1.0 - smoothstep(0.0, 0.11, length(uvCenter))) * mix(0.02, 0.09, strength);
+    float knobGlow = (1.0 - smoothstep(0.0, 0.08, length(uvCenter - pointerDelta))) * strength * 0.11;
+
+    vec2 screen = vUV - 0.5;
+    screen.x *= uResolution.x / uResolution.y;
+    float vignette = 1.0 - smoothstep(0.0, 1.15, length(screen));
+
+    vec3 background = vec3(0.02, 0.03, 0.05) * vignette;
+    vec3 ringColor = vec3(0.72, 0.98, 1.0);
+    vec3 directionalTint = vec3(diff, 1.0, 1.0);
+
+    vec3 color = background;
+    color += ringColor * baseGlow;
+    color += ringColor * (coreGlow + knobGlow);
+    color += ringColor * directionalTint * rings;
+
+    gl_FragColor = vec4(color, 1.0);
 }
 `;
 
         function compile(type, source) {
-            const s = gl.createShader(type);
-            gl.shaderSource(s, source);
-            gl.compileShader(s);
-            return s;
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                const info = gl.getShaderInfoLog(shader);
+                gl.deleteShader(shader);
+                throw new Error(info || "着色器编译失败");
+            }
+            return shader;
         }
 
-        const program = gl.createProgram();
-        gl.attachShader(program, compile(gl.VERTEX_SHADER, vertexSrc));
-        gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragmentSrc));
-        gl.linkProgram(program);
+        function createProgram(vertexSource, fragmentSource) {
+            const program = gl.createProgram();
+            gl.attachShader(program, compile(gl.VERTEX_SHADER, vertexSource));
+            gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragmentSource));
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                const info = gl.getProgramInfoLog(program);
+                gl.deleteProgram(program);
+                throw new Error(info || "着色器链接失败");
+            }
+            return program;
+        }
+
+        const program = createProgram(vertexSrc, fragmentSrc);
         gl.useProgram(program);
 
-        const buffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        const quad = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, quad);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
             -1, -1,
             1, -1,
@@ -143,37 +264,129 @@ void main(){
             1, 1
         ]), gl.STATIC_DRAW);
 
-        const position = gl.getAttribLocation(program, "position");
-        gl.enableVertexAttribArray(position);
-        gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+        const positionLoc = gl.getAttribLocation(program, "position");
+        gl.enableVertexAttribArray(positionLoc);
+        gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
 
-        const uCenter = gl.getUniformLocation(program, "uCenter");
-        const uPointer = gl.getUniformLocation(program, "uPointer");
-        const uResolution = gl.getUniformLocation(program, "uResolution");
-        const uTime = gl.getUniformLocation(program, "uTime");
+        const uniforms = {
+            center: gl.getUniformLocation(program, "uCenter"),
+            pointer: gl.getUniformLocation(program, "uPointer"),
+            resolution: gl.getUniformLocation(program, "uResolution"),
+            time: gl.getUniformLocation(program, "uTime"),
+            maxDrag: gl.getUniformLocation(program, "uMaxDrag"),
+            radiusScale: gl.getUniformLocation(program, "uRadiusScale")
+        };
 
-        let center = [0.5, 0.5];
-        let pointer = [0.5, 0.5];
+        const state = {
+            center: [0.5, 0.5],
+            pointer: [0.5, 0.5],
+            target: [0.5, 0.5],
+            dragging: false,
+            maxDrag: 0.18,
+            pointerId: null
+        };
 
-        canvas.addEventListener("mousemove", e => {
-            const r = canvas.getBoundingClientRect();
-            pointer[0] = (e.clientX - r.left) / r.width;
-            pointer[1] = 1.0 - (e.clientY - r.top) / r.height;
+        function resize() {
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            canvas.width = Math.round(window.innerWidth * dpr);
+            canvas.height = Math.round(window.innerHeight * dpr);
+            canvas.style.width = window.innerWidth + "px";
+            canvas.style.height = window.innerHeight + "px";
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+
+        function screenToUv(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            return [
+                (clientX - rect.left) / rect.width,
+                1 - (clientY - rect.top) / rect.height
+            ];
+        }
+
+        function clampToJoystick(uv) {
+            const aspect = canvas.width / canvas.height;
+            let dx = (uv[0] - state.center[0]) * aspect;
+            let dy = uv[1] - state.center[1];
+            const len = Math.hypot(dx, dy);
+
+            if (len > state.maxDrag) {
+                const scale = state.maxDrag / len;
+                dx *= scale;
+                dy *= scale;
+            }
+
+            return [state.center[0] + dx / aspect, state.center[1] + dy];
+        }
+
+        function isInsideJoystick(uv) {
+            const aspect = canvas.width / canvas.height;
+            const dx = (uv[0] - state.center[0]) * aspect;
+            const dy = uv[1] - state.center[1];
+            return Math.hypot(dx, dy) <= 0.32;
+        }
+
+        function updateTarget(clientX, clientY) {
+            state.target = clampToJoystick(screenToUv(clientX, clientY));
+        }
+
+        canvas.addEventListener("pointerdown", event => {
+            const uv = screenToUv(event.clientX, event.clientY);
+            if (!isInsideJoystick(uv)) {
+                return;
+            }
+            state.dragging = true;
+            state.pointerId = event.pointerId;
+            canvas.setPointerCapture(event.pointerId);
+            updateTarget(event.clientX, event.clientY);
         });
 
-        function render(t) {
+        canvas.addEventListener("pointermove", event => {
+            if (!state.dragging || event.pointerId !== state.pointerId) {
+                return;
+            }
+            updateTarget(event.clientX, event.clientY);
+        });
 
-            gl.uniform2fv(uCenter, center);
-            gl.uniform2fv(uPointer, pointer);
-            gl.uniform2f(uResolution, canvas.width, canvas.height);
-            gl.uniform1f(uTime, t * 0.001);
+        function releasePointer(event) {
+            if (event.pointerId !== state.pointerId) {
+                return;
+            }
+            state.dragging = false;
+            state.pointerId = null;
+            state.target = [...state.center];
+            if (canvas.hasPointerCapture(event.pointerId)) {
+                canvas.releasePointerCapture(event.pointerId);
+            }
+        }
+
+        canvas.addEventListener("pointerup", releasePointer);
+        canvas.addEventListener("pointercancel", releasePointer);
+        canvas.addEventListener("pointerleave", event => {
+            if (!state.dragging) {
+                state.target = [...state.center];
+            }
+        });
+
+        window.addEventListener("resize", resize);
+        resize();
+
+        function render(time) {
+            const easing = state.dragging ? 0.22 : 0.1;
+            state.pointer[0] += (state.target[0] - state.pointer[0]) * easing;
+            state.pointer[1] += (state.target[1] - state.pointer[1]) * easing;
+
+            gl.uniform2f(uniforms.center, state.center[0], state.center[1]);
+            gl.uniform2f(uniforms.pointer, state.pointer[0], state.pointer[1]);
+            gl.uniform2f(uniforms.resolution, canvas.width, canvas.height);
+            gl.uniform1f(uniforms.time, time * 0.001);
+            gl.uniform1f(uniforms.maxDrag, state.maxDrag);
+            gl.uniform2f(uniforms.radiusScale, 0.94, 0.965);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
             requestAnimationFrame(render);
         }
 
         requestAnimationFrame(render);
-
     </script>
 </body>
 
