@@ -9,7 +9,10 @@ function kappa_add_type_attribute( $tag, $handle, $src ) {
         'kappa-pager-js',
         'kappa-cursor-js',
         'kappa-tech-capability-bg',
+        'kappa-music-showcase-bg',
+        'kappa-category-music-bg',
         'kappa-pointer-service',
+        'kappa-waveform-data',
         'kappa-progress-controller',
         'kappa-homepage-boot'
     );

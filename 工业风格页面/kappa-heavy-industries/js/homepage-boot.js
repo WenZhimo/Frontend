@@ -10,6 +10,8 @@ if (overlay && logRoot && progressFill && statusText) {
         { id: 'dom', message: '[BOOT] 核心总线已接通 // CORE BUS LINKED // document skeleton online' },
         { id: 'shell', message: '[CHK ] 首屏视口已校验 // PRIMARY VIEWPORT VERIFIED // active shell mounted' },
         { id: 'hero', message: '[ASST] 首屏视觉资源已校验 // HERO VISUAL BLOCK VERIFIED // foreground assets responsive' },
+        { id: 'waveform-module', message: '[MOD ] 波形模块已装载 // WAVEFORM MODULE LOADED // shared waveform runtime ready' },
+        { id: 'audio', message: '[AUD ] 音频波形资源已锁定 // AUDIO SHAPE SOURCE LOCKED // waveform analysis ready' },
         { id: 'pager', message: '[NAV ] 分页引擎已武装 // PAGER ENGINE ARMED // page state synchronized' },
         { id: 'progress', message: '[CTRL] 页脚导航控制器上线 // FOOTER NAV CONTROLLER ONLINE // progress bus synced' },
         { id: 'frame', message: '[RDY ] 首帧交互已提交 // FIRST INTERACTIVE FRAME COMMITTED // viewport safe to release' },
@@ -118,6 +120,8 @@ if (overlay && logRoot && progressFill && statusText) {
     }
 
     window.addEventListener('kappa:home-ready-hero', () => markStepDone('hero'));
+    window.addEventListener('kappa:home-ready-waveform-module', () => markStepDone('waveform-module'));
+    window.addEventListener('kappa:home-ready-audio', () => markStepDone('audio'));
     window.addEventListener('kappa:home-ready-pager', () => markStepDone('pager'));
     window.addEventListener('kappa:home-ready-progress', () => markStepDone('progress'));
 

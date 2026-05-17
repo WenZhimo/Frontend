@@ -278,6 +278,19 @@ function handleVisibilityChange() {
     }
 }
 
+function syncLoopState() {
+    if (!page || !host || !canvas || !ctx) return;
+
+    if (document.hidden || !isPageActive()) {
+        resetAndPause();
+        return;
+    }
+
+    resetGameState();
+    drawFrame();
+    startLoop();
+}
+
 function initTechCapabilityBackground() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
