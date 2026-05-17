@@ -26,6 +26,9 @@ function kappa_heavy_industries_scripts() {
     if ( is_front_page() ) {
         wp_enqueue_style( 'kappa-front-page-inline', $theme_dir . '/css/front-page-inline.css', array( 'kappa-pager' ), '1.0' );
     }
+    if ( is_category( 'music' ) ) {
+        wp_enqueue_style( 'kappa-category-music-inline', $theme_dir . '/css/category-music-inline.css', array( 'kappa-base', 'kappa-pager' ), '1.0' );
+    }
 
     wp_enqueue_style( 'font-yishan', $theme_dir . '/asset/fonts/峄山碑篆体/峄山碑篆体/result.css', array(), '1.0' );
     wp_enqueue_style( 'font-bailutongtong', $theme_dir . '/asset/fonts/白路彤彤手写体/白路彤彤手写体/result.css', array(), '1.0' );
@@ -66,6 +69,7 @@ function kappa_heavy_industries_scripts() {
         wp_enqueue_script( 'kappa-footer-toc', $theme_dir . '/js/footer-toc.js', array(), '1.0', true );
     }
     wp_enqueue_script( 'kappa-pointer-service', $theme_dir . '/js/pointer-service.js', array(), '1.0', true );
+    wp_enqueue_script( 'kappa-waveform-data', $theme_dir . '/js/waveform-data.js', array(), '1.0', true );
     wp_enqueue_script( 'kappa-progress-controller', $theme_dir . '/js/progress-controller.js', array( 'kappa-pointer-service' ), '1.0', true );
     if ( ! wp_is_mobile() ) {
         wp_enqueue_script( 'kappa-cursor-js', $theme_dir . '/js/cursor.js', array( 'kappa-pointer-service' ), '1.0', true );
@@ -77,8 +81,15 @@ function kappa_heavy_industries_scripts() {
 
         if ( ! wp_is_mobile() ) {
             wp_enqueue_script( 'kappa-tech-capability-bg', $theme_dir . '/js/homepage-tech-capability-bg.js', array( 'kappa-pager-js', 'kappa-pointer-service' ), '1.0', true );
+            wp_enqueue_script( 'kappa-music-showcase-bg', $theme_dir . '/js/homepage-music-showcase-bg.js', array( 'kappa-pager-js', 'kappa-waveform-data' ), '1.0', true );
         }
-    } else {
+    }
+
+    if ( ! wp_is_mobile() && is_category( 'music' ) ) {
+        wp_enqueue_script( 'kappa-category-music-bg', $theme_dir . '/js/category-music-bg.js', array( 'kappa-pointer-service', 'kappa-waveform-data' ), '1.0', true );
+    }
+
+    if ( ! is_front_page() ) {
         $single_override_css = "
             html, body { overflow-y: auto !important; height: auto !important; }
             html { scrollbar-width: none; }

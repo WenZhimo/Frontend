@@ -1,4 +1,18 @@
 /* --- 出处文本样式 --- */
+.music-showcase-bg-host {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.music-showcase-bg-host canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    opacity: 0.94;
+}
+
+/* --- 出处文本样式 --- */
 .slogan-source {
     font-family: 'ZCOOL QingKe HuangYou', monospace, sans-serif;
     color: #666;

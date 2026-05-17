@@ -52,7 +52,7 @@
                     'extra_classes' => 'card',
                 ) ); ?>>
                     <div class="homepage-bg-layer" aria-hidden="true"></div>
-                    <a href="https://www.wenzhimo.xyz/%e9%9f%b3%e4%b9%90%e5%a4%87%e5%bf%98%e5%bd%95/"
+                    <a href="https://www.wenzhimo.xyz/category/%e5%88%86%e4%ba%ab/music/"
                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></a>
 
                     <div
