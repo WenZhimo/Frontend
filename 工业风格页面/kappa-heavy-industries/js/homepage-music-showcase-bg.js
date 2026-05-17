@@ -4,7 +4,7 @@ import {
     buildWaveformState,
     buildWindowPoints,
     dispatchWaveformModuleReady,
-} from './waveform-data.js';
+} from './shared/waveform-data.js';
 
 const PAGE_SELECTOR = '.page--music-showcase';
 const HOST_SELECTOR = '.music-showcase-bg-host[data-homepage-bg-animation="music-showcase"]';
