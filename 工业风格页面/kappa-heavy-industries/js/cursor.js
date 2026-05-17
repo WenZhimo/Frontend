@@ -1,4 +1,4 @@
-import { subscribePointer } from './pointer-service.js';
+import { subscribePointer } from './shared/pointer-service.js';
 
 const root = document.documentElement;
 const mxEl = document.getElementById("mx");

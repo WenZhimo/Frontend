@@ -1,4 +1,4 @@
-import { getLocalPoint, subscribePointer } from './pointer-service.js';
+import { getLocalPoint, subscribePointer } from './shared/pointer-service.js';
 
 const PAGE_SELECTOR = '.page--tech-capability';
 const HOST_SELECTOR = '.homepage-bg-animation-host[data-homepage-bg-animation="tech-capability"]';

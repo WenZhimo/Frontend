@@ -1,4 +1,4 @@
-import { subscribePointer } from './pointer-service.js';
+import { subscribePointer } from './shared/pointer-service.js';
 
 const progress = document.getElementById('progress');
 const progressFill = progress?.querySelector('span') ?? null;

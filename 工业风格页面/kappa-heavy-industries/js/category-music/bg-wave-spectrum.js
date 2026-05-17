@@ -1,4 +1,4 @@
-import { subscribePointer } from './pointer-service.js';
+import { subscribePointer } from '../shared/pointer-service.js';
 import {
     DEFAULT_WINDOW_SAMPLES,
     loadWaveformPayload,
@@ -6,7 +6,7 @@ import {
     buildWindowPoints,
     buildSpectrumLevelsFromWindowPoints,
     dispatchWaveformModuleReady,
-} from './waveform-data.js';
+} from '../shared/waveform-data.js';
 
 const HOST_SELECTOR = '.music-category-bg-host[data-music-bg="wave-spectrum"]';
 const SHELL_SELECTOR = '.category-music-shell';
