@@ -1,6 +1,7 @@
 import { createAStarSafeStrategy } from './astar-safe.js';
 import { createHamiltonianCycleStrategy } from './hamiltonian-cycle.js';
 import { createHamiltonianShortcutStrategy } from './hamiltonian-shortcuts.js';
+import { createSnakeAIStrategy } from './snakeai-nn.js';
 
 export const STRATEGY_MANIFEST = {
     'astar-safe': {
@@ -17,6 +18,11 @@ export const STRATEGY_MANIFEST = {
         label: 'HAMILTONIAN+',
         description: '在哈密尔顿环基础上尝试安全抄近道，只要不会破坏拓扑安全，就会更积极地接近苹果。',
         factory: createHamiltonianShortcutStrategy,
+    },
+    'snakeai-nn': {
+        label: 'SNAKEAI NN',
+        description: '使用 SnakeAI 风格的 32 维观察输入与前馈神经网络打分动作，再叠加保命兜底，作为可训练的神经决策策略。',
+        factory: createSnakeAIStrategy,
     },
 };
 
