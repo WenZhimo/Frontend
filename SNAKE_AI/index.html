@@ -403,7 +403,18 @@
             return STRATEGY_MANIFEST[strategySelect.value] ? strategySelect.value : (strategyCatalog[0]?.id || 'astar-safe');
         }
 
+        const NN_BOARD_PROFILE_MAP = {
+            'snakeai-nn-phone': { columns: 26, rows: 12 },
+            'snakeai-nn-pc': { columns: 32, rows: 18 },
+            'snakeai-nn-tablet': { columns: 32, rows: 24 },
+        };
+
         function normalizeGridForStrategy(strategyId, columns, rows) {
+            const nnProfile = NN_BOARD_PROFILE_MAP[strategyId];
+            if (nnProfile) {
+                return { columns: nnProfile.columns, rows: nnProfile.rows };
+            }
+
             if (strategyId !== 'hamiltonian-cycle' && strategyId !== 'hamiltonian-shortcuts') {
                 return { columns, rows };
             }

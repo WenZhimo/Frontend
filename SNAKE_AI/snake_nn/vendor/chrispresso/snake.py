@@ -239,10 +239,12 @@ def save_snake(population_folder: str, individual_name: str, snake: Snake, setti
     individual_dir = os.path.join(population_folder, individual_name)
     os.makedirs(individual_dir, exist_ok=True)
     constructor = {
+        'board_size': list(snake.board_size),
         'start_pos': snake.start_pos.to_dict(),
         'apple_seed': snake.apple_seed,
         'initial_velocity': snake.initial_velocity,
         'starting_direction': snake.starting_direction,
+        'lifespan': snake.lifespan,
     }
     with open(os.path.join(individual_dir, 'constructor_params.json'), 'w', encoding='utf-8') as out:
         json.dump(constructor, out, sort_keys=True, indent=4)
@@ -269,8 +271,11 @@ def load_snake(population_folder: str, individual_name: str, settings: Optional[
     with open(os.path.join(individual_dir, 'constructor_params.json'), 'r', encoding='utf-8') as fp:
         constructor_params = json.load(fp)
 
+    board_size = tuple(constructor_params.get('board_size', settings['board_size']))
+    lifespan = constructor_params.get('lifespan', settings['lifespan'])
+
     return Snake(
-        settings['board_size'],
+        board_size,
         chromosome=params,
         start_pos=Point.from_dict(constructor_params['start_pos']),
         apple_seed=constructor_params['apple_seed'],
@@ -279,7 +284,7 @@ def load_snake(population_folder: str, individual_name: str, settings: Optional[
         hidden_layer_architecture=settings['hidden_network_architecture'],
         hidden_activation=settings['hidden_layer_activation'],
         output_activation=settings['output_layer_activation'],
-        lifespan=settings['lifespan'],
+        lifespan=lifespan,
         apple_and_self_vision=settings['apple_and_self_vision'],
         starvation_limit=settings.get('starvation_limit', 100),
     )
