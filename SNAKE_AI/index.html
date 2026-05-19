@@ -332,6 +332,10 @@
                     <div class="telemetry-value" id="telemetryLength">--</div>
                 </div>
                 <div class="telemetry-card">
+                    <div class="telemetry-label">Score</div>
+                    <div class="telemetry-value" id="telemetryScore">--</div>
+                </div>
+                <div class="telemetry-card">
                     <div class="telemetry-label">Food</div>
                     <div class="telemetry-value" id="telemetryFood">--</div>
                 </div>
@@ -368,6 +372,7 @@
         const telemetryCols = document.getElementById('telemetryCols');
         const telemetryRows = document.getElementById('telemetryRows');
         const telemetryLength = document.getElementById('telemetryLength');
+        const telemetryScore = document.getElementById('telemetryScore');
         const telemetryFood = document.getElementById('telemetryFood');
 
         let engine = null;
@@ -479,6 +484,7 @@
             telemetryCols.textContent = state.columns;
             telemetryRows.textContent = state.rows;
             telemetryLength.textContent = state.length;
+            telemetryScore.textContent = state.score;
             telemetryFood.textContent = state.food ? `${state.food.x},${state.food.y}` : '--';
         }
 

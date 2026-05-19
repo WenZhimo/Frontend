@@ -96,6 +96,9 @@ class TrainingConfig:
     population_checkpoint_interval: int = 5
     resume_from_checkpoint: str | None = None
     resume_strict: bool = True
+    parallel_evaluation_enabled: bool = False
+    parallel_evaluation_workers: int | None = None
+    parallel_evaluation_chunksize: int = 1
 
 
 BASE_IDE_CONFIG = TrainingConfig(
@@ -130,11 +133,11 @@ BASE_IDE_CONFIG = TrainingConfig(
     # 停滞惩罚：连续没有更接近苹果的步数会累计惩罚
     stall_penalty=1.5,
     # 批量实验默认不自动晋升，由比较结果决定是否手动晋升
-    promote_to_default=False,
+    promote_to_default=True,
     # 是否启用整群 checkpoint（会保存在对应 profile 的 checkpoints 目录下）
     population_checkpoint_enabled=True,
     # 每隔多少代覆写一次整群 checkpoint，例如 5 表示每 5 代更新一次 <seed>-latest
-    population_checkpoint_interval=5,
+    population_checkpoint_interval=1,
     # 从整群 checkpoint 继续训练时，把这里改成 checkpoint 目录路径。
     # 例 1（PC 档位，seed=56）：
     # resume_from_checkpoint='snake_models/exports/pc/checkpoints/56-latest'
@@ -147,6 +150,12 @@ BASE_IDE_CONFIG = TrainingConfig(
     # True: 关键训练参数必须与 checkpoint 中保存的一致，否则拒绝恢复。
     # False: 允许近似恢复，但后续训练轨迹可能与原始连续训练不同。
     resume_strict=True,
+    # 是否启用“每代种群评估”的多进程并行。只并行 evaluate_population()，不并行 next_generation()。
+    parallel_evaluation_enabled=True,
+    # 多进程 worker 数量。建议先从 8 开始试；None 表示自动取 os.cpu_count()-1。
+    parallel_evaluation_workers=None,
+    # ProcessPoolExecutor.map 的 chunksize，通常保持 1 即可。
+    parallel_evaluation_chunksize=1,
 )
 
 
@@ -228,6 +237,9 @@ def train(config: TrainingConfig) -> Path:
             population_checkpoint_interval=config.population_checkpoint_interval,
             resume_from_checkpoint=config.resume_from_checkpoint,
             resume_strict=config.resume_strict,
+            parallel_evaluation_enabled=config.parallel_evaluation_enabled,
+            parallel_evaluation_workers=config.parallel_evaluation_workers,
+            parallel_evaluation_chunksize=config.parallel_evaluation_chunksize,
         )
     )
     return trainer.train()

@@ -37,6 +37,7 @@ export function createSnakeEngine({ columns, rows, growthStep = 1 } = {}) {
         growthStep,
         direction: DIRECTIONS.EAST,
         length: 1,
+        score: 0,
         body: [],
         food: null,
     };
@@ -64,6 +65,7 @@ export function createSnakeEngine({ columns, rows, growthStep = 1 } = {}) {
 
     function reset() {
         state.length = 1;
+        state.score = 0;
         state.direction = DIRECTIONS.EAST;
         state.body = [];
         spawnFood();
@@ -124,6 +126,7 @@ export function createSnakeEngine({ columns, rows, growthStep = 1 } = {}) {
         state.body.push(cell);
         if (state.food && cell.x === state.food.x && cell.y === state.food.y) {
             state.length += state.growthStep;
+            state.score += 1;
             spawnFood();
         }
         if (state.body.length > state.length) {
