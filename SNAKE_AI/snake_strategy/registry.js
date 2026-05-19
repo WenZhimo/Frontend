@@ -19,10 +19,32 @@ export const STRATEGY_MANIFEST = {
         description: '在哈密尔顿环基础上尝试安全抄近道，只要不会破坏拓扑安全，就会更积极地接近苹果。',
         factory: createHamiltonianShortcutStrategy,
     },
-    'snakeai-nn': {
-        label: 'SNAKEAI NN',
-        description: '使用 SnakeAI 风格的 32 维观察输入与前馈神经网络打分动作，再叠加保命兜底，作为可训练的神经决策策略。',
-        factory: createSnakeAIStrategy,
+    'snakeai-nn-phone': {
+        label: 'SNAKEAI 手机',
+        description: '使用为手机 19.5:9 棋盘训练的 SnakeAI 神经网络模型，并强制切换到 26×12 棋盘。',
+        factory: (engine, options = {}) => createSnakeAIStrategy(engine, {
+            ...options,
+            profileId: 'phone',
+            modelUrl: './snake_models/profiles/phone.json',
+        }),
+    },
+    'snakeai-nn-pc': {
+        label: 'SNAKEAI PC',
+        description: '使用为 PC 16:9 棋盘训练的 SnakeAI 神经网络模型，并强制切换到 32×18 棋盘。',
+        factory: (engine, options = {}) => createSnakeAIStrategy(engine, {
+            ...options,
+            profileId: 'pc',
+            modelUrl: './snake_models/profiles/pc.json',
+        }),
+    },
+    'snakeai-nn-tablet': {
+        label: 'SNAKEAI 平板',
+        description: '使用为平板 4:3 棋盘训练的 SnakeAI 神经网络模型，并强制切换到 32×24 棋盘。',
+        factory: (engine, options = {}) => createSnakeAIStrategy(engine, {
+            ...options,
+            profileId: 'tablet',
+            modelUrl: './snake_models/profiles/tablet.json',
+        }),
     },
 };
 
