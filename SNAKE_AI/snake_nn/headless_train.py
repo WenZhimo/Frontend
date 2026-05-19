@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import pickle
 import random
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, field
 from math import sqrt
 from pathlib import Path
@@ -69,6 +71,111 @@ class TrainerConfig:
     population_checkpoint_interval: int = 5
     resume_from_checkpoint: str | None = None
     resume_strict: bool = True
+    parallel_evaluation_enabled: bool = False
+    parallel_evaluation_workers: int | None = None
+    parallel_evaluation_chunksize: int = 1
+
+
+def _create_eval_snake(task, board_size, apple_seed):
+    columns, rows = board_size
+    starvation_limit = max(100, int(columns * rows * task['starvation_scale']))
+    return Snake(
+        board_size,
+        chromosome=task['chromosome'],
+        hidden_layer_architecture=task['settings']['hidden_network_architecture'],
+        hidden_activation=task['settings']['hidden_layer_activation'],
+        output_activation=task['settings']['output_layer_activation'],
+        lifespan=task['lifespan'],
+        apple_and_self_vision=task['settings']['apple_and_self_vision'],
+        starvation_limit=starvation_limit,
+        apple_seed=apple_seed,
+    )
+
+
+def _evaluate_single_snake_task(snake, task):
+    visited_head_cells = set()
+    repeat_cell_count = 0
+    approach_apple_events = 0
+    stall_steps = 0
+    previous_distance = None
+
+    while snake.is_alive:
+        head = snake.snake_array[0]
+        head_key = (head.x, head.y)
+        if head_key in visited_head_cells:
+            repeat_cell_count += 1
+        else:
+            visited_head_cells.add(head_key)
+
+        current_distance = abs(head.x - snake.apple_location.x) + abs(head.y - snake.apple_location.y)
+        if previous_distance is not None:
+            if current_distance < previous_distance:
+                approach_apple_events += 1
+            else:
+                stall_steps += 1
+        previous_distance = current_distance
+
+        snake.update()
+        snake.move()
+
+    snake.calculate_fitness()
+    survival_ratio = compute_survival_ratio(float(snake._frames), snake.starvation_limit)
+    selection_score = compute_selection_score(
+        score=float(snake.score),
+        frames=float(snake._frames),
+        raw_fitness=float(snake.fitness),
+        starvation_limit=snake.starvation_limit,
+        approach_apple_events=float(approach_apple_events),
+        repeat_cell_count=float(repeat_cell_count),
+        stall_steps=float(stall_steps),
+        score_weight=task['score_weight'],
+        survival_weight=task['survival_weight'],
+        raw_fitness_weight=task['raw_fitness_weight'],
+        raw_fitness_cap=task['raw_fitness_cap'],
+        zero_score_penalty=task['zero_score_penalty'],
+        approach_apple_weight=task['approach_apple_weight'],
+        repeat_cell_penalty=task['repeat_cell_penalty'],
+        stall_penalty=task['stall_penalty'],
+    )
+    return {
+        'fitness': float(snake.fitness),
+        'selectionScore': float(selection_score),
+        'score': float(snake.score),
+        'frames': float(snake._frames),
+        'survivalRatio': float(survival_ratio),
+        'approachAppleEvents': float(approach_apple_events),
+        'repeatCellCount': float(repeat_cell_count),
+        'stallSteps': float(stall_steps),
+        'uniqueHeadCells': float(len(visited_head_cells)),
+        'boardSize': list(snake.board_size),
+        'starvationLimit': snake.starvation_limit,
+    }
+
+
+def _evaluate_individual_task(task):
+    episodes = []
+    for board_size, apple_seeds in task['trial_plan']:
+        for apple_seed in apple_seeds:
+            trial = _create_eval_snake(task, board_size, apple_seed)
+            episodes.append(_evaluate_single_snake_task(trial, task))
+
+    summary = summarize_episodes(
+        episodes,
+        score_weight=task['score_weight'],
+        survival_weight=task['survival_weight'],
+        raw_fitness_weight=task['raw_fitness_weight'],
+        raw_fitness_cap=task['raw_fitness_cap'],
+        zero_score_penalty=task['zero_score_penalty'],
+        approach_apple_weight=task['approach_apple_weight'],
+        repeat_cell_penalty=task['repeat_cell_penalty'],
+        stall_penalty=task['stall_penalty'],
+    )
+    return {
+        'individual_index': task['individual_index'],
+        'summary': summary,
+        'episodes': episodes,
+        'boardSizePool': [list(board_size) for board_size, _ in task['trial_plan']],
+    }
 
 
 class HeadlessTrainer:
@@ -228,32 +335,88 @@ class HeadlessTrainer:
             'starvationLimit': snake.starvation_limit,
         }
 
-    def evaluate_individual_across_boards(self, individual):
+    def _build_individual_trial_plan(self, individual):
         board_sizes = self._sample_board_sizes_for_individual()
-        episodes = []
+        trial_plan = []
+        base_apple_seed = getattr(individual, 'apple_seed', None)
         for board_size in board_sizes:
+            episode_seeds = []
             for episode_index in range(self.config.episodes_per_board):
-                trial = self._clone_individual_for_board(individual, board_size, reseed_offset=episode_index)
-                episodes.append(self._evaluate_single_snake(trial))
+                if base_apple_seed is not None:
+                    episode_seeds.append(base_apple_seed + episode_index)
+                else:
+                    episode_seeds.append(self._rng.randrange(10_000_000))
+            trial_plan.append((tuple(board_size), episode_seeds))
+        return trial_plan
 
-        summary = summarize_episodes(
-            episodes,
-            score_weight=self.config.score_weight,
-            survival_weight=self.config.survival_weight,
-            raw_fitness_weight=self.config.raw_fitness_weight,
-            raw_fitness_cap=self.config.raw_fitness_cap,
-            zero_score_penalty=self.config.zero_score_penalty,
-            approach_apple_weight=self.config.approach_apple_weight,
-            repeat_cell_penalty=self.config.repeat_cell_penalty,
-            stall_penalty=self.config.stall_penalty,
-        )
+    def _build_individual_evaluation_task(self, individual_index, individual):
+        return {
+            'individual_index': individual_index,
+            'chromosome': {key: np.array(value, copy=True) for key, value in individual.network.params.items()},
+            'lifespan': individual.lifespan,
+            'trial_plan': self._build_individual_trial_plan(individual),
+            'settings': {
+                'hidden_network_architecture': list(self.settings['hidden_network_architecture']),
+                'hidden_layer_activation': self.settings['hidden_layer_activation'],
+                'output_layer_activation': self.settings['output_layer_activation'],
+                'apple_and_self_vision': self.settings['apple_and_self_vision'],
+            },
+            'starvation_scale': self.config.starvation_scale,
+            'score_weight': self.config.score_weight,
+            'survival_weight': self.config.survival_weight,
+            'raw_fitness_weight': self.config.raw_fitness_weight,
+            'raw_fitness_cap': self.config.raw_fitness_cap,
+            'zero_score_penalty': self.config.zero_score_penalty,
+            'approach_apple_weight': self.config.approach_apple_weight,
+            'repeat_cell_penalty': self.config.repeat_cell_penalty,
+            'stall_penalty': self.config.stall_penalty,
+        }
+
+    def evaluate_individual_across_boards(self, individual_index, individual, task=None):
+        task_payload = task or self._build_individual_evaluation_task(individual_index, individual)
+        result = _evaluate_individual_task(task_payload)
+        summary = result['summary']
         individual._fitness = summary['avgSelectionScore']
         individual.evaluation_summary = {
             **summary,
-            'episodes': episodes,
-            'boardSizePool': [list(size) for size in board_sizes],
+            'episodes': result['episodes'],
+            'boardSizePool': result['boardSizePool'],
         }
         return individual.evaluation_summary
+
+    def _resolve_parallel_workers(self):
+        workers = self.config.parallel_evaluation_workers
+        if workers is None:
+            cpu_total = os.cpu_count() or 1
+            return max(1, cpu_total - 1)
+        return max(1, workers)
+
+    def evaluate_population(self):
+        tasks = [
+            self._build_individual_evaluation_task(index, individual)
+            for index, individual in enumerate(self.population.individuals)
+        ]
+
+        if not self.config.parallel_evaluation_enabled or len(tasks) <= 1:
+            for task in tasks:
+                individual = self.population.individuals[task['individual_index']]
+                self.evaluate_individual_across_boards(task['individual_index'], individual, task=task)
+            return
+
+        workers = self._resolve_parallel_workers()
+        chunksize = max(1, self.config.parallel_evaluation_chunksize)
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            results = list(executor.map(_evaluate_individual_task, tasks, chunksize=chunksize))
+
+        for result in sorted(results, key=lambda item: item['individual_index']):
+            individual = self.population.individuals[result['individual_index']]
+            summary = result['summary']
+            individual._fitness = summary['avgSelectionScore']
+            individual.evaluation_summary = {
+                **summary,
+                'episodes': result['episodes'],
+                'boardSizePool': result['boardSizePool'],
+            }
 
     def _crossover(self, parent1_weights, parent2_weights, parent1_bias, parent2_bias):
         rand_crossover = self._rng.random()
@@ -288,10 +451,6 @@ class HeadlessTrainer:
             random_uniform_mutation(child2_bias, mutation_rate, -1, 1)
         else:
             raise Exception('Unable to determine valid mutation based off probabilities.')
-
-    def evaluate_population(self):
-        for individual in self.population.individuals:
-            self.evaluate_individual_across_boards(individual)
 
     def next_generation(self):
         self.current_generation += 1
