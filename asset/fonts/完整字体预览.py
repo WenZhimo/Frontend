@@ -6,12 +6,12 @@ from PIL import Image, ImageDraw, ImageFont
 INPUT_DIR = Path(r"D:\盒子\HTML\asset\fonts")
 OUTPUT_IMAGE = Path(__file__).with_name("完整字体预览.png")
 PREVIEW_TEXT = "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 汉字预览测试 文于止墨丰川祥子实验"
-FONT_SIZE = 160
+FONT_SIZE = 120
 TITLE_SIZE = 80
-PADDING = 24
-LINE_SPACING = 12
-TITLE_LINE_SPACING = 16
-PREVIEW_LINE_SPACING = 14
+PADDING = 40
+LINE_SPACING = 20
+TITLE_LINE_SPACING = 20
+PREVIEW_LINE_SPACING = 20
 
 FONT_EXTS = {".ttf", ".otf", ".ttc"}
 PREFERRED_SUFFIX_ORDER = {".ttf": 0, ".otf": 1, ".ttc": 2}
