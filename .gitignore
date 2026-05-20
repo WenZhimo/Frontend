@@ -1,3 +1,11 @@
+.claude/
+*/.claude/
+*/*/.claude/
+*/*/*/.claude/
+
 SNAKE_AI/snake_models/exports/pc/checkpoints/best-so-far.json
 SNAKE_AI/snake_models/exports/pc/checkpoints/best.json
+SNAKE_AI/snake_models/exports/pc/checkpoints/**-latest/
+.idea/
+
 #SNAKE_AI/snake_models/exports/pc/checkpoints/**-latest/
