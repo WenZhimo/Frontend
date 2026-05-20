@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Custom Card Tilt Demo</title>
+  <link rel="stylesheet" href="./styles.css?v=foil-1" />
+</head>
+<body>
+  <main class="demo-shell">
+    <header class="demo-header">
+      <p class="demo-kicker">CUSTOM CARD / HOLOGRAPHIC TILT / V0</p>
+      <h1>自定义信息卡 3D 倾斜效果</h1>
+      <p class="demo-lead">
+        这是一个从 pokemon-cards-css 的交互思路抽离出来的通用版本：
+        用指针位置驱动卡片倾斜、背景视差、光斑和掠光层，但保留你当前工业风首页的布局语言。
+      </p>
+    </header>
+
+    <section class="card-grid" aria-label="Custom cards demo">
+      <article
+        class="tilt-card tilt-card--foil-archive"
+        data-tilt-card
+        style="--card-image: url('https://www.wenzhimo.xyz/wp-content/uploads/2024/10/2566B02C88E0D556AAD62E5F9B131F17.jpg'); --card-glow: rgba(219, 182, 86, 0.6);"
+      >
+        <div class="tilt-card__bg" aria-hidden="true"></div>
+        <div class="tilt-card__shade" aria-hidden="true"></div>
+        <div class="tilt-card__foil" aria-hidden="true"></div>
+        <div class="tilt-card__shine" aria-hidden="true"></div>
+        <div class="tilt-card__glare" aria-hidden="true"></div>
+        <div class="tilt-card__frame" aria-hidden="true"></div>
+
+        <div class="tilt-card__content">
+          <div class="tilt-card__meta">
+            <span class="tilt-card__tag">ARCHIVE</span>
+            <span class="tilt-card__coords">X:585 Y:276</span>
+          </div>
+          <h2>最近更新<span class="accent">[壹]</span></h2>
+          <p class="tilt-card__note">按照发布顺序排序</p>
+          <p class="tilt-card__body">旅途总是有新的发现。</p>
+          <div class="tilt-card__footer">
+            <span>&gt; 检索最近更新的全部档案</span>
+          </div>
+        </div>
+      </article>
+
+      <article
+        class="tilt-card tilt-card--foil-music"
+        data-tilt-card
+        style="--card-image: url('https://www.wenzhimo.xyz/wp-content/uploads/2024/10/%E7%B4%BA%E5%B1%8B%E9%B4%89%E6%B1%9F_%E9%89%9B%E3%81%AE%E5%86%A0_99161141_p0-scaled.jpg'); --card-glow: rgba(94, 164, 137, 0.55);"
+      >
+        <div class="tilt-card__bg" aria-hidden="true"></div>
+        <div class="tilt-card__shade" aria-hidden="true"></div>
+        <div class="tilt-card__foil" aria-hidden="true"></div>
+        <div class="tilt-card__shine" aria-hidden="true"></div>
+        <div class="tilt-card__glare" aria-hidden="true"></div>
+        <div class="tilt-card__frame" aria-hidden="true"></div>
+
+        <div class="tilt-card__content">
+          <div class="tilt-card__meta">
+            <span class="tilt-card__tag">MUSIC</span>
+            <span class="tilt-card__coords">WAVE / SHARE</span>
+          </div>
+          <h2>音乐分享</h2>
+          <p class="tilt-card__body">心灵的碰撞。</p>
+          <div class="tilt-card__ornament">
+            <img src="../asset/img/文文报社.png" alt="装饰图标" />
+          </div>
+        </div>
+      </article>
+
+      <article
+        class="tilt-card tilt-card--dark tilt-card--foil-scp"
+        data-tilt-card
+        style="--card-image: url('https://www.wenzhimo.xyz/wp-content/uploads/2024/08/SCP-LOGO-2-scaled.jpg'); --card-glow: rgba(196, 197, 201, 0.38);"
+      >
+        <div class="tilt-card__bg" aria-hidden="true"></div>
+        <div class="tilt-card__shade" aria-hidden="true"></div>
+        <div class="tilt-card__foil" aria-hidden="true"></div>
+        <div class="tilt-card__shine" aria-hidden="true"></div>
+        <div class="tilt-card__glare" aria-hidden="true"></div>
+        <div class="tilt-card__frame" aria-hidden="true"></div>
+
+        <div class="tilt-card__content">
+          <div class="tilt-card__meta">
+            <span class="tilt-card__tag">DATABASE</span>
+            <span class="tilt-card__coords">SECURE / LOG</span>
+          </div>
+          <h2>SCP基金会</h2>
+          <p class="tilt-card__body">最大的去中心化创作平台。</p>
+          <div class="tilt-card__ornament tilt-card__ornament--symbol">
+            <img src="../asset/img/藤原1.png" alt="装饰图标" />
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="./script.js?v=foil-1"></script>
+</body>
+</html>
