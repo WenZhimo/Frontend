@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        body {
+            display: -webkit-box;
+            display: -webkit-flex;
+            display: -ms-flexbox;
+            display: flex;
+            -webkit-box-align: center;
+            -webkit-align-items: center;
+            -ms-flex-align: center;
+            align-items: center;
+            -webkit-box-pack: center;
+            -webkit-justify-content: center;
+            -ms-flex-pack: center;
+            justify-content: center;
+            height: 100vh;
+            background-position: center;
+            background-size: cover;
+        }
+
+        #title {
+            position: relative;
+            font-family: "Creepster", sans-serif;
+            font-size: 10vw;
+            color: black;
+        }
+
+        #title span {
+            display: inline-block;
+            -webkit-animation: moveShadow 0.6s linear infinite, shake 0.9s linear infinite;
+            animation: moveShadow 0.6s linear infinite, shake 0.9s linear infinite;
+        }
+
+        #title span:nth-child(1) {
+            -webkit-animation-delay: -0.2s;
+            animation-delay: -0.2s;
+        }
+
+        #title span:nth-child(2) {
+            -webkit-animation-delay: -0.4s;
+            animation-delay: -0.4s;
+        }
+
+        #title span:nth-child(3) {
+            -webkit-animation-delay: -0.6s;
+            animation-delay: -0.6s;
+        }
+
+        #title span:nth-child(4) {
+            -webkit-animation-delay: -0.8s;
+            animation-delay: -0.8s;
+        }
+
+        #title span:nth-child(5) {
+            -webkit-animation-delay: -1s;
+            animation-delay: -1s;
+        }
+
+        #title span:nth-child(6) {
+            -webkit-animation-delay: -1.2s;
+            animation-delay: -1.2s;
+        }
+
+        #title span:nth-child(7) {
+            -webkit-animation-delay: -1.4s;
+            animation-delay: -1.4s;
+        }
+
+        #title span:nth-child(8) {
+            -webkit-animation-delay: -1.6s;
+            animation-delay: -1.6s;
+        }
+
+        #title span:nth-child(9) {
+            -webkit-animation-delay: -1.8s;
+            animation-delay: -1.8s;
+        }
+
+        #title span:nth-child(10) {
+            -webkit-animation-delay: -2s;
+            animation-delay: -2s;
+        }
+
+        #title span:nth-child(11) {
+            -webkit-animation-delay: -2.2s;
+            animation-delay: -2.2s;
+        }
+
+        @-webkit-keyframes moveShadow {
+            0% {
+                text-shadow: 2px 2px 0 black;
+            }
+
+            25% {
+                text-shadow: -1px -1px 0 black;
+            }
+
+            50% {
+                text-shadow: 1px 2px 0 black;
+            }
+
+            75% {
+                text-shadow: -2px -1px 0 black;
+            }
+        }
+
+        @keyframes moveShadow {
+            0% {
+                text-shadow: 2px 2px 0 black;
+            }
+
+            25% {
+                text-shadow: -1px -1px 0 black;
+            }
+
+            50% {
+                text-shadow: 1px 2px 0 black;
+            }
+
+            75% {
+                text-shadow: -2px -1px 0 black;
+            }
+        }
+
+        @-webkit-keyframes shake {
+            0% {
+                -webkit-transform: rotate(1deg) translateY(-1px);
+                transform: rotate(1deg) translateY(-1px);
+            }
+
+            25% {
+                -webkit-transform: rotate(-1deg) translateY(0px);
+                transform: rotate(-1deg) translateY(0px);
+            }
+
+            50% {
+                -webkit-transform: rotate(1deg) translateY(-1px);
+                transform: rotate(1deg) translateY(-1px);
+            }
+
+            75% {
+                -webkit-transform: rotate(0) translateY(1px);
+                transform: rotate(0) translateY(1px);
+            }
+        }
+
+        @keyframes shake {
+            0% {
+                -webkit-transform: rotate(1deg) translateY(-1px);
+                transform: rotate(1deg) translateY(-1px);
+            }
+
+            25% {
+                -webkit-transform: rotate(-1deg) translateY(0px);
+                transform: rotate(-1deg) translateY(0px);
+            }
+
+            50% {
+                -webkit-transform: rotate(1deg) translateY(-1px);
+                transform: rotate(1deg) translateY(-1px);
+            }
+
+            75% {
+                -webkit-transform: rotate(0) translateY(1px);
+                transform: rotate(0) translateY(1px);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <script type="text/javascript" src="//wow.techbrood.com/libs/jquery/jquery-2.1.1.min.js"></script>
+    <script src="https://wow.techbrood.com/libs/jquery/jquery-1.11.1.min.js"></script>
+    <h3 id="title">[你的文本]</h3>
+    <script>
+        var titleId = "title";
+        var title = document.getElementById(titleId).innerHTML;
+        var splitTitle = "";
+
+        for (var i = 0, letters = title.length; i < letters; i++) {
+            splitTitle += "<span>" + title[i] + "</span>";
+        }
+
+        document.getElementById(titleId).innerHTML = splitTitle;
+    </script>
+</body>
+
+</html>

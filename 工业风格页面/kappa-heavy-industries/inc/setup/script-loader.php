@@ -18,7 +18,8 @@ function kappa_add_type_attribute( $tag, $handle, $src ) {
         'kappa-pointer-service',
         'kappa-waveform-data',
         'kappa-progress-controller',
-        'kappa-homepage-boot'
+        'kappa-homepage-boot',
+        'kappa-homepage-intro-tilt'
     );
 
     if ( in_array( $handle, $module_scripts, true ) ) {
