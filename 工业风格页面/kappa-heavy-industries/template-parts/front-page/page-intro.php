@@ -28,9 +28,16 @@
                     'position'      => 'center',
                     'overlay_start' => 'rgba(0,0,0,0.6)',
                     'overlay_end'   => 'rgba(0,0,0,0.85)',
-                    'extra_classes' => 'card',
-                ) ); ?>>
+                    'extra_classes' => ! wp_is_mobile() ? 'card homepage-intro-tilt-card homepage-intro-tilt-card--foil-archive' : 'card',
+                ) ); ?> <?php if ( ! wp_is_mobile() ) : ?>data-homepage-intro-tilt<?php endif; ?>>
                     <div class="homepage-bg-layer" aria-hidden="true"></div>
+                    <?php if ( ! wp_is_mobile() ) : ?>
+                        <div class="intro-tilt__shade" aria-hidden="true"></div>
+                        <div class="intro-tilt__foil" aria-hidden="true"></div>
+                        <div class="intro-tilt__shine" aria-hidden="true"></div>
+                        <div class="intro-tilt__glare" aria-hidden="true"></div>
+                        <div class="intro-tilt__frame" aria-hidden="true"></div>
+                    <?php endif; ?>
                     <a href="https://www.wenzhimo.xyz/%E6%9C%80%E8%BF%91%E6%9B%B4%E6%96%B0/"
                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></a>
 
@@ -49,9 +56,16 @@
                     'position'      => 'center',
                     'overlay_start' => 'rgba(0,0,0,0.6)',
                     'overlay_end'   => 'rgba(0,0,0,0.85)',
-                    'extra_classes' => 'card',
-                ) ); ?>>
+                    'extra_classes' => ! wp_is_mobile() ? 'card homepage-intro-tilt-card homepage-intro-tilt-card--foil-music' : 'card',
+                ) ); ?> <?php if ( ! wp_is_mobile() ) : ?>data-homepage-intro-tilt<?php endif; ?>>
                     <div class="homepage-bg-layer" aria-hidden="true"></div>
+                    <?php if ( ! wp_is_mobile() ) : ?>
+                        <div class="intro-tilt__shade" aria-hidden="true"></div>
+                        <div class="intro-tilt__foil" aria-hidden="true"></div>
+                        <div class="intro-tilt__shine" aria-hidden="true"></div>
+                        <div class="intro-tilt__glare" aria-hidden="true"></div>
+                        <div class="intro-tilt__frame" aria-hidden="true"></div>
+                    <?php endif; ?>
                     <a href="https://www.wenzhimo.xyz/category/%e5%88%86%e4%ba%ab/music/"
                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></a>
 
@@ -69,9 +83,16 @@
                     'position'      => 'center',
                     'overlay_start' => 'rgba(0,0,0,0.6)',
                     'overlay_end'   => 'rgba(0,0,0,0.85)',
-                    'extra_classes' => 'card',
-                ) ); ?>>
+                    'extra_classes' => ! wp_is_mobile() ? 'card homepage-intro-tilt-card homepage-intro-tilt-card--foil-scp homepage-intro-tilt-card--dark' : 'card',
+                ) ); ?> <?php if ( ! wp_is_mobile() ) : ?>data-homepage-intro-tilt<?php endif; ?>>
                     <div class="homepage-bg-layer" aria-hidden="true"></div>
+                    <?php if ( ! wp_is_mobile() ) : ?>
+                        <div class="intro-tilt__shade" aria-hidden="true"></div>
+                        <div class="intro-tilt__foil" aria-hidden="true"></div>
+                        <div class="intro-tilt__shine" aria-hidden="true"></div>
+                        <div class="intro-tilt__glare" aria-hidden="true"></div>
+                        <div class="intro-tilt__frame" aria-hidden="true"></div>
+                    <?php endif; ?>
                     <a href="https://www.wenzhimo.xyz/scp-foundation-cn-branch/"
                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></a>
 

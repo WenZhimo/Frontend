@@ -89,6 +89,7 @@ function kappa_heavy_industries_scripts() {
         if ( ! wp_is_mobile() ) {
             wp_enqueue_script( 'kappa-tech-capability-bg', $theme_dir . '/js/homepage-tech-capability-bg.js', array( 'kappa-pager-js', 'kappa-pointer-service' ), '1.0', true );
             wp_enqueue_script( 'kappa-music-showcase-bg', $theme_dir . '/js/homepage-music-showcase-bg.js', array( 'kappa-pager-js', 'kappa-waveform-data' ), '1.0', true );
+            wp_enqueue_script( 'kappa-homepage-intro-tilt', $theme_dir . '/js/homepage-intro-tilt.js', array( 'kappa-pager-js', 'kappa-pointer-service' ), '1.0', true );
         }
     }
 
