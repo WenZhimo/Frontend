@@ -64,7 +64,7 @@ DEVICE_BOARD_PROFILES = {
 }
 
 ACTIVE_PROFILE = 'pc'
-SEED_BATCH = [56]
+SEED_BATCH = [56, 947, 23, 56, 2024, 42]
 
 
 @dataclass
@@ -105,7 +105,7 @@ BASE_IDE_CONFIG = TrainingConfig(
     # 随机种子：会在批量模式里被逐个覆盖
     seed=23,
     # 训练代数：越大训练越充分，但耗时越长
-    generations=200,
+    generations=1000,
     # 每代保留为父代的精英个体数量
     num_parents=120,
     # 每代新生成的子代数量
