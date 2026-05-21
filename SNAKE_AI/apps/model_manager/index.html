@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Snake AI Model Manager</title>
+    <style>
+        :root {
+            --bg: #070a0c;
+            --panel: rgba(7, 10, 12, 0.86);
+            --panel-strong: rgba(10, 14, 16, 0.95);
+            --text: #d8d8d8;
+            --muted: #9aa7b0;
+            --gold: #c89a2e;
+            --cyan: #00e5ff;
+            --danger: #d45134;
+            --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at top right, rgba(0, 229, 255, 0.08), transparent 30%), linear-gradient(180deg, #050709, #0a0d10);
+            color: var(--text);
+            font-family: "Segoe UI", system-ui, sans-serif;
+            display: grid;
+            grid-template-columns: minmax(280px, 340px) 1fr;
+        }
+        .sidebar {
+            padding: 24px 20px;
+            background: linear-gradient(180deg, rgba(8, 10, 12, 0.96), rgba(8, 10, 12, 0.88));
+            border-right: 1px solid rgba(200, 154, 46, 0.16);
+            box-shadow: var(--shadow);
+            display: grid;
+            gap: 16px;
+            overflow-y: auto;
+        }
+        .main {
+            padding: 24px;
+            display: grid;
+            gap: 16px;
+            align-content: start;
+            overflow-y: auto;
+        }
+        .status-line {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: #8bcfd6;
+            font-family: monospace, sans-serif;
+            letter-spacing: 1.6px;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: var(--cyan);
+            box-shadow: 0 0 12px rgba(0, 229, 255, 0.52);
+        }
+        h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 2.7rem);
+            color: var(--gold);
+        }
+        .lede {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+        .panel {
+            background: var(--panel);
+            border: 1px solid rgba(200, 154, 46, 0.16);
+            padding: 16px;
+            box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.02);
+        }
+        .panel-title {
+            margin: 0 0 12px;
+            color: var(--gold);
+            font-family: monospace, sans-serif;
+            font-size: 0.86rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+        .field {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .field:last-child { margin-bottom: 0; }
+        label {
+            font-size: 0.8rem;
+            color: var(--muted);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-family: monospace, sans-serif;
+        }
+        select, button {
+            width: 100%;
+            background: rgba(8, 12, 14, 0.9);
+            color: var(--text);
+            border: 1px solid rgba(200, 154, 46, 0.16);
+            padding: 10px 12px;
+            font-size: 0.95rem;
+        }
+        button {
+            cursor: pointer;
+            transition: all 0.22s ease;
+            font-family: monospace, sans-serif;
+            letter-spacing: 1px;
+        }
+        button:hover {
+            border-color: var(--cyan);
+            color: #fff;
+            background: rgba(0, 36, 42, 0.84);
+            box-shadow: 0 0 16px rgba(0, 229, 255, 0.12);
+        }
+        .button-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+        .card {
+            padding: 12px;
+            background: rgba(9, 12, 14, 0.88);
+            border: 1px solid rgba(0, 229, 255, 0.08);
+        }
+        .card-label {
+            font-size: 0.72rem;
+            color: #7e8b92;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-family: monospace, sans-serif;
+        }
+        .card-value {
+            margin-top: 8px;
+            font-size: 1.15rem;
+            color: var(--gold);
+            font-family: monospace, sans-serif;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 16px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .list {
+            display: grid;
+            gap: 10px;
+            max-height: 420px;
+            overflow-y: auto;
+        }
+        .item {
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(9, 12, 14, 0.88);
+            cursor: pointer;
+        }
+        .item.active {
+            border-color: var(--cyan);
+            box-shadow: 0 0 12px rgba(0,229,255,0.12);
+        }
+        .item-title {
+            color: var(--gold);
+            font-family: monospace, sans-serif;
+            font-size: 0.95rem;
+        }
+        .item-meta {
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: 0.88rem;
+            line-height: 1.5;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(140px, 1fr));
+            gap: 10px;
+        }
+        .detail-cell {
+            background: rgba(9, 12, 14, 0.88);
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 10px;
+        }
+        .detail-label {
+            font-size: 0.72rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-family: monospace, sans-serif;
+        }
+        .detail-value {
+            margin-top: 8px;
+            color: var(--gold);
+            font-family: monospace, sans-serif;
+            word-break: break-word;
+        }
+        .links {
+            display: grid;
+            gap: 8px;
+        }
+        .help-summary {
+            color: var(--muted);
+            line-height: 1.6;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+        .help-list {
+            display: none;
+            gap: 10px;
+            color: var(--muted);
+            line-height: 1.65;
+        }
+        .help-list.open {
+            display: grid;
+        }
+        .tabs {
+            display: inline-grid;
+            grid-auto-flow: column;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .tab-btn {
+            width: auto;
+            min-width: 120px;
+        }
+        .tab-btn.active {
+            border-color: var(--cyan);
+            background: rgba(0, 36, 42, 0.84);
+            color: #fff;
+        }
+        .summary-panel {
+            display: none;
+        }
+        .summary-panel.active {
+            display: block;
+        }
+        a {
+            color: var(--cyan);
+            text-decoration: none;
+        }
+        a:hover { text-decoration: underline; }
+        .message {
+            padding: 10px 12px;
+            border-left: 3px solid var(--cyan);
+            background: rgba(0, 229, 255, 0.08);
+            color: #d5dbe0;
+            font-size: 0.95rem;
+        }
+        .message.error {
+            border-left-color: var(--danger);
+            background: rgba(212, 81, 52, 0.08);
+        }
+        @media (max-width: 1080px) {
+            body { grid-template-columns: 1fr; }
+            .grid, .summary-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="status-line">
+            <span class="status-dot"></span>
+            <span>[ MODEL MANAGER : LOCAL ]</span>
+        </div>
+        <div>
+            <h1>模型管理台</h1>
+            <p class="lede">这是一个给本地使用的统一入口页面。你可以在这里查看当前默认模型、浏览训练产生的候选模型、阅读训练/评估报告、查看 checkpoint 的恢复训练提示，并把某个候选模型直接设为默认模型。</p>
+        </div>
+        <div class="panel">
+            <h2 class="panel-title">[ 新手说明 ]</h2>
+            <div class="help-summary">这里是统一的模型管理入口：先在右侧候选模型里选中一个模型，再决定是设为默认、重新评估，还是查看它对应的 checkpoint / resume 信息。</div>
+            <button id="toggleHelpBtn">展开完整使用说明</button>
+            <div class="help-list" id="helpList" style="margin-top: 12px;">
+                <div>1. <strong style="color: var(--gold);">当前默认模型</strong>：显示 PC / phone / tablet 现在实际在用的模型。</div>
+                <div>2. <strong style="color: var(--gold);">候选模型</strong>：显示训练导出的可选模型。先点选，再看右侧详情。</div>
+                <div>3. <strong style="color: var(--gold);">设为默认</strong>：把当前选中的候选模型复制到默认模型位置，之后测试台与前端推理会使用它。</div>
+                <div>4. <strong style="color: var(--gold);">打开评估</strong>：会先重新评估当前候选模型，再自动打开最新评估报告。</div>
+                <div>5. <strong style="color: var(--gold);">Checkpoints / Resume</strong>：在主区域切到对应标签后，可以看到 checkpoint 列表和恢复训练配置。</div>
+            </div>
+        </div>
+        <div class="panel">
+            <h2 class="panel-title">[ 快速入口 ]</h2>
+            <div class="links">
+                <a href="/apps/runtime/index.html">打开模拟测试台</a>
+                <a id="training-report-link" href="#">打开训练报告</a>
+                <a id="evaluation-report-link" href="#">打开评估报告</a>
+            </div>
+        </div>
+        <div class="panel">
+            <h2 class="panel-title">[ 控制 ]</h2>
+            <div class="field">
+                <label for="profileFilter">Profile Filter</label>
+                <select id="profileFilter">
+                    <option value="all">全部</option>
+                    <option value="pc">PC</option>
+                    <option value="phone">phone</option>
+                    <option value="tablet">tablet</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="promoteProfile">Promote Target</label>
+                <select id="promoteProfile">
+                    <option value="pc">PC</option>
+                    <option value="phone">phone</option>
+                    <option value="tablet">tablet</option>
+                </select>
+            </div>
+            <div class="button-row">
+                <button id="refreshBtn">刷新</button>
+                <button id="promoteBtn">设为默认</button>
+                <button id="openEvalBtn">打开评估</button>
+            </div>
+        </div>
+    </aside>
+    <main class="main">
+        <div id="messageBox" class="message">正在加载本地模型管理数据…</div>
+        <section class="panel">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="defaults">默认模型</button>
+                <button class="tab-btn" data-tab="checkpoints">Checkpoints / Resume</button>
+            </div>
+            <div class="summary-panel active" id="defaultsPanel">
+                <h2 class="panel-title">[ 当前默认模型 ]</h2>
+                <div class="list" id="defaultList"></div>
+            </div>
+            <div class="summary-panel" id="checkpointsPanel">
+                <h2 class="panel-title">[ Checkpoints / Resume ]</h2>
+                <div class="list" id="checkpointList"></div>
+                <div style="margin-top: 12px; display: grid; gap: 10px;">
+                    <div class="detail-grid" id="checkpointDetail"></div>
+                    <button id="copyResumeBtn">复制 resume 配置</button>
+                    <div>
+                        <label for="resumeFallbackText">复制失败时可手动复制</label>
+                        <textarea id="resumeFallbackText" style="width:100%; min-height: 84px; margin-top: 8px; background: rgba(8, 12, 14, 0.9); color: var(--text); border: 1px solid rgba(200, 154, 46, 0.16); padding: 10px 12px; font-size: 0.92rem; font-family: monospace, sans-serif; resize: vertical;" readonly></textarea>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <section class="panel">
+            <h2 class="panel-title">[ 候选模型 ]</h2>
+            <div class="grid">
+                <div class="list" id="candidateList"></div>
+                <div>
+                    <div class="detail-grid" id="candidateDetail"></div>
+                    <div class="panel" style="margin-top: 12px; padding: 12px;">
+                        <h3 class="panel-title" style="margin-bottom: 10px;">[ 相关报告 ]</h3>
+                        <div class="links" id="candidateReportLinks"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <section class="panel">
+            <h2 class="panel-title">[ 报告索引 ]</h2>
+            <div class="cards" id="reportCards"></div>
+        </section>
+    </main>
+    <script>
+        const defaultList = document.getElementById('defaultList');
+        const checkpointList = document.getElementById('checkpointList');
+        const candidateList = document.getElementById('candidateList');
+        const candidateDetail = document.getElementById('candidateDetail');
+        const candidateReportLinks = document.getElementById('candidateReportLinks');
+        const reportCards = document.getElementById('reportCards');
+        const checkpointDetail = document.getElementById('checkpointDetail');
+        const copyResumeBtn = document.getElementById('copyResumeBtn');
+        const resumeFallbackText = document.getElementById('resumeFallbackText');
+        const profileFilter = document.getElementById('profileFilter');
+        const promoteProfile = document.getElementById('promoteProfile');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const promoteBtn = document.getElementById('promoteBtn');
+        const openEvalBtn = document.getElementById('openEvalBtn');
+        const messageBox = document.getElementById('messageBox');
+        const trainingReportLink = document.getElementById('training-report-link');
+        const evaluationReportLink = document.getElementById('evaluation-report-link');
+        const toggleHelpBtn = document.getElementById('toggleHelpBtn');
+        const helpList = document.getElementById('helpList');
+        const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
+        const defaultsPanel = document.getElementById('defaultsPanel');
+        const checkpointsPanel = document.getElementById('checkpointsPanel');
+
+        let artifacts = null;
+        let selectedCandidate = null;
+        let selectedCheckpoint = null;
+
+        function setMessage(text, error = false) {
+            messageBox.textContent = text;
+            messageBox.className = error ? 'message error' : 'message';
+        }
+
+        function fixed(value, digits = 2) {
+            return Number.isFinite(value) ? Number(value).toFixed(digits) : '--';
+        }
+
+        function createItem(title, meta, active = false) {
+            const div = document.createElement('div');
+            div.className = `item${active ? ' active' : ''}`;
+            div.innerHTML = `<div class="item-title">${title}</div><div class="item-meta">${meta}</div>`;
+            return div;
+        }
+
+        function createDetailCell(label, value) {
+            return `<div class="detail-cell"><div class="detail-label">${label}</div><div class="detail-value">${value ?? '--'}</div></div>`;
+        }
+
+        function renderDefaults() {
+            defaultList.innerHTML = '';
+            for (const item of artifacts.profiles || []) {
+                const summary = item.summary || {};
+                defaultList.appendChild(createItem(
+                    `${item.profile.toUpperCase()} 默认模型`,
+                    `文件: ${item.path}<br>seed=${summary.seed ?? '--'} | gen=${summary.generation ?? '--'}<br>selection=${fixed(summary.selectionScore)} | score=${fixed(summary.score)} | frames=${fixed(summary.frames)}`
+                ));
+            }
+        }
+
+        function renderCheckpoints() {
+            checkpointList.innerHTML = '';
+            const checkpointItems = [];
+            for (const group of artifacts.checkpoints || []) {
+                for (const latest of group.latestSeeds || []) {
+                    checkpointItems.push({ group, latest });
+                }
+            }
+            for (const entry of checkpointItems) {
+                const meta = entry.latest.summary || {};
+                const item = createItem(
+                    `${entry.group.profile.toUpperCase()} / ${entry.latest.name}`,
+                    `generation=${meta.generation ?? '--'} | population=${meta.populationSize ?? '--'}<br>${entry.latest.path}`
+                );
+                item.addEventListener('click', () => renderCheckpointDetail(entry.group.profile, entry.latest));
+                checkpointList.appendChild(item);
+            }
+            if (checkpointItems.length > 0) {
+                renderCheckpointDetail(checkpointItems[0].group.profile, checkpointItems[0].latest);
+            } else {
+                checkpointDetail.innerHTML = createDetailCell('Checkpoint', '暂无可用 checkpoint');
+                resumeFallbackText.value = '';
+            }
+        }
+
+        function renderCheckpointDetail(profile, latest) {
+            selectedCheckpoint = latest;
+            const meta = latest.summary || {};
+            checkpointDetail.innerHTML = [
+                createDetailCell('Profile', profile.toUpperCase()),
+                createDetailCell('Seed', meta.seed ?? '--'),
+                createDetailCell('Generation', meta.generation ?? '--'),
+                createDetailCell('Population', meta.populationSize ?? '--'),
+                createDetailCell('Checkpoint Interval', meta.checkpointInterval ?? '--'),
+                createDetailCell('Parallel Eval', meta.parallelEvaluationEnabled ?? '--'),
+                createDetailCell('Resume Path', meta.resumePath ?? '--'),
+                createDetailCell('Resume Config', meta.resumeExample ?? '--'),
+                createDetailCell('Target Generations', meta.targetGenerations ?? '--'),
+            ].join('');
+            resumeFallbackText.value = meta.resumeExample ?? '';
+        }
+
+        function renderReports() {
+            reportCards.innerHTML = '';
+            for (const report of artifacts.reports || []) {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `<div class="card-label">${report.type.toUpperCase()}</div><div class="card-value" style="font-size:1rem;">${report.name}</div><div style="margin-top:8px;"><a href="/${report.path}" target="_blank">打开</a></div>`;
+                reportCards.appendChild(card);
+            }
+            const trainingReport = (artifacts.reports || []).find(item => item.name === 'training-report.html');
+            const evaluationReport = (artifacts.reports || []).find(item => item.name === 'evaluation-report.html');
+            trainingReportLink.href = trainingReport ? `/${trainingReport.path}` : '#';
+            evaluationReportLink.href = evaluationReport ? `/${evaluationReport.path}` : '#';
+        }
+
+        function candidateMatchesFilter(candidate) {
+            const filter = profileFilter.value;
+            if (filter === 'all') return true;
+            return candidate.profileId === filter || candidate.path.includes(`/exports/${filter}/`) || candidate.path.includes(`\\exports\\${filter}\\`);
+        }
+
+        function renderCandidateDetails(candidate, raw) {
+            const metadata = raw?.metadata || candidate.metadata || {};
+            candidateDetail.innerHTML = [
+                createDetailCell('文件', candidate.path),
+                createDetailCell('Profile', metadata.profileLabel || metadata.profileId || candidate.profileId || '--'),
+                createDetailCell('Seed', metadata.seed ?? '--'),
+                createDetailCell('Generation', metadata.generation ?? '--'),
+                createDetailCell('Selection Score', fixed(metadata.selectionScore)),
+                createDetailCell('Avg Score', fixed(metadata.score)),
+                createDetailCell('Avg Frames', fixed(metadata.frames)),
+                createDetailCell('Survival Ratio', fixed(metadata.avgSurvivalRatio)),
+            ].join('');
+
+            const reportLinks = [];
+            const evalJson = `${candidate.path}.eval-report.json`;
+            const evalHtml = `${candidate.path}.eval-report.html`;
+            reportLinks.push(`<a href="/${evalJson}" target="_blank">打开模型评估 JSON</a>`);
+            reportLinks.push(`<a href="/${evalHtml}" target="_blank">打开模型评估 HTML</a>`);
+            candidateReportLinks.innerHTML = reportLinks.join('');
+        }
+
+        async function fetchCandidateDetails(candidate) {
+            const response = await fetch(`/api/model-manager/candidate?path=${encodeURIComponent(candidate.path)}`);
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || '读取候选模型失败');
+            }
+            renderCandidateDetails(payload.candidate, payload.raw);
+        }
+
+        function renderCandidates() {
+            candidateList.innerHTML = '';
+            const candidates = (artifacts.candidates || [])
+                .filter(candidateMatchesFilter)
+                .sort((a, b) => (b.selectionScore ?? Number.NEGATIVE_INFINITY) - (a.selectionScore ?? Number.NEGATIVE_INFINITY));
+            for (const candidate of candidates) {
+                const item = createItem(
+                    candidate.name,
+                    `seed=${candidate.seed ?? '--'} | gen=${candidate.generation ?? '--'}<br>selection=${fixed(candidate.selectionScore)} | score=${fixed(candidate.score)} | frames=${fixed(candidate.frames)}`,
+                    selectedCandidate?.path === candidate.path
+                );
+                item.addEventListener('click', async () => {
+                    selectedCandidate = candidate;
+                    renderCandidates();
+                    setMessage(`已选择候选模型：${candidate.name}`);
+                    try {
+                        await fetchCandidateDetails(candidate);
+                    } catch (error) {
+                        setMessage(error.message, true);
+                    }
+                });
+                candidateList.appendChild(item);
+            }
+            if (!selectedCandidate && candidates.length > 0) {
+                selectedCandidate = candidates[0];
+                fetchCandidateDetails(selectedCandidate).catch((error) => setMessage(error.message, true));
+            }
+        }
+
+        async function loadArtifacts() {
+            setMessage('正在刷新模型管理数据…');
+            const response = await fetch('/api/model-manager/artifacts');
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || '加载模型管理数据失败');
+            }
+            artifacts = payload;
+            renderDefaults();
+            renderCheckpoints();
+            renderReports();
+            renderCandidates();
+            setMessage('模型管理数据已刷新。');
+        }
+
+        async function promoteCandidate() {
+            if (!selectedCandidate) {
+                setMessage('请先选择一个候选模型。', true);
+                return;
+            }
+            const targetProfile = promoteProfile.value;
+            setMessage(`正在将 ${selectedCandidate.name} 设为 ${targetProfile} 默认模型…`);
+            const response = await fetch('/api/model-manager/promote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profile: targetProfile, candidatePath: selectedCandidate.path }),
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) {
+                setMessage(payload.error || '设为默认模型失败。', true);
+                return;
+            }
+            setMessage(`已将 ${selectedCandidate.name} 设为 ${targetProfile} 默认模型。`);
+            await loadArtifacts();
+        }
+
+        async function evaluateCandidate() {
+            if (!selectedCandidate) {
+                setMessage('请先选择一个候选模型。', true);
+                return;
+            }
+            setMessage(`正在评估 ${selectedCandidate.name} …`);
+            const response = await fetch('/api/model-manager/evaluate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ candidatePath: selectedCandidate.path }),
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) {
+                setMessage(payload.error || '模型评估失败。', true);
+                return;
+            }
+            setMessage(`评估完成：${selectedCandidate.name}`);
+            await loadArtifacts();
+            window.open(`/${payload.reportHtmlPath}`, '_blank');
+        }
+
+        async function copyResumeConfig() {
+            const resumeText = selectedCheckpoint?.summary?.resumeExample;
+            if (!resumeText) {
+                setMessage('当前没有可复制的 resume 配置。', true);
+                return;
+            }
+            resumeFallbackText.value = resumeText;
+            try {
+                await navigator.clipboard.writeText(resumeText);
+                setMessage('已复制 resume 配置到剪贴板。');
+            } catch (error) {
+                resumeFallbackText.focus();
+                resumeFallbackText.select();
+                setMessage(`自动复制失败，请手动复制下方文本：${error.message}`, true);
+            }
+        }
+
+        function activateTab(tabName) {
+            const showDefaults = tabName === 'defaults';
+            defaultsPanel.classList.toggle('active', showDefaults);
+            checkpointsPanel.classList.toggle('active', !showDefaults);
+            tabButtons.forEach((button) => button.classList.toggle('active', button.dataset.tab === tabName));
+        }
+
+        toggleHelpBtn.addEventListener('click', () => {
+            const open = helpList.classList.toggle('open');
+            toggleHelpBtn.textContent = open ? '收起完整使用说明' : '展开完整使用说明';
+        });
+        tabButtons.forEach((button) => button.addEventListener('click', () => activateTab(button.dataset.tab)));
+        refreshBtn.addEventListener('click', () => loadArtifacts().catch((error) => setMessage(error.message, true)));
+        profileFilter.addEventListener('change', () => renderCandidates());
+        promoteBtn.addEventListener('click', () => promoteCandidate());
+        openEvalBtn.addEventListener('click', () => evaluateCandidate());
+        copyResumeBtn.addEventListener('click', () => copyResumeConfig());
+
+        loadArtifacts().catch((error) => setMessage(error.message, true));
+    </script>
+</body>
+</html>
