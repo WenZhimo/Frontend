@@ -545,12 +545,28 @@ class HeadlessTrainer:
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         return checkpoint_dir / 'training-report.html'
 
-    def _load_training_history(self):
-        history_path = self._training_history_path()
+    def _seed_training_history_dir(self) -> Path:
+        path = resolve_project_path(self.config.checkpoint_dir) / f'{self.config.seed}-latest'
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _seed_training_history_path(self) -> Path:
+        return self._seed_training_history_dir() / 'training-history.json'
+
+    def _seed_training_report_path(self) -> Path:
+        return self._seed_training_history_dir() / 'training-report.html'
+
+    def _load_history(self, history_path: Path):
         if not history_path.exists():
             return []
         data = json.loads(history_path.read_text(encoding='utf-8'))
         return data.get('history', [])
+
+    def _load_training_history(self):
+        return self._load_history(self._training_history_path())
+
+    def _load_seed_training_history(self):
+        return self._load_history(self._seed_training_history_path())
 
     def _build_training_history_entry(self, current_best, population_size: int):
         summary = getattr(current_best, 'evaluation_summary', None) or {}
@@ -690,20 +706,26 @@ class HeadlessTrainer:
 </html>"""
         return template.replace('__PAYLOAD__', json_payload)
 
-    def _write_training_history_report(self, history):
+    def _write_training_history_report(self, history_path: Path, report_path: Path, history):
         payload = self._build_training_history_payload(history)
-        history_path = self._training_history_path()
         history_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding='utf-8')
-        self._training_report_path().write_text(self._build_training_report_html(payload), encoding='utf-8')
+        report_path.write_text(self._build_training_report_html(payload), encoding='utf-8')
 
-    def _append_training_history_entry(self, current_best, population_size: int):
-        history = self._load_training_history()
-        entry = self._build_training_history_entry(current_best, population_size)
+    def _append_history_entry(self, history, entry):
         if history and history[-1].get('generation') == self.current_generation:
             history[-1] = entry
         else:
             history.append(entry)
-        self._write_training_history_report(history)
+        return history
+
+    def _append_training_history_entry(self, current_best, population_size: int):
+        entry = self._build_training_history_entry(current_best, population_size)
+
+        profile_history = self._append_history_entry(self._load_training_history(), entry)
+        self._write_training_history_report(self._training_history_path(), self._training_report_path(), profile_history)
+
+        seed_history = self._append_history_entry(self._load_seed_training_history(), entry)
+        self._write_training_history_report(self._seed_training_history_path(), self._seed_training_report_path(), seed_history)
 
     def _should_save_population_checkpoint(self) -> bool:
         interval = self.config.population_checkpoint_interval
@@ -747,9 +769,17 @@ class HeadlessTrainer:
         checkpoint_root = resolve_project_path(self.config.checkpoint_dir)
         checkpoint_root.mkdir(parents=True, exist_ok=True)
         checkpoint_path = self._population_checkpoint_path(checkpoint_root)
+        seed_history_path = self._seed_training_history_path()
+        seed_report_path = self._seed_training_report_path()
+        preserved_history = seed_history_path.read_text(encoding='utf-8') if seed_history_path.exists() else None
+        preserved_report = seed_report_path.read_text(encoding='utf-8') if seed_report_path.exists() else None
         if checkpoint_path.exists():
             rmtree(checkpoint_path)
         checkpoint_path.mkdir(parents=True, exist_ok=False)
+        if preserved_history is not None:
+            (checkpoint_path / 'training-history.json').write_text(preserved_history, encoding='utf-8')
+        if preserved_report is not None:
+            (checkpoint_path / 'training-report.html').write_text(preserved_report, encoding='utf-8')
 
         population_dir = checkpoint_path / 'population'
         best_so_far_dir = checkpoint_path / 'best_so_far'
