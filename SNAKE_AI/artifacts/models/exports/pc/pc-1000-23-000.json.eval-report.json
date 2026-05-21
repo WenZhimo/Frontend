@@ -1,0 +1,81 @@
+{
+  "generatedAt": "2026-05-21T08:52:38.843174+00:00",
+  "reports": [
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-23-000.json",
+      "avgFitness": 3.71817185235725e+19,
+      "avgSelectionScore": 205504.0,
+      "avgScore": 62.5,
+      "avgFrames": 4342.0,
+      "avgSurvivalRatio": 1.0,
+      "avgApproachAppleEvents": 2647.0,
+      "avgRepeatCellCount": 3783.0,
+      "avgStallSteps": 1694.0,
+      "fitnessStd": 3.6605257771267473e+19,
+      "selectionScoreStd": 11734.5,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 7.378697629483998e+19,
+          "selectionScore": 217238.5,
+          "score": 66.0,
+          "frames": 4814.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 2896.0,
+          "repeatCellCount": 4256.0,
+          "stallSteps": 1917.0,
+          "uniqueHeadCells": 558.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 5.764607523050292e+17,
+          "selectionScore": 193769.5,
+          "score": 59.0,
+          "frames": 3870.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 2398.0,
+          "repeatCellCount": 3310.0,
+          "stallSteps": 1471.0,
+          "uniqueHeadCells": 560.0
+        }
+      ],
+      "label": "pc-1000-23-000.json"
+    }
+  ],
+  "boardSummaries": [
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-23-000.json",
+      "label": "pc-1000-23-000.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 205504.0,
+          "avgFitness": 3.71817185235725e+19,
+          "avgScore": 62.5,
+          "avgFrames": 4342.0,
+          "avgSurvivalRatio": 1.0
+        }
+      ]
+    }
+  ],
+  "comparison": null
+}

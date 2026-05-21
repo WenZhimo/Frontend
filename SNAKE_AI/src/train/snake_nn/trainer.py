@@ -15,8 +15,8 @@ if hasattr(sys.stdout, 'reconfigure'):
 
 if __package__ in (None, ''):
     project_root = Path(__file__).resolve().parents[3]
-    train_root = Path(__file__).resolve().parents[1]
-    for entry in (project_root, train_root):
+    src_root = Path(__file__).resolve().parents[2]
+    for entry in (src_root, project_root):
         if str(entry) not in sys.path:
             sys.path.insert(0, str(entry))
 else:
@@ -33,6 +33,8 @@ from train.snake_nn.evaluate_models import (
     write_evaluation_report,
 )
 from train.snake_nn.headless_train import HeadlessTrainer, TrainerConfig
+from train.snake_nn.paths import resolve_project_path
+from train.snake_nn.profiles import DEVICE_BOARD_PROFILES
 from train.snake_nn.scoring import (
     DEFAULT_APPROACH_APPLE_WEIGHT,
     DEFAULT_RAW_FITNESS_CAP,
@@ -44,27 +46,6 @@ from train.snake_nn.scoring import (
     DEFAULT_ZERO_SCORE_PENALTY,
 )
 
-
-DEVICE_BOARD_PROFILES = {
-    'phone': {
-        'label': '手机 19.5:9',
-        'board_size_pool': [(26, 12)],
-        'default_model_path': 'data/models/profiles/phone.json',
-        'export_dir': 'artifacts/models/exports/phone',
-    },
-    'pc': {
-        'label': 'PC 16:9',
-        'board_size_pool': [(32, 18)],
-        'default_model_path': 'data/models/profiles/pc.json',
-        'export_dir': 'artifacts/models/exports/pc',
-    },
-    'tablet': {
-        'label': '平板 4:3',
-        'board_size_pool': [(32, 24)],
-        'default_model_path': 'data/models/profiles/tablet.json',
-        'export_dir': 'artifacts/models/exports/tablet',
-    },
-}
 
 ACTIVE_PROFILE = 'pc'
 SEED_BATCH = [23]
@@ -162,15 +143,8 @@ BASE_IDE_CONFIG = TrainingConfig(
 )
 
 
-def _resolve_project_path(path_str: str) -> Path:
-    path = Path(path_str)
-    if not path.is_absolute():
-        path = project_root / path
-    return path
-
-
 def build_export_name(profile_id: str, generations: int, seed: int) -> str:
-    export_dir = _resolve_project_path(DEVICE_BOARD_PROFILES[profile_id]['export_dir'])
+    export_dir = resolve_project_path(DEVICE_BOARD_PROFILES[profile_id]['export_dir'])
     export_dir.mkdir(parents=True, exist_ok=True)
     prefix = f'{profile_id}-{generations}-{seed}-'
     existing = sorted(export_dir.glob(f'{prefix}*.json'))
@@ -199,7 +173,7 @@ def build_profile_config(base: TrainingConfig, profile_id: str) -> TrainingConfi
         default_model_path=profile['default_model_path'],
         profile_id=profile_id,
         profile_label=profile['label'],
-        checkpoint_dir=f"artifacts/models/checkpoints/{profile['export_dir'].split('/')[-1]}",
+        checkpoint_dir=profile['checkpoint_dir'],
     )
 
 
@@ -235,6 +209,7 @@ def train(config: TrainingConfig) -> Path:
             profile_id=config.profile_id,
             profile_label=config.profile_label,
             checkpoint_dir=config.checkpoint_dir,
+            default_model_path=config.default_model_path,
             promote_to_default=config.promote_to_default,
             population_checkpoint_enabled=config.population_checkpoint_enabled,
             population_checkpoint_interval=config.population_checkpoint_interval,
@@ -249,11 +224,11 @@ def train(config: TrainingConfig) -> Path:
 
 
 def _prepare_default_baseline(config: TrainingConfig):
-    default_model_path = _resolve_project_path(config.default_model_path)
+    default_model_path = resolve_project_path(config.default_model_path)
     if not default_model_path.exists():
         return None
 
-    baseline_temp_path = _resolve_project_path(f'{config.export_dir}/__baseline_default_before_run__.json')
+    baseline_temp_path = resolve_project_path(f'{config.export_dir}/__baseline_default_before_run__.json')
     baseline_temp_path.parent.mkdir(parents=True, exist_ok=True)
     baseline_temp_path.write_text(default_model_path.read_text(encoding='utf-8'), encoding='utf-8')
     return baseline_temp_path
@@ -284,7 +259,7 @@ def _evaluate_against_baseline(output: Path, config: TrainingConfig, baseline_te
     else:
         print('[snake_nn.trainer] 当前没有可比较的该设备默认模型；如果候选模型表现满意，可以手动晋升为默认模型。')
 
-    report_dir = _resolve_project_path(config.export_dir)
+    report_dir = resolve_project_path(config.export_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
     report_json_path = report_dir / 'evaluation-report.json'
     report_models = [candidate_report] + ([baseline_report] if baseline_report else [])
@@ -311,11 +286,9 @@ def _copy_best_of_batch(batch_results):
         return None
 
     best = max(batch_results, key=lambda item: item['candidate_report']['avgSelectionScore'])
-    source_path = Path(best['output'])
-    if not source_path.is_absolute():
-        source_path = project_root / source_path
+    source_path = resolve_project_path(best['output'])
 
-    best_of_batch_path = _resolve_project_path(f"{best['config'].export_dir}/best-of-batch.json")
+    best_of_batch_path = resolve_project_path(f"{best['config'].export_dir}/best-of-batch.json")
     best_of_batch_path.parent.mkdir(parents=True, exist_ok=True)
     copyfile(source_path, best_of_batch_path)
     return best_of_batch_path, best
@@ -356,7 +329,7 @@ def run_seed_batch(base_config: TrainingConfig, seeds: list[int]):
         print(f"- 目标文件：{best_of_batch_path}")
 
         if best['comparison'] and best['comparison']['better']:
-            default_target = _resolve_project_path(best['config'].default_model_path)
+            default_target = resolve_project_path(best['config'].default_model_path)
             print('[snake_nn.trainer] 推荐操作：')
             print(f"- 推荐将本轮最佳模型晋升为 {best['config'].profile_label} 的默认模型")
             print(f"- 推荐复制到：{default_target}")

@@ -17,16 +17,11 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from train.snake_nn.evaluate_models import evaluate_models, write_evaluation_report
+from train.snake_nn.paths import CHECKPOINTS_ROOT, EXPORTS_ROOT, PROFILES_DIR
+from train.snake_nn.profiles import PROFILE_FILE_MAP
 
-PROFILES_DIR = PROJECT_ROOT / 'data' / 'models' / 'profiles'
-EXPORTS_DIR = PROJECT_ROOT / 'artifacts' / 'models' / 'exports'
-CHECKPOINTS_DIR = PROJECT_ROOT / 'artifacts' / 'models' / 'checkpoints'
-
-PROFILE_FILE_MAP = {
-    'pc': PROFILES_DIR / 'pc.json',
-    'phone': PROFILES_DIR / 'phone.json',
-    'tablet': PROFILES_DIR / 'tablet.json',
-}
+EXPORTS_DIR = EXPORTS_ROOT
+CHECKPOINTS_DIR = CHECKPOINTS_ROOT
 ALLOWED_PROFILE_TARGETS = {key: path.resolve() for key, path in PROFILE_FILE_MAP.items()}
 
 

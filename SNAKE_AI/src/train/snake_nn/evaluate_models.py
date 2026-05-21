@@ -17,8 +17,8 @@ if hasattr(sys.stdout, 'reconfigure'):
 
 if __package__ in (None, ''):
     project_root = Path(__file__).resolve().parents[3]
-    train_root = Path(__file__).resolve().parents[1]
-    for entry in (project_root, train_root):
+    src_root = Path(__file__).resolve().parents[2]
+    for entry in (src_root, project_root):
         if str(entry) not in sys.path:
             sys.path.insert(0, str(entry))
 else:
@@ -228,45 +228,6 @@ def format_board_size_summary(report):
             f"平均苹果数={item['avgScore']:.2f}，平均存活步数={item['avgFrames']:.2f}，平均生存比例={item['avgSurvivalRatio']:.2f}"
         )
     return '\n'.join(lines)
-
-
-def compare_reports(candidate_report, baseline_report):
-    deltas = {
-        'selection': candidate_report['avgSelectionScore'] - baseline_report['avgSelectionScore'],
-        'fitness': candidate_report['avgFitness'] - baseline_report['avgFitness'],
-        'score': candidate_report['avgScore'] - baseline_report['avgScore'],
-        'frames': candidate_report['avgFrames'] - baseline_report['avgFrames'],
-    }
-
-    candidate_by_board = {
-        tuple(item['boardSize']): item for item in summarize_by_board_size(candidate_report['results'])
-    }
-    baseline_by_board = {
-        tuple(item['boardSize']): item for item in summarize_by_board_size(baseline_report['results'])
-    }
-
-    board_comparisons = []
-    for board_size in sorted(set(candidate_by_board) | set(baseline_by_board)):
-        candidate_item = candidate_by_board.get(board_size)
-        baseline_item = baseline_by_board.get(board_size)
-        if not candidate_item or not baseline_item:
-            continue
-        board_comparisons.append({
-            'boardSize': list(board_size),
-            'selection': candidate_item['avgSelectionScore'] - baseline_item['avgSelectionScore'],
-            'fitness': candidate_item['avgFitness'] - baseline_item['avgFitness'],
-            'score': candidate_item['avgScore'] - baseline_item['avgScore'],
-            'frames': candidate_item['avgFrames'] - baseline_item['avgFrames'],
-        })
-
-    better = deltas['selection'] > 0
-    return {
-        'better': better,
-        'deltas': deltas,
-        'candidate': candidate_report['model'],
-        'baseline': baseline_report['model'],
-        'byBoard': board_comparisons,
-    }
 
 
 def compare_reports(candidate_report, baseline_report):
