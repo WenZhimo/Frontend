@@ -25,20 +25,35 @@ from train.snake_nn.trainer import TrainingConfig, build_export_name, build_prof
 @dataclass
 # 长期自动训练入口使用的总配置：决定是先 warmup、先试训，还是触发清理与保留 top-N。
 class LongRunConfig:
+    # 当前长期训练针对的设备档位。会决定默认模型、候选模型目录、checkpoint 目录和棋盘尺寸池。
     profile_id: str = 'pc'
+    # 试训阶段的训练代数。用于先低成本判断一个新 seed 有没有继续投入完整训练的价值。
     trial_generations: int = 300
+    # 完整训练阶段的目标总代数上限。trial 通过后会从 trial checkpoint 继续跑到这里，而不是再额外加这么多代。
     full_generations: int = 1000
+    # 候选池少于多少个模型时，直接进入 warmup 模式，不走试训筛选，优先把候选样本数量堆起来。
     warmup_seed_count: int = 5
+    # 长期训练最终保留的 top-N 模型数量。清理阶段会优先围绕这个数量裁剪弱模型。
     keep_top_n: int = 10
+    # 当候选池达到这个规模后，就触发一次清理检查。名字叫 interval，但当前逻辑本质上更像“候选池规模阈值”。
     cleanup_interval_runs: int = 5
+    # 试训模型相对当前默认模型的最低选择分比例门槛。低于这个比例就不继续做完整训练。
     trial_min_selection_ratio_vs_default: float = 0.75
+    # 试训模型相对当前 top-N 最后一名的最低选择分比例门槛，用来防止明显弱于现有候选池地板的 seed 继续浪费算力。
     trial_min_selection_ratio_vs_topn_floor: float = 0.6
+    # 试训模型的最低平均苹果数门槛。用于筛掉虽然 selection score 还行，但吃苹果能力明显不足的模型。
     trial_min_avg_score: float = 1.0
+    # 试训模型的最低平均存活步数门槛。用于筛掉过早死亡、稳定性太差的模型。
     trial_min_avg_frames: float = 50.0
+    # 清理非 top-N 模型时，是否仍保留它们的最终导出 JSON。False 表示连导出一起删掉，只保留强模型。
     keep_non_topn_final_exports: bool = False
+    # 是否在评估阶段启用多进程并行。只影响评估吞吐，不改变遗传算法本身的演化逻辑。
     parallel_evaluation_enabled: bool = False
+    # 多进程评估 worker 数量。None 表示沿用下游训练器的自动决策；手动设值适合在固定机器上调吞吐。
     parallel_evaluation_workers: int | None = None
+    # 长期训练日志根目录。运行事件最终会写到 <log_dir>/<profile_id>/run-log.jsonl。
     log_dir: str = LONG_RUN_ROOT.as_posix()
+    # True 时只演练长期训练调度流程，不真正训练、不真正清理，用于 smoke test 和流程验证。
     dry_run: bool = False
 
 
