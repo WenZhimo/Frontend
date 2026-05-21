@@ -2,19 +2,11 @@
   color-scheme: dark;
   --bg: #07090d;
   --panel: rgba(255, 255, 255, 0.028);
-  --panel-strong: rgba(255, 255, 255, 0.05);
   --line: rgba(214, 178, 87, 0.42);
-  --line-soft: rgba(214, 178, 87, 0.14);
   --text: #f5f1e7;
   --muted: rgba(231, 222, 197, 0.72);
   --accent: #d6b257;
   --shadow: rgba(0, 0, 0, 0.42);
-  --foil-red: hsl(8 92% 67%);
-  --foil-yellow: hsl(50 95% 67%);
-  --foil-green: hsl(112 64% 65%);
-  --foil-cyan: hsl(181 56% 68%);
-  --foil-blue: hsl(220 82% 71%);
-  --foil-violet: hsl(283 73% 72%);
 }
 
 * {
@@ -85,23 +77,12 @@ body {
   --rotate-x: 0deg;
   --rotate-y: 0deg;
   --card-scale: 1;
-  --bg-shift-x: 50%;
-  --bg-shift-y: 50%;
-  --glare-opacity: 0;
+  --translate-y: 0px;
   --shine-opacity: 0;
+  --glare-opacity: 0;
   --pointer-from-center: 0;
   --pointer-from-left: 0.5;
   --pointer-from-top: 0.5;
-  --foil-opacity: 0.22;
-  --translate-y: 0px;
-  --foil-angle: 118deg;
-  --foil-space: 3.2%;
-  --foil-band-space: 1px;
-  --foil-band-light: rgba(255, 255, 255, 0.24);
-  --foil-band-dark: rgba(0, 0, 0, 0.92);
-  --foil-rainbow:
-    var(--foil-violet), var(--foil-blue), var(--foil-cyan), var(--foil-green), var(--foil-yellow), var(--foil-red),
-    var(--foil-violet), var(--foil-blue), var(--foil-cyan), var(--foil-green), var(--foil-yellow), var(--foil-red);
 
   position: relative;
   min-height: 356px;
@@ -117,17 +98,6 @@ body {
     rotateY(var(--rotate-y))
     translateY(var(--translate-y))
     scale(var(--card-scale));
-  box-shadow:
-    0 20px 40px -24px var(--shadow),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-}
-
-.tilt-card:hover {
-  border-color: rgba(236, 200, 97, 0.8);
-  box-shadow:
-    0 28px 70px -30px rgba(0, 0, 0, 0.78),
-    0 0 24px color-mix(in srgb, var(--card-glow) 34%, transparent),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .tilt-card__bg,
@@ -139,6 +109,7 @@ body {
 .tilt-card__content {
   position: absolute;
   inset: 0;
+  pointer-events: none;
 }
 
 .tilt-card__bg {
@@ -146,11 +117,12 @@ body {
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center center;
-  filter: brightness(0.5) saturate(0.88);
   transform: scale(1.045);
+  filter: brightness(0.92) saturate(1);
 }
 
 .tilt-card__shade {
+  z-index: 1;
   background:
     linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.5) 55%, rgba(0, 0, 0, 0.8)),
     radial-gradient(circle at 12% 16%, rgba(255, 221, 139, 0.12), transparent 28%),
@@ -164,25 +136,10 @@ body {
 }
 
 .tilt-card__foil {
+  z-index: 1;
   opacity: calc(0.12 + (var(--shine-opacity) * 0.22));
   mix-blend-mode: color-dodge;
-  filter: brightness(calc(0.78 + (var(--pointer-from-center) * 0.16))) contrast(1.18) saturate(1.04);
-  background-image:
-    repeating-linear-gradient(
-      var(--foil-angle),
-      var(--foil-rainbow)
-    ),
-    repeating-linear-gradient(
-      90deg,
-      var(--foil-band-dark) calc(var(--foil-band-space) * 0),
-      var(--foil-band-dark) calc(var(--foil-band-space) * 2),
-      var(--foil-band-light) calc(var(--foil-band-space) * 2),
-      var(--foil-band-light) calc(var(--foil-band-space) * 4)
-    );
-  background-size: 320% 320%, cover;
-  background-position:
-    calc(((50% - var(--bg-shift-x)) * 2.2) + 50%) calc(((50% - var(--bg-shift-y)) * 2.8) + 50%),
-    center center;
+  filter: brightness(calc(0.96 + (var(--pointer-from-center) * 0.28))) contrast(1.52) saturate(1.38);
 }
 
 .tilt-card__foil::before,
@@ -192,108 +149,48 @@ body {
   inset: 0;
 }
 
-.tilt-card__foil::before {
-  mix-blend-mode: screen;
-  opacity: 0.24;
-  background-image:
-    repeating-linear-gradient(
-      90deg,
-      rgba(0, 0, 0, 0.92) 0%,
-      rgba(255, 255, 255, 0.16) 8%,
-      rgba(0, 0, 0, 0.9) 12%,
-      rgba(0, 0, 0, 0.92) 24%
-    ),
-    linear-gradient(
-      125deg,
-      transparent 22%,
-      rgba(255,255,255,0.03) 36%,
-      rgba(255,255,255,0.1) 48%,
-      rgba(255,255,255,0.03) 58%,
-      transparent 70%
-    );
-  background-size: 180% 180%, 200% 200%;
-  background-position:
-    calc((((50% - var(--bg-shift-x)) * 1.15) + 50% ) + (var(--pointer-y) * 0.18)) var(--bg-shift-x),
-    var(--pointer-x) var(--pointer-y);
-}
-
-.tilt-card__foil::after {
-  mix-blend-mode: soft-light;
-  opacity: calc(0.04 + (var(--pointer-from-center) * 0.08));
-  background-image:
-    linear-gradient(
-      118deg,
-      transparent 24%,
-      rgba(255,255,255,0.02) 36%,
-      rgba(255,255,255,0.06) 47%,
-      rgba(255,255,255,0.02) 58%,
-      transparent 70%
-    ),
-    linear-gradient(
-      24deg,
-      rgba(0,0,0,0.1),
-      rgba(255,255,255,0.015) 28%,
-      rgba(0,0,0,0.12) 72%
-    );
-  background-size: 220% 220%, 160% 160%;
-  background-position: var(--pointer-x) var(--pointer-y), calc(50% + ((var(--pointer-from-left) - 0.5) * 18%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 12%));
-  filter: brightness(0.82) contrast(1.04);
-}
-
 .tilt-card__shine {
+  z-index: 1;
   opacity: calc(var(--shine-opacity) * 0.18);
   mix-blend-mode: soft-light;
   background:
-    linear-gradient(
-      118deg,
+    linear-gradient(118deg,
       transparent 22%,
       rgba(214, 178, 87, 0.012) 36%,
       rgba(255, 255, 255, 0.05) 46%,
       rgba(255, 255, 255, 0.07) 49%,
       rgba(214, 178, 87, 0.024) 56%,
-      transparent 66%
-    );
+      transparent 66%);
   background-size: 210% 210%;
   background-position: var(--pointer-x) var(--pointer-y);
 }
 
 .tilt-card__glare {
+  z-index: 1;
   opacity: calc(var(--glare-opacity) * 0.16);
   mix-blend-mode: overlay;
   background:
-    linear-gradient(
-      116deg,
+    linear-gradient(116deg,
       transparent 28%,
-      color-mix(in srgb, var(--card-glow) 6%, white) 44%,
+      rgba(255, 249, 238, 0.06) 44%,
       rgba(255, 255, 255, 0.08) 49%,
-      color-mix(in srgb, var(--card-glow) 6%, white) 54%,
-      transparent 68%
-    );
+      rgba(255, 249, 238, 0.06) 54%,
+      transparent 68%);
   background-size: 210% 210%;
   background-position: var(--pointer-x) var(--pointer-y);
   filter: blur(1px);
 }
 
 .tilt-card__frame {
-  border: 1px solid rgba(214, 178, 87, 0.22);
+  z-index: 1;
   inset: 14px;
-  pointer-events: none;
+  border: none;
+  background: none;
 }
 
 .tilt-card__frame::before,
 .tilt-card__frame::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgba(214, 178, 87, 0.85), transparent 44px) top left / 54px 1px no-repeat,
-    linear-gradient(180deg, rgba(214, 178, 87, 0.85), transparent 44px) top left / 1px 54px no-repeat,
-    linear-gradient(-90deg, rgba(214, 178, 87, 0.85), transparent 44px) top right / 54px 1px no-repeat,
-    linear-gradient(180deg, rgba(214, 178, 87, 0.85), transparent 44px) top right / 1px 54px no-repeat,
-    linear-gradient(90deg, rgba(214, 178, 87, 0.85), transparent 44px) bottom left / 54px 1px no-repeat,
-    linear-gradient(-180deg, rgba(214, 178, 87, 0.85), transparent 44px) bottom left / 1px 54px no-repeat,
-    linear-gradient(-90deg, rgba(214, 178, 87, 0.85), transparent 44px) bottom right / 54px 1px no-repeat,
-    linear-gradient(-180deg, rgba(214, 178, 87, 0.85), transparent 44px) bottom right / 1px 54px no-repeat;
+  content: none;
 }
 
 .tilt-card__content {
@@ -390,8 +287,7 @@ body {
 
 .tilt-card--foil-archive .tilt-card__foil {
   background-image:
-    repeating-linear-gradient(
-      110deg,
+    repeating-linear-gradient(110deg,
       rgba(209, 145, 240, 0.34) 0%,
       rgba(138, 163, 239, 0.28) 4%,
       rgba(145, 218, 222, 0.24) 8%,
@@ -399,178 +295,239 @@ body {
       rgba(251, 226, 116, 0.24) 16%,
       rgba(249, 127, 103, 0.26) 20%,
       rgba(18, 18, 24, 0.04) 24%,
-      rgba(209, 145, 240, 0.34) 28%
-    ),
-    repeating-linear-gradient(
-      90deg,
+      rgba(209, 145, 240, 0.34) 28%),
+    repeating-linear-gradient(90deg,
       rgba(0, 0, 0, 0.92) 0px,
       rgba(0, 0, 0, 0.92) 1px,
       rgba(255, 226, 154, 0.2) 1px,
       rgba(255, 226, 154, 0.2) 3px,
       rgba(0, 0, 0, 0.92) 3px,
-      rgba(0, 0, 0, 0.92) 5px
-    );
+      rgba(0, 0, 0, 0.92) 5px);
   background-size: 240% 280%, cover;
+  background-position:
+    calc(50% + ((var(--pointer-from-left) - 0.5) * 16%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 14%)),
+    center center;
 }
 
 .tilt-card--foil-archive .tilt-card__foil::before {
+  opacity: 0.24;
+  mix-blend-mode: screen;
   background-image:
-    repeating-linear-gradient(
-      90deg,
+    repeating-linear-gradient(90deg,
       rgba(0, 0, 0, 0.92) 0%,
       rgba(255, 255, 255, 0.16) 8%,
       rgba(0, 0, 0, 0.9) 12%,
-      rgba(0, 0, 0, 0.92) 24%
-    ),
-    linear-gradient(
-      125deg,
+      rgba(0, 0, 0, 0.92) 24%),
+    linear-gradient(125deg,
       transparent 22%,
-      rgba(255,255,255,0.03) 36%,
-      rgba(255,255,255,0.1) 48%,
-      rgba(255,255,255,0.03) 58%,
-      transparent 70%
-    );
+      rgba(255, 255, 255, 0.03) 36%,
+      rgba(255, 255, 255, 0.1) 48%,
+      rgba(255, 255, 255, 0.03) 58%,
+      transparent 70%);
+  background-size: 180% 180%, 200% 200%;
+  background-position:
+    calc(50% + (var(--pointer-from-top) * 18%)) 50%,
+    var(--pointer-x) var(--pointer-y);
+}
+
+.tilt-card--foil-archive .tilt-card__foil::after {
+  opacity: calc(0.04 + (var(--pointer-from-center) * 0.08));
+  mix-blend-mode: soft-light;
+  background-image:
+    linear-gradient(118deg,
+      transparent 24%,
+      rgba(255, 255, 255, 0.02) 36%,
+      rgba(255, 255, 255, 0.06) 47%,
+      rgba(255, 255, 255, 0.02) 58%,
+      transparent 70%),
+    linear-gradient(24deg,
+      rgba(0, 0, 0, 0.1),
+      rgba(255, 255, 255, 0.015) 28%,
+      rgba(0, 0, 0, 0.12) 72%);
+  background-size: 220% 220%, 160% 160%;
+  background-position:
+    var(--pointer-x) var(--pointer-y),
+    calc(50% + ((var(--pointer-from-left) - 0.5) * 18%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 12%));
+  filter: brightness(0.82) contrast(1.04);
 }
 
 .tilt-card--foil-music .tilt-card__foil {
   background-image:
-    repeating-linear-gradient(
-      132deg,
-      rgba(126, 215, 199, 0.3) 0%,
-      rgba(91, 170, 163, 0.12) 5%,
-      rgba(18, 28, 29, 0.0) 10%,
-      rgba(131, 223, 204, 0.24) 15%,
-      rgba(40, 74, 72, 0.06) 20%,
-      rgba(18, 28, 29, 0.0) 26%
-    ),
-    repeating-radial-gradient(
-      ellipse at 50% 50%,
-      rgba(171, 255, 235, 0.08) 0 3px,
-      rgba(18, 28, 29, 0.0) 3px 14px,
-      rgba(171, 255, 235, 0.035) 14px 17px,
-      rgba(18, 28, 29, 0.0) 17px 32px
-    ),
-    repeating-linear-gradient(
-      -36deg,
-      rgba(255,255,255,0.018) 0 6px,
-      rgba(0,0,0,0.0) 6px 18px
-    );
-  background-size: 220% 220%, 180% 180%, 160% 160%;
+    url('./assets/img/导览音乐卡片bottom.webp'),
+    linear-gradient(132deg,
+      rgba(126, 215, 199, 0.14) 0%,
+      rgba(91, 170, 163, 0.06) 18%,
+      rgba(18, 28, 29, 0) 42%,
+      rgba(131, 223, 204, 0.12) 60%,
+      rgba(40, 74, 72, 0.04) 82%,
+      rgba(18, 28, 29, 0) 100%);
+  background-size: cover, 220% 220%;
   background-position:
-    calc(42% + ((var(--pointer-from-left) - 0.5) * 26%)) calc(42% + ((var(--pointer-from-top) - 0.5) * 26%)),
-    calc(50% - ((var(--pointer-from-left) - 0.5) * 18%)) calc(50% - ((var(--pointer-from-top) - 0.5) * 18%)),
-    calc(50% + ((var(--pointer-from-left) - 0.5) * 10%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 12%));
-  filter: brightness(calc(0.72 + (var(--pointer-from-center) * 0.1))) contrast(1.08) saturate(0.92);
+    center center,
+    calc(42% + ((var(--pointer-from-left) - 0.5) * 20%)) calc(42% + ((var(--pointer-from-top) - 0.5) * 20%));
+  background-repeat: no-repeat;
+  filter: brightness(calc(0.92 + (var(--pointer-from-center) * 0.32))) contrast(1.4) saturate(1.38);
 }
 
 .tilt-card--foil-music .tilt-card__foil::before {
+  opacity: 0.22;
+  mix-blend-mode: screen;
   background-image:
-    repeating-linear-gradient(
-      24deg,
-      rgba(255,255,255,0.04) 0 10px,
-      rgba(0,0,0,0.0) 10px 18px,
-      rgba(255,255,255,0.025) 18px 24px,
-      rgba(0,0,0,0.0) 24px 34px
-    ),
-    linear-gradient(
-      146deg,
+    url('./assets/img/导览音乐卡片middle.webp'),
+    linear-gradient(146deg,
       transparent 18%,
-      rgba(168,255,238,0.04) 36%,
-      rgba(255,255,255,0.08) 49%,
-      rgba(168,255,238,0.035) 61%,
-      transparent 74%
-    );
-  background-size: 180% 180%, 220% 220%;
+      rgba(168, 255, 238, 0.03) 36%,
+      rgba(255, 255, 255, 0.06) 49%,
+      rgba(168, 255, 238, 0.028) 61%,
+      transparent 74%);
+  background-size: cover, 220% 220%;
+  background-position:
+    center center,
+    var(--pointer-x) var(--pointer-y);
+  background-repeat: no-repeat;
 }
 
 .tilt-card--foil-music .tilt-card__foil::after {
+  opacity: calc(0.04 + (var(--pointer-from-center) * 0.07));
+  mix-blend-mode: soft-light;
   background-image:
-    linear-gradient(
-      136deg,
-      transparent 20%,
-      rgba(255,255,255,0.028) 34%,
-      rgba(178,255,236,0.05) 46%,
-      rgba(255,255,255,0.028) 58%,
-      transparent 72%
-    ),
-    linear-gradient(
-      -18deg,
-      rgba(0,0,0,0.06),
-      rgba(255,255,255,0.012) 34%,
-      rgba(0,0,0,0.08) 76%
-    );
+    url('./assets/img/导览音乐卡片top.webp'),
+    linear-gradient(-18deg,
+      rgba(0, 0, 0, 0.04),
+      rgba(255, 255, 255, 0.012) 34%,
+      rgba(0, 0, 0, 0.06) 76%);
+  background-size: cover, 180% 180%;
+  background-position:
+    center center,
+    calc(50% - ((var(--pointer-from-left) - 0.5) * 10%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 8%));
+  background-repeat: no-repeat;
+}
+
+.tilt-card--foil-music .tilt-card__shine {
+  -webkit-mask-image: url('./assets/img/导览音乐卡片middle.webp');
+  mask-image: url('./assets/img/导览音乐卡片middle.webp');
+  -webkit-mask-size: cover;
+  mask-size: cover;
+  -webkit-mask-position: center center;
+  mask-position: center center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  opacity: calc(0.16 + (var(--shine-opacity) * 0.24));
+  mix-blend-mode: screen;
+  background:
+    linear-gradient(122deg,
+      transparent 16%,
+      rgba(255, 98, 196, 0.08) 28%,
+      rgba(128, 214, 255, 0.14) 40%,
+      rgba(255, 255, 255, 0.20) 49%,
+      rgba(172, 255, 118, 0.14) 58%,
+      rgba(255, 214, 84, 0.10) 68%,
+      transparent 80%),
+    linear-gradient(-18deg,
+      rgba(255, 80, 152, 0) 8%,
+      rgba(95, 212, 255, 0.05) 42%,
+      rgba(255, 229, 111, 0.06) 56%,
+      rgba(96, 255, 211, 0.04) 72%,
+      rgba(255, 80, 152, 0) 92%);
+  background-size: 220% 220%, 180% 180%;
+  background-position:
+    var(--pointer-x) var(--pointer-y),
+    calc(50% + ((var(--pointer-from-left) - 0.5) * 16%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 12%));
+}
+
+.tilt-card--foil-music .tilt-card__glare {
+  -webkit-mask-image: url('./assets/img/导览音乐卡片middle.webp');
+  mask-image: url('./assets/img/导览音乐卡片middle.webp');
+  -webkit-mask-size: cover;
+  mask-size: cover;
+  -webkit-mask-position: center center;
+  mask-position: center center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  opacity: calc(0.08 + (var(--glare-opacity) * 0.18));
+  mix-blend-mode: color-dodge;
+  background:
+    linear-gradient(118deg,
+      transparent 22%,
+      rgba(255, 82, 176, 0.06) 34%,
+      rgba(122, 214, 255, 0.10) 44%,
+      rgba(255, 255, 255, 0.14) 49%,
+      rgba(171, 255, 118, 0.10) 56%,
+      rgba(255, 218, 92, 0.08) 64%,
+      transparent 76%);
+  background-size: 200% 200%;
+  background-position: var(--pointer-x) var(--pointer-y);
+  filter: blur(1px);
 }
 
 .tilt-card--foil-scp .tilt-card__foil {
   background-image:
-    repeating-linear-gradient(
-      96deg,
+    repeating-linear-gradient(96deg,
       rgba(226, 231, 236, 0.22) 0px,
       rgba(226, 231, 236, 0.22) 1px,
-      rgba(44, 49, 56, 0.0) 1px,
-      rgba(44, 49, 56, 0.0) 8px,
+      rgba(44, 49, 56, 0) 1px,
+      rgba(44, 49, 56, 0) 8px,
       rgba(248, 251, 253, 0.08) 8px,
       rgba(248, 251, 253, 0.08) 9px,
-      rgba(44, 49, 56, 0.0) 9px,
-      rgba(44, 49, 56, 0.0) 16px
-    ),
-    repeating-linear-gradient(
-      0deg,
-      rgba(255,255,255,0.012) 0 2px,
-      rgba(0,0,0,0.0) 2px 12px,
-      rgba(255,255,255,0.006) 12px 13px,
-      rgba(0,0,0,0.0) 13px 22px
-    ),
-    linear-gradient(
-      180deg,
-      rgba(230,235,240,0.10),
-      rgba(24,28,34,0.02) 28%,
-      rgba(230,235,240,0.08) 64%,
-      rgba(24,28,34,0.05)
-    );
+      rgba(44, 49, 56, 0) 9px,
+      rgba(44, 49, 56, 0) 16px),
+    repeating-linear-gradient(0deg,
+      rgba(255, 255, 255, 0.012) 0 2px,
+      rgba(0, 0, 0, 0) 2px 12px,
+      rgba(255, 255, 255, 0.006) 12px 13px,
+      rgba(0, 0, 0, 0) 13px 22px),
+    linear-gradient(180deg,
+      rgba(230, 235, 240, 0.10),
+      rgba(24, 28, 34, 0.02) 28%,
+      rgba(230, 235, 240, 0.08) 64%,
+      rgba(24, 28, 34, 0.05));
   background-size: 170% 170%, 150% 150%, cover;
   background-position:
     calc(50% + ((var(--pointer-from-left) - 0.5) * 12%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 7%)),
     calc(50% - ((var(--pointer-from-left) - 0.5) * 8%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 5%)),
     center center;
-  filter: brightness(calc(0.70 + (var(--pointer-from-center) * 0.08))) contrast(1.08) saturate(0.58);
+  filter: brightness(calc(0.90 + (var(--pointer-from-center) * 0.28))) contrast(1.58) saturate(1.58);
 }
 
 .tilt-card--foil-scp .tilt-card__foil::before {
+  opacity: 0.18;
+  mix-blend-mode: screen;
   background-image:
-    repeating-linear-gradient(
-      90deg,
-      rgba(255,255,255,0.05) 0 1px,
-      rgba(0,0,0,0.0) 1px 9px,
-      rgba(255,255,255,0.025) 9px 10px,
-      rgba(0,0,0,0.0) 10px 18px
-    ),
-    linear-gradient(
-      122deg,
+    repeating-linear-gradient(90deg,
+      rgba(255, 255, 255, 0.05) 0 1px,
+      rgba(0, 0, 0, 0) 1px 9px,
+      rgba(255, 255, 255, 0.025) 9px 10px,
+      rgba(0, 0, 0, 0) 10px 18px),
+    linear-gradient(122deg,
       transparent 24%,
-      rgba(255,255,255,0.025) 40%,
-      rgba(255,255,255,0.05) 50%,
-      rgba(255,255,255,0.025) 60%,
-      transparent 76%
-    );
+      rgba(255, 255, 255, 0.025) 40%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0.025) 60%,
+      transparent 76%);
+  background-size: 180% 180%, 220% 220%;
+  background-position:
+    calc(50% + ((var(--pointer-from-left) - 0.5) * 10%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 6%)),
+    var(--pointer-x) var(--pointer-y);
 }
 
 .tilt-card--foil-scp .tilt-card__foil::after {
+  opacity: calc(0.03 + (var(--pointer-from-center) * 0.05));
+  mix-blend-mode: soft-light;
   background-image:
-    linear-gradient(
-      112deg,
+    linear-gradient(112deg,
       transparent 28%,
-      rgba(255,255,255,0.018) 40%,
-      rgba(255,255,255,0.04) 49%,
-      rgba(255,255,255,0.018) 58%,
-      transparent 68%
-    ),
-    linear-gradient(
-      0deg,
-      rgba(0,0,0,0.10),
-      rgba(255,255,255,0.008) 26%,
-      rgba(0,0,0,0.12) 74%
-    );
+      rgba(255, 255, 255, 0.018) 40%,
+      rgba(255, 255, 255, 0.04) 49%,
+      rgba(255, 255, 255, 0.018) 58%,
+      transparent 68%),
+    linear-gradient(0deg,
+      rgba(0, 0, 0, 0.10),
+      rgba(255, 255, 255, 0.008) 26%,
+      rgba(0, 0, 0, 0.12) 74%);
+  background-size: 220% 220%, 180% 180%;
+  background-position:
+    var(--pointer-x) var(--pointer-y),
+    calc(50% + ((var(--pointer-from-left) - 0.5) * 6%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 4%));
 }
 
 @media (max-width: 1280px) {
@@ -591,6 +548,15 @@ body {
 
   .tilt-card {
     min-height: 320px;
+    transform: none !important;
+    transition: none;
+  }
+
+  .tilt-card__foil,
+  .tilt-card__shine,
+  .tilt-card__glare {
+    opacity: 0.08 !important;
+    filter: none !important;
   }
 
   .tilt-card__content {
@@ -605,6 +571,14 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .tilt-card {
+    transform: none !important;
     transition: none;
+  }
+
+  .tilt-card__foil,
+  .tilt-card__shine,
+  .tilt-card__glare {
+    opacity: 0.08 !important;
+    filter: none !important;
   }
 }

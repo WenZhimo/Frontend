@@ -9,27 +9,27 @@ cards.forEach((card) => {
 
   const onMove = (event) => {
     const rect = card.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width;
-    const y = (event.clientY - rect.top) / rect.height;
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
 
-    const percentX = Math.max(0, Math.min(100, x * 100));
-    const percentY = Math.max(0, Math.min(100, y * 100));
-    const centerX = x - 0.5;
-    const centerY = y - 0.5;
+    const ratioX = x / rect.width;
+    const ratioY = y / rect.height;
+    const percentX = Math.max(0, Math.min(100, ratioX * 100));
+    const percentY = Math.max(0, Math.min(100, ratioY * 100));
+    const centerX = ratioX - 0.5;
+    const centerY = ratioY - 0.5;
     const pointerFromCenter = Math.min(1, Math.sqrt(centerX * centerX + centerY * centerY) / 0.7071);
 
     setVars({
       '--pointer-x': `${percentX.toFixed(2)}%`,
       '--pointer-y': `${percentY.toFixed(2)}%`,
-      '--rotate-x': `${(-centerY * 9).toFixed(2)}deg`,
-      '--rotate-y': `${(centerX * 12).toFixed(2)}deg`,
-      '--card-scale': '1.015',
+      '--rotate-x': `${(-centerY * 20.5).toFixed(2)}deg`,
+      '--rotate-y': `${(centerX * 30.5).toFixed(2)}deg`,
+      '--card-scale': '1.056',
       '--translate-y': '-2px',
-      '--bg-shift-x': `${(50 + centerX * -8).toFixed(2)}%`,
-      '--bg-shift-y': `${(50 + centerY * -8).toFixed(2)}%`,
       '--pointer-from-center': pointerFromCenter.toFixed(4),
-      '--pointer-from-left': x.toFixed(4),
-      '--pointer-from-top': y.toFixed(4),
+      '--pointer-from-left': ratioX.toFixed(4),
+      '--pointer-from-top': ratioY.toFixed(4),
       '--glare-opacity': '0.42',
       '--shine-opacity': '0.58'
     });
@@ -43,8 +43,6 @@ cards.forEach((card) => {
       '--rotate-y': '0deg',
       '--card-scale': '1',
       '--translate-y': '0px',
-      '--bg-shift-x': '50%',
-      '--bg-shift-y': '50%',
       '--pointer-from-center': '0',
       '--pointer-from-left': '0.5',
       '--pointer-from-top': '0.5',
