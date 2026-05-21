@@ -318,7 +318,10 @@
             <div class="button-row">
                 <button id="refreshBtn">刷新</button>
                 <button id="promoteBtn">设为默认</button>
-                <button id="openEvalBtn">打开评估</button>
+                <button id="openEvalBtn">评估当前</button>
+            </div>
+            <div style="margin-top: 10px;">
+                <button id="openEvalAllBtn">评估全部候选模型</button>
             </div>
         </div>
     </aside>
@@ -379,6 +382,7 @@
         const refreshBtn = document.getElementById('refreshBtn');
         const promoteBtn = document.getElementById('promoteBtn');
         const openEvalBtn = document.getElementById('openEvalBtn');
+        const openEvalAllBtn = document.getElementById('openEvalAllBtn');
         const messageBox = document.getElementById('messageBox');
         const trainingReportLink = document.getElementById('training-report-link');
         const evaluationReportLink = document.getElementById('evaluation-report-link');
@@ -391,6 +395,7 @@
         let artifacts = null;
         let selectedCandidate = null;
         let selectedCheckpoint = null;
+        let evaluationBusy = false;
 
         function setMessage(text, error = false) {
             messageBox.textContent = text;
@@ -585,20 +590,49 @@
                 setMessage('请先选择一个候选模型。', true);
                 return;
             }
-            setMessage(`正在评估 ${selectedCandidate.name} …`);
-            const response = await fetch('/api/model-manager/evaluate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ candidatePath: selectedCandidate.path }),
-            });
-            const payload = await response.json();
-            if (!response.ok || !payload.ok) {
-                setMessage(payload.error || '模型评估失败。', true);
-                return;
+            if (evaluationBusy) return;
+            setEvaluationButtonsDisabled(true);
+            try {
+                setMessage(`正在评估 ${selectedCandidate.name} …`);
+                const response = await fetch('/api/model-manager/evaluate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ candidatePath: selectedCandidate.path }),
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    setMessage(payload.error || '模型评估失败。', true);
+                    return;
+                }
+                setMessage(`评估完成：${selectedCandidate.name}`);
+                await loadArtifacts();
+                window.open(`/${payload.reportHtmlPath}`, '_blank');
+            } finally {
+                setEvaluationButtonsDisabled(false);
             }
-            setMessage(`评估完成：${selectedCandidate.name}`);
-            await loadArtifacts();
-            window.open(`/${payload.reportHtmlPath}`, '_blank');
+        }
+
+        async function evaluateAllCandidates() {
+            if (evaluationBusy) return;
+            setEvaluationButtonsDisabled(true);
+            try {
+                setMessage('正在评估全部候选模型…');
+                const response = await fetch('/api/model-manager/evaluate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ allCandidates: true }),
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    setMessage(payload.error || '批量评估失败。', true);
+                    return;
+                }
+                setMessage(`批量评估完成，共处理 ${payload.count} 个模型。`);
+                await loadArtifacts();
+                window.open(`/${payload.reportHtmlPath}`, '_blank');
+            } finally {
+                setEvaluationButtonsDisabled(false);
+            }
         }
 
         async function copyResumeConfig() {
@@ -625,6 +659,14 @@
             tabButtons.forEach((button) => button.classList.toggle('active', button.dataset.tab === tabName));
         }
 
+        function setEvaluationButtonsDisabled(disabled) {
+            evaluationBusy = disabled;
+            openEvalBtn.disabled = disabled;
+            openEvalAllBtn.disabled = disabled;
+            openEvalBtn.textContent = disabled ? '评估中…' : '评估当前';
+            openEvalAllBtn.textContent = disabled ? '评估中…' : '评估全部候选模型';
+        }
+
         toggleHelpBtn.addEventListener('click', () => {
             const open = helpList.classList.toggle('open');
             toggleHelpBtn.textContent = open ? '收起完整使用说明' : '展开完整使用说明';
@@ -634,6 +676,7 @@
         profileFilter.addEventListener('change', () => renderCandidates());
         promoteBtn.addEventListener('click', () => promoteCandidate());
         openEvalBtn.addEventListener('click', () => evaluateCandidate());
+        openEvalAllBtn.addEventListener('click', () => evaluateAllCandidates());
         copyResumeBtn.addEventListener('click', () => copyResumeConfig());
 
         loadArtifacts().catch((error) => setMessage(error.message, true));

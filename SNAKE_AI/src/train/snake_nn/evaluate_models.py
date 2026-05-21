@@ -63,10 +63,21 @@ def build_episode_seed_schedule(board_sizes, episodes_per_board: int, rng: rando
     }
 
 
+def resolve_board_sizes(model, board_sizes=None):
+    metadata = model.get('metadata', {})
+    metadata_board_pool = metadata.get('boardSizePool') or []
+    if board_sizes is not None:
+        return [tuple(board_size) for board_size in board_sizes]
+    if metadata_board_pool:
+        return [tuple(board_size) for board_size in metadata_board_pool]
+    return list(DEFAULT_BOARD_SIZES)
+
+
 def evaluate_model(model_path: Path, board_sizes, episodes_per_board: int, starvation_scale: float, episode_seed_schedule=None):
     model = load_model(model_path)
     params = build_vendor_params(model)
     metadata = model.get('metadata', {})
+    board_sizes = resolve_board_sizes(model, board_sizes)
     score_weight = metadata.get('scoreWeight', DEFAULT_SCORE_WEIGHT)
     survival_weight = metadata.get('survivalWeight', DEFAULT_SURVIVAL_WEIGHT)
     raw_fitness_weight = metadata.get('rawFitnessWeight', DEFAULT_RAW_FITNESS_WEIGHT)
@@ -170,8 +181,13 @@ def evaluate_model(model_path: Path, board_sizes, episodes_per_board: int, starv
 
 
 def evaluate_models(model_paths, board_sizes, episodes_per_board: int, starvation_scale: float, episode_seed_schedule=None):
-    seed_schedule = episode_seed_schedule or build_episode_seed_schedule(board_sizes, episodes_per_board)
-    return [evaluate_model(path, board_sizes, episodes_per_board, starvation_scale, episode_seed_schedule=seed_schedule) for path in model_paths]
+    reports = []
+    for path in model_paths:
+        model = load_model(path)
+        resolved_board_sizes = resolve_board_sizes(model, board_sizes)
+        seed_schedule = episode_seed_schedule or build_episode_seed_schedule(resolved_board_sizes, episodes_per_board)
+        reports.append(evaluate_model(path, resolved_board_sizes, episodes_per_board, starvation_scale, episode_seed_schedule=seed_schedule))
+    return reports
 
 
 def summarize_by_board_size(results):
@@ -296,10 +312,17 @@ def build_evaluation_report_payload(reports, comparison=None, generated_at=None)
     generated_at = generated_at or datetime.now(timezone.utc).isoformat()
     return {
         'generatedAt': generated_at,
-        'reports': reports,
+        'reports': [
+            {
+                **report,
+                'label': Path(report['model']).name,
+            }
+            for report in reports
+        ],
         'boardSummaries': [
             {
                 'model': report['model'],
+                'label': Path(report['model']).name,
                 'items': summarize_by_board_size(report['results']),
             }
             for report in reports
@@ -318,7 +341,7 @@ def build_evaluation_report_html(payload):
   <title>Snake AI 评估报告</title>
   <script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>
   <style>
-    :root {{
+    :root {
       --bg: #070a0c;
       --panel: rgba(7, 10, 12, 0.86);
       --text: #d8d8d8;
@@ -326,20 +349,20 @@ def build_evaluation_report_html(payload):
       --gold: #c89a2e;
       --cyan: #00e5ff;
       --danger: #d45134;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{ margin: 0; min-height: 100vh; background: radial-gradient(circle at top right, rgba(0, 229, 255, 0.08), transparent 30%), linear-gradient(180deg, #050709, #0a0d10); color: var(--text); font-family: \"Segoe UI\", system-ui, sans-serif; padding: 24px; }}
-    h1 {{ margin: 0 0 8px; color: var(--gold); }}
-    p {{ color: var(--muted); }}
-    .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0 24px; }}
-    .card, .panel {{ background: var(--panel); border: 1px solid rgba(200, 154, 46, 0.16); padding: 14px; }}
-    .label {{ font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }}
-    .value {{ margin-top: 8px; font-size: 1.2rem; color: var(--gold); font-family: monospace, sans-serif; }}
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }}
-    canvas {{ width: 100% !important; height: 280px !important; }}
-    table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.92rem; }}
-    th, td {{ padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: right; }}
-    th:first-child, td:first-child {{ text-align: left; }}
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top right, rgba(0, 229, 255, 0.08), transparent 30%), linear-gradient(180deg, #050709, #0a0d10); color: var(--text); font-family: \"Segoe UI\", system-ui, sans-serif; padding: 24px; }
+    h1 { margin: 0 0 8px; color: var(--gold); }
+    p { color: var(--muted); }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0 24px; }
+    .card, .panel { background: var(--panel); border: 1px solid rgba(200, 154, 46, 0.16); padding: 14px; }
+    .label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .value { margin-top: 8px; font-size: 1.2rem; color: var(--gold); font-family: monospace, sans-serif; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    canvas { width: 100% !important; height: 360px !important; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.92rem; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
   </style>
 </head>
 <body>
@@ -362,43 +385,43 @@ def build_evaluation_report_html(payload):
     const boardSummaries = payload.boardSummaries || [];
     const comparison = payload.comparison || null;
 
-    function fixed(value, digits = 2) {{ return Number.isFinite(value) ? value.toFixed(digits) : '--'; }}
-    const labels = reports.map(report => report.model.split(/[\\/]/).pop());
+    function fixed(value, digits = 2) { return Number.isFinite(value) ? value.toFixed(digits) : '--'; }
+    const labels = reports.map(report => report.label || report.model.split(/[\\/]/).pop());
     document.getElementById('summary-cards').innerHTML = [
       ['Models', reports.length],
       ['Generated At', (payload.generatedAt || '').replace('T', ' ').slice(0, 19)],
       ['Comparison', comparison ? (comparison.better ? 'Candidate Better' : 'Keep Baseline') : '--'],
-    ].map(([label, value]) => `<div class=\"card\"><div class=\"label\">${{label}}</div><div class=\"value\">${{value}}</div></div>`).join('');
+    ].map(([label, value]) => `<div class=\"card\"><div class=\"label\">${label}</div><div class=\"value\">${value}</div></div>`).join('');
 
-    function barChart(id, title, datasets, labels) {{
-      new Chart(document.getElementById(id), {{
+    function barChart(id, title, datasets, labels) {
+      new Chart(document.getElementById(id), {
         type: 'bar',
-        data: {{ labels, datasets }},
-        options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ labels: {{ color: '#d8d8d8' }} }}, title: {{ display: true, text: title, color: '#c89a2e' }} }}, scales: {{ x: {{ ticks: {{ color: '#9aa7b0' }} }}, y: {{ ticks: {{ color: '#9aa7b0' }} }} }} }}
-      }});
-    }}
+        data: { labels, datasets },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#d8d8d8' } }, title: { display: true, text: title, color: '#c89a2e' } }, scales: { x: { ticks: { color: '#9aa7b0' } }, y: { ticks: { color: '#9aa7b0' } } } }
+      });
+    }
 
     barChart('summaryChart', '模型总体摘要', [
-      {{ label: 'Selection Score', data: reports.map(r => r.avgSelectionScore), backgroundColor: 'rgba(0,229,255,0.55)' }},
-      {{ label: 'Avg Score', data: reports.map(r => r.avgScore), backgroundColor: 'rgba(200,154,46,0.55)' }},
-      {{ label: 'Avg Frames', data: reports.map(r => r.avgFrames), backgroundColor: 'rgba(123,216,143,0.55)' }},
+      { label: 'Selection Score', data: reports.map(r => r.avgSelectionScore), backgroundColor: 'rgba(0,229,255,0.55)' },
+      { label: 'Avg Score', data: reports.map(r => r.avgScore), backgroundColor: 'rgba(200,154,46,0.55)' },
+      { label: 'Avg Frames', data: reports.map(r => r.avgFrames), backgroundColor: 'rgba(123,216,143,0.55)' },
     ], labels);
 
-    const boardLabels = Array.from(new Set(boardSummaries.flatMap(item => item.items.map(entry => `${{entry.boardSize[0]}}x${{entry.boardSize[1]}}`))));
+    const boardLabels = Array.from(new Set(boardSummaries.flatMap(item => item.items.map(entry => `${entry.boardSize[0]}x${entry.boardSize[1]}`))));
     barChart('boardScoreChart', '按棋盘尺寸 Avg Score', boardSummaries.map((entry, idx) => ({
-      label: entry.model.split(/[\\/]/).pop(),
-      data: boardLabels.map(label => {{
-        const item = entry.items.find(board => `${{board.boardSize[0]}}x${{board.boardSize[1]}}` === label);
+      label: entry.label || entry.model.split(/[\\/]/).pop(),
+      data: boardLabels.map(label => {
+        const item = entry.items.find(board => `${board.boardSize[0]}x${board.boardSize[1]}` === label);
         return item ? item.avgScore : null;
-      }}),
+      }),
       backgroundColor: ['rgba(0,229,255,0.55)','rgba(200,154,46,0.55)','rgba(123,216,143,0.55)','rgba(138,125,255,0.55)'][idx % 4],
     })), boardLabels);
     barChart('boardFramesChart', '按棋盘尺寸 Avg Frames', boardSummaries.map((entry, idx) => ({
-      label: entry.model.split(/[\\/]/).pop(),
-      data: boardLabels.map(label => {{
-        const item = entry.items.find(board => `${{board.boardSize[0]}}x${{board.boardSize[1]}}` === label);
+      label: entry.label || entry.model.split(/[\\/]/).pop(),
+      data: boardLabels.map(label => {
+        const item = entry.items.find(board => `${board.boardSize[0]}x${board.boardSize[1]}` === label);
         return item ? item.avgFrames : null;
-      }}),
+      }),
       backgroundColor: ['rgba(255,183,0,0.55)','rgba(0,229,255,0.55)','rgba(200,154,46,0.55)','rgba(123,216,143,0.55)'][idx % 4],
     })), boardLabels);
 
@@ -410,7 +433,7 @@ def build_evaluation_report_html(payload):
     }] : [{ label: 'No Comparison', data: [] }], comparisonLabels);
 
     const table = document.getElementById('summary-table');
-    table.innerHTML = `<thead><tr><th>模型</th><th>选择分</th><th>苹果数</th><th>存活步数</th><th>选择分标准差</th></tr></thead><tbody>${{reports.map(report => `<tr><td>${{report.model}}</td><td>${{fixed(report.avgSelectionScore)}}</td><td>${{fixed(report.avgScore)}}</td><td>${{fixed(report.avgFrames)}}</td><td>${{fixed(report.selectionScoreStd)}}</td></tr>`).join('')}}</tbody>`;
+    table.innerHTML = `<thead><tr><th>模型</th><th>选择分</th><th>苹果数</th><th>存活步数</th><th>选择分标准差</th></tr></thead><tbody>${reports.map(report => `<tr><td>${report.label || report.model}</td><td>${fixed(report.avgSelectionScore)}</td><td>${fixed(report.avgScore)}</td><td>${fixed(report.avgFrames)}</td><td>${fixed(report.selectionScoreStd)}</td></tr>`).join('')}</tbody>`;
   </script>
 </body>
 </html>"""
