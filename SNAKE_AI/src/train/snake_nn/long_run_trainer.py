@@ -23,6 +23,7 @@ from train.snake_nn.trainer import TrainingConfig, build_export_name, build_prof
 
 
 @dataclass
+# 长期自动训练入口使用的总配置：决定是先 warmup、先试训，还是触发清理与保留 top-N。
 class LongRunConfig:
     profile_id: str = 'pc'
     trial_generations: int = 300
@@ -112,6 +113,7 @@ def _load_ranked_exports(export_dir: Path, profile_id: str):
     for path in sorted(export_dir.glob('*.json')):
         if path.name.endswith('.eval-report.json'):
             continue
+        # 这里显式排除汇总文件，只把“真正可继续参与筛选的候选模型”算进长期训练池。
         if path.name in {'best-of-batch.json', 'evaluation-report.json'}:
             continue
         report = evaluate_models([path], None, episodes_per_board=2, starvation_scale=1.0)[0]
@@ -170,6 +172,7 @@ def _trial_passes(config: LongRunConfig, trial_report, default_report, ranked_ca
     return True, 'accepted'
 
 
+# 长期自动训练主流程：扫描现有候选池 -> 生成新 seed -> warmup / trial / full train -> 重新排行 -> 可选清理。
 def run_long_training(config: LongRunConfig):
     rng = random.Random()
     base_config = build_profile_config(TrainingConfig(), config.profile_id)
@@ -185,6 +188,7 @@ def run_long_training(config: LongRunConfig):
     existing_seeds.add(generated_seed)
     _log_event(log_path, 'seed_generated', config.profile_id, seed=generated_seed)
 
+    # 候选池还没堆起来时直接完整训练，优先把样本数量补足，再谈 trial 筛选。
     warmup_mode = len(ranked_candidates) < config.warmup_seed_count
     if warmup_mode:
         _log_event(log_path, 'full_train_started', config.profile_id, seed=generated_seed, reason='warmup')
@@ -210,6 +214,7 @@ def run_long_training(config: LongRunConfig):
         trial_report = {'avgSelectionScore': 0.0, 'avgScore': 0.0, 'avgFrames': 0.0}
     _log_event(log_path, 'trial_finished', config.profile_id, seed=generated_seed, output=str(trial_output), report=trial_report)
 
+    # 试训结束后，先拿当前默认模型和现有 top-N 地板做门槛判断，决定这个 seed 值不值得继续投入完整训练。
     default_report = _evaluate_default(base_config)
     passes, reason = _trial_passes(config, trial_report, default_report, ranked_candidates)
     if not passes:
@@ -238,6 +243,7 @@ def run_long_training(config: LongRunConfig):
     report_json_path = _write_bulk_report(export_dir, ranked_candidates)
     _log_event(log_path, 'batch_evaluation_finished', config.profile_id, seed=generated_seed, report=str(report_json_path) if report_json_path else None)
 
+    # 候选池达到设定规模后，按 keep_top_n 清理弱模型与其 checkpoint，避免长期运行后目录无限膨胀。
     if len(ranked_candidates) >= config.cleanup_interval_runs:
         _log_event(log_path, 'cleanup_started', config.profile_id, seed=generated_seed, keepTopN=config.keep_top_n)
         _cleanup_non_topn(config, ranked_candidates, checkpoint_dir, log_path)
@@ -256,6 +262,7 @@ def run_long_training(config: LongRunConfig):
 
 
 def main():
+    # 直接运行 long_run_trainer.py 时，默认读取 LongRunConfig 的当前参数并执行一轮长期训练调度。
     config = LongRunConfig()
     run_long_training(config)
 
