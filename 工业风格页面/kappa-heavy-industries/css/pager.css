@@ -682,68 +682,111 @@ p {
 
 .homepage-intro-tilt-card--foil-music .intro-tilt__foil {
     background-image:
-        repeating-linear-gradient(132deg,
-            rgba(126, 215, 199, 0.3) 0%,
-            rgba(91, 170, 163, 0.12) 5%,
-            rgba(18, 28, 29, 0.0) 10%,
-            rgba(131, 223, 204, 0.24) 15%,
-            rgba(40, 74, 72, 0.06) 20%,
-            rgba(18, 28, 29, 0.0) 26%),
-        repeating-radial-gradient(ellipse at 50% 50%,
-            rgba(171, 255, 235, 0.08) 0 3px,
-            rgba(18, 28, 29, 0.0) 3px 14px,
-            rgba(171, 255, 235, 0.035) 14px 17px,
-            rgba(18, 28, 29, 0.0) 17px 32px),
-        repeating-linear-gradient(-36deg,
-            rgba(255, 255, 255, 0.018) 0 6px,
-            rgba(0, 0, 0, 0.0) 6px 18px);
-    background-size: 220% 220%, 180% 180%, 160% 160%;
+        url('../asset/img/导览音乐卡片bottom.webp'),
+        linear-gradient(132deg,
+            rgba(126, 215, 199, 0.14) 0%,
+            rgba(91, 170, 163, 0.06) 18%,
+            rgba(18, 28, 29, 0.0) 42%,
+            rgba(131, 223, 204, 0.12) 60%,
+            rgba(40, 74, 72, 0.04) 82%,
+            rgba(18, 28, 29, 0.0) 100%);
+    background-size: cover, 220% 220%;
     background-position:
-        calc(42% + ((var(--pointer-from-left) - 0.5) * 26%)) calc(42% + ((var(--pointer-from-top) - 0.5) * 26%)),
-        calc(50% - ((var(--pointer-from-left) - 0.5) * 18%)) calc(50% - ((var(--pointer-from-top) - 0.5) * 18%)),
-        calc(50% + ((var(--pointer-from-left) - 0.5) * 10%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 12%));
+        center center,
+        calc(42% + ((var(--pointer-from-left) - 0.5) * 20%)) calc(42% + ((var(--pointer-from-top) - 0.5) * 20%));
+    background-repeat: no-repeat;
     filter: brightness(calc(0.92 + (var(--pointer-from-center) * 0.32))) contrast(1.4) saturate(1.38);
 }
 
 .homepage-intro-tilt-card--foil-music .intro-tilt__foil::before {
-    opacity: 0.2;
+    opacity: 0.22;
     mix-blend-mode: screen;
     background-image:
-        repeating-linear-gradient(24deg,
-            rgba(255, 255, 255, 0.04) 0 10px,
-            rgba(0, 0, 0, 0.0) 10px 18px,
-            rgba(255, 255, 255, 0.025) 18px 24px,
-            rgba(0, 0, 0, 0.0) 24px 34px),
+        url('../asset/img/导览音乐卡片middle.webp'),
         linear-gradient(146deg,
             transparent 18%,
-            rgba(168, 255, 238, 0.04) 36%,
-            rgba(255, 255, 255, 0.08) 49%,
-            rgba(168, 255, 238, 0.035) 61%,
+            rgba(168, 255, 238, 0.03) 36%,
+            rgba(255, 255, 255, 0.06) 49%,
+            rgba(168, 255, 238, 0.028) 61%,
             transparent 74%);
-    background-size: 180% 180%, 220% 220%;
+    background-size: cover, 220% 220%;
     background-position:
-        calc(50% + ((var(--pointer-from-left) - 0.5) * 14%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 10%)),
+        center center,
         var(--pointer-x) var(--pointer-y);
+    background-repeat: no-repeat;
 }
 
 .homepage-intro-tilt-card--foil-music .intro-tilt__foil::after {
-    opacity: calc(0.03 + (var(--pointer-from-center) * 0.06));
+    opacity: calc(0.04 + (var(--pointer-from-center) * 0.07));
     mix-blend-mode: soft-light;
     background-image:
-        linear-gradient(136deg,
-            transparent 20%,
-            rgba(255, 255, 255, 0.028) 34%,
-            rgba(178, 255, 236, 0.05) 46%,
-            rgba(255, 255, 255, 0.028) 58%,
-            transparent 72%),
+        url('../asset/img/导览音乐卡片top.webp'),
         linear-gradient(-18deg,
-            rgba(0, 0, 0, 0.06),
+            rgba(0, 0, 0, 0.04),
             rgba(255, 255, 255, 0.012) 34%,
-            rgba(0, 0, 0, 0.08) 76%);
+            rgba(0, 0, 0, 0.06) 76%);
+    background-size: cover, 180% 180%;
+    background-position:
+        center center,
+        calc(50% - ((var(--pointer-from-left) - 0.5) * 10%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 8%));
+    background-repeat: no-repeat;
+}
+
+.homepage-intro-tilt-card--foil-music .intro-tilt__shine {
+    -webkit-mask-image: url('../asset/img/导览音乐卡片middle.webp');
+    mask-image: url('../asset/img/导览音乐卡片middle.webp');
+    -webkit-mask-size: cover;
+    mask-size: cover;
+    -webkit-mask-position: center center;
+    mask-position: center center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    opacity: calc(0.16 + (var(--shine-opacity) * 0.24));
+    mix-blend-mode: screen;
+    background:
+        linear-gradient(122deg,
+            transparent 16%,
+            rgba(255, 98, 196, 0.08) 28%,
+            rgba(128, 214, 255, 0.14) 40%,
+            rgba(255, 255, 255, 0.20) 49%,
+            rgba(172, 255, 118, 0.14) 58%,
+            rgba(255, 214, 84, 0.10) 68%,
+            transparent 80%),
+        linear-gradient(-18deg,
+            rgba(255, 80, 152, 0.0) 8%,
+            rgba(95, 212, 255, 0.05) 42%,
+            rgba(255, 229, 111, 0.06) 56%,
+            rgba(96, 255, 211, 0.04) 72%,
+            rgba(255, 80, 152, 0.0) 92%);
     background-size: 220% 220%, 180% 180%;
     background-position:
         var(--pointer-x) var(--pointer-y),
-        calc(50% - ((var(--pointer-from-left) - 0.5) * 12%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 10%));
+        calc(50% + ((var(--pointer-from-left) - 0.5) * 16%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 12%));
+}
+
+.homepage-intro-tilt-card--foil-music .intro-tilt__glare {
+    -webkit-mask-image: url('../asset/img/导览音乐卡片middle.webp');
+    mask-image: url('../asset/img/导览音乐卡片middle.webp');
+    -webkit-mask-size: cover;
+    mask-size: cover;
+    -webkit-mask-position: center center;
+    mask-position: center center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    opacity: calc(0.08 + (var(--glare-opacity) * 0.18));
+    mix-blend-mode: color-dodge;
+    background:
+        linear-gradient(118deg,
+            transparent 22%,
+            rgba(255, 82, 176, 0.06) 34%,
+            rgba(122, 214, 255, 0.10) 44%,
+            rgba(255, 255, 255, 0.14) 49%,
+            rgba(171, 255, 118, 0.10) 56%,
+            rgba(255, 218, 92, 0.08) 64%,
+            transparent 76%);
+    background-size: 200% 200%;
+    background-position: var(--pointer-x) var(--pointer-y);
+    filter: blur(1px);
 }
 
 .homepage-intro-tilt-card--foil-scp .intro-tilt__foil {
