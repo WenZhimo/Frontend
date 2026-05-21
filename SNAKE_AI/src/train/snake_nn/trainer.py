@@ -47,7 +47,9 @@ from train.snake_nn.scoring import (
 )
 
 
+# 当前手动训练的目标档位。这里决定本轮训练绑定哪一种棋盘尺寸、默认模型路径和导出目录。
 ACTIVE_PROFILE = 'pc'
+# 本轮要跑的随机种子列表。通常先放少量种子，比较不同初始随机性的训练上限。
 SEED_BATCH = [23]
 
 
@@ -162,6 +164,7 @@ def build_export_name(profile_id: str, generations: int, seed: int) -> str:
     return f'{prefix}{serial:03d}'
 
 
+# 把一份通用训练参数绑定到具体设备档位，避免手动同时改棋盘尺寸、导出目录和默认模型路径。
 def build_profile_config(base: TrainingConfig, profile_id: str) -> TrainingConfig:
     profile = DEVICE_BOARD_PROFILES[profile_id]
     return replace(
@@ -294,6 +297,7 @@ def _copy_best_of_batch(batch_results):
     return best_of_batch_path, best
 
 
+# 手动批量训练的主流程：逐个 seed 训练 -> 逐个评估 -> 生成排行榜 -> 复制 best-of-batch。
 def run_seed_batch(base_config: TrainingConfig, seeds: list[int]):
     baseline_temp_path = _prepare_default_baseline(base_config)
     batch_results = []
@@ -339,11 +343,13 @@ def run_seed_batch(base_config: TrainingConfig, seeds: list[int]):
 
 
 def train_default():
+    # 本地直接运行 trainer.py 时，默认就走“当前档位 + 当前种子列表”的批量实验模式。
     profile_config = build_profile_config(BASE_IDE_CONFIG, ACTIVE_PROFILE)
     return run_seed_batch(profile_config, SEED_BATCH)
 
 
 if __name__ == '__main__':
+    # CLI 直接启动时，先把 BASE_IDE_CONFIG 绑定到当前档位，再把 SEED_BATCH 里的种子逐个跑完。
     profile_config = build_profile_config(BASE_IDE_CONFIG, ACTIVE_PROFILE)
     print('[snake_nn.trainer] 开始执行种子批量实验模式...')
     print(f"当前设备档位：{profile_config.profile_label} ({profile_config.board_size_pool[0][0]}x{profile_config.board_size_pool[0][1]})")
