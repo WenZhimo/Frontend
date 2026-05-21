@@ -1,2 +1,5 @@
 __pycache__/
+**/__pycache__/
 *.pyc
+*.py[cod]
+artifacts/models/long-run/**/run-log.jsonl

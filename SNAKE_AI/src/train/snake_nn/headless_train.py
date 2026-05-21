@@ -17,14 +17,15 @@ import numpy as np
 
 if __package__ in (None, ''):
     project_root = Path(__file__).resolve().parents[3]
-    train_root = Path(__file__).resolve().parents[1]
-    for entry in (project_root, train_root):
+    src_root = Path(__file__).resolve().parents[2]
+    for entry in (src_root, project_root):
         if str(entry) not in sys.path:
             sys.path.insert(0, str(entry))
 else:
     project_root = Path(__file__).resolve().parents[3]
 
 from train.snake_nn.browser_export_adapter import write_browser_model
+from train.snake_nn.paths import CHECKPOINTS_ROOT, EXPORTS_ROOT, resolve_project_path
 from train.snake_nn.scoring import (
     DEFAULT_APPROACH_APPLE_WEIGHT,
     DEFAULT_RAW_FITNESS_CAP,
@@ -65,10 +66,11 @@ class TrainerConfig:
     repeat_cell_penalty: float = DEFAULT_REPEAT_CELL_PENALTY
     stall_penalty: float = DEFAULT_STALL_PENALTY
     export_name: str = 'snakeai-default'
-    export_dir: str = 'artifacts/models/exports'
+    export_dir: str = EXPORTS_ROOT.as_posix()
     profile_id: str = 'generic'
     profile_label: str = '通用棋盘'
-    checkpoint_dir: str = 'artifacts/models/checkpoints'
+    checkpoint_dir: str = CHECKPOINTS_ROOT.as_posix()
+    default_model_path: str = ''
     promote_to_default: bool = True
     population_checkpoint_enabled: bool = True
     population_checkpoint_interval: int = 5
@@ -223,12 +225,6 @@ class HeadlessTrainer:
         ])
         self._SPBX_type = self.settings['SPBX_type'].lower()
         self._mutation_rate = self.settings['mutation_rate']
-
-    def _resolve_project_path(self, path_str: str) -> Path:
-        path = Path(path_str)
-        if not path.is_absolute():
-            path = project_root / path
-        return path
 
     @staticmethod
     def _encode_state(value) -> str:
@@ -533,19 +529,19 @@ class HeadlessTrainer:
         }
 
     def _write_checkpoint(self, snake, metadata, filename):
-        checkpoint_dir = self._resolve_project_path(self.config.checkpoint_dir)
+        checkpoint_dir = resolve_project_path(self.config.checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         checkpoint_path = checkpoint_dir / filename
         write_browser_model(snake, self.settings, metadata, checkpoint_path)
         return checkpoint_path
 
     def _training_history_path(self) -> Path:
-        checkpoint_dir = self._resolve_project_path(self.config.checkpoint_dir)
+        checkpoint_dir = resolve_project_path(self.config.checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         return checkpoint_dir / 'training-history.json'
 
     def _training_report_path(self) -> Path:
-        checkpoint_dir = self._resolve_project_path(self.config.checkpoint_dir)
+        checkpoint_dir = resolve_project_path(self.config.checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         return checkpoint_dir / 'training-report.html'
 
@@ -748,7 +744,7 @@ class HeadlessTrainer:
         }
 
     def _save_population_checkpoint(self):
-        checkpoint_root = self._resolve_project_path(self.config.checkpoint_dir)
+        checkpoint_root = resolve_project_path(self.config.checkpoint_dir)
         checkpoint_root.mkdir(parents=True, exist_ok=True)
         checkpoint_path = self._population_checkpoint_path(checkpoint_root)
         if checkpoint_path.exists():
@@ -835,7 +831,7 @@ class HeadlessTrainer:
             raise ValueError('Checkpoint is incompatible with current trainer configuration:\n' + '\n'.join(mismatches))
 
     def _load_population_checkpoint(self, checkpoint_path_str: str):
-        checkpoint_path = self._resolve_project_path(checkpoint_path_str)
+        checkpoint_path = resolve_project_path(checkpoint_path_str)
         meta_path = checkpoint_path / 'checkpoint_meta.json'
         if not meta_path.exists():
             raise FileNotFoundError(f'Checkpoint metadata not found: {meta_path}')
@@ -908,15 +904,13 @@ class HeadlessTrainer:
         if self.best_so_far is None:
             raise ValueError('No best individual is available for export. Training did not evaluate any population.')
 
-        export_dir = Path(self.config.export_dir)
-        if not export_dir.is_absolute():
-            export_dir = project_root / export_dir
+        export_dir = resolve_project_path(self.config.export_dir)
         export_dir.mkdir(parents=True, exist_ok=True)
         export_path = export_dir / f'{self.config.export_name}.json'
-        default_path = project_root / 'snake_models' / 'profiles' / f'{self.config.profile_id}.json'
+        default_path = resolve_project_path(self.config.default_model_path) if self.config.default_model_path else None
         metadata = self._build_metadata(self.best_so_far)
         exported = write_browser_model(self.best_so_far, self.settings, metadata, export_path)
-        if self.config.promote_to_default:
+        if self.config.promote_to_default and default_path is not None:
             default_path.parent.mkdir(parents=True, exist_ok=True)
             copyfile(exported, default_path)
         return exported

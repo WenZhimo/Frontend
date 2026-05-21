@@ -28,10 +28,10 @@
     "repeat_cell_penalty": 3.0,
     "stall_penalty": 1.5,
     "export_name": "pc-1000-2024-000",
-    "export_dir": "snake_models/exports/pc",
+    "export_dir": "artifacts/models/exports/pc",
     "profile_id": "pc",
     "profile_label": "PC 16:9",
-    "checkpoint_dir": "snake_models/exports/pc/checkpoints",
+    "checkpoint_dir": "artifacts/models/checkpoints/pc",
     "promote_to_default": true,
     "population_checkpoint_enabled": true,
     "population_checkpoint_interval": 1,
@@ -39,7 +39,8 @@
     "resume_strict": true,
     "parallel_evaluation_enabled": true,
     "parallel_evaluation_workers": null,
-    "parallel_evaluation_chunksize": 1
+    "parallel_evaluation_chunksize": 1,
+    "default_model_path": "data/models/profiles/pc.json"
   },
   "settingsSnapshot": {
     "board_size": [

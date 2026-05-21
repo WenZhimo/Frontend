@@ -1,18 +1,18 @@
 {
-  "generatedAt": "2026-05-21T05:23:22.345254+00:00",
+  "generatedAt": "2026-05-21T08:53:24.075319+00:00",
   "reports": [
     {
       "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\best-of-batch.json",
-      "avgFitness": 9.066943647109719e+23,
-      "avgSelectionScore": 260206.0,
-      "avgScore": 79.5,
-      "avgFrames": 5439.5,
+      "avgFitness": 2.361183241434823e+22,
+      "avgSelectionScore": 243848.5,
+      "avgScore": 74.0,
+      "avgFrames": 5471.5,
       "avgSurvivalRatio": 1.0,
-      "avgApproachAppleEvents": 3284.5,
-      "avgRepeatCellCount": 4869.0,
-      "avgStallSteps": 2154.0,
-      "fitnessStd": 3.022314549036573e+23,
-      "selectionScoreStd": 2370.0,
+      "avgApproachAppleEvents": 3304.5,
+      "avgRepeatCellCount": 4895.5,
+      "avgStallSteps": 2166.0,
+      "fitnessStd": 1.416709944860894e+22,
+      "selectionScoreStd": 2811.0,
       "scoreWeight": 3000.0,
       "survivalWeight": 100.0,
       "rawFitnessWeight": 0.1,
@@ -28,14 +28,14 @@
             18
           ],
           "episode": 0,
-          "fitness": 6.044629098073146e+23,
-          "selectionScore": 257836.0,
-          "score": 79.0,
-          "frames": 5383.0,
+          "fitness": 3.777893186295717e+22,
+          "selectionScore": 246659.5,
+          "score": 75.0,
+          "frames": 5455.0,
           "survivalRatio": 1.0,
-          "approachAppleEvents": 3200.0,
-          "repeatCellCount": 4807.0,
-          "stallSteps": 2182.0,
+          "approachAppleEvents": 3285.0,
+          "repeatCellCount": 4879.0,
+          "stallSteps": 2169.0,
           "uniqueHeadCells": 576.0
         },
         {
@@ -44,31 +44,31 @@
             18
           ],
           "episode": 1,
-          "fitness": 1.2089258196146292e+24,
-          "selectionScore": 262576.0,
-          "score": 80.0,
-          "frames": 5496.0,
+          "fitness": 9.444732965739293e+21,
+          "selectionScore": 241037.5,
+          "score": 73.0,
+          "frames": 5488.0,
           "survivalRatio": 1.0,
-          "approachAppleEvents": 3369.0,
-          "repeatCellCount": 4931.0,
-          "stallSteps": 2126.0,
-          "uniqueHeadCells": 565.0
+          "approachAppleEvents": 3324.0,
+          "repeatCellCount": 4912.0,
+          "stallSteps": 2163.0,
+          "uniqueHeadCells": 576.0
         }
       ],
       "label": "best-of-batch.json"
     },
     {
       "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-2024-000.json",
-      "avgFitness": 8590548761.710596,
-      "avgSelectionScore": 107679.25,
-      "avgScore": 33.0,
-      "avgFrames": 1596.5,
+      "avgFitness": 8584903.798773177,
+      "avgSelectionScore": 59485.0,
+      "avgScore": 18.0,
+      "avgFrames": 1175.5,
       "avgSurvivalRatio": 1.0,
-      "avgApproachAppleEvents": 1052.0,
-      "avgRepeatCellCount": 1086.5,
-      "avgStallSteps": 543.5,
-      "fitnessStd": 3551.4938468933105,
-      "selectionScoreStd": 2.25,
+      "avgApproachAppleEvents": 701.5,
+      "avgRepeatCellCount": 784.5,
+      "avgStallSteps": 473.0,
+      "fitnessStd": 8521717.590431113,
+      "selectionScoreStd": 18519.0,
       "scoreWeight": 3000.0,
       "survivalWeight": 100.0,
       "rawFitnessWeight": 0.1,
@@ -84,15 +84,15 @@
             18
           ],
           "episode": 0,
-          "fitness": 8590545210.21675,
-          "selectionScore": 107681.5,
-          "score": 33.0,
-          "frames": 1624.0,
+          "fitness": 63186.20834206267,
+          "selectionScore": 40966.0,
+          "score": 12.0,
+          "frames": 1248.0,
           "survivalRatio": 1.0,
-          "approachAppleEvents": 1060.0,
-          "repeatCellCount": 1108.0,
-          "stallSteps": 563.0,
-          "uniqueHeadCells": 516.0
+          "approachAppleEvents": 695.0,
+          "repeatCellCount": 892.0,
+          "stallSteps": 552.0,
+          "uniqueHeadCells": 356.0
         },
         {
           "boardSize": [
@@ -100,31 +100,31 @@
             18
           ],
           "episode": 1,
-          "fitness": 8590552313.204443,
-          "selectionScore": 107677.0,
-          "score": 33.0,
-          "frames": 1569.0,
+          "fitness": 17106621.38920429,
+          "selectionScore": 78004.0,
+          "score": 24.0,
+          "frames": 1103.0,
           "survivalRatio": 1.0,
-          "approachAppleEvents": 1044.0,
-          "repeatCellCount": 1065.0,
-          "stallSteps": 524.0,
-          "uniqueHeadCells": 504.0
+          "approachAppleEvents": 708.0,
+          "repeatCellCount": 677.0,
+          "stallSteps": 394.0,
+          "uniqueHeadCells": 426.0
         }
       ],
       "label": "pc-1000-2024-000.json"
     },
     {
       "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-23-000.json",
-      "avgFitness": 7.555786372591432e+22,
-      "avgSelectionScore": 248838.25,
-      "avgScore": 76.0,
-      "avgFrames": 5300.0,
+      "avgFitness": 70368744688411.94,
+      "avgSelectionScore": 94561.0,
+      "avgScore": 28.5,
+      "avgFrames": 2095.5,
       "avgSurvivalRatio": 1.0,
-      "avgApproachAppleEvents": 3172.5,
-      "avgRepeatCellCount": 4724.0,
-      "avgStallSteps": 2126.5,
-      "fitnessStd": 0.0,
-      "selectionScoreStd": 551.25,
+      "avgApproachAppleEvents": 1259.5,
+      "avgRepeatCellCount": 1643.5,
+      "avgStallSteps": 835.0,
+      "fitnessStd": 70368744638766.84,
+      "selectionScoreStd": 60705.0,
       "scoreWeight": 3000.0,
       "survivalWeight": 100.0,
       "rawFitnessWeight": 0.1,
@@ -140,15 +140,15 @@
             18
           ],
           "episode": 0,
-          "fitness": 7.555786372591432e+22,
-          "selectionScore": 248287.0,
-          "score": 76.0,
-          "frames": 5118.0,
+          "fitness": 49645.08531776796,
+          "selectionScore": 33856.0,
+          "score": 10.0,
+          "frames": 783.0,
           "survivalRatio": 1.0,
-          "approachAppleEvents": 3071.0,
-          "repeatCellCount": 4542.0,
-          "stallSteps": 2046.0,
-          "uniqueHeadCells": 576.0
+          "approachAppleEvents": 464.0,
+          "repeatCellCount": 455.0,
+          "stallSteps": 318.0,
+          "uniqueHeadCells": 328.0
         },
         {
           "boardSize": [
@@ -156,14 +156,14 @@
             18
           ],
           "episode": 1,
-          "fitness": 7.555786372591432e+22,
-          "selectionScore": 249389.5,
-          "score": 76.0,
-          "frames": 5482.0,
+          "fitness": 140737489327178.78,
+          "selectionScore": 155266.0,
+          "score": 47.0,
+          "frames": 3408.0,
           "survivalRatio": 1.0,
-          "approachAppleEvents": 3274.0,
-          "repeatCellCount": 4906.0,
-          "stallSteps": 2207.0,
+          "approachAppleEvents": 2055.0,
+          "repeatCellCount": 2832.0,
+          "stallSteps": 1352.0,
           "uniqueHeadCells": 576.0
         }
       ],
@@ -171,16 +171,16 @@
     },
     {
       "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-42-000.json",
-      "avgFitness": 38655356631.283936,
-      "avgSelectionScore": 112620.25,
-      "avgScore": 34.5,
-      "avgFrames": 1825.0,
-      "avgSurvivalRatio": 1.0,
-      "avgApproachAppleEvents": 1161.5,
-      "avgRepeatCellCount": 1318.0,
-      "avgStallSteps": 662.5,
-      "fitnessStd": 30064837182.201572,
-      "selectionScoreStd": 4637.25,
+      "avgFitness": 4295246016.295703,
+      "avgSelectionScore": 54095.970138888886,
+      "avgScore": 16.5,
+      "avgFrames": 1022.5,
+      "avgSurvivalRatio": 0.5217013888888888,
+      "avgApproachAppleEvents": 617.5,
+      "avgRepeatCellCount": 750.5,
+      "avgStallSteps": 404.0,
+      "fitnessStd": 4295245990.295703,
+      "selectionScoreStd": 54134.529861111114,
       "scoreWeight": 3000.0,
       "survivalWeight": 100.0,
       "rawFitnessWeight": 0.1,
@@ -196,15 +196,15 @@
             18
           ],
           "episode": 0,
-          "fitness": 68720193813.4855,
-          "selectionScore": 117257.5,
-          "score": 36.0,
-          "frames": 1831.0,
-          "survivalRatio": 1.0,
-          "approachAppleEvents": 1175.0,
-          "repeatCellCount": 1330.0,
-          "stallSteps": 655.0,
-          "uniqueHeadCells": 501.0
+          "fitness": 26.0,
+          "selectionScore": -38.55972222222222,
+          "score": 0.0,
+          "frames": 25.0,
+          "survivalRatio": 0.043402777777777776,
+          "approachAppleEvents": 3.0,
+          "repeatCellCount": 0.0,
+          "stallSteps": 21.0,
+          "uniqueHeadCells": 25.0
         },
         {
           "boardSize": [
@@ -212,143 +212,31 @@
             18
           ],
           "episode": 1,
-          "fitness": 8590519449.082361,
-          "selectionScore": 107983.0,
+          "fitness": 8590492006.591406,
+          "selectionScore": 108230.5,
           "score": 33.0,
-          "frames": 1819.0,
+          "frames": 2020.0,
           "survivalRatio": 1.0,
-          "approachAppleEvents": 1148.0,
-          "repeatCellCount": 1306.0,
-          "stallSteps": 670.0,
-          "uniqueHeadCells": 513.0
+          "approachAppleEvents": 1232.0,
+          "repeatCellCount": 1501.0,
+          "stallSteps": 787.0,
+          "uniqueHeadCells": 519.0
         }
       ],
       "label": "pc-1000-42-000.json"
     },
     {
-      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-56-000.json",
-      "avgFitness": 105630.46790833464,
-      "avgSelectionScore": 44418.25,
-      "avgScore": 13.0,
-      "avgFrames": 1206.5,
-      "avgSurvivalRatio": 1.0,
-      "avgApproachAppleEvents": 690.0,
-      "avgRepeatCellCount": 739.5,
-      "avgStallSteps": 515.5,
-      "fitnessStd": 51904.136009500755,
-      "selectionScoreStd": 10697.25,
-      "scoreWeight": 3000.0,
-      "survivalWeight": 100.0,
-      "rawFitnessWeight": 0.1,
-      "rawFitnessCap": 300.0,
-      "zeroScorePenalty": 50.0,
-      "approachAppleWeight": 12.0,
-      "repeatCellPenalty": 3.0,
-      "stallPenalty": 1.5,
-      "results": [
-        {
-          "boardSize": [
-            32,
-            18
-          ],
-          "episode": 0,
-          "fitness": 157534.6039178354,
-          "selectionScore": 55115.5,
-          "score": 16.0,
-          "frames": 1806.0,
-          "survivalRatio": 1.0,
-          "approachAppleEvents": 1000.0,
-          "repeatCellCount": 1269.0,
-          "stallSteps": 805.0,
-          "uniqueHeadCells": 537.0
-        },
-        {
-          "boardSize": [
-            32,
-            18
-          ],
-          "episode": 1,
-          "fitness": 53726.331898833894,
-          "selectionScore": 33721.0,
-          "score": 10.0,
-          "frames": 607.0,
-          "survivalRatio": 1.0,
-          "approachAppleEvents": 380.0,
-          "repeatCellCount": 210.0,
-          "stallSteps": 226.0,
-          "uniqueHeadCells": 397.0
-        }
-      ],
-      "label": "pc-1000-56-000.json"
-    },
-    {
-      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-56-001.json",
-      "avgFitness": 35821859.39118537,
-      "avgSelectionScore": 82774.0,
-      "avgScore": 24.0,
-      "avgFrames": 2800.0,
-      "avgSurvivalRatio": 1.0,
-      "avgApproachAppleEvents": 1598.0,
-      "avgRepeatCellCount": 2243.5,
-      "avgStallSteps": 1201.0,
-      "fitnessStd": 31463941.86139594,
-      "selectionScoreStd": 7456.5,
-      "scoreWeight": 3000.0,
-      "survivalWeight": 100.0,
-      "rawFitnessWeight": 0.1,
-      "rawFitnessCap": 300.0,
-      "zeroScorePenalty": 50.0,
-      "approachAppleWeight": 12.0,
-      "repeatCellPenalty": 3.0,
-      "stallPenalty": 1.5,
-      "results": [
-        {
-          "boardSize": [
-            32,
-            18
-          ],
-          "episode": 0,
-          "fitness": 67285801.25258131,
-          "selectionScore": 90230.5,
-          "score": 26.0,
-          "frames": 3183.0,
-          "survivalRatio": 1.0,
-          "approachAppleEvents": 1835.0,
-          "repeatCellCount": 2633.0,
-          "stallSteps": 1347.0,
-          "uniqueHeadCells": 550.0
-        },
-        {
-          "boardSize": [
-            32,
-            18
-          ],
-          "episode": 1,
-          "fitness": 4357917.529789429,
-          "selectionScore": 75317.5,
-          "score": 22.0,
-          "frames": 2417.0,
-          "survivalRatio": 1.0,
-          "approachAppleEvents": 1361.0,
-          "repeatCellCount": 1854.0,
-          "stallSteps": 1055.0,
-          "uniqueHeadCells": 563.0
-        }
-      ],
-      "label": "pc-1000-56-001.json"
-    },
-    {
       "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-947-000.json",
-      "avgFitness": 142840.82203510843,
-      "avgSelectionScore": 47005.836805555555,
-      "avgScore": 14.5,
-      "avgFrames": 655.5,
-      "avgSurvivalRatio": 0.8133680555555556,
-      "avgApproachAppleEvents": 403.5,
-      "avgRepeatCellCount": 357.0,
-      "avgStallSteps": 251.0,
-      "fitnessStd": 6767.945266765513,
-      "selectionScoreStd": 2534.1631944444453,
+      "avgFitness": 639482.439290153,
+      "avgSelectionScore": 36830.5,
+      "avgScore": 11.0,
+      "avgFrames": 767.0,
+      "avgSurvivalRatio": 1.0,
+      "avgApproachAppleEvents": 471.0,
+      "avgRepeatCellCount": 503.0,
+      "avgStallSteps": 295.0,
+      "fitnessStd": 638370.1840651968,
+      "selectionScoreStd": 28813.5,
       "scoreWeight": 3000.0,
       "survivalWeight": 100.0,
       "rawFitnessWeight": 0.1,
@@ -364,15 +252,15 @@
             18
           ],
           "episode": 0,
-          "fitness": 149608.76730187394,
-          "selectionScore": 49540.0,
-          "score": 15.0,
-          "frames": 950.0,
+          "fitness": 1112.2552249561504,
+          "selectionScore": 8017.0,
+          "score": 2.0,
+          "frames": 636.0,
           "survivalRatio": 1.0,
-          "approachAppleEvents": 565.0,
-          "repeatCellCount": 598.0,
-          "stallSteps": 384.0,
-          "uniqueHeadCells": 352.0
+          "approachAppleEvents": 331.0,
+          "repeatCellCount": 543.0,
+          "stallSteps": 304.0,
+          "uniqueHeadCells": 93.0
         },
         {
           "boardSize": [
@@ -380,74 +268,18 @@
             18
           ],
           "episode": 1,
-          "fitness": 136072.87676834292,
-          "selectionScore": 44471.67361111111,
-          "score": 14.0,
-          "frames": 361.0,
-          "survivalRatio": 0.6267361111111112,
-          "approachAppleEvents": 242.0,
-          "repeatCellCount": 116.0,
-          "stallSteps": 118.0,
-          "uniqueHeadCells": 245.0
+          "fitness": 1277852.6233553498,
+          "selectionScore": 65644.0,
+          "score": 20.0,
+          "frames": 898.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 611.0,
+          "repeatCellCount": 463.0,
+          "stallSteps": 286.0,
+          "uniqueHeadCells": 435.0
         }
       ],
       "label": "pc-1000-947-000.json"
-    },
-    {
-      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-300-56-000.json",
-      "avgFitness": 3998.2815602477935,
-      "avgSelectionScore": 11200.645833333332,
-      "avgScore": 3.0,
-      "avgFrames": 381.0,
-      "avgSurvivalRatio": 0.6614583333333334,
-      "avgApproachAppleEvents": 215.0,
-      "avgRepeatCellCount": 76.0,
-      "avgStallSteps": 165.0,
-      "fitnessStd": 352.9682659052064,
-      "selectionScoreStd": 529.3194444444443,
-      "scoreWeight": 3000.0,
-      "survivalWeight": 100.0,
-      "rawFitnessWeight": 0.1,
-      "rawFitnessCap": 300.0,
-      "zeroScorePenalty": 50.0,
-      "approachAppleWeight": 12.0,
-      "repeatCellPenalty": 3.0,
-      "stallPenalty": 1.5,
-      "results": [
-        {
-          "boardSize": [
-            32,
-            18
-          ],
-          "episode": 0,
-          "fitness": 3645.313294342587,
-          "selectionScore": 11729.965277777777,
-          "score": 3.0,
-          "frames": 475.0,
-          "survivalRatio": 0.8246527777777778,
-          "approachAppleEvents": 271.0,
-          "repeatCellCount": 110.0,
-          "stallSteps": 203.0,
-          "uniqueHeadCells": 365.0
-        },
-        {
-          "boardSize": [
-            32,
-            18
-          ],
-          "episode": 1,
-          "fitness": 4351.249826153,
-          "selectionScore": 10671.326388888889,
-          "score": 3.0,
-          "frames": 287.0,
-          "survivalRatio": 0.4982638888888889,
-          "approachAppleEvents": 159.0,
-          "repeatCellCount": 42.0,
-          "stallSteps": 127.0,
-          "uniqueHeadCells": 245.0
-        }
-      ],
-      "label": "pc-300-56-000.json"
     }
   ],
   "boardSummaries": [
@@ -460,10 +292,10 @@
             32,
             18
           ],
-          "avgSelectionScore": 260206.0,
-          "avgFitness": 9.066943647109719e+23,
-          "avgScore": 79.5,
-          "avgFrames": 5439.5,
+          "avgSelectionScore": 243848.5,
+          "avgFitness": 2.361183241434823e+22,
+          "avgScore": 74.0,
+          "avgFrames": 5471.5,
           "avgSurvivalRatio": 1.0
         }
       ]
@@ -477,10 +309,10 @@
             32,
             18
           ],
-          "avgSelectionScore": 107679.25,
-          "avgFitness": 8590548761.710596,
-          "avgScore": 33.0,
-          "avgFrames": 1596.5,
+          "avgSelectionScore": 59485.0,
+          "avgFitness": 8584903.798773177,
+          "avgScore": 18.0,
+          "avgFrames": 1175.5,
           "avgSurvivalRatio": 1.0
         }
       ]
@@ -494,10 +326,10 @@
             32,
             18
           ],
-          "avgSelectionScore": 248838.25,
-          "avgFitness": 7.555786372591432e+22,
-          "avgScore": 76.0,
-          "avgFrames": 5300.0,
+          "avgSelectionScore": 94561.0,
+          "avgFitness": 70368744688411.94,
+          "avgScore": 28.5,
+          "avgFrames": 2095.5,
           "avgSurvivalRatio": 1.0
         }
       ]
@@ -511,45 +343,11 @@
             32,
             18
           ],
-          "avgSelectionScore": 112620.25,
-          "avgFitness": 38655356631.283936,
-          "avgScore": 34.5,
-          "avgFrames": 1825.0,
-          "avgSurvivalRatio": 1.0
-        }
-      ]
-    },
-    {
-      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-56-000.json",
-      "label": "pc-1000-56-000.json",
-      "items": [
-        {
-          "boardSize": [
-            32,
-            18
-          ],
-          "avgSelectionScore": 44418.25,
-          "avgFitness": 105630.46790833464,
-          "avgScore": 13.0,
-          "avgFrames": 1206.5,
-          "avgSurvivalRatio": 1.0
-        }
-      ]
-    },
-    {
-      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-56-001.json",
-      "label": "pc-1000-56-001.json",
-      "items": [
-        {
-          "boardSize": [
-            32,
-            18
-          ],
-          "avgSelectionScore": 82774.0,
-          "avgFitness": 35821859.39118537,
-          "avgScore": 24.0,
-          "avgFrames": 2800.0,
-          "avgSurvivalRatio": 1.0
+          "avgSelectionScore": 54095.970138888886,
+          "avgFitness": 4295246016.295703,
+          "avgScore": 16.5,
+          "avgFrames": 1022.5,
+          "avgSurvivalRatio": 0.5217013888888888
         }
       ]
     },
@@ -562,28 +360,11 @@
             32,
             18
           ],
-          "avgSelectionScore": 47005.836805555555,
-          "avgFitness": 142840.82203510843,
-          "avgScore": 14.5,
-          "avgFrames": 655.5,
-          "avgSurvivalRatio": 0.8133680555555556
-        }
-      ]
-    },
-    {
-      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-300-56-000.json",
-      "label": "pc-300-56-000.json",
-      "items": [
-        {
-          "boardSize": [
-            32,
-            18
-          ],
-          "avgSelectionScore": 11200.645833333332,
-          "avgFitness": 3998.2815602477935,
-          "avgScore": 3.0,
-          "avgFrames": 381.0,
-          "avgSurvivalRatio": 0.6614583333333334
+          "avgSelectionScore": 36830.5,
+          "avgFitness": 639482.439290153,
+          "avgScore": 11.0,
+          "avgFrames": 767.0,
+          "avgSurvivalRatio": 1.0
         }
       ]
     }
