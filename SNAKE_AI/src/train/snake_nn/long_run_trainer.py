@@ -17,7 +17,7 @@ if __package__ in (None, ''):
 else:
     project_root = Path(__file__).resolve().parents[3]
 
-from train.snake_nn.evaluate_models import evaluate_models, write_evaluation_report
+from train.snake_nn.evaluate_models import write_evaluation_report
 from train.snake_nn.paths import LONG_RUN_ROOT, resolve_project_path
 from train.snake_nn.trainer import TrainingConfig, build_export_name, build_profile_config, train
 
@@ -79,13 +79,56 @@ def generate_unique_seed(existing_seeds: set[int], rng: random.Random) -> int:
             return candidate
 
 
-def _log_event(log_path: Path, event: str, profile_id: str, seed: int | None = None, **extra):
+def _local_timestamp_text():
+    now = datetime.now()
+    return f'{now.year % 100}.{now.month}.{now.day} - {now.hour:02d}：{now.minute:02d}'
+
+
+def _format_float(value):
+    if value is None:
+        return '--'
+    return f'{float(value):.2f}'
+
+
+def _build_log_message(action: str, *, target: str | None = None, reason: str | None = None, result: str = '成功', details: str | None = None):
+    headline = f'[{_local_timestamp_text()}]：{action}'
+    if target:
+        headline += f'{target}'
+    if reason:
+        headline += f'（由于{reason}）'
+    parts = [headline]
+    if details:
+        parts.append(details)
+    parts.append(f'操作结果：{result}')
+    return '；'.join(parts)
+
+
+def _log_event(
+    log_path: Path,
+    event: str,
+    profile_id: str,
+    seed: int | None = None,
+    *,
+    action: str | None = None,
+    target: str | None = None,
+    reason: str | None = None,
+    result: str = 'success',
+    details: str | None = None,
+    **extra,
+):
     log_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         'timestamp': datetime.now(timezone.utc).isoformat(),
+        'timestampLocalText': _local_timestamp_text(),
         'event': event,
+        'action': action or event,
         'profileId': profile_id,
         'seed': seed,
+        'target': target,
+        'reason': reason,
+        'result': result,
+        'details': details,
+        'message': _build_log_message(action or event, target=target, reason=reason, result='成功' if result == 'success' else result, details=details),
         **extra,
     }
     with log_path.open('a', encoding='utf-8') as fp:
@@ -110,55 +153,160 @@ def _build_run_config(base_config: TrainingConfig, *, seed: int, generations: in
     )
 
 
-def _evaluate_export(config: TrainingConfig, output_path: Path):
-    reports = evaluate_models([output_path], config.board_size_pool, config.episodes_per_board, config.starvation_scale)
-    return reports[0]
+def _history_entry_to_report(entry, *, seed: int, generation: int, profile_id: str, profile_label: str, path: Path | None = None):
+    report_path = str(path) if path is not None else f'history://{profile_id}/{seed}/{generation}'
+    return {
+        'model': report_path,
+        'avgSelectionScore': float(entry['bestSelectionScore']),
+        'avgFitness': float(entry.get('bestAvgFitness', 0.0)),
+        'avgScore': float(entry.get('bestAvgScore', 0.0)),
+        'avgFrames': float(entry.get('bestAvgFrames', 0.0)),
+        'avgSurvivalRatio': float(entry.get('bestAvgSurvivalRatio', 0.0)),
+        'avgApproachAppleEvents': float(entry.get('bestAvgApproachAppleEvents', 0.0)),
+        'avgRepeatCellCount': float(entry.get('bestAvgRepeatCellCount', 0.0)),
+        'avgStallSteps': float(entry.get('bestAvgStallSteps', 0.0)),
+        'fitnessStd': float(entry.get('bestFitnessStd', 0.0)),
+        'selectionScoreStd': float(entry.get('bestSelectionScoreStd', 0.0)),
+        'results': [],
+        'historyEntry': entry,
+        'seed': seed,
+        'generation': generation,
+        'profileId': profile_id,
+        'profileLabel': profile_label,
+    }
 
 
-def _evaluate_default(config: TrainingConfig):
+def _history_generation_map(history_path: Path):
+    if not history_path.exists():
+        return {}
+    data = json.loads(history_path.read_text(encoding='utf-8'))
+    return {int(item['generation']): item for item in data.get('history', [])}
+
+
+def _load_history_snapshot(profile_id: str, seed: int, generation: int, *, checkpoint_dir: Path, export_dir: Path | None = None):
+    checkpoint_path = checkpoint_dir / f'{seed}-latest'
+    history_path = checkpoint_path / 'training-history.json'
+    generation_map = _history_generation_map(history_path)
+    entry = generation_map.get(int(generation))
+    if entry is None:
+        return None
+    export_path = None
+    if export_dir is not None:
+        fallback_path = None
+        for path in sorted(export_dir.glob(f'{profile_id}-*-{seed}-*.json')):
+            if path.name.endswith('.eval-report.json') or path.name in {'best-of-batch.json', 'evaluation-report.json'}:
+                continue
+            metadata = json.loads(path.read_text(encoding='utf-8')).get('metadata', {})
+            if int(metadata.get('generation', -1)) == int(generation):
+                export_path = path
+                break
+            if fallback_path is None:
+                fallback_path = path
+        if export_path is None:
+            export_path = fallback_path
+    return {
+        'seed': seed,
+        'generation': int(generation),
+        'historyEntry': entry,
+        'checkpointPath': checkpoint_path,
+        'historyPath': history_path,
+        'exportPath': export_path,
+        'report': _history_entry_to_report(
+            entry,
+            seed=seed,
+            generation=int(generation),
+            profile_id=profile_id,
+            profile_label=entry.get('profileLabel', profile_id),
+            path=export_path,
+        ),
+    }
+
+
+def _load_default_history(config: TrainingConfig, generation: int, *, export_dir: Path):
     default_path = resolve_project_path(config.default_model_path)
     if not default_path.exists():
         return None
-    reports = evaluate_models([default_path], config.board_size_pool, config.episodes_per_board, config.starvation_scale)
-    return reports[0]
+    metadata = json.loads(default_path.read_text(encoding='utf-8')).get('metadata', {})
+    default_seed = metadata.get('seed')
+    if default_seed is None:
+        return None
+    return _load_history_snapshot(config.profile_id, int(default_seed), generation, checkpoint_dir=resolve_project_path(config.checkpoint_dir), export_dir=export_dir)
 
 
-def _load_ranked_exports(export_dir: Path, profile_id: str):
+def _scan_resumable_trial_checkpoints(checkpoint_dir: Path, profile_id: str, trial_generations: int):
+    resumable = []
+    if not checkpoint_dir.exists():
+        return resumable
+    for path in sorted(checkpoint_dir.glob('*-latest')):
+        meta_path = path / 'checkpoint_meta.json'
+        if not meta_path.exists():
+            continue
+        meta = json.loads(meta_path.read_text(encoding='utf-8'))
+        seed = meta.get('seed')
+        generation = int(meta.get('generation', -1))
+        snapshot_profile = (meta.get('trainerConfigSnapshot') or {}).get('profile_id')
+        if seed is None or snapshot_profile != profile_id:
+            continue
+        if generation >= trial_generations:
+            continue
+        resumable.append({
+            'seed': int(seed),
+            'generation': generation,
+            'checkpointPath': path,
+            'metaPath': meta_path,
+            'meta': meta,
+        })
+    resumable.sort(key=lambda item: (item['generation'], item['seed']))
+    return resumable
+
+
+def _load_ranked_history_snapshots(export_dir: Path, checkpoint_dir: Path, profile_id: str, generation: int):
     candidates = []
-    for path in sorted(export_dir.glob('*.json')):
-        if path.name.endswith('.eval-report.json'):
-            continue
-        # 这里显式排除汇总文件，只把“真正可继续参与筛选的候选模型”算进长期训练池。
-        if path.name in {'best-of-batch.json', 'evaluation-report.json'}:
-            continue
-        report = evaluate_models([path], None, episodes_per_board=2, starvation_scale=1.0)[0]
-        candidates.append({'path': path, 'report': report, 'profileId': profile_id})
+    seen_seeds = set()
+    if checkpoint_dir.exists():
+        for path in sorted(checkpoint_dir.glob('*-latest')):
+            prefix = path.name[:-7]
+            if not prefix.isdigit():
+                continue
+            seed = int(prefix)
+            snapshot = _load_history_snapshot(profile_id, seed, generation, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+            if snapshot is None:
+                continue
+            candidates.append(snapshot)
+            seen_seeds.add(seed)
+    if export_dir.exists():
+        for path in sorted(export_dir.glob('*.json')):
+            if path.name.endswith('.eval-report.json'):
+                continue
+            # 这里显式排除汇总文件，只把“真正可继续参与筛选的候选模型”算进长期训练池。
+            if path.name in {'best-of-batch.json', 'evaluation-report.json'}:
+                continue
+            metadata = json.loads(path.read_text(encoding='utf-8')).get('metadata', {})
+            seed = metadata.get('seed')
+            if seed is None or int(seed) in seen_seeds:
+                continue
+            snapshot = _load_history_snapshot(profile_id, int(seed), generation, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+            if snapshot is None:
+                continue
+            candidates.append(snapshot)
+            seen_seeds.add(int(seed))
     candidates.sort(key=lambda item: item['report']['avgSelectionScore'], reverse=True)
     return candidates
 
 
 def _cleanup_non_topn(config: LongRunConfig, ranked_candidates, checkpoint_dir: Path, log_path: Path):
-    keep_paths = {item['path'].resolve() for item in ranked_candidates[:config.keep_top_n]}
-    keep_seeds = set()
-    for item in ranked_candidates[:config.keep_top_n]:
-        metadata = item['report']
-        model_path = item['path']
-        stem_parts = model_path.stem.split('-')
-        if len(stem_parts) >= 3 and stem_parts[-2].isdigit():
-            keep_seeds.add(int(stem_parts[-2]))
+    keep_seeds = {int(item['seed']) for item in ranked_candidates[:config.keep_top_n]}
 
     for item in ranked_candidates[config.keep_top_n:]:
-        path = item['path']
-        stem_parts = path.stem.split('-')
-        seed = int(stem_parts[-2]) if len(stem_parts) >= 3 and stem_parts[-2].isdigit() else None
-        if not config.keep_non_topn_final_exports and path.exists():
-            path.unlink()
-            _log_event(log_path, 'cleanup_deleted_export', config.profile_id, seed=seed, path=str(path))
-        if seed is not None:
-            checkpoint_path = checkpoint_dir / f'{seed}-latest'
-            if checkpoint_path.exists() and seed not in keep_seeds:
-                rmtree(checkpoint_path)
-                _log_event(log_path, 'cleanup_deleted_checkpoint', config.profile_id, seed=seed, path=str(checkpoint_path))
+        seed = int(item['seed'])
+        export_path = item.get('exportPath')
+        if not config.keep_non_topn_final_exports and export_path is not None and export_path.exists():
+            export_path.unlink()
+            _log_event(log_path, 'cleanup_deleted_export', config.profile_id, seed=seed, action='回收导出模型', target=f'：{seed}', reason='非 top-N 候选模型被清理', details=f'导出文件：{export_path}', path=str(export_path))
+        checkpoint_path = checkpoint_dir / f'{seed}-latest'
+        if checkpoint_path.exists() and seed not in keep_seeds:
+            rmtree(checkpoint_path)
+            _log_event(log_path, 'cleanup_deleted_checkpoint', config.profile_id, seed=seed, action='回收checkpoint', target=f'：{seed}', reason='非 top-N 候选模型被清理', details=f'checkpoint目录：{checkpoint_path}', path=str(checkpoint_path))
 
 
 def _write_bulk_report(export_dir: Path, ranked_candidates):
@@ -172,22 +320,54 @@ def _write_bulk_report(export_dir: Path, ranked_candidates):
 
 def _trial_passes(config: LongRunConfig, trial_report, default_report, ranked_candidates):
     if trial_report['avgScore'] < config.trial_min_avg_score:
-        return False, 'avgScore below threshold'
+        return False, {
+            'code': '平均苹果数低于试训门槛',
+            'message': '平均苹果数低于试训门槛',
+            'trialAvgScore': trial_report['avgScore'],
+            'requiredAvgScore': config.trial_min_avg_score,
+        }
     if trial_report['avgFrames'] < config.trial_min_avg_frames:
-        return False, 'avgFrames below threshold'
+        return False, {
+            'code': '平均存活步数低于试训门槛',
+            'message': '平均存活步数低于试训门槛',
+            'trialAvgFrames': trial_report['avgFrames'],
+            'requiredAvgFrames': config.trial_min_avg_frames,
+        }
     if default_report:
         ratio = trial_report['avgSelectionScore'] / max(default_report['avgSelectionScore'], 1e-9)
         if ratio < config.trial_min_selection_ratio_vs_default:
-            return False, 'selection ratio vs default below threshold'
+            return False, {
+                'code': '相对默认模型的选择分比例低于门槛',
+                'message': '平均选择分低于默认模型要求',
+                'trialAvgSelectionScore': trial_report['avgSelectionScore'],
+                'defaultAvgSelectionScore': default_report['avgSelectionScore'],
+                'ratio': ratio,
+                'requiredRatio': config.trial_min_selection_ratio_vs_default,
+            }
     if ranked_candidates and len(ranked_candidates) >= config.keep_top_n:
-        floor_score = ranked_candidates[min(config.keep_top_n, len(ranked_candidates)) - 1]['report']['avgSelectionScore']
+        floor_candidate = ranked_candidates[min(config.keep_top_n, len(ranked_candidates)) - 1]
+        floor_score = floor_candidate['report']['avgSelectionScore']
         ratio = trial_report['avgSelectionScore'] / max(floor_score, 1e-9)
         if ratio < config.trial_min_selection_ratio_vs_topn_floor:
-            return False, 'selection ratio vs top-N floor below threshold'
-    return True, 'accepted'
+            return False, {
+                'code': '相对历史候选地板的选择分比例低于门槛',
+                'message': '平均选择分低于历史候选地板要求',
+                'trialAvgSelectionScore': trial_report['avgSelectionScore'],
+                'floorAvgSelectionScore': floor_score,
+                'floorSeed': floor_candidate['seed'],
+                'ratio': ratio,
+                'requiredRatio': config.trial_min_selection_ratio_vs_topn_floor,
+            }
+    return True, {
+        'code': '通过试训筛选',
+        'message': '通过试训筛选',
+        'trialAvgSelectionScore': trial_report['avgSelectionScore'],
+        'trialAvgScore': trial_report['avgScore'],
+        'trialAvgFrames': trial_report['avgFrames'],
+    }
 
 
-# 长期自动训练主流程：扫描现有候选池 -> 生成新 seed -> warmup / trial / full train -> 重新排行 -> 可选清理。
+# 长期自动训练主流程：优先续训未完成 trial 的 checkpoint，清空 backlog 后才生成新 seed，再做 warmup / trial / full train / 排序 / 清理。
 def run_long_training(config: LongRunConfig):
     rng = random.Random()
     base_config = build_profile_config(TrainingConfig(), config.profile_id)
@@ -197,81 +377,193 @@ def run_long_training(config: LongRunConfig):
     checkpoint_dir = resolve_project_path(base_config.checkpoint_dir)
     log_path = _build_long_run_log_path(config)
 
+    while True:
+        resumable_checkpoints = _scan_resumable_trial_checkpoints(checkpoint_dir, config.profile_id, config.trial_generations)
+        if resumable_checkpoints:
+            resumable = resumable_checkpoints[0]
+            resumed_seed = int(resumable['seed'])
+            resumed_generation = int(resumable['generation'])
+            ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.trial_generations)
+            _log_event(
+                log_path,
+                'resume_trial_checkpoint',
+                config.profile_id,
+                seed=resumed_seed,
+                action='恢复试训checkpoint',
+                target=f'：{resumed_seed}',
+                reason='发现未完成试训的checkpoint，优先续训而不是创建新seed',
+                details=f'checkpoint目录：{resumable["checkpointPath"]}；当前代数：{resumed_generation}；试训目标代数：{config.trial_generations}；当前待续训checkpoint数量：{len(resumable_checkpoints)}',
+                checkpointPath=str(resumable['checkpointPath']),
+                checkpointGeneration=resumed_generation,
+                pendingCheckpointCount=len(resumable_checkpoints),
+            )
+            trial_config = _build_run_config(
+                base_config,
+                seed=resumed_seed,
+                generations=config.trial_generations,
+                promote_to_default=False,
+                resume_from_checkpoint=str(resumable['checkpointPath']),
+            )
+            _log_event(log_path, 'trial_started', config.profile_id, seed=resumed_seed, action='开始试训', target=f'：{resumed_seed}', reason='从未完成试训的checkpoint恢复执行', details=f'试训代数：{config.trial_generations}；checkpoint当前代数：{resumed_generation}；可比较历史候选数：{len(ranked_candidates)}', generations=config.trial_generations)
+            if not config.dry_run:
+                trial_output = train(trial_config)
+                trial_snapshot = _load_history_snapshot(config.profile_id, resumed_seed, config.trial_generations, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+                if trial_snapshot is None:
+                    raise ValueError(f'Missing generation-matched history for resumed trial seed={resumed_seed} generation={config.trial_generations}')
+                trial_report = trial_snapshot['report']
+            else:
+                trial_output = export_dir / f'dry-run-trial-{resumed_seed}.json'
+                trial_report = {'avgSelectionScore': 0.0, 'avgScore': 0.0, 'avgFrames': 0.0}
+            _log_event(log_path, 'trial_finished', config.profile_id, seed=resumed_seed, action='完成试训', target=f'：{resumed_seed}', reason='checkpoint恢复后的trial阶段结束，准备进入历史候选比较', details=f'输出模型：{trial_output}；对比代数：{config.trial_generations}；平均选择分：{_format_float(trial_report["avgSelectionScore"])}；平均苹果数：{_format_float(trial_report["avgScore"])}；平均存活步数：{_format_float(trial_report["avgFrames"])}', output=str(trial_output), report=trial_report)
+
+            default_snapshot = _load_default_history(base_config, config.trial_generations, export_dir=export_dir)
+            default_report = default_snapshot['report'] if default_snapshot else None
+            passes, reason_info = _trial_passes(config, trial_report, default_report, ranked_candidates)
+            if not passes:
+                checkpoint_path = checkpoint_dir / f'{resumed_seed}-latest'
+                if checkpoint_path.exists() and not config.dry_run:
+                    rmtree(checkpoint_path)
+                    _log_event(log_path, 'cleanup_deleted_checkpoint', config.profile_id, seed=resumed_seed, action='回收checkpoint', target=f'：{resumed_seed}', reason='trial未通过，回收该seed的checkpoint', details=f'checkpoint目录：{checkpoint_path}', path=str(checkpoint_path))
+                if trial_output.exists() and not config.keep_non_topn_final_exports and not config.dry_run:
+                    trial_output.unlink()
+                    _log_event(log_path, 'cleanup_deleted_export', config.profile_id, seed=resumed_seed, action='回收导出模型', target=f'：{resumed_seed}', reason='trial未通过，删除该seed的导出模型', details=f'导出文件：{trial_output}', path=str(trial_output))
+                _log_event(log_path, 'trial_rejected', config.profile_id, seed=resumed_seed, action='回收seed', target=f'：{resumed_seed}', reason=reason_info['message'], details=(
+                    f'试训代数：{config.trial_generations}；'
+                    f'该seed平均选择分：{_format_float(reason_info.get("trialAvgSelectionScore", trial_report.get("avgSelectionScore")))}；'
+                    f'该seed平均苹果数：{_format_float(reason_info.get("trialAvgScore", trial_report.get("avgScore")))}；'
+                    f'该seed平均存活步数：{_format_float(reason_info.get("trialAvgFrames", trial_report.get("avgFrames")))}；'
+                    f'默认模型平均选择分：{_format_float(reason_info.get("defaultAvgSelectionScore"))}；'
+                    f'历史候选地板seed：{reason_info.get("floorSeed", "--")}；'
+                    f'历史候选地板平均选择分：{_format_float(reason_info.get("floorAvgSelectionScore"))}；'
+                    f'当前比例：{_format_float(reason_info.get("ratio"))}；'
+                    f'要求比例：{_format_float(reason_info.get("requiredRatio"))}；'
+                    f'要求最低平均苹果数：{_format_float(reason_info.get("requiredAvgScore"))}；'
+                    f'要求最低平均存活步数：{_format_float(reason_info.get("requiredAvgFrames"))}'
+                ), report=trial_report, reasonInfo=reason_info)
+                continue
+
+            _log_event(log_path, 'full_train_started', config.profile_id, seed=resumed_seed, action='开始完整训练', target=f'：{resumed_seed}', reason='trial通过，继续从trial checkpoint跑到完整代数', details=f'目标完整代数：{config.full_generations}；试训平均选择分：{_format_float(trial_report["avgSelectionScore"])}；试训平均苹果数：{_format_float(trial_report["avgScore"])}；试训平均存活步数：{_format_float(trial_report["avgFrames"])}')
+            if not config.dry_run:
+                full_config = _build_run_config(base_config, seed=resumed_seed, generations=config.full_generations, promote_to_default=False, resume_from_checkpoint=str(resumable['checkpointPath']))
+                full_output = train(full_config)
+                full_snapshot = _load_history_snapshot(config.profile_id, resumed_seed, config.full_generations, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+                if full_snapshot is None:
+                    raise ValueError(f'Missing generation-matched history for resumed full-train seed={resumed_seed} generation={config.full_generations}')
+                full_report = full_snapshot['report']
+            else:
+                full_output = export_dir / f'dry-run-full-{resumed_seed}.json'
+                full_report = None
+            _log_event(log_path, 'full_train_finished', config.profile_id, seed=resumed_seed, action='完成完整训练', target=f'：{resumed_seed}', reason='full train阶段结束，准备重新进入全量历史候选池排序', details=f'输出模型：{full_output}；对比代数：{config.full_generations}；平均选择分：{_format_float(full_report["avgSelectionScore"]) if full_report else "--"}；平均苹果数：{_format_float(full_report["avgScore"]) if full_report else "--"}；平均存活步数：{_format_float(full_report["avgFrames"]) if full_report else "--"}', output=str(full_output), report=full_report)
+
+            ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.full_generations)
+            _log_event(log_path, 'batch_evaluation_started', config.profile_id, seed=resumed_seed, action='开始重排历史候选池', target=f'：{config.profile_id}', reason='full train完成后，重新加载 full_generations 上的历史候选并生成汇总报告', details=f'可比较候选数：{len(ranked_candidates)}；对比代数：{config.full_generations}', candidateCount=len(ranked_candidates))
+            report_json_path = _write_bulk_report(export_dir, ranked_candidates)
+            _log_event(log_path, 'batch_evaluation_finished', config.profile_id, seed=resumed_seed, action='完成历史候选池重排', target=f'：{config.profile_id}', reason='full_generations历史候选汇总报告已生成', details=f'报告文件：{report_json_path if report_json_path else "--"}；候选数：{len(ranked_candidates)}', report=str(report_json_path) if report_json_path else None)
+
+            if len(ranked_candidates) >= config.cleanup_interval_runs:
+                _log_event(log_path, 'cleanup_started', config.profile_id, seed=resumed_seed, action='开始清理弱模型', target=f'：{config.profile_id}', reason='可比较候选池规模达到清理阈值', details=f'候选数：{len(ranked_candidates)}；清理阈值：{config.cleanup_interval_runs}；保留topN：{config.keep_top_n}', keepTopN=config.keep_top_n)
+                _cleanup_non_topn(config, ranked_candidates, checkpoint_dir, log_path)
+                ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.full_generations)
+                _write_bulk_report(export_dir, ranked_candidates)
+
+            for item in ranked_candidates[:config.keep_top_n]:
+                export_path = item.get('exportPath') or item['checkpointPath']
+                _log_event(log_path, 'retained_top_model', config.profile_id, seed=int(item['seed']), action='保留top模型', target=f'：{int(item["seed"])}', reason='进入当前full_generations历史候选池前列，保留为长期候选', details=f'文件路径：{export_path}；平均选择分：{_format_float(item["report"]["avgSelectionScore"])}；平均苹果数：{_format_float(item["report"]["avgScore"])}；平均存活步数：{_format_float(item["report"]["avgFrames"])}', path=str(export_path), selectionScore=item['report']['avgSelectionScore'])
+            continue
+
+        _log_event(log_path, 'resume_backlog_cleared', config.profile_id, action='未完成试训checkpoint已清空', target=f'：{config.profile_id}', reason='当前目录中已没有代数小于试训目标的checkpoint，允许进入新seed创建阶段', details=f'试训目标代数：{config.trial_generations}')
+        break
+
     existing_seeds = _list_existing_seeds(export_dir, checkpoint_dir)
-    ranked_candidates = _load_ranked_exports(export_dir, config.profile_id)
+    ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.trial_generations)
     generated_seed = generate_unique_seed(existing_seeds, rng)
     existing_seeds.add(generated_seed)
-    _log_event(log_path, 'seed_generated', config.profile_id, seed=generated_seed)
+    _log_event(log_path, 'seed_generated', config.profile_id, seed=generated_seed, action='生成新seed', target=f'：{generated_seed}', reason='未发现待续训checkpoint，创建新seed进入长期训练流程', details=f'当前已知历史seed池数量：{len(existing_seeds) - 1}')
 
-    # 候选池还没堆起来时直接完整训练，优先把样本数量补足，再谈 trial 筛选。
     warmup_mode = len(ranked_candidates) < config.warmup_seed_count
     if warmup_mode:
-        _log_event(log_path, 'full_train_started', config.profile_id, seed=generated_seed, reason='warmup')
+        _log_event(log_path, 'full_train_started', config.profile_id, seed=generated_seed, action='开始完整训练', target=f'：{generated_seed}', reason='进入warmup模式：可比较历史模型数量不足', details=f'可比较历史候选数：{len(ranked_candidates)}；warmup阈值：{config.warmup_seed_count}；目标代数：{config.full_generations}')
         if not config.dry_run:
             full_config = _build_run_config(base_config, seed=generated_seed, generations=config.full_generations, promote_to_default=False)
             full_output = train(full_config)
-            full_report = _evaluate_export(full_config, full_output)
+            full_snapshot = _load_history_snapshot(config.profile_id, generated_seed, config.full_generations, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+            if full_snapshot is None:
+                raise ValueError(f'Missing generation-matched history for warmup seed={generated_seed} generation={config.full_generations}')
+            full_report = full_snapshot['report']
         else:
             full_output = export_dir / f'dry-run-{generated_seed}.json'
             full_report = None
-        _log_event(log_path, 'full_train_finished', config.profile_id, seed=generated_seed, output=str(full_output), report=full_report)
-        ranked_candidates = _load_ranked_exports(export_dir, config.profile_id)
+        _log_event(log_path, 'full_train_finished', config.profile_id, seed=generated_seed, action='完成完整训练', target=f'：{generated_seed}', reason='warmup阶段完整训练结束', details=f'输出模型：{full_output}；对比代数：{config.full_generations}；平均选择分：{_format_float(full_report["avgSelectionScore"]) if full_report else "--"}；平均苹果数：{_format_float(full_report["avgScore"]) if full_report else "--"}；平均存活步数：{_format_float(full_report["avgFrames"])}' if full_report else f'输出模型：{full_output}；对比代数：{config.full_generations}；平均选择分：--；平均苹果数：--；平均存活步数：--', output=str(full_output), report=full_report)
+        ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.full_generations)
         _write_bulk_report(export_dir, ranked_candidates)
         return generated_seed
 
     trial_config = _build_run_config(base_config, seed=generated_seed, generations=config.trial_generations, promote_to_default=False)
-    _log_event(log_path, 'trial_started', config.profile_id, seed=generated_seed, generations=config.trial_generations)
+    _log_event(log_path, 'trial_started', config.profile_id, seed=generated_seed, action='开始试训', target=f'：{generated_seed}', reason='可比较历史模型数量已达到warmup阈值，进入trial筛选', details=f'试训代数：{config.trial_generations}；可比较历史候选数：{len(ranked_candidates)}；warmup阈值：{config.warmup_seed_count}', generations=config.trial_generations)
     if not config.dry_run:
         trial_output = train(trial_config)
-        trial_report = _evaluate_export(trial_config, trial_output)
+        trial_snapshot = _load_history_snapshot(config.profile_id, generated_seed, config.trial_generations, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+        if trial_snapshot is None:
+            raise ValueError(f'Missing generation-matched history for trial seed={generated_seed} generation={config.trial_generations}')
+        trial_report = trial_snapshot['report']
     else:
         trial_output = export_dir / f'dry-run-trial-{generated_seed}.json'
         trial_report = {'avgSelectionScore': 0.0, 'avgScore': 0.0, 'avgFrames': 0.0}
-    _log_event(log_path, 'trial_finished', config.profile_id, seed=generated_seed, output=str(trial_output), report=trial_report)
+    _log_event(log_path, 'trial_finished', config.profile_id, seed=generated_seed, action='完成试训', target=f'：{generated_seed}', reason='trial阶段训练结束，准备进入历史候选比较', details=f'输出模型：{trial_output}；对比代数：{config.trial_generations}；平均选择分：{_format_float(trial_report["avgSelectionScore"])}；平均苹果数：{_format_float(trial_report["avgScore"])}；平均存活步数：{_format_float(trial_report["avgFrames"])}', output=str(trial_output), report=trial_report)
 
-    # 试训结束后，先拿当前默认模型和现有 top-N 地板做门槛判断，决定这个 seed 值不值得继续投入完整训练。
-    default_report = _evaluate_default(base_config)
-    passes, reason = _trial_passes(config, trial_report, default_report, ranked_candidates)
+    default_snapshot = _load_default_history(base_config, config.trial_generations, export_dir=export_dir)
+    default_report = default_snapshot['report'] if default_snapshot else None
+    passes, reason_info = _trial_passes(config, trial_report, default_report, ranked_candidates)
     if not passes:
         checkpoint_path = checkpoint_dir / f'{generated_seed}-latest'
         if checkpoint_path.exists() and not config.dry_run:
             rmtree(checkpoint_path)
-            _log_event(log_path, 'cleanup_deleted_checkpoint', config.profile_id, seed=generated_seed, path=str(checkpoint_path))
+            _log_event(log_path, 'cleanup_deleted_checkpoint', config.profile_id, seed=generated_seed, action='回收checkpoint', target=f'：{generated_seed}', reason='trial未通过，回收该seed的checkpoint', details=f'checkpoint目录：{checkpoint_path}', path=str(checkpoint_path))
         if trial_output.exists() and not config.keep_non_topn_final_exports and not config.dry_run:
             trial_output.unlink()
-            _log_event(log_path, 'cleanup_deleted_export', config.profile_id, seed=generated_seed, path=str(trial_output))
-        _log_event(log_path, 'trial_rejected', config.profile_id, seed=generated_seed, reason=reason, report=trial_report)
+            _log_event(log_path, 'cleanup_deleted_export', config.profile_id, seed=generated_seed, action='回收导出模型', target=f'：{generated_seed}', reason='trial未通过，删除该seed的导出模型', details=f'导出文件：{trial_output}', path=str(trial_output))
+        _log_event(log_path, 'trial_rejected', config.profile_id, seed=generated_seed, action='回收seed', target=f'：{generated_seed}', reason=reason_info['message'], details=(
+            f'试训代数：{config.trial_generations}；'
+            f'该seed平均选择分：{_format_float(reason_info.get("trialAvgSelectionScore", trial_report.get("avgSelectionScore")))}；'
+            f'该seed平均苹果数：{_format_float(reason_info.get("trialAvgScore", trial_report.get("avgScore")))}；'
+            f'该seed平均存活步数：{_format_float(reason_info.get("trialAvgFrames", trial_report.get("avgFrames")))}；'
+            f'默认模型平均选择分：{_format_float(reason_info.get("defaultAvgSelectionScore"))}；'
+            f'历史候选地板seed：{reason_info.get("floorSeed", "--")}；'
+            f'历史候选地板平均选择分：{_format_float(reason_info.get("floorAvgSelectionScore"))}；'
+            f'当前比例：{_format_float(reason_info.get("ratio"))}；'
+            f'要求比例：{_format_float(reason_info.get("requiredRatio"))}；'
+            f'要求最低平均苹果数：{_format_float(reason_info.get("requiredAvgScore"))}；'
+            f'要求最低平均存活步数：{_format_float(reason_info.get("requiredAvgFrames"))}'
+        ), report=trial_report, reasonInfo=reason_info)
         return generated_seed
 
-    _log_event(log_path, 'full_train_started', config.profile_id, seed=generated_seed, reason='trial_passed')
+    _log_event(log_path, 'full_train_started', config.profile_id, seed=generated_seed, action='开始完整训练', target=f'：{generated_seed}', reason='trial通过，继续从trial checkpoint跑到完整代数', details=f'目标完整代数：{config.full_generations}；试训平均选择分：{_format_float(trial_report["avgSelectionScore"])}；试训平均苹果数：{_format_float(trial_report["avgScore"])}；试训平均存活步数：{_format_float(trial_report["avgFrames"])}')
     if not config.dry_run:
         full_config = _build_run_config(base_config, seed=generated_seed, generations=config.full_generations, promote_to_default=False, resume_from_checkpoint=f'artifacts/models/checkpoints/{config.profile_id}/{generated_seed}-latest')
         full_output = train(full_config)
-        full_report = _evaluate_export(full_config, full_output)
+        full_snapshot = _load_history_snapshot(config.profile_id, generated_seed, config.full_generations, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+        if full_snapshot is None:
+            raise ValueError(f'Missing generation-matched history for full-train seed={generated_seed} generation={config.full_generations}')
+        full_report = full_snapshot['report']
     else:
         full_output = export_dir / f'dry-run-full-{generated_seed}.json'
         full_report = None
-    _log_event(log_path, 'full_train_finished', config.profile_id, seed=generated_seed, output=str(full_output), report=full_report)
+    _log_event(log_path, 'full_train_finished', config.profile_id, seed=generated_seed, action='完成完整训练', target=f'：{generated_seed}', reason='full train阶段结束，准备重新进入全量历史候选池排序', details=f'输出模型：{full_output}；对比代数：{config.full_generations}；平均选择分：{_format_float(full_report["avgSelectionScore"]) if full_report else "--"}；平均苹果数：{_format_float(full_report["avgScore"]) if full_report else "--"}；平均存活步数：{_format_float(full_report["avgFrames"])}' if full_report else f'输出模型：{full_output}；对比代数：{config.full_generations}；平均选择分：--；平均苹果数：--；平均存活步数：--', output=str(full_output), report=full_report)
 
-    ranked_candidates = _load_ranked_exports(export_dir, config.profile_id)
-    _log_event(log_path, 'batch_evaluation_started', config.profile_id, seed=generated_seed, candidateCount=len(ranked_candidates))
+    ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.full_generations)
+    _log_event(log_path, 'batch_evaluation_started', config.profile_id, seed=generated_seed, action='开始重排历史候选池', target=f'：{config.profile_id}', reason='full train完成后，重新加载 full_generations 上的历史候选并生成汇总报告', details=f'可比较候选数：{len(ranked_candidates)}；对比代数：{config.full_generations}', candidateCount=len(ranked_candidates))
     report_json_path = _write_bulk_report(export_dir, ranked_candidates)
-    _log_event(log_path, 'batch_evaluation_finished', config.profile_id, seed=generated_seed, report=str(report_json_path) if report_json_path else None)
+    _log_event(log_path, 'batch_evaluation_finished', config.profile_id, seed=generated_seed, action='完成历史候选池重排', target=f'：{config.profile_id}', reason='full_generations历史候选汇总报告已生成', details=f'报告文件：{report_json_path if report_json_path else "--"}；候选数：{len(ranked_candidates)}', report=str(report_json_path) if report_json_path else None)
 
-    # 候选池达到设定规模后，按 keep_top_n 清理弱模型与其 checkpoint，避免长期运行后目录无限膨胀。
     if len(ranked_candidates) >= config.cleanup_interval_runs:
-        _log_event(log_path, 'cleanup_started', config.profile_id, seed=generated_seed, keepTopN=config.keep_top_n)
+        _log_event(log_path, 'cleanup_started', config.profile_id, seed=generated_seed, action='开始清理弱模型', target=f'：{config.profile_id}', reason='可比较候选池规模达到清理阈值', details=f'候选数：{len(ranked_candidates)}；清理阈值：{config.cleanup_interval_runs}；保留topN：{config.keep_top_n}', keepTopN=config.keep_top_n)
         _cleanup_non_topn(config, ranked_candidates, checkpoint_dir, log_path)
-        ranked_candidates = _load_ranked_exports(export_dir, config.profile_id)
+        ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.full_generations)
         _write_bulk_report(export_dir, ranked_candidates)
 
     for item in ranked_candidates[:config.keep_top_n]:
-        path = item['path']
-        seed = None
-        stem_parts = path.stem.split('-')
-        if len(stem_parts) >= 3 and stem_parts[-2].isdigit():
-            seed = int(stem_parts[-2])
-        _log_event(log_path, 'retained_top_model', config.profile_id, seed=seed, path=str(path), selectionScore=item['report']['avgSelectionScore'])
+        export_path = item.get('exportPath') or item['checkpointPath']
+        _log_event(log_path, 'retained_top_model', config.profile_id, seed=int(item['seed']), action='保留top模型', target=f'：{int(item["seed"])}', reason='进入当前full_generations历史候选池前列，保留为长期候选', details=f'文件路径：{export_path}；平均选择分：{_format_float(item["report"]["avgSelectionScore"])}；平均苹果数：{_format_float(item["report"]["avgScore"])}；平均存活步数：{_format_float(item["report"]["avgFrames"])}', path=str(export_path), selectionScore=item['report']['avgSelectionScore'])
 
     return generated_seed
 

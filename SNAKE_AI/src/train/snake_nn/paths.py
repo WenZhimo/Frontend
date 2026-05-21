@@ -13,6 +13,10 @@ CHECKPOINTS_ROOT = MODEL_ARTIFACTS_ROOT / 'checkpoints'
 LONG_RUN_ROOT = MODEL_ARTIFACTS_ROOT / 'long-run'
 
 
+def seed_checkpoint_dir(profile_id: str, seed: int | str) -> Path:
+    return CHECKPOINTS_ROOT / profile_id / f'{seed}-latest'
+
+
 def resolve_project_path(path_like: str | Path) -> Path:
     path = Path(path_like)
     if not path.is_absolute():
