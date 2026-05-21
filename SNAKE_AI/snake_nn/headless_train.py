@@ -8,6 +8,7 @@ import random
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from math import sqrt
 from pathlib import Path
 from shutil import copyfile, rmtree
@@ -536,6 +537,176 @@ class HeadlessTrainer:
         write_browser_model(snake, self.settings, metadata, checkpoint_path)
         return checkpoint_path
 
+    def _training_history_path(self) -> Path:
+        checkpoint_dir = self._resolve_project_path(self.config.checkpoint_dir)
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        return checkpoint_dir / 'training-history.json'
+
+    def _training_report_path(self) -> Path:
+        checkpoint_dir = self._resolve_project_path(self.config.checkpoint_dir)
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        return checkpoint_dir / 'training-report.html'
+
+    def _load_training_history(self):
+        history_path = self._training_history_path()
+        if not history_path.exists():
+            return []
+        data = json.loads(history_path.read_text(encoding='utf-8'))
+        return data.get('history', [])
+
+    def _build_training_history_entry(self, current_best, population_size: int):
+        summary = getattr(current_best, 'evaluation_summary', None) or {}
+        return {
+            'generation': self.current_generation,
+            'populationSize': population_size,
+            'bestSelectionScore': float(current_best.fitness),
+            'bestAvgFitness': float(summary.get('avgFitness', 0.0)),
+            'bestAvgScore': float(summary.get('avgScore', 0.0)),
+            'bestAvgFrames': float(summary.get('avgFrames', 0.0)),
+            'bestAvgSurvivalRatio': float(summary.get('avgSurvivalRatio', 0.0)),
+            'bestAvgApproachAppleEvents': float(summary.get('avgApproachAppleEvents', 0.0)),
+            'bestAvgRepeatCellCount': float(summary.get('avgRepeatCellCount', 0.0)),
+            'bestAvgStallSteps': float(summary.get('avgStallSteps', 0.0)),
+            'bestFitnessStd': float(summary.get('fitnessStd', 0.0)),
+            'bestSelectionScoreStd': float(summary.get('selectionScoreStd', 0.0)),
+            'seed': self.config.seed,
+            'profileId': self.config.profile_id,
+            'profileLabel': self.config.profile_label,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _build_training_history_payload(self, history):
+        latest = history[-1] if history else None
+        return {
+            'seed': self.config.seed,
+            'profileId': self.config.profile_id,
+            'profileLabel': self.config.profile_label,
+            'checkpointDir': self.config.checkpoint_dir,
+            'latestGeneration': self.current_generation,
+            'latest': latest,
+            'history': history,
+        }
+
+    def _build_training_report_html(self, payload):
+        json_payload = json.dumps(payload, ensure_ascii=False)
+        template = """<!DOCTYPE html>
+<html lang=\"zh-CN\">
+<head>
+  <meta charset=\"UTF-8\" />
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+  <title>Snake AI 训练报告</title>
+  <script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>
+  <style>
+    :root {{
+      --bg: #070a0c;
+      --panel: rgba(7, 10, 12, 0.86);
+      --text: #d8d8d8;
+      --muted: #9aa7b0;
+      --gold: #c89a2e;
+      --cyan: #00e5ff;
+      --danger: #d45134;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top right, rgba(0, 229, 255, 0.08), transparent 30%), linear-gradient(180deg, #050709, #0a0d10);
+      color: var(--text);
+      font-family: \"Segoe UI\", system-ui, sans-serif;
+      padding: 24px;
+    }}
+    h1 {{ margin: 0 0 8px; color: var(--gold); }}
+    p {{ color: var(--muted); }}
+    .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0 24px; }}
+    .card, .panel {{ background: var(--panel); border: 1px solid rgba(200, 154, 46, 0.16); padding: 14px; }}
+    .label {{ font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }}
+    .value {{ margin-top: 8px; font-size: 1.35rem; color: var(--gold); font-family: monospace, sans-serif; }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }}
+    canvas {{ width: 100% !important; height: 280px !important; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.92rem; }}
+    th, td {{ padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: right; }}
+    th:first-child, td:first-child {{ text-align: left; }}
+  </style>
+</head>
+<body>
+  <h1>Snake AI 训练过程报告</h1>
+  <p>显示 checkpoint 目录中累计保存的每代训练指标历史。</p>
+  <div class=\"cards\" id=\"summary-cards\"></div>
+  <div class=\"grid\">
+    <div class=\"panel\"><canvas id=\"selectionChart\"></canvas></div>
+    <div class=\"panel\"><canvas id=\"scoreChart\"></canvas></div>
+    <div class=\"panel\"><canvas id=\"framesChart\"></canvas></div>
+    <div class=\"panel\"><canvas id=\"survivalChart\"></canvas></div>
+    <div class=\"panel\"><canvas id=\"behaviorChart\"></canvas></div>
+    <div class=\"panel\"><canvas id=\"stabilityChart\"></canvas></div>
+  </div>
+  <div class=\"panel\" style=\"margin-top: 18px;\">
+    <h2 style=\"margin-top:0;color:var(--gold);font-size:1.1rem;\">最近 20 代</h2>
+    <table id=\"history-table\"></table>
+  </div>
+  <script>
+    const payload = __PAYLOAD__;
+    const history = payload.history || [];
+    const latest = payload.latest || {{}};
+    const labels = history.map(item => item.generation);
+
+    function metric(name) {{ return history.map(item => item[name] ?? null); }}
+    function fixed(value, digits = 2) {{ return Number.isFinite(value) ? value.toFixed(digits) : '--'; }}
+
+    document.getElementById('summary-cards').innerHTML = [
+      ['Seed', payload.seed],
+      ['Profile', payload.profileLabel || payload.profileId || '--'],
+      ['Latest Gen', payload.latestGeneration],
+      ['Best Selection', fixed(latest.bestSelectionScore)],
+      ['Best Avg Score', fixed(latest.bestAvgScore)],
+      ['Best Avg Frames', fixed(latest.bestAvgFrames)],
+    ].map(([label, value]) => `<div class=\"card\"><div class=\"label\">${{label}}</div><div class=\"value\">${{value}}</div></div>`).join('');
+
+    function lineChart(id, title, datasets) {{
+      new Chart(document.getElementById(id), {{
+        type: 'line',
+        data: {{ labels, datasets }},
+        options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ labels: {{ color: '#d8d8d8' }} }}, title: {{ display: true, text: title, color: '#c89a2e' }} }}, scales: {{ x: {{ ticks: {{ color: '#9aa7b0' }} }}, y: {{ ticks: {{ color: '#9aa7b0' }} }} }} }}
+      }});
+    }}
+
+    lineChart('selectionChart', '每代最佳 Selection Score', [{{ label: 'Selection Score', data: metric('bestSelectionScore'), borderColor: '#00e5ff', backgroundColor: 'rgba(0,229,255,0.15)' }}]);
+    lineChart('scoreChart', '每代最佳 Avg Score', [{{ label: 'Avg Score', data: metric('bestAvgScore'), borderColor: '#c89a2e', backgroundColor: 'rgba(200,154,46,0.15)' }}]);
+    lineChart('framesChart', '每代最佳 Avg Frames', [{{ label: 'Avg Frames', data: metric('bestAvgFrames'), borderColor: '#7bd88f', backgroundColor: 'rgba(123,216,143,0.15)' }}]);
+    lineChart('survivalChart', '每代最佳 Avg Survival Ratio', [{{ label: 'Avg Survival Ratio', data: metric('bestAvgSurvivalRatio'), borderColor: '#ffb700', backgroundColor: 'rgba(255,183,0,0.15)' }}]);
+    lineChart('behaviorChart', '行为指标趋势', [
+      {{ label: 'Approach Apple', data: metric('bestAvgApproachAppleEvents'), borderColor: '#00e5ff' }},
+      {{ label: 'Repeat Cell', data: metric('bestAvgRepeatCellCount'), borderColor: '#d45134' }},
+      {{ label: 'Stall Steps', data: metric('bestAvgStallSteps'), borderColor: '#ffb700' }},
+    ]);
+    lineChart('stabilityChart', '稳定性指标', [
+      {{ label: 'Selection Std', data: metric('bestSelectionScoreStd'), borderColor: '#c89a2e' }},
+      {{ label: 'Fitness Std', data: metric('bestFitnessStd'), borderColor: '#8a7dff' }},
+    ]);
+
+    const recent = history.slice(-20).reverse();
+    const table = document.getElementById('history-table');
+    table.innerHTML = `<thead><tr><th>Generation</th><th>Selection</th><th>Avg Score</th><th>Avg Frames</th><th>Survival</th></tr></thead><tbody>${{recent.map(item => `<tr><td>${{item.generation}}</td><td>${{fixed(item.bestSelectionScore)}}</td><td>${{fixed(item.bestAvgScore)}}</td><td>${{fixed(item.bestAvgFrames)}}</td><td>${{fixed(item.bestAvgSurvivalRatio)}}</td></tr>`).join('')}}</tbody>`;
+  </script>
+</body>
+</html>"""
+        return template.replace('__PAYLOAD__', json_payload)
+
+    def _write_training_history_report(self, history):
+        payload = self._build_training_history_payload(history)
+        history_path = self._training_history_path()
+        history_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding='utf-8')
+        self._training_report_path().write_text(self._build_training_report_html(payload), encoding='utf-8')
+
+    def _append_training_history_entry(self, current_best, population_size: int):
+        history = self._load_training_history()
+        entry = self._build_training_history_entry(current_best, population_size)
+        if history and history[-1].get('generation') == self.current_generation:
+            history[-1] = entry
+        else:
+            history.append(entry)
+        self._write_training_history_report(history)
+
     def _should_save_population_checkpoint(self) -> bool:
         interval = self.config.population_checkpoint_interval
         return (
@@ -718,6 +889,7 @@ class HeadlessTrainer:
                 f'平均原始适应度={summary["avgFitness"]:.2f} | 平均苹果数={summary["avgScore"]:.2f} | '
                 f'平均存活步数={summary["avgFrames"]:.2f} | 平均生存比例={summary["avgSurvivalRatio"]:.2f}'
             )
+            self._append_training_history_entry(current_best, population_size)
 
             generation_metadata = self._build_metadata(current_best)
             generation_metadata['generationCheckpointType'] = 'generation-best'

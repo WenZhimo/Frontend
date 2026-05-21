@@ -28,6 +28,7 @@ from snake_nn.evaluate_models import (
     format_board_size_summary,
     format_comparison,
     format_summary,
+    write_evaluation_report,
 )
 from snake_nn.headless_train import HeadlessTrainer, TrainerConfig
 from snake_nn.scoring import (
@@ -64,7 +65,7 @@ DEVICE_BOARD_PROFILES = {
 }
 
 ACTIVE_PROFILE = 'pc'
-SEED_BATCH = [56, 947, 23, 56, 2024, 42]
+SEED_BATCH = [23]
 
 
 @dataclass
@@ -105,7 +106,7 @@ BASE_IDE_CONFIG = TrainingConfig(
     # 随机种子：会在批量模式里被逐个覆盖
     seed=23,
     # 训练代数：越大训练越充分，但耗时越长
-    generations=1000,
+    generations=3000,
     # 每代保留为父代的精英个体数量
     num_parents=120,
     # 每代新生成的子代数量
@@ -146,7 +147,7 @@ BASE_IDE_CONFIG = TrainingConfig(
     # 注意：恢复训练时，generations 表示“目标总代数上限”，不是“再训练多少代”。
     # 例如 checkpoint 是第 50 代，想继续跑到第 200 代，这里应保持 generations=200。
     # 如果想重新从头开始训练，把它改回 None 即可。
-    resume_from_checkpoint=None,
+    resume_from_checkpoint='snake_models/exports/pc/checkpoints/23-latest',
     # True: 关键训练参数必须与 checkpoint 中保存的一致，否则拒绝恢复。
     # False: 允许近似恢复，但后续训练轨迹可能与原始连续训练不同。
     resume_strict=True,
@@ -266,6 +267,7 @@ def _evaluate_against_baseline(output: Path, config: TrainingConfig, baseline_te
     print(format_board_size_summary(candidate_report))
 
     comparison = None
+    baseline_report = None
     if baseline_temp_path and baseline_temp_path.exists():
         baseline_report = evaluate_models([baseline_temp_path], config.board_size_pool, config.episodes_per_board, config.starvation_scale, episode_seed_schedule=episode_seed_schedule)[0]
         print('[snake_nn.trainer] 当前默认模型评估摘要：')
@@ -279,6 +281,12 @@ def _evaluate_against_baseline(output: Path, config: TrainingConfig, baseline_te
         print(format_board_size_comparison(comparison))
     else:
         print('[snake_nn.trainer] 当前没有可比较的该设备默认模型；如果候选模型表现满意，可以手动晋升为默认模型。')
+
+    report_dir = _resolve_project_path(config.export_dir)
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_json_path = report_dir / 'evaluation-report.json'
+    report_models = [candidate_report] + ([baseline_report] if baseline_report else [])
+    write_evaluation_report(report_json_path, report_models, comparison=comparison)
 
     return candidate_report, comparison
 
