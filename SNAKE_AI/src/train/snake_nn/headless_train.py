@@ -599,7 +599,7 @@ class HeadlessTrainer:
   <title>Snake AI 训练报告</title>
   <script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>
   <style>
-    :root {{
+    :root {
       --bg: #070a0c;
       --panel: rgba(7, 10, 12, 0.86);
       --text: #d8d8d8;
@@ -607,27 +607,27 @@ class HeadlessTrainer:
       --gold: #c89a2e;
       --cyan: #00e5ff;
       --danger: #d45134;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
+    }
+    * { box-sizing: border-box; }
+    body {
       margin: 0;
       min-height: 100vh;
       background: radial-gradient(circle at top right, rgba(0, 229, 255, 0.08), transparent 30%), linear-gradient(180deg, #050709, #0a0d10);
       color: var(--text);
       font-family: \"Segoe UI\", system-ui, sans-serif;
       padding: 24px;
-    }}
-    h1 {{ margin: 0 0 8px; color: var(--gold); }}
-    p {{ color: var(--muted); }}
-    .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0 24px; }}
-    .card, .panel {{ background: var(--panel); border: 1px solid rgba(200, 154, 46, 0.16); padding: 14px; }}
-    .label {{ font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }}
-    .value {{ margin-top: 8px; font-size: 1.35rem; color: var(--gold); font-family: monospace, sans-serif; }}
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }}
-    canvas {{ width: 100% !important; height: 280px !important; }}
-    table {{ width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.92rem; }}
-    th, td {{ padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: right; }}
-    th:first-child, td:first-child {{ text-align: left; }}
+    }
+    h1 { margin: 0 0 8px; color: var(--gold); }
+    p { color: var(--muted); }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0 24px; }
+    .card, .panel { background: var(--panel); border: 1px solid rgba(200, 154, 46, 0.16); padding: 14px; }
+    .label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .value { margin-top: 8px; font-size: 1.35rem; color: var(--gold); font-family: monospace, sans-serif; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+    canvas { width: 100% !important; height: 280px !important; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.92rem; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
   </style>
 </head>
 <body>
@@ -649,11 +649,11 @@ class HeadlessTrainer:
   <script>
     const payload = __PAYLOAD__;
     const history = payload.history || [];
-    const latest = payload.latest || {{}};
+    const latest = payload.latest || {};
     const labels = history.map(item => item.generation);
 
-    function metric(name) {{ return history.map(item => item[name] ?? null); }}
-    function fixed(value, digits = 2) {{ return Number.isFinite(value) ? value.toFixed(digits) : '--'; }}
+    function metric(name) { return history.map(item => item[name] ?? null); }
+    function fixed(value, digits = 2) { return Number.isFinite(value) ? value.toFixed(digits) : '--'; }
 
     document.getElementById('summary-cards').innerHTML = [
       ['Seed', payload.seed],
@@ -662,33 +662,33 @@ class HeadlessTrainer:
       ['Best Selection', fixed(latest.bestSelectionScore)],
       ['Best Avg Score', fixed(latest.bestAvgScore)],
       ['Best Avg Frames', fixed(latest.bestAvgFrames)],
-    ].map(([label, value]) => `<div class=\"card\"><div class=\"label\">${{label}}</div><div class=\"value\">${{value}}</div></div>`).join('');
+    ].map(([label, value]) => `<div class=\"card\"><div class=\"label\">${label}</div><div class=\"value\">${value}</div></div>`).join('');
 
-    function lineChart(id, title, datasets) {{
-      new Chart(document.getElementById(id), {{
+    function lineChart(id, title, datasets) {
+      new Chart(document.getElementById(id), {
         type: 'line',
-        data: {{ labels, datasets }},
-        options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ labels: {{ color: '#d8d8d8' }} }}, title: {{ display: true, text: title, color: '#c89a2e' }} }}, scales: {{ x: {{ ticks: {{ color: '#9aa7b0' }} }}, y: {{ ticks: {{ color: '#9aa7b0' }} }} }} }}
-      }});
-    }}
+        data: { labels, datasets },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#d8d8d8' } }, title: { display: true, text: title, color: '#c89a2e' } }, scales: { x: { ticks: { color: '#9aa7b0' } }, y: { ticks: { color: '#9aa7b0' } } } }
+      });
+    }
 
-    lineChart('selectionChart', '每代最佳 Selection Score', [{{ label: 'Selection Score', data: metric('bestSelectionScore'), borderColor: '#00e5ff', backgroundColor: 'rgba(0,229,255,0.15)' }}]);
-    lineChart('scoreChart', '每代最佳 Avg Score', [{{ label: 'Avg Score', data: metric('bestAvgScore'), borderColor: '#c89a2e', backgroundColor: 'rgba(200,154,46,0.15)' }}]);
-    lineChart('framesChart', '每代最佳 Avg Frames', [{{ label: 'Avg Frames', data: metric('bestAvgFrames'), borderColor: '#7bd88f', backgroundColor: 'rgba(123,216,143,0.15)' }}]);
-    lineChart('survivalChart', '每代最佳 Avg Survival Ratio', [{{ label: 'Avg Survival Ratio', data: metric('bestAvgSurvivalRatio'), borderColor: '#ffb700', backgroundColor: 'rgba(255,183,0,0.15)' }}]);
+    lineChart('selectionChart', '每代最佳 Selection Score', [{ label: 'Selection Score', data: metric('bestSelectionScore'), borderColor: '#00e5ff', backgroundColor: 'rgba(0,229,255,0.15)' }]);
+    lineChart('scoreChart', '每代最佳 Avg Score', [{ label: 'Avg Score', data: metric('bestAvgScore'), borderColor: '#c89a2e', backgroundColor: 'rgba(200,154,46,0.15)' }]);
+    lineChart('framesChart', '每代最佳 Avg Frames', [{ label: 'Avg Frames', data: metric('bestAvgFrames'), borderColor: '#7bd88f', backgroundColor: 'rgba(123,216,143,0.15)' }]);
+    lineChart('survivalChart', '每代最佳 Avg Survival Ratio', [{ label: 'Avg Survival Ratio', data: metric('bestAvgSurvivalRatio'), borderColor: '#ffb700', backgroundColor: 'rgba(255,183,0,0.15)' }]);
     lineChart('behaviorChart', '行为指标趋势', [
-      {{ label: 'Approach Apple', data: metric('bestAvgApproachAppleEvents'), borderColor: '#00e5ff' }},
-      {{ label: 'Repeat Cell', data: metric('bestAvgRepeatCellCount'), borderColor: '#d45134' }},
-      {{ label: 'Stall Steps', data: metric('bestAvgStallSteps'), borderColor: '#ffb700' }},
+      { label: 'Approach Apple', data: metric('bestAvgApproachAppleEvents'), borderColor: '#00e5ff' },
+      { label: 'Repeat Cell', data: metric('bestAvgRepeatCellCount'), borderColor: '#d45134' },
+      { label: 'Stall Steps', data: metric('bestAvgStallSteps'), borderColor: '#ffb700' },
     ]);
     lineChart('stabilityChart', '稳定性指标', [
-      {{ label: 'Selection Std', data: metric('bestSelectionScoreStd'), borderColor: '#c89a2e' }},
-      {{ label: 'Fitness Std', data: metric('bestFitnessStd'), borderColor: '#8a7dff' }},
+      { label: 'Selection Std', data: metric('bestSelectionScoreStd'), borderColor: '#c89a2e' },
+      { label: 'Fitness Std', data: metric('bestFitnessStd'), borderColor: '#8a7dff' },
     ]);
 
     const recent = history.slice(-20).reverse();
     const table = document.getElementById('history-table');
-    table.innerHTML = `<thead><tr><th>Generation</th><th>Selection</th><th>Avg Score</th><th>Avg Frames</th><th>Survival</th></tr></thead><tbody>${{recent.map(item => `<tr><td>${{item.generation}}</td><td>${{fixed(item.bestSelectionScore)}}</td><td>${{fixed(item.bestAvgScore)}}</td><td>${{fixed(item.bestAvgFrames)}}</td><td>${{fixed(item.bestAvgSurvivalRatio)}}</td></tr>`).join('')}}</tbody>`;
+    table.innerHTML = `<thead><tr><th>Generation</th><th>Selection</th><th>Avg Score</th><th>Avg Frames</th><th>Survival</th></tr></thead><tbody>${recent.map(item => `<tr><td>${item.generation}</td><td>${fixed(item.bestSelectionScore)}</td><td>${fixed(item.bestAvgScore)}</td><td>${fixed(item.bestAvgFrames)}</td><td>${fixed(item.bestAvgSurvivalRatio)}</td></tr>`).join('')}</tbody>`;
   </script>
 </body>
 </html>"""

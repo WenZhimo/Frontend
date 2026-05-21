@@ -16,7 +16,7 @@ SRC_ROOT = PROJECT_ROOT / 'src'
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from train.snake_nn.evaluate_models import DEFAULT_BOARD_SIZES, evaluate_models, write_evaluation_report
+from train.snake_nn.evaluate_models import evaluate_models, write_evaluation_report
 
 PROFILES_DIR = PROJECT_ROOT / 'data' / 'models' / 'profiles'
 EXPORTS_DIR = PROJECT_ROOT / 'artifacts' / 'models' / 'exports'
@@ -71,12 +71,24 @@ def _candidate_eval_report_paths(candidate_path: Path):
 
 
 def _run_candidate_evaluation(candidate_path: Path):
-    reports = evaluate_models([candidate_path], DEFAULT_BOARD_SIZES, episodes_per_board=2, starvation_scale=1.0)
+    reports = evaluate_models([candidate_path], None, episodes_per_board=2, starvation_scale=1.0)
     report_json_path, report_html_path = write_evaluation_report(_candidate_eval_report_paths(candidate_path)[0], reports)
     return {
         'reportJsonPath': _safe_relative(report_json_path),
         'reportHtmlPath': _safe_relative(report_html_path),
         'report': reports[0],
+    }
+
+
+def _run_bulk_evaluation(candidate_paths: list[Path]):
+    reports = evaluate_models(candidate_paths, None, episodes_per_board=2, starvation_scale=1.0)
+    report_json_path = EXPORTS_DIR / 'evaluation-report.json'
+    report_json_path, report_html_path = write_evaluation_report(report_json_path, reports)
+    return {
+        'reportJsonPath': _safe_relative(report_json_path),
+        'reportHtmlPath': _safe_relative(report_html_path),
+        'count': len(reports),
+        'topModel': max(reports, key=lambda item: item['avgSelectionScore']) if reports else None,
     }
 
 
@@ -237,6 +249,17 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
                     'updatedDefault': _extract_model_summary(target_path),
                 })
 
+            evaluate_all = bool(payload.get('allCandidates'))
+            if evaluate_all:
+                candidate_paths = [
+                    _resolve_repo_path(candidate['path'])
+                    for candidate in _discover_candidates()
+                ]
+                if not candidate_paths:
+                    raise ValueError('No candidate models available to evaluate')
+                evaluation_result = _run_bulk_evaluation(candidate_paths)
+                return self._send_json({'ok': True, 'mode': 'all', **evaluation_result})
+
             candidate_path_value = payload.get('candidatePath')
             if not candidate_path_value:
                 raise ValueError('Missing candidatePath')
@@ -244,7 +267,7 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
             if not candidate_path.exists() or candidate_path.suffix != '.json':
                 raise FileNotFoundError(candidate_path_value)
             evaluation_result = _run_candidate_evaluation(candidate_path)
-            return self._send_json({'ok': True, **evaluation_result})
+            return self._send_json({'ok': True, 'mode': 'single', **evaluation_result})
         except Exception as exc:
             self._send_json({'ok': False, 'error': str(exc)}, status=HTTPStatus.BAD_REQUEST)
 

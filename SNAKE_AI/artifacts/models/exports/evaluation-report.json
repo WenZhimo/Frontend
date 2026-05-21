@@ -1,0 +1,592 @@
+{
+  "generatedAt": "2026-05-21T05:23:22.345254+00:00",
+  "reports": [
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\best-of-batch.json",
+      "avgFitness": 9.066943647109719e+23,
+      "avgSelectionScore": 260206.0,
+      "avgScore": 79.5,
+      "avgFrames": 5439.5,
+      "avgSurvivalRatio": 1.0,
+      "avgApproachAppleEvents": 3284.5,
+      "avgRepeatCellCount": 4869.0,
+      "avgStallSteps": 2154.0,
+      "fitnessStd": 3.022314549036573e+23,
+      "selectionScoreStd": 2370.0,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 6.044629098073146e+23,
+          "selectionScore": 257836.0,
+          "score": 79.0,
+          "frames": 5383.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 3200.0,
+          "repeatCellCount": 4807.0,
+          "stallSteps": 2182.0,
+          "uniqueHeadCells": 576.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 1.2089258196146292e+24,
+          "selectionScore": 262576.0,
+          "score": 80.0,
+          "frames": 5496.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 3369.0,
+          "repeatCellCount": 4931.0,
+          "stallSteps": 2126.0,
+          "uniqueHeadCells": 565.0
+        }
+      ],
+      "label": "best-of-batch.json"
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-2024-000.json",
+      "avgFitness": 8590548761.710596,
+      "avgSelectionScore": 107679.25,
+      "avgScore": 33.0,
+      "avgFrames": 1596.5,
+      "avgSurvivalRatio": 1.0,
+      "avgApproachAppleEvents": 1052.0,
+      "avgRepeatCellCount": 1086.5,
+      "avgStallSteps": 543.5,
+      "fitnessStd": 3551.4938468933105,
+      "selectionScoreStd": 2.25,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 8590545210.21675,
+          "selectionScore": 107681.5,
+          "score": 33.0,
+          "frames": 1624.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 1060.0,
+          "repeatCellCount": 1108.0,
+          "stallSteps": 563.0,
+          "uniqueHeadCells": 516.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 8590552313.204443,
+          "selectionScore": 107677.0,
+          "score": 33.0,
+          "frames": 1569.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 1044.0,
+          "repeatCellCount": 1065.0,
+          "stallSteps": 524.0,
+          "uniqueHeadCells": 504.0
+        }
+      ],
+      "label": "pc-1000-2024-000.json"
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-23-000.json",
+      "avgFitness": 7.555786372591432e+22,
+      "avgSelectionScore": 248838.25,
+      "avgScore": 76.0,
+      "avgFrames": 5300.0,
+      "avgSurvivalRatio": 1.0,
+      "avgApproachAppleEvents": 3172.5,
+      "avgRepeatCellCount": 4724.0,
+      "avgStallSteps": 2126.5,
+      "fitnessStd": 0.0,
+      "selectionScoreStd": 551.25,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 7.555786372591432e+22,
+          "selectionScore": 248287.0,
+          "score": 76.0,
+          "frames": 5118.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 3071.0,
+          "repeatCellCount": 4542.0,
+          "stallSteps": 2046.0,
+          "uniqueHeadCells": 576.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 7.555786372591432e+22,
+          "selectionScore": 249389.5,
+          "score": 76.0,
+          "frames": 5482.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 3274.0,
+          "repeatCellCount": 4906.0,
+          "stallSteps": 2207.0,
+          "uniqueHeadCells": 576.0
+        }
+      ],
+      "label": "pc-1000-23-000.json"
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-42-000.json",
+      "avgFitness": 38655356631.283936,
+      "avgSelectionScore": 112620.25,
+      "avgScore": 34.5,
+      "avgFrames": 1825.0,
+      "avgSurvivalRatio": 1.0,
+      "avgApproachAppleEvents": 1161.5,
+      "avgRepeatCellCount": 1318.0,
+      "avgStallSteps": 662.5,
+      "fitnessStd": 30064837182.201572,
+      "selectionScoreStd": 4637.25,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 68720193813.4855,
+          "selectionScore": 117257.5,
+          "score": 36.0,
+          "frames": 1831.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 1175.0,
+          "repeatCellCount": 1330.0,
+          "stallSteps": 655.0,
+          "uniqueHeadCells": 501.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 8590519449.082361,
+          "selectionScore": 107983.0,
+          "score": 33.0,
+          "frames": 1819.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 1148.0,
+          "repeatCellCount": 1306.0,
+          "stallSteps": 670.0,
+          "uniqueHeadCells": 513.0
+        }
+      ],
+      "label": "pc-1000-42-000.json"
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-56-000.json",
+      "avgFitness": 105630.46790833464,
+      "avgSelectionScore": 44418.25,
+      "avgScore": 13.0,
+      "avgFrames": 1206.5,
+      "avgSurvivalRatio": 1.0,
+      "avgApproachAppleEvents": 690.0,
+      "avgRepeatCellCount": 739.5,
+      "avgStallSteps": 515.5,
+      "fitnessStd": 51904.136009500755,
+      "selectionScoreStd": 10697.25,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 157534.6039178354,
+          "selectionScore": 55115.5,
+          "score": 16.0,
+          "frames": 1806.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 1000.0,
+          "repeatCellCount": 1269.0,
+          "stallSteps": 805.0,
+          "uniqueHeadCells": 537.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 53726.331898833894,
+          "selectionScore": 33721.0,
+          "score": 10.0,
+          "frames": 607.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 380.0,
+          "repeatCellCount": 210.0,
+          "stallSteps": 226.0,
+          "uniqueHeadCells": 397.0
+        }
+      ],
+      "label": "pc-1000-56-000.json"
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-56-001.json",
+      "avgFitness": 35821859.39118537,
+      "avgSelectionScore": 82774.0,
+      "avgScore": 24.0,
+      "avgFrames": 2800.0,
+      "avgSurvivalRatio": 1.0,
+      "avgApproachAppleEvents": 1598.0,
+      "avgRepeatCellCount": 2243.5,
+      "avgStallSteps": 1201.0,
+      "fitnessStd": 31463941.86139594,
+      "selectionScoreStd": 7456.5,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 67285801.25258131,
+          "selectionScore": 90230.5,
+          "score": 26.0,
+          "frames": 3183.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 1835.0,
+          "repeatCellCount": 2633.0,
+          "stallSteps": 1347.0,
+          "uniqueHeadCells": 550.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 4357917.529789429,
+          "selectionScore": 75317.5,
+          "score": 22.0,
+          "frames": 2417.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 1361.0,
+          "repeatCellCount": 1854.0,
+          "stallSteps": 1055.0,
+          "uniqueHeadCells": 563.0
+        }
+      ],
+      "label": "pc-1000-56-001.json"
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-947-000.json",
+      "avgFitness": 142840.82203510843,
+      "avgSelectionScore": 47005.836805555555,
+      "avgScore": 14.5,
+      "avgFrames": 655.5,
+      "avgSurvivalRatio": 0.8133680555555556,
+      "avgApproachAppleEvents": 403.5,
+      "avgRepeatCellCount": 357.0,
+      "avgStallSteps": 251.0,
+      "fitnessStd": 6767.945266765513,
+      "selectionScoreStd": 2534.1631944444453,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 149608.76730187394,
+          "selectionScore": 49540.0,
+          "score": 15.0,
+          "frames": 950.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 565.0,
+          "repeatCellCount": 598.0,
+          "stallSteps": 384.0,
+          "uniqueHeadCells": 352.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 136072.87676834292,
+          "selectionScore": 44471.67361111111,
+          "score": 14.0,
+          "frames": 361.0,
+          "survivalRatio": 0.6267361111111112,
+          "approachAppleEvents": 242.0,
+          "repeatCellCount": 116.0,
+          "stallSteps": 118.0,
+          "uniqueHeadCells": 245.0
+        }
+      ],
+      "label": "pc-1000-947-000.json"
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-300-56-000.json",
+      "avgFitness": 3998.2815602477935,
+      "avgSelectionScore": 11200.645833333332,
+      "avgScore": 3.0,
+      "avgFrames": 381.0,
+      "avgSurvivalRatio": 0.6614583333333334,
+      "avgApproachAppleEvents": 215.0,
+      "avgRepeatCellCount": 76.0,
+      "avgStallSteps": 165.0,
+      "fitnessStd": 352.9682659052064,
+      "selectionScoreStd": 529.3194444444443,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 3645.313294342587,
+          "selectionScore": 11729.965277777777,
+          "score": 3.0,
+          "frames": 475.0,
+          "survivalRatio": 0.8246527777777778,
+          "approachAppleEvents": 271.0,
+          "repeatCellCount": 110.0,
+          "stallSteps": 203.0,
+          "uniqueHeadCells": 365.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 4351.249826153,
+          "selectionScore": 10671.326388888889,
+          "score": 3.0,
+          "frames": 287.0,
+          "survivalRatio": 0.4982638888888889,
+          "approachAppleEvents": 159.0,
+          "repeatCellCount": 42.0,
+          "stallSteps": 127.0,
+          "uniqueHeadCells": 245.0
+        }
+      ],
+      "label": "pc-300-56-000.json"
+    }
+  ],
+  "boardSummaries": [
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\best-of-batch.json",
+      "label": "best-of-batch.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 260206.0,
+          "avgFitness": 9.066943647109719e+23,
+          "avgScore": 79.5,
+          "avgFrames": 5439.5,
+          "avgSurvivalRatio": 1.0
+        }
+      ]
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-2024-000.json",
+      "label": "pc-1000-2024-000.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 107679.25,
+          "avgFitness": 8590548761.710596,
+          "avgScore": 33.0,
+          "avgFrames": 1596.5,
+          "avgSurvivalRatio": 1.0
+        }
+      ]
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-23-000.json",
+      "label": "pc-1000-23-000.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 248838.25,
+          "avgFitness": 7.555786372591432e+22,
+          "avgScore": 76.0,
+          "avgFrames": 5300.0,
+          "avgSurvivalRatio": 1.0
+        }
+      ]
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-42-000.json",
+      "label": "pc-1000-42-000.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 112620.25,
+          "avgFitness": 38655356631.283936,
+          "avgScore": 34.5,
+          "avgFrames": 1825.0,
+          "avgSurvivalRatio": 1.0
+        }
+      ]
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-56-000.json",
+      "label": "pc-1000-56-000.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 44418.25,
+          "avgFitness": 105630.46790833464,
+          "avgScore": 13.0,
+          "avgFrames": 1206.5,
+          "avgSurvivalRatio": 1.0
+        }
+      ]
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-56-001.json",
+      "label": "pc-1000-56-001.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 82774.0,
+          "avgFitness": 35821859.39118537,
+          "avgScore": 24.0,
+          "avgFrames": 2800.0,
+          "avgSurvivalRatio": 1.0
+        }
+      ]
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-947-000.json",
+      "label": "pc-1000-947-000.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 47005.836805555555,
+          "avgFitness": 142840.82203510843,
+          "avgScore": 14.5,
+          "avgFrames": 655.5,
+          "avgSurvivalRatio": 0.8133680555555556
+        }
+      ]
+    },
+    {
+      "model": "D:\\盒子\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-300-56-000.json",
+      "label": "pc-300-56-000.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 11200.645833333332,
+          "avgFitness": 3998.2815602477935,
+          "avgScore": 3.0,
+          "avgFrames": 381.0,
+          "avgSurvivalRatio": 0.6614583333333334
+        }
+      ]
+    }
+  ],
+  "comparison": null
+}
