@@ -431,6 +431,9 @@
                     <div class="panel">
                         <h2 class="panel-title">[ 运行状态 ]</h2>
                         <div class="detail-grid" id="runStatusDetail"></div>
+                        <div style="margin-top: 12px;">
+                            <button id="shutdownServerBtn">关闭服务器</button>
+                        </div>
                     </div>
                     <div class="panel">
                         <h2 class="panel-title">[ 新手说明 ]</h2>
@@ -465,6 +468,7 @@
         const openEvalBtn = document.getElementById('openEvalBtn');
         const openEvalAllBtn = document.getElementById('openEvalAllBtn');
         const clearReportsBtn = document.getElementById('clearReportsBtn');
+        const shutdownServerBtn = document.getElementById('shutdownServerBtn');
         const messageBox = document.getElementById('messageBox');
         const trainingReportLink = document.getElementById('training-report-link');
         const evaluationReportLink = document.getElementById('evaluation-report-link');
@@ -1132,6 +1136,21 @@
         openEvalAllBtn.addEventListener('click', () => evaluateAllCandidates());
         clearReportsBtn.addEventListener('click', () => clearReports());
         copyResumeBtn.addEventListener('click', () => copyResumeConfig());
+        shutdownServerBtn.addEventListener('click', async () => {
+            const hasRunning = lastRunStatus === 'running';
+            const confirmMessage = hasRunning
+                ? '确定要关闭服务器吗？\n\n关闭的是：本地模型管理服务（HTTP 服务进程本身）\n\n影响：\n- 管理页和运行测试台将无法访问\n- API 接口将不可用\n\n不影响：\n- 正在运行的训练任务（训练在独立进程中，服务器的关闭不会终止它）\n- 已保存的模型、checkpoint、报告等文件'
+                : '确定要关闭服务器吗？\n\n关闭的是：本地模型管理服务（HTTP 服务进程本身）\n\n影响：\n- 管理页和运行测试台将无法访问\n- API 接口将不可用\n\n不影响：\n- 已保存的模型、checkpoint、报告等文件';
+            if (!confirm(confirmMessage)) return;
+            try {
+                const response = await fetch('/api/model-manager/server/shutdown', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || '关闭服务器失败');
+                setMessage(payload.message || '服务器已关闭。');
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
         manualPresetSelect.addEventListener('change', () => renderSelectedPresetConfig('manual'));
         longRunPresetSelect.addEventListener('change', () => renderSelectedPresetConfig('longRun'));
 
