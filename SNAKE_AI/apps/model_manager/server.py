@@ -190,8 +190,6 @@ def _iter_report_files_to_clear():
         'artifacts/models/exports/*/evaluation-report.json',
         'artifacts/models/exports/*/*.eval-report.html',
         'artifacts/models/exports/*/*.eval-report.json',
-        'artifacts/models/checkpoints/*/training-report.html',
-        'artifacts/models/checkpoints/*/*-latest/training-report.html',
     ]
     seen = set()
     for pattern in patterns:
@@ -208,6 +206,22 @@ def _clear_report_files():
     for path in _iter_report_files_to_clear():
         path.unlink(missing_ok=True)
         removed.append(_safe_relative(path))
+    return removed
+
+
+def _iter_training_data_to_clear():
+    yield from (PROJECT_ROOT / 'artifacts' / 'models' / 'checkpoints').glob('*/training-history.json')
+    yield from (PROJECT_ROOT / 'artifacts' / 'models' / 'checkpoints').glob('*/training-report.html')
+    yield from (PROJECT_ROOT / 'artifacts' / 'models' / 'long-run').glob('*/run-log.jsonl')
+    yield from (PROJECT_ROOT / 'artifacts' / 'models' / 'long-run').glob('*/run-log-summary.html')
+
+
+def _clear_training_data():
+    removed = []
+    for path in _iter_training_data_to_clear():
+        if path.exists() and path.is_file():
+            path.unlink(missing_ok=True)
+            removed.append(_safe_relative(path))
     return removed
 
 
@@ -445,6 +459,29 @@ def build_artifacts_payload():
     }
 
 
+def recover_orphaned_run_state():
+    if not CONFIGS_DIR.exists():
+        return
+    for status_file in sorted(CONFIGS_DIR.glob('run-status-*.json')):
+        try:
+            status_data = json.loads(status_file.read_text(encoding='utf-8'))
+            with RUN_LOCK:
+                if RUN_STATE['status'] == 'running':
+                    return
+                RUN_STATE.update({
+                    'id': status_file.stem.replace('run-status-', ''),
+                    'status': status_data.get('status', 'unknown'),
+                    'kind': 'recovered',
+                    'startedAt': None,
+                    'endedAt': datetime.now(timezone.utc).isoformat(),
+                    'result': status_data.get('result'),
+                    'error': status_data.get('error') or '服务器重启后恢复的训练结果',
+                })
+            status_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
 class ModelManagerHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PROJECT_ROOT), **kwargs)
@@ -509,6 +546,8 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
             '/api/model-manager/runs/manual',
             '/api/model-manager/runs/long-run',
             '/api/model-manager/server/shutdown',
+            '/api/model-manager/training-data/clear',
+            '/api/model-manager/runs/stop',
         }:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -622,6 +661,35 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
                 threading.Timer(0.3, lambda: sys.exit(0)).start()
                 return
 
+            if parsed.path == '/api/model-manager/training-data/clear':
+                removed = _clear_training_data()
+                return self._send_json({
+                    'ok': True,
+                    'removedCount': len(removed),
+                    'removedPaths': removed,
+                })
+
+            if parsed.path == '/api/model-manager/runs/stop':
+                with RUN_LOCK:
+                    if RUN_STATE['status'] != 'running':
+                        raise ValueError('当前没有正在运行的训练任务')
+                    pid = RUN_STATE.get('pid')
+                    killed = False
+                    if pid is not None:
+                        try:
+                            import signal
+                            import os
+                            os.kill(pid, signal.SIGTERM)
+                            killed = True
+                        except OSError:
+                            pass
+                    RUN_STATE.update({
+                        'status': 'failed',
+                        'endedAt': datetime.now(timezone.utc).isoformat(),
+                        'error': '用户手动终止训练进程' if killed else '终止请求已发送',
+                    })
+                return self._send_json({'ok': True, 'killed': killed, 'run': RUN_STATE})
+
             evaluate_all = bool(payload.get('allCandidates'))
             if evaluate_all:
                 candidate_paths = [
@@ -646,6 +714,7 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
 
 
 def main(host='127.0.0.1', port=8000, open_browser=True):
+    recover_orphaned_run_state()
     server = ThreadingHTTPServer((host, port), ModelManagerHandler)
     manager_url = f'http://{host}:{port}/apps/model_manager/index.html'
     print(f'[model_manager_server] serving {PROJECT_ROOT} at http://{host}:{port}')
