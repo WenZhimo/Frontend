@@ -1,0 +1,33 @@
+{
+  "activePresetId": "default",
+  "presets": [
+    {
+      "id": "default",
+      "name": "默认手动训练",
+      "config": {
+        "profile_id": "pc",
+        "seed": 23,
+        "generations": 3000,
+        "num_parents": 120,
+        "num_offspring": 240,
+        "boards_per_individual": 1,
+        "episodes_per_board": 4,
+        "starvation_scale": 1.0,
+        "score_weight": 3000.0,
+        "survival_weight": 100.0,
+        "raw_fitness_weight": 0.1,
+        "raw_fitness_cap": 300.0,
+        "zero_score_penalty": 50.0,
+        "approach_apple_weight": 12.0,
+        "repeat_cell_penalty": 3.0,
+        "stall_penalty": 1.5,
+        "population_checkpoint_enabled": true,
+        "population_checkpoint_interval": 1,
+        "resume_strict": true,
+        "parallel_evaluation_enabled": true,
+        "parallel_evaluation_workers": null,
+        "parallel_evaluation_chunksize": 1
+      }
+    }
+  ]
+}

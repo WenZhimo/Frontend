@@ -4,7 +4,10 @@ import json
 import shutil
 import sys
 import threading
+import traceback
+import uuid
 import webbrowser
+from dataclasses import asdict
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -19,10 +22,25 @@ if str(SRC_ROOT) not in sys.path:
 from train.snake_nn.evaluate_models import evaluate_models, write_evaluation_report
 from train.snake_nn.paths import CHECKPOINTS_ROOT, EXPORTS_ROOT, PROFILES_DIR
 from train.snake_nn.profiles import PROFILE_FILE_MAP
+from train.snake_nn.trainer import ACTIVE_PROFILE, BASE_IDE_CONFIG, TrainingConfig, build_profile_config, run_seed_batch
+from train.snake_nn.long_run_trainer import LongRunConfig, run_long_training
 
 EXPORTS_DIR = EXPORTS_ROOT
 CHECKPOINTS_DIR = CHECKPOINTS_ROOT
+CONFIGS_DIR = PROJECT_ROOT / 'artifacts' / 'models' / 'config'
 ALLOWED_PROFILE_TARGETS = {key: path.resolve() for key, path in PROFILE_FILE_MAP.items()}
+RUN_STATE = {
+    'id': None,
+    'kind': None,
+    'presetId': None,
+    'presetName': None,
+    'status': 'idle',
+    'startedAt': None,
+    'endedAt': None,
+    'error': None,
+    'result': None,
+}
+RUN_LOCK = threading.Lock()
 
 
 def _safe_relative(path: Path) -> str:
@@ -158,10 +176,214 @@ def _discover_reports():
     results = []
     for path in sorted((PROJECT_ROOT / 'artifacts').glob('**/*.html')):
         results.append({'path': _safe_relative(path), 'name': path.name, 'type': 'html'})
-    for path in sorted((PROJECT_ROOT / 'artifacts').glob('**/*.json')):
-        if path.name.endswith('.eval-report.json') or path.name in {'evaluation-report.json', 'training-history.json'}:
-            results.append({'path': _safe_relative(path), 'name': path.name, 'type': 'json'})
     return results
+
+
+def _iter_report_files_to_clear():
+    patterns = [
+        'artifacts/models/exports/evaluation-report.html',
+        'artifacts/models/exports/evaluation-report.json',
+        'artifacts/models/exports/*/evaluation-report.html',
+        'artifacts/models/exports/*/evaluation-report.json',
+        'artifacts/models/exports/*/*.eval-report.html',
+        'artifacts/models/exports/*/*.eval-report.json',
+        'artifacts/models/checkpoints/*/training-report.html',
+        'artifacts/models/checkpoints/*/*-latest/training-report.html',
+    ]
+    seen = set()
+    for pattern in patterns:
+        for path in PROJECT_ROOT.glob(pattern):
+            resolved = path.resolve()
+            if resolved in seen or not path.exists() or not path.is_file():
+                continue
+            seen.add(resolved)
+            yield path
+
+
+def _clear_report_files():
+    removed = []
+    for path in _iter_report_files_to_clear():
+        path.unlink(missing_ok=True)
+        removed.append(_safe_relative(path))
+    return removed
+
+
+def _manual_presets_path() -> Path:
+    return CONFIGS_DIR / 'manual-training-presets.json'
+
+
+def _long_run_presets_path() -> Path:
+    return CONFIGS_DIR / 'long-run-presets.json'
+
+
+def _default_manual_config():
+    base = build_profile_config(BASE_IDE_CONFIG, ACTIVE_PROFILE)
+    config = asdict(base)
+    config.pop('export_name', None)
+    return config
+
+
+def _default_long_run_config():
+    config = asdict(LongRunConfig())
+    return config
+
+
+def _default_preset_store(default_name: str, default_payload: dict):
+    return {
+        'activePresetId': 'default',
+        'presets': [
+            {
+                'id': 'default',
+                'name': default_name,
+                'config': default_payload,
+            }
+        ],
+    }
+
+
+def _read_or_init_preset_store(path: Path, default_name: str, default_payload: dict):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        payload = _default_preset_store(default_name, default_payload)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+        return payload
+    data = _read_json(path)
+    if 'presets' not in data or 'activePresetId' not in data:
+        data = _default_preset_store(default_name, default_payload)
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+    return data
+
+
+def _write_preset_store(path: Path, payload: dict):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+
+
+def _get_active_preset_config(store: dict):
+    active_id = store.get('activePresetId')
+    for preset in store.get('presets', []):
+        if preset.get('id') == active_id:
+            return preset.get('config', {})
+    return (store.get('presets') or [{}])[0].get('config', {})
+
+
+def _upsert_preset(path: Path, default_name: str, default_payload: dict, preset: dict):
+    store = _read_or_init_preset_store(path, default_name, default_payload)
+    preset_id = preset.get('id')
+    if not preset_id:
+        raise ValueError('Missing preset id')
+    existing = next((item for item in store['presets'] if item.get('id') == preset_id), None)
+    if existing:
+        existing.update(preset)
+    else:
+        store['presets'].append(preset)
+    _write_preset_store(path, store)
+    return store
+
+
+def _activate_preset(path: Path, default_name: str, default_payload: dict, preset_id: str):
+    store = _read_or_init_preset_store(path, default_name, default_payload)
+    if not any(item.get('id') == preset_id for item in store['presets']):
+        raise ValueError('Preset not found')
+    store['activePresetId'] = preset_id
+    _write_preset_store(path, store)
+    return store
+
+
+def _delete_preset(path: Path, default_name: str, default_payload: dict, preset_id: str):
+    store = _read_or_init_preset_store(path, default_name, default_payload)
+    presets = store.get('presets', [])
+    if preset_id == 'default':
+        raise ValueError('默认预设不允许删除')
+    if len(presets) <= 1:
+        raise ValueError('至少保留一个预设')
+    next_presets = [item for item in presets if item.get('id') != preset_id]
+    if len(next_presets) == len(presets):
+        raise ValueError('Preset not found')
+    store['presets'] = next_presets
+    if store.get('activePresetId') == preset_id:
+        store['activePresetId'] = next_presets[0].get('id')
+    _write_preset_store(path, store)
+    return store
+
+
+def _rename_preset(path: Path, default_name: str, default_payload: dict, preset_id: str, new_name: str):
+    store = _read_or_init_preset_store(path, default_name, default_payload)
+    if not new_name or not str(new_name).strip():
+        raise ValueError('预设名称不能为空')
+    preset = next((item for item in store.get('presets', []) if item.get('id') == preset_id), None)
+    if not preset:
+        raise ValueError('Preset not found')
+    preset['name'] = str(new_name).strip()
+    _write_preset_store(path, store)
+    return store
+
+
+def _manual_training_config_from_preset(config: dict) -> TrainingConfig:
+    base = TrainingConfig(
+        seed=int(config.get('seed', 23)),
+        generations=int(config.get('generations', 3000)),
+        num_parents=int(config.get('num_parents', 120)),
+        num_offspring=int(config.get('num_offspring', 240)),
+        boards_per_individual=int(config.get('boards_per_individual', 1)),
+        episodes_per_board=int(config.get('episodes_per_board', 4)),
+        starvation_scale=float(config.get('starvation_scale', 1.0)),
+        score_weight=float(config.get('score_weight', 3000.0)),
+        survival_weight=float(config.get('survival_weight', 100.0)),
+        raw_fitness_weight=float(config.get('raw_fitness_weight', 0.1)),
+        raw_fitness_cap=float(config.get('raw_fitness_cap', 300.0)),
+        zero_score_penalty=float(config.get('zero_score_penalty', 50.0)),
+        approach_apple_weight=float(config.get('approach_apple_weight', 12.0)),
+        repeat_cell_penalty=float(config.get('repeat_cell_penalty', 3.0)),
+        stall_penalty=float(config.get('stall_penalty', 1.5)),
+        promote_to_default=False,
+        population_checkpoint_enabled=bool(config.get('population_checkpoint_enabled', True)),
+        population_checkpoint_interval=int(config.get('population_checkpoint_interval', 1)),
+        resume_from_checkpoint=config.get('resume_from_checkpoint'),
+        resume_strict=bool(config.get('resume_strict', True)),
+        parallel_evaluation_enabled=bool(config.get('parallel_evaluation_enabled', True)),
+        parallel_evaluation_workers=config.get('parallel_evaluation_workers'),
+        parallel_evaluation_chunksize=int(config.get('parallel_evaluation_chunksize', 1)),
+    )
+    return build_profile_config(base, config.get('profile_id', 'pc'))
+
+
+def _long_run_config_from_preset(config: dict) -> LongRunConfig:
+    return LongRunConfig(**config)
+
+
+def _set_run_state(**kwargs):
+    with RUN_LOCK:
+        RUN_STATE.update(kwargs)
+
+
+def _start_run(kind: str, preset: dict, target):
+    with RUN_LOCK:
+        if RUN_STATE['status'] == 'running':
+            raise ValueError('已有训练任务正在运行')
+        run_id = uuid.uuid4().hex
+        RUN_STATE.update({
+            'id': run_id,
+            'kind': kind,
+            'presetId': preset.get('id'),
+            'presetName': preset.get('name'),
+            'status': 'running',
+            'startedAt': datetime.now(timezone.utc).isoformat(),
+            'endedAt': None,
+            'error': None,
+            'result': None,
+        })
+
+    def runner():
+        try:
+            result = target()
+            _set_run_state(status='succeeded', endedAt=datetime.now(timezone.utc).isoformat(), result=result)
+        except Exception as exc:
+            _set_run_state(status='failed', endedAt=datetime.now(timezone.utc).isoformat(), error=f'{exc}\n{traceback.format_exc()}')
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+    return run_id
 
 
 def build_artifacts_payload():
@@ -198,6 +420,11 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
             return self._send_json(build_artifacts_payload())
         if parsed.path == '/api/model-manager/reports':
             return self._send_json({'reports': _discover_reports()})
+        if parsed.path == '/api/model-manager/configs':
+            return self._send_json({
+                'manual': _read_or_init_preset_store(_manual_presets_path(), '默认手动训练', _default_manual_config()),
+                'longRun': _read_or_init_preset_store(_long_run_presets_path(), '默认长期训练', _default_long_run_config()),
+            })
         if parsed.path == '/api/model-manager/candidate':
             query = parse_qs(parsed.query)
             relative_path = query.get('path', [None])[0]
@@ -210,11 +437,29 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
                 return self._send_json({'candidate': _extract_model_summary(candidate_path), 'raw': _read_json(candidate_path)})
             except Exception as exc:
                 return self._send_json({'error': str(exc)}, status=HTTPStatus.BAD_REQUEST)
+        if parsed.path == '/api/model-manager/run-status':
+            return self._send_json({'run': RUN_STATE})
         return super().do_GET()
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path not in {'/api/model-manager/promote', '/api/model-manager/evaluate'}:
+        if parsed.path not in {
+            '/api/model-manager/promote',
+            '/api/model-manager/evaluate',
+            '/api/model-manager/reports/clear',
+            '/api/model-manager/configs/manual',
+            '/api/model-manager/configs/long-run',
+            '/api/model-manager/presets/manual',
+            '/api/model-manager/presets/long-run',
+            '/api/model-manager/presets/manual/delete',
+            '/api/model-manager/presets/long-run/delete',
+            '/api/model-manager/presets/manual/rename',
+            '/api/model-manager/presets/long-run/rename',
+            '/api/model-manager/presets/manual/activate',
+            '/api/model-manager/presets/long-run/activate',
+            '/api/model-manager/runs/manual',
+            '/api/model-manager/runs/long-run',
+        }:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
 
@@ -243,6 +488,84 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
                     'targetPath': _safe_relative(target_path),
                     'updatedDefault': _extract_model_summary(target_path),
                 })
+
+            if parsed.path == '/api/model-manager/reports/clear':
+                removed = _clear_report_files()
+                return self._send_json({
+                    'ok': True,
+                    'removedCount': len(removed),
+                    'removedPaths': removed,
+                })
+
+            if parsed.path == '/api/model-manager/configs/manual':
+                store = _read_or_init_preset_store(_manual_presets_path(), '默认手动训练', _default_manual_config())
+                active_id = store.get('activePresetId')
+                active = next((item for item in store['presets'] if item.get('id') == active_id), None)
+                if not active:
+                    raise ValueError('Active manual preset not found')
+                active['config'] = payload
+                _write_preset_store(_manual_presets_path(), store)
+                return self._send_json({'ok': True, 'manual': store})
+
+            if parsed.path == '/api/model-manager/configs/long-run':
+                store = _read_or_init_preset_store(_long_run_presets_path(), '默认长期训练', _default_long_run_config())
+                active_id = store.get('activePresetId')
+                active = next((item for item in store['presets'] if item.get('id') == active_id), None)
+                if not active:
+                    raise ValueError('Active long-run preset not found')
+                active['config'] = payload
+                _write_preset_store(_long_run_presets_path(), store)
+                return self._send_json({'ok': True, 'longRun': store})
+
+            if parsed.path == '/api/model-manager/presets/manual':
+                store = _upsert_preset(_manual_presets_path(), '默认手动训练', _default_manual_config(), payload)
+                return self._send_json({'ok': True, 'manual': store})
+
+            if parsed.path == '/api/model-manager/presets/long-run':
+                store = _upsert_preset(_long_run_presets_path(), '默认长期训练', _default_long_run_config(), payload)
+                return self._send_json({'ok': True, 'longRun': store})
+
+            if parsed.path == '/api/model-manager/presets/manual/activate':
+                store = _activate_preset(_manual_presets_path(), '默认手动训练', _default_manual_config(), payload.get('id'))
+                return self._send_json({'ok': True, 'manual': store})
+
+            if parsed.path == '/api/model-manager/presets/long-run/activate':
+                store = _activate_preset(_long_run_presets_path(), '默认长期训练', _default_long_run_config(), payload.get('id'))
+                return self._send_json({'ok': True, 'longRun': store})
+
+            if parsed.path == '/api/model-manager/presets/manual/delete':
+                store = _delete_preset(_manual_presets_path(), '默认手动训练', _default_manual_config(), payload.get('id'))
+                return self._send_json({'ok': True, 'manual': store})
+
+            if parsed.path == '/api/model-manager/presets/long-run/delete':
+                store = _delete_preset(_long_run_presets_path(), '默认长期训练', _default_long_run_config(), payload.get('id'))
+                return self._send_json({'ok': True, 'longRun': store})
+
+            if parsed.path == '/api/model-manager/presets/manual/rename':
+                store = _rename_preset(_manual_presets_path(), '默认手动训练', _default_manual_config(), payload.get('id'), payload.get('name'))
+                return self._send_json({'ok': True, 'manual': store})
+
+            if parsed.path == '/api/model-manager/presets/long-run/rename':
+                store = _rename_preset(_long_run_presets_path(), '默认长期训练', _default_long_run_config(), payload.get('id'), payload.get('name'))
+                return self._send_json({'ok': True, 'longRun': store})
+
+            if parsed.path == '/api/model-manager/runs/manual':
+                store = _read_or_init_preset_store(_manual_presets_path(), '默认手动训练', _default_manual_config())
+                active_id = store.get('activePresetId')
+                preset = next((item for item in store['presets'] if item.get('id') == active_id), None)
+                if not preset:
+                    raise ValueError('Active manual preset not found')
+                run_id = _start_run('manual', preset, lambda: str(run_seed_batch(_manual_training_config_from_preset(preset['config']), [_manual_training_config_from_preset(preset['config']).seed])))
+                return self._send_json({'ok': True, 'runId': run_id, 'run': RUN_STATE})
+
+            if parsed.path == '/api/model-manager/runs/long-run':
+                store = _read_or_init_preset_store(_long_run_presets_path(), '默认长期训练', _default_long_run_config())
+                active_id = store.get('activePresetId')
+                preset = next((item for item in store['presets'] if item.get('id') == active_id), None)
+                if not preset:
+                    raise ValueError('Active long-run preset not found')
+                run_id = _start_run('long-run', preset, lambda: str(run_long_training(_long_run_config_from_preset(preset['config']))))
+                return self._send_json({'ok': True, 'runId': run_id, 'run': RUN_STATE})
 
             evaluate_all = bool(payload.get('allCandidates'))
             if evaluate_all:
