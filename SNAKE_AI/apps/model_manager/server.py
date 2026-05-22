@@ -24,7 +24,7 @@ from train.snake_nn.evaluate_models import evaluate_models, write_evaluation_rep
 from train.snake_nn.paths import CHECKPOINTS_ROOT, EXPORTS_ROOT, PROFILES_DIR
 from train.snake_nn.profiles import PROFILE_FILE_MAP
 from train.snake_nn.trainer import ACTIVE_PROFILE, BASE_IDE_CONFIG, TrainingConfig, build_profile_config, run_seed_batch
-from train.snake_nn.long_run_trainer import LongRunConfig, run_long_training
+from train.snake_nn.long_run_trainer import LongRunConfig, run_long_training, write_long_run_report
 
 EXPORTS_DIR = EXPORTS_ROOT
 CHECKPOINTS_DIR = CHECKPOINTS_ROOT
@@ -548,6 +548,7 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
             '/api/model-manager/server/shutdown',
             '/api/model-manager/training-data/clear',
             '/api/model-manager/runs/stop',
+            '/api/model-manager/long-run/summary',
         }:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -689,6 +690,15 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
                         'error': '用户手动终止训练进程' if killed else '终止请求已发送',
                     })
                 return self._send_json({'ok': True, 'killed': killed, 'run': RUN_STATE})
+
+            if parsed.path == '/api/model-manager/long-run/summary':
+                store = _read_or_init_preset_store(_long_run_presets_path(), '默认长期训练', _default_long_run_config())
+                active_id = store.get('activePresetId')
+                preset = next((item for item in store['presets'] if item.get('id') == active_id), None)
+                profile_id = (preset.get('config', {}) if preset else {}).get('profile_id', 'pc')
+                log_path = PROJECT_ROOT / 'artifacts' / 'models' / 'long-run' / profile_id / 'run-log.jsonl'
+                summary_path = write_long_run_report(log_path)
+                return self._send_json({'ok': True, 'summaryPath': _safe_relative(summary_path)})
 
             evaluate_all = bool(payload.get('allCandidates'))
             if evaluate_all:
