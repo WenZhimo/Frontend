@@ -415,8 +415,11 @@ def _start_run(kind: str, preset: dict):
         status_path = str(CONFIGS_DIR / f'run-status-{run_id}.json')
         CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
         config_json = json.dumps(preset.get('config', {}), ensure_ascii=False)
+        pid_file_info = {'pid': None}
         cmd = _training_runner_script(config_json, kind, status_path)
         proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        pid_file_info['pid'] = proc.pid
+        Path(status_path).write_text(json.dumps({'status': 'running', 'pid': proc.pid}, ensure_ascii=False), encoding='utf-8')
         RUN_STATE.update({
             'id': run_id,
             'kind': kind,
@@ -465,21 +468,72 @@ def recover_orphaned_run_state():
     for status_file in sorted(CONFIGS_DIR.glob('run-status-*.json')):
         try:
             status_data = json.loads(status_file.read_text(encoding='utf-8'))
+            saved_pid = status_data.get('pid')
+            alive = False
+            if saved_pid is not None:
+                try:
+                    import os
+                    os.kill(saved_pid, 0)
+                    alive = True
+                except OSError:
+                    pass
+            recovered_status = status_data.get('status', 'unknown')
+            if recovered_status == 'running' and not alive:
+                recovered_status = 'failed'
+                status_file.unlink(missing_ok=True)
             with RUN_LOCK:
                 if RUN_STATE['status'] == 'running':
                     return
+                if alive:
+                    RUN_STATE.update({
+                        'id': status_file.stem.replace('run-status-', ''),
+                        'kind': 'recovered',
+                        'presetId': None,
+                        'presetName': None,
+                        'status': 'running',
+                        'pid': saved_pid,
+                        'startedAt': None,
+                        'endedAt': None,
+                        'error': None,
+                        'result': None,
+                        'statusPath': str(status_file),
+                    })
+                    _start_monitor_for_existing(status_file, saved_pid)
+                    return
                 RUN_STATE.update({
                     'id': status_file.stem.replace('run-status-', ''),
-                    'status': status_data.get('status', 'unknown'),
+                    'status': recovered_status,
                     'kind': 'recovered',
                     'startedAt': None,
                     'endedAt': datetime.now(timezone.utc).isoformat(),
                     'result': status_data.get('result'),
-                    'error': status_data.get('error') or '服务器重启后恢复的训练结果',
+                    'error': status_data.get('error') or ('服务器关闭时训练进程被终止' if status_data.get('status') == 'running' else '服务器重启后恢复的训练结果'),
                 })
-            status_file.unlink(missing_ok=True)
         except Exception:
             pass
+
+
+def _start_monitor_for_existing(status_file: Path, pid: int):
+    def monitor():
+        try:
+            import os
+            os.waitpid(pid, 0)
+        except OSError:
+            pass
+        status_payload = {'status': 'failed', 'error': 'Process exited without writing status'}
+        try:
+            status_payload = json.loads(status_file.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+        _set_run_state(
+            status=status_payload.get('status', 'failed'),
+            endedAt=datetime.now(timezone.utc).isoformat(),
+            result=status_payload.get('result'),
+            error=status_payload.get('error') or '服务器重启后恢复，训练进程已结束',
+        )
+        status_file.unlink(missing_ok=True)
+
+    threading.Thread(target=monitor, daemon=True).start()
 
 
 class ModelManagerHandler(SimpleHTTPRequestHandler):
@@ -684,10 +738,14 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
                             killed = True
                         except OSError:
                             pass
+                    status_path = RUN_STATE.get('statusPath')
+                    if status_path:
+                        Path(status_path).unlink(missing_ok=True)
                     RUN_STATE.update({
                         'status': 'failed',
                         'endedAt': datetime.now(timezone.utc).isoformat(),
                         'error': '用户手动终止训练进程' if killed else '终止请求已发送',
+                        'statusPath': None,
                     })
                 return self._send_json({'ok': True, 'killed': killed, 'run': RUN_STATE})
 
