@@ -521,7 +521,7 @@ p {
 .homepage-intro-tilt-card>.homepage-bg-layer {
     background-position: center center;
     transform: scale(1.045);
-    filter: brightness(0.92) saturate(1);
+    filter: brightness(1.06) saturate(1.04);
 }
 
 .homepage-intro-tilt-card .intro-tilt__shade,
@@ -537,14 +537,14 @@ p {
 .homepage-intro-tilt-card .intro-tilt__shade {
     z-index: 1;
     background:
-        linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.5) 55%, rgba(0, 0, 0, 0.8)),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0.38) 55%, rgba(0, 0, 0, 0.64)),
         radial-gradient(circle at 12% 16%, rgba(255, 221, 139, 0.12), transparent 28%),
-        linear-gradient(120deg, rgba(4, 8, 18, 0.3), rgba(4, 8, 18, 0.05), rgba(4, 8, 18, 0.4));
+        linear-gradient(120deg, rgba(4, 8, 18, 0.18), rgba(4, 8, 18, 0.03), rgba(4, 8, 18, 0.24));
 }
 
 .homepage-intro-tilt-card--dark .intro-tilt__shade {
     background:
-        linear-gradient(180deg, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.62) 48%, rgba(0, 0, 0, 0.92)),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.48) 48%, rgba(0, 0, 0, 0.76)),
         radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05), transparent 34%);
 }
 
@@ -857,6 +857,75 @@ p {
     background-position:
         var(--pointer-x) var(--pointer-y),
         calc(50% + ((var(--pointer-from-left) - 0.5) * 6%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 4%));
+}
+
+.homepage-intro-tilt-card--foil-scp .intro-tilt__shine {
+    -webkit-mask-image: url('../asset/img/SCP导览卡片middle-invert-mask.webp');
+    mask-image: url('../asset/img/SCP导览卡片middle-invert-mask.webp');
+    -webkit-mask-size: cover;
+    mask-size: cover;
+    -webkit-mask-position: center center;
+    mask-position: center center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    opacity: calc(0.14 + (var(--shine-opacity) * 0.2));
+    mix-blend-mode: screen;
+    background:
+        linear-gradient(118deg,
+            transparent 18%,
+            rgba(245, 247, 255, 0.05) 34%,
+            rgba(255, 255, 255, 0.14) 46%,
+            rgba(255, 255, 255, 0.18) 50%,
+            rgba(227, 235, 255, 0.08) 58%,
+            transparent 72%),
+        linear-gradient(-14deg,
+            rgba(18, 22, 28, 0.0) 12%,
+            rgba(245, 248, 255, 0.04) 44%,
+            rgba(18, 22, 28, 0.0) 82%);
+    background-size: 220% 220%, 180% 180%;
+    background-position:
+        var(--pointer-x) var(--pointer-y),
+        calc(50% + ((var(--pointer-from-left) - 0.5) * 12%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 10%));
+}
+
+.homepage-intro-tilt-card--foil-scp .intro-tilt__shine::after,
+.homepage-intro-tilt-card--foil-scp .intro-tilt__glare::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(3, 4, 6, 0.985);
+    -webkit-mask-image: url('../asset/img/SCP导览卡片middle.webp');
+    mask-image: url('../asset/img/SCP导览卡片middle.webp');
+    -webkit-mask-size: cover;
+    mask-size: cover;
+    -webkit-mask-position: center center;
+    mask-position: center center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    pointer-events: none;
+}
+
+.homepage-intro-tilt-card--foil-scp .intro-tilt__glare {
+    -webkit-mask-image: url('../asset/img/SCP导览卡片middle-invert-mask.webp');
+    mask-image: url('../asset/img/SCP导览卡片middle-invert-mask.webp');
+    -webkit-mask-size: cover;
+    mask-size: cover;
+    -webkit-mask-position: center center;
+    mask-position: center center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    opacity: calc(0.06 + (var(--glare-opacity) * 0.16));
+    mix-blend-mode: overlay;
+    background:
+        linear-gradient(116deg,
+            transparent 24%,
+            rgba(242, 246, 255, 0.05) 40%,
+            rgba(255, 255, 255, 0.10) 49%,
+            rgba(242, 246, 255, 0.05) 58%,
+            transparent 74%);
+    background-size: 200% 200%;
+    background-position: var(--pointer-x) var(--pointer-y);
+    filter: blur(1px);
 }
 
 @media (hover: none),
