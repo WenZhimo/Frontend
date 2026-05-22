@@ -937,6 +937,9 @@ class HeadlessTrainer:
         if self.best_so_far is None:
             raise ValueError('No best individual is available for export. Training did not evaluate any population.')
 
+        if self.current_generation >= self.config.generations and self.config.population_checkpoint_enabled:
+            self._save_population_checkpoint()
+
         export_dir = resolve_project_path(self.config.export_dir)
         export_dir.mkdir(parents=True, exist_ok=True)
         export_path = export_dir / f'{self.config.export_name}.json'
