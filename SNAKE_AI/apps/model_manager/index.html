@@ -687,7 +687,7 @@
                 card.innerHTML = `<div class="card-label">HTML</div><div class="card-value" style="font-size:1rem;">${report.name}</div><div style="margin-top:8px;"><a href="/${report.path}" target="_blank">打开</a></div>`;
                 reportCards.appendChild(card);
             }
-            const trainingReport = (artifacts.reports || []).find(item => item.name === 'training-report.html' && !item.path.includes('/-latest/')) || (artifacts.reports || []).find(item => item.name === 'training-report.html');
+            const trainingReport = (artifacts.reports || []).find(item => item.name === 'training-report.html' && !item.path.includes('-latest/')) || (artifacts.reports || []).find(item => item.name === 'training-report.html');
             const evaluationReport = (artifacts.reports || []).find(item => item.name === 'evaluation-report.html');
             const longRunSummary = (artifacts.reports || []).find(item => item.name === 'run-log-summary.html');
             trainingReportLink.href = trainingReport ? `/${trainingReport.path}` : '#';
@@ -857,8 +857,14 @@
             const evalHtml = `${candidate.path}.eval-report.html`;
             reportLinks.push(`<a href="/${evalHtml}" target="_blank">打开模型评估 HTML</a>`);
             const candidateProfile = metadata.profileId || (selectedCandidate?.profileId) || 'pc';
-            const trainingReportPath = `artifacts/models/checkpoints/${candidateProfile}/training-report.html`;
-            reportLinks.push(`<a href="/${trainingReportPath}" target="_blank">打开训练报告</a>`);
+            const candidateSeed = metadata.seed ?? (selectedCandidate?.seed);
+            if (candidateSeed != null) {
+                const seedTrainingReport = `artifacts/models/checkpoints/${candidateProfile}/${candidateSeed}-latest/training-report.html`;
+                reportLinks.push(`<a href="/${seedTrainingReport}" target="_blank">打开训练报告</a>`);
+            } else {
+                const trainingReportPath = `artifacts/models/checkpoints/${candidateProfile}/training-report.html`;
+                reportLinks.push(`<a href="/${trainingReportPath}" target="_blank">打开训练报告</a>`);
+            }
             candidateReportLinks.innerHTML = reportLinks.join('');
         }
 
