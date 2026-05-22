@@ -23,24 +23,17 @@
             background: radial-gradient(circle at top right, rgba(0, 229, 255, 0.08), transparent 30%), linear-gradient(180deg, #050709, #0a0d10);
             color: var(--text);
             font-family: "Segoe UI", system-ui, sans-serif;
-            display: grid;
-            grid-template-columns: minmax(280px, 340px) 1fr;
         }
-        .sidebar {
-            padding: 24px 20px;
-            background: linear-gradient(180deg, rgba(8, 10, 12, 0.96), rgba(8, 10, 12, 0.88));
-            border-right: 1px solid rgba(200, 154, 46, 0.16);
-            box-shadow: var(--shadow);
+        .page {
             display: grid;
             gap: 16px;
-            overflow-y: auto;
+            padding: 24px;
+            align-content: start;
         }
         .main {
-            padding: 24px;
             display: grid;
             gap: 16px;
             align-content: start;
-            overflow-y: auto;
         }
         .status-line {
             display: inline-flex;
@@ -223,6 +216,27 @@
         .help-list.open {
             display: grid;
         }
+        .top-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .top-nav button {
+            width: auto;
+            min-width: 120px;
+        }
+        .top-nav button.active {
+            border-color: var(--cyan);
+            background: rgba(0, 36, 42, 0.84);
+            color: #fff;
+        }
+        .section {
+            display: none;
+            gap: 16px;
+        }
+        .section.active {
+            display: grid;
+        }
         .tabs {
             display: inline-grid;
             grid-auto-flow: column;
@@ -267,7 +281,7 @@
     </style>
 </head>
 <body>
-    <aside class="sidebar">
+    <div class="page">
         <div class="status-line">
             <span class="status-dot"></span>
             <span>[ MODEL MANAGER : LOCAL ]</span>
@@ -276,97 +290,164 @@
             <h1>模型管理台</h1>
             <p class="lede">这是一个给本地使用的统一入口页面。你可以在这里查看当前默认模型、浏览训练产生的候选模型、阅读训练/评估报告、查看 checkpoint 的恢复训练提示，并把某个候选模型直接设为默认模型。</p>
         </div>
-        <div class="panel">
-            <h2 class="panel-title">[ 新手说明 ]</h2>
-            <div class="help-summary">这里是统一的模型管理入口：先在右侧候选模型里选中一个模型，再决定是设为默认、重新评估，还是查看它对应的 checkpoint / resume 信息。</div>
-            <button id="toggleHelpBtn">展开完整使用说明</button>
-            <div class="help-list" id="helpList" style="margin-top: 12px;">
-                <div>1. <strong style="color: var(--gold);">当前默认模型</strong>：显示 PC / phone / tablet 现在实际在用的模型。</div>
-                <div>2. <strong style="color: var(--gold);">候选模型</strong>：显示训练导出的可选模型。先点选，再看右侧详情。</div>
-                <div>3. <strong style="color: var(--gold);">设为默认</strong>：把当前选中的候选模型复制到默认模型位置，之后测试台与前端推理会使用它。</div>
-                <div>4. <strong style="color: var(--gold);">打开评估</strong>：会先重新评估当前候选模型，再自动打开最新评估报告。</div>
-                <div>5. <strong style="color: var(--gold);">Checkpoints / Resume</strong>：在主区域切到对应标签后，可以看到 checkpoint 列表和恢复训练配置。</div>
-            </div>
+        <div class="top-nav" id="topNav">
+            <button class="active" data-section="defaultsSection">默认模型</button>
+            <button data-section="candidatesSection">候选模型</button>
+            <button data-section="manualTrainingSection">手动训练</button>
+            <button data-section="longRunSection">长期训练</button>
+            <button data-section="checkpointsSection">Checkpoints / Resume</button>
+            <button data-section="reportsSection">报告</button>
+            <button data-section="helpSection">帮助</button>
         </div>
-        <div class="panel">
-            <h2 class="panel-title">[ 快速入口 ]</h2>
-            <div class="links">
-                <a href="/apps/runtime/index.html">打开模拟测试台</a>
-                <a id="training-report-link" href="#">打开训练报告</a>
-                <a id="evaluation-report-link" href="#">打开评估报告</a>
-            </div>
-        </div>
-        <div class="panel">
-            <h2 class="panel-title">[ 控制 ]</h2>
-            <div class="field">
-                <label for="profileFilter">Profile Filter</label>
-                <select id="profileFilter">
-                    <option value="all">全部</option>
-                    <option value="pc">PC</option>
-                    <option value="phone">phone</option>
-                    <option value="tablet">tablet</option>
-                </select>
-            </div>
-            <div class="field">
-                <label for="promoteProfile">Promote Target</label>
-                <select id="promoteProfile">
-                    <option value="pc">PC</option>
-                    <option value="phone">phone</option>
-                    <option value="tablet">tablet</option>
-                </select>
-            </div>
-            <div class="button-row">
-                <button id="refreshBtn">刷新</button>
-                <button id="promoteBtn">设为默认</button>
-                <button id="openEvalBtn">评估当前</button>
-            </div>
-            <div style="margin-top: 10px;">
-                <button id="openEvalAllBtn">评估全部候选模型</button>
-            </div>
-        </div>
-    </aside>
-    <main class="main">
-        <div id="messageBox" class="message">正在加载本地模型管理数据…</div>
-        <section class="panel">
-            <div class="tabs">
-                <button class="tab-btn active" data-tab="defaults">默认模型</button>
-                <button class="tab-btn" data-tab="checkpoints">Checkpoints / Resume</button>
-            </div>
-            <div class="summary-panel active" id="defaultsPanel">
-                <h2 class="panel-title">[ 当前默认模型 ]</h2>
-                <div class="list" id="defaultList"></div>
-            </div>
-            <div class="summary-panel" id="checkpointsPanel">
-                <h2 class="panel-title">[ Checkpoints / Resume ]</h2>
-                <div class="list" id="checkpointList"></div>
-                <div style="margin-top: 12px; display: grid; gap: 10px;">
-                    <div class="detail-grid" id="checkpointDetail"></div>
-                    <button id="copyResumeBtn">复制 resume 配置</button>
-                    <div>
-                        <label for="resumeFallbackText">复制失败时可手动复制</label>
-                        <textarea id="resumeFallbackText" style="width:100%; min-height: 84px; margin-top: 8px; background: rgba(8, 12, 14, 0.9); color: var(--text); border: 1px solid rgba(200, 154, 46, 0.16); padding: 10px 12px; font-size: 0.92rem; font-family: monospace, sans-serif; resize: vertical;" readonly></textarea>
+        <main class="main">
+            <div id="messageBox" class="message">正在加载本地模型管理数据…</div>
+
+            <section class="section active" id="defaultsSection">
+                <div class="panel">
+                    <h2 class="panel-title">[ 当前默认模型 ]</h2>
+                    <div class="list" id="defaultList"></div>
+                </div>
+            </section>
+
+            <section class="section" id="candidatesSection">
+                <div class="summary-grid">
+                    <div class="panel">
+                        <h2 class="panel-title">[ 控制 ]</h2>
+                        <div class="field">
+                            <label for="profileFilter">Profile Filter</label>
+                            <select id="profileFilter">
+                                <option value="all">全部</option>
+                                <option value="pc">PC</option>
+                                <option value="phone">phone</option>
+                                <option value="tablet">tablet</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="promoteProfile">Promote Target</label>
+                            <select id="promoteProfile">
+                                <option value="pc">PC</option>
+                                <option value="phone">phone</option>
+                                <option value="tablet">tablet</option>
+                            </select>
+                        </div>
+                        <div class="button-row">
+                            <button id="refreshBtn">刷新</button>
+                            <button id="promoteBtn">设为默认</button>
+                            <button id="openEvalBtn">评估当前</button>
+                        </div>
+                        <div style="margin-top: 10px; display: grid; gap: 10px;">
+                            <button id="openEvalAllBtn">评估全部候选模型</button>
+                            <button id="clearReportsBtn">清空报告</button>
+                        </div>
+                    </div>
+                    <div class="panel">
+                        <h2 class="panel-title">[ 候选模型 ]</h2>
+                        <div class="grid">
+                            <div class="list" id="candidateList"></div>
+                            <div>
+                                <div class="detail-grid" id="candidateDetail"></div>
+                                <div class="panel" style="margin-top: 12px; padding: 12px;">
+                                    <h3 class="panel-title" style="margin-bottom: 10px;">[ 相关报告 ]</h3>
+                                    <div class="links" id="candidateReportLinks"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </section>
-        <section class="panel">
-            <h2 class="panel-title">[ 候选模型 ]</h2>
-            <div class="grid">
-                <div class="list" id="candidateList"></div>
-                <div>
-                    <div class="detail-grid" id="candidateDetail"></div>
-                    <div class="panel" style="margin-top: 12px; padding: 12px;">
-                        <h3 class="panel-title" style="margin-bottom: 10px;">[ 相关报告 ]</h3>
-                        <div class="links" id="candidateReportLinks"></div>
+            </section>
+
+            <section class="section" id="manualTrainingSection">
+                <div class="panel">
+                    <h2 class="panel-title">[ 手动训练参数 ]</h2>
+                    <div class="help-summary">这里展示并保存手动训练所使用的一组参数预设。你可以切换当前预设、保存当前预设，并直接应用该预设启动训练。</div>
+                    <div class="field">
+                        <label for="manualPresetSelect">手动训练预设</label>
+                        <select id="manualPresetSelect"></select>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+                        <button id="createManualPresetBtn">新建预设</button>
+                        <button id="activateManualPresetBtn">设为当前预设</button>
+                        <button id="renameManualPresetBtn">重命名预设</button>
+                        <button id="deleteManualPresetBtn">删除当前预设</button>
+                        <button id="saveManualConfigBtn">保存当前预设</button>
+                        <button id="runManualBtn">应用并启动训练</button>
+                    </div>
+                    <div class="detail-grid" id="manualConfigFields"></div>
+                </div>
+            </section>
+
+            <section class="section" id="longRunSection">
+                <div class="panel">
+                    <h2 class="panel-title">[ 长期训练参数 ]</h2>
+                    <div class="help-summary">这里展示并保存长期自动训练的参数预设。你可以切换当前预设、保存当前预设，并直接应用它启动长期训练。</div>
+                    <div class="links" style="margin-bottom: 12px;">
+                        <a id="longRunSummaryLinkInMenu" href="#">打开长期训练日志摘要</a>
+                    </div>
+                    <div class="field">
+                        <label for="longRunPresetSelect">长期训练预设</label>
+                        <select id="longRunPresetSelect"></select>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+                        <button id="createLongRunPresetBtn">新建预设</button>
+                        <button id="activateLongRunPresetBtn">设为当前预设</button>
+                        <button id="renameLongRunPresetBtn">重命名预设</button>
+                        <button id="deleteLongRunPresetBtn">删除当前预设</button>
+                        <button id="saveLongRunConfigBtn">保存当前预设</button>
+                        <button id="runLongRunBtn">应用并启动长期训练</button>
+                    </div>
+                    <div class="detail-grid" id="longRunConfigFields"></div>
+                </div>
+            </section>
+
+            <section class="section" id="checkpointsSection">
+                <div class="panel">
+                    <h2 class="panel-title">[ Checkpoints / Resume ]</h2>
+                    <div class="list" id="checkpointList"></div>
+                    <div style="margin-top: 12px; display: grid; gap: 10px;">
+                        <div class="detail-grid" id="checkpointDetail"></div>
+                        <button id="copyResumeBtn">复制 resume 配置</button>
+                        <div>
+                            <label for="resumeFallbackText">复制失败时可手动复制</label>
+                            <textarea id="resumeFallbackText" style="width:100%; min-height: 84px; margin-top: 8px; background: rgba(8, 12, 14, 0.9); color: var(--text); border: 1px solid rgba(200, 154, 46, 0.16); padding: 10px 12px; font-size: 0.92rem; font-family: monospace, sans-serif; resize: vertical;" readonly></textarea>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </section>
-        <section class="panel">
-            <h2 class="panel-title">[ 报告索引 ]</h2>
-            <div class="cards" id="reportCards"></div>
-        </section>
-    </main>
+            </section>
+
+            <section class="section" id="reportsSection">
+                <div class="panel">
+                    <h2 class="panel-title">[ 报告索引 ]</h2>
+                    <div class="links" style="margin-bottom: 12px;">
+                        <a id="training-report-link" href="#">打开训练报告</a>
+                        <a id="evaluation-report-link" href="#">打开评估报告</a>
+                        <a id="longRunSummaryLink" href="#">打开长期训练日志摘要</a>
+                    </div>
+                    <div class="cards" id="reportCards"></div>
+                </div>
+            </section>
+
+            <section class="section" id="helpSection">
+                <div class="summary-grid">
+                    <div class="panel">
+                        <h2 class="panel-title">[ 运行状态 ]</h2>
+                        <div class="detail-grid" id="runStatusDetail"></div>
+                    </div>
+                    <div class="panel">
+                        <h2 class="panel-title">[ 新手说明 ]</h2>
+                        <div class="help-summary">这里是统一的模型管理入口：先在候选模型里选中一个模型，再决定是设为默认、重新评估，还是查看它对应的 checkpoint / resume 信息。</div>
+                        <button id="toggleHelpBtn">展开完整使用说明</button>
+                        <div class="help-list" id="helpList" style="margin-top: 12px;">
+                            <div>1. <strong style="color: var(--gold);">当前默认模型</strong>：显示 PC / phone / tablet 现在实际在用的模型。</div>
+                            <div>2. <strong style="color: var(--gold);">候选模型</strong>：显示训练导出的可选模型。先点选，再看详情。</div>
+                            <div>3. <strong style="color: var(--gold);">设为默认</strong>：把当前选中的候选模型复制到默认模型位置，之后测试台与前端推理会使用它。</div>
+                            <div>4. <strong style="color: var(--gold);">评估当前 / 评估全部</strong>：重新生成报告并自动刷新索引。</div>
+                            <div>5. <strong style="color: var(--gold);">Checkpoints / Resume</strong>：查看恢复训练配置与当前 checkpoint 状态。</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
     <script>
         const defaultList = document.getElementById('defaultList');
         const checkpointList = document.getElementById('checkpointList');
@@ -383,19 +464,41 @@
         const promoteBtn = document.getElementById('promoteBtn');
         const openEvalBtn = document.getElementById('openEvalBtn');
         const openEvalAllBtn = document.getElementById('openEvalAllBtn');
+        const clearReportsBtn = document.getElementById('clearReportsBtn');
         const messageBox = document.getElementById('messageBox');
         const trainingReportLink = document.getElementById('training-report-link');
         const evaluationReportLink = document.getElementById('evaluation-report-link');
         const toggleHelpBtn = document.getElementById('toggleHelpBtn');
         const helpList = document.getElementById('helpList');
-        const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
-        const defaultsPanel = document.getElementById('defaultsPanel');
-        const checkpointsPanel = document.getElementById('checkpointsPanel');
+        const topNavButtons = Array.from(document.querySelectorAll('#topNav button'));
+        const sections = Array.from(document.querySelectorAll('.section'));
+        const longRunSummaryLink = document.getElementById('longRunSummaryLink');
+        const longRunSummaryLinkInMenu = document.getElementById('longRunSummaryLinkInMenu');
+        const runStatusDetail = document.getElementById('runStatusDetail');
+        const manualConfigFields = document.getElementById('manualConfigFields');
+        const longRunConfigFields = document.getElementById('longRunConfigFields');
+        const manualPresetSelect = document.getElementById('manualPresetSelect');
+        const longRunPresetSelect = document.getElementById('longRunPresetSelect');
+        const createManualPresetBtn = document.getElementById('createManualPresetBtn');
+        const createLongRunPresetBtn = document.getElementById('createLongRunPresetBtn');
+        const activateManualPresetBtn = document.getElementById('activateManualPresetBtn');
+        const activateLongRunPresetBtn = document.getElementById('activateLongRunPresetBtn');
+        const renameManualPresetBtn = document.getElementById('renameManualPresetBtn');
+        const renameLongRunPresetBtn = document.getElementById('renameLongRunPresetBtn');
+        const deleteManualPresetBtn = document.getElementById('deleteManualPresetBtn');
+        const deleteLongRunPresetBtn = document.getElementById('deleteLongRunPresetBtn');
+        const saveManualConfigBtn = document.getElementById('saveManualConfigBtn');
+        const saveLongRunConfigBtn = document.getElementById('saveLongRunConfigBtn');
+        const runManualBtn = document.getElementById('runManualBtn');
+        const runLongRunBtn = document.getElementById('runLongRunBtn');
 
         let artifacts = null;
+        let configs = { manual: { activePresetId: null, presets: [] }, longRun: { activePresetId: null, presets: [] } };
         let selectedCandidate = null;
         let selectedCheckpoint = null;
         let evaluationBusy = false;
+        let activeSection = 'defaultsSection';
+        let lastRunStatus = 'idle';
 
         function setMessage(text, error = false) {
             messageBox.textContent = text;
@@ -416,6 +519,112 @@
         function createDetailCell(label, value) {
             return `<div class="detail-cell"><div class="detail-label">${label}</div><div class="detail-value">${value ?? '--'}</div></div>`;
         }
+
+        const PARAM_TOOLTIPS = {
+            'profile_id': '设备档位：决定棋盘尺寸、默认模型路径、导出/checkpoint 目录\n可选值：pc | phone | tablet',
+            'seed': '随机种子：同一 seed 可复现训练结果\n取值范围：任意整数',
+            'generations': '总训练代数上限\n建议范围：100～30000',
+            'num_parents': '每代保留为父代的精英个体数量\n建议范围：20～500',
+            'num_offspring': '每代新生成的子代数量\n建议范围：40～1000',
+            'boards_per_individual': '每个个体在几种棋盘尺寸上评估；固定档位时通常为 1\n建议范围：1～5',
+            'episodes_per_board': '每块棋盘重复跑多少局以降低评估随机性\n建议范围：1～8',
+            'starvation_scale': '饥饿阈值缩放系数；越大，蛇越久不吃苹果仍可存活\n建议范围：0.5～3.0',
+            'score_weight': '苹果奖励权重；越大，越优先学会吃苹果\n建议范围：100～10000',
+            'survival_weight': '生存奖励权重；适度保留活下来的激励\n建议范围：10～500',
+            'raw_fitness_weight': '原始适应度权重；辅助排序信号\n建议范围：0.01～1.0',
+            'raw_fitness_cap': '原始适应度截断值；防止极端长生存拉爆聚合分数\n建议范围：50～1000',
+            'zero_score_penalty': '0苹果惩罚；抑制只绕圈不吃的策略\n建议范围：0～500',
+            'approach_apple_weight': '接近苹果奖励；蛇头缩短与苹果距离时给予正反馈\n建议范围：1～50',
+            'repeat_cell_penalty': '重复踩格惩罚；蛇回到曾访问位置时的负反馈\n建议范围：1～20',
+            'stall_penalty': '停滞惩罚；长时间未靠近苹果的累计负反馈\n建议范围：0.5～20',
+            'population_checkpoint_enabled': '是否启用整群 checkpoint 保存\n可选值：true | false',
+            'population_checkpoint_interval': '整群 checkpoint 覆写间隔（代）；不影响每代 history 写入\n建议范围：1～10',
+            'resume_strict': '恢复训练时是否严格校验 checkpoint 参数一致性\n可选值：true | false',
+            'parallel_evaluation_enabled': '是否启用多进程并行评估种群\n可选值：true | false',
+            'parallel_evaluation_workers': '多进程评估 worker 数；null=自动\n取值范围：null 或 1～128',
+            'parallel_evaluation_chunksize': '并行 map 的 chunksize\n建议范围：1～4',
+            'promote_to_default': '训练结束时是否自动晋升为默认模型\n可选值：true | false',
+            'hybrid_enabled': '是否启用跨种群 hybrid 融合\n可选值：true | false',
+            'hybrid_min_seed_pool': '触发 hybrid 所需的最少 full 阶段候选 seed 数\n建议范围：5～50',
+            'hybrid_top_seed_count': '每次 hybrid 从排名靠前的多少个 seed 中选来源\n建议范围：2～10',
+            'hybrid_population_size': 'hybrid 融合后的目标人口大小；为空则用 num_parents\n建议范围：null 或 40～500',
+            'hybrid_segment_boundaries': '来源种群内部排名切段边界\n示例：[0.1, 0.3, 0.6, 1.0]',
+            'hybrid_segment_weights': '每段分配的配额权重\n示例：[0.4, 0.3, 0.2, 0.1]',
+            'hybrid_skip_incompatible_sources': '若来源种群不兼容是否跳过并继续补足\n可选值：true | false',
+            'hybrid_min_new_seeds_since_last': '一次 hybrid 后至少新增多少个 seed 才允许下一轮 hybrid\n建议范围：1～10',
+            'keep_non_topn_final_exports': '清理非 top-N 模型时是否保留其最终导出 JSON\n可选值：true | false',
+            'trial_generations': '试训代数；用于低成本筛掉弱 seed\n建议范围：100～1000',
+            'full_generations': '完整训练目标总代数上限\n建议范围：500～30000',
+            'warmup_seed_count': '候选池少于这个数量时直接进入 warmup，不做 trial 筛选\n建议范围：3～20',
+            'keep_top_n': '长期训练保留多少个 best seed\n建议范围：5～50',
+            'cleanup_interval_runs': '候选池规模达到多少时触发清理\n建议范围：5～50',
+            'trial_min_selection_ratio_vs_default': '试训模型 vs 默认模型的 selection 分数最低比例\n建议范围：0.5～1.0',
+            'trial_min_selection_ratio_vs_topn_floor': '试训模型 vs 历史候选地板的最低 selection 分数比例\n建议范围：0.3～0.9',
+            'trial_min_avg_score': '试训模型最低平均苹果数门槛\n建议范围：1.0～100.0',
+            'trial_min_avg_frames': '试训模型最低平均存活步数门槛\n建议范围：50～5000',
+            'log_dir': '长期训练日志输出根目录',
+            'dry_run': '仅演练调度流程，不真正训练\n可选值：true | false',
+        };
+
+        const PARAM_LABELS = {
+            'profile_id': '设备档位(profile_id)',
+            'seed': '随机种子(seed)',
+            'generations': '训练代数(generations)',
+            'num_parents': '父代个数(num_parents)',
+            'num_offspring': '子代个数(num_offspring)',
+            'boards_per_individual': '评估棋盘数(boards_per_individual)',
+            'episodes_per_board': '每棋盘局数(episodes_per_board)',
+            'starvation_scale': '饥饿缩放(starvation_scale)',
+            'score_weight': '苹果奖励权重(score_weight)',
+            'survival_weight': '生存奖励权重(survival_weight)',
+            'raw_fitness_weight': '原始适应度权重(raw_fitness_weight)',
+            'raw_fitness_cap': '适应度截断(raw_fitness_cap)',
+            'zero_score_penalty': '零苹果惩罚(zero_score_penalty)',
+            'approach_apple_weight': '趋近苹果奖励(approach_apple_weight)',
+            'repeat_cell_penalty': '重复踩格惩罚(repeat_cell_penalty)',
+            'stall_penalty': '停滞惩罚(stall_penalty)',
+            'population_checkpoint_enabled': '启用checkpoint(population_checkpoint_enabled)',
+            'population_checkpoint_interval': 'checkpoint间隔(population_checkpoint_interval)',
+            'resume_strict': '恢复严格校验(resume_strict)',
+            'parallel_evaluation_enabled': '并行评估(parallel_evaluation_enabled)',
+            'parallel_evaluation_workers': '并行worker数(parallel_evaluation_workers)',
+            'parallel_evaluation_chunksize': '并行块大小(parallel_evaluation_chunksize)',
+            'promote_to_default': '自动晋升默认(promote_to_default)',
+            'hybrid_enabled': '启用hybrid(hybrid_enabled)',
+            'hybrid_min_seed_pool': 'hybrid最少seed(hybrid_min_seed_pool)',
+            'hybrid_top_seed_count': 'hybrid来源seed数(hybrid_top_seed_count)',
+            'hybrid_population_size': 'hybrid目标人口(hybrid_population_size)',
+            'hybrid_segment_boundaries': 'hybrid切段边界(hybrid_segment_boundaries)',
+            'hybrid_segment_weights': 'hybrid段权重(hybrid_segment_weights)',
+            'hybrid_skip_incompatible_sources': 'hybrid跳过不兼容源(hybrid_skip_incompatible_sources)',
+            'hybrid_min_new_seeds_since_last': 'hybrid冷却新增seed数(hybrid_min_new_seeds_since_last)',
+            'keep_non_topn_final_exports': '保留弱模型导出(keep_non_topn_final_exports)',
+            'trial_generations': '试训代数(trial_generations)',
+            'full_generations': '完整训练代数(full_generations)',
+            'warmup_seed_count': 'warmup阈值(warmup_seed_count)',
+            'keep_top_n': '保留top数量(keep_top_n)',
+            'cleanup_interval_runs': '清理触发数量(cleanup_interval_runs)',
+            'trial_min_selection_ratio_vs_default': '试训vs默认最低比例(trial_min_selection_ratio_vs_default)',
+            'trial_min_selection_ratio_vs_topn_floor': '试训vs地板最低比例(trial_min_selection_ratio_vs_topn_floor)',
+            'trial_min_avg_score': '试训最低苹果数(trial_min_avg_score)',
+            'trial_min_avg_frames': '试训最低存活步数(trial_min_avg_frames)',
+            'log_dir': '日志目录(log_dir)',
+            'dry_run': '演练模式(dry_run)',
+        };
+
+        const MANUAL_PARAM_GROUPS = [
+            { name: '基础参数', keys: ['profile_id', 'seed', 'generations', 'num_parents', 'num_offspring', 'boards_per_individual', 'episodes_per_board', 'starvation_scale'] },
+            { name: '评分与惩罚', keys: ['score_weight', 'survival_weight', 'raw_fitness_weight', 'raw_fitness_cap', 'zero_score_penalty', 'approach_apple_weight', 'repeat_cell_penalty', 'stall_penalty'] },
+            { name: 'Checkpoint / Resume', keys: ['population_checkpoint_enabled', 'population_checkpoint_interval', 'resume_strict', 'parallel_evaluation_enabled', 'parallel_evaluation_workers', 'parallel_evaluation_chunksize', 'promote_to_default'] },
+        ];
+
+        const LONG_RUN_PARAM_GROUPS = [
+            { name: '基础参数', keys: ['profile_id', 'trial_generations', 'full_generations', 'warmup_seed_count', 'keep_top_n', 'cleanup_interval_runs', 'num_parents', 'num_offspring', 'boards_per_individual', 'episodes_per_board', 'starvation_scale', 'dry_run'] },
+            { name: '试训门槛', keys: ['trial_min_avg_score', 'trial_min_avg_frames', 'trial_min_selection_ratio_vs_default', 'trial_min_selection_ratio_vs_topn_floor'] },
+            { name: '评分与惩罚', keys: ['score_weight', 'survival_weight', 'raw_fitness_weight', 'raw_fitness_cap', 'zero_score_penalty', 'approach_apple_weight', 'repeat_cell_penalty', 'stall_penalty'] },
+            { name: 'Checkpoint / Resume', keys: ['population_checkpoint_enabled', 'population_checkpoint_interval', 'resume_strict', 'parallel_evaluation_enabled', 'parallel_evaluation_workers', 'parallel_evaluation_chunksize', 'promote_to_default'] },
+            { name: 'Hybrid 融合', keys: ['hybrid_enabled', 'hybrid_min_seed_pool', 'hybrid_top_seed_count', 'hybrid_population_size', 'hybrid_segment_boundaries', 'hybrid_segment_weights', 'hybrid_skip_incompatible_sources', 'hybrid_min_new_seeds_since_last', 'keep_non_topn_final_exports'] },
+        ];
 
         function renderDefaults() {
             defaultList.innerHTML = '';
@@ -475,13 +684,154 @@
             for (const report of artifacts.reports || []) {
                 const card = document.createElement('div');
                 card.className = 'card';
-                card.innerHTML = `<div class="card-label">${report.type.toUpperCase()}</div><div class="card-value" style="font-size:1rem;">${report.name}</div><div style="margin-top:8px;"><a href="/${report.path}" target="_blank">打开</a></div>`;
+                card.innerHTML = `<div class="card-label">HTML</div><div class="card-value" style="font-size:1rem;">${report.name}</div><div style="margin-top:8px;"><a href="/${report.path}" target="_blank">打开</a></div>`;
                 reportCards.appendChild(card);
             }
             const trainingReport = (artifacts.reports || []).find(item => item.name === 'training-report.html');
             const evaluationReport = (artifacts.reports || []).find(item => item.name === 'evaluation-report.html');
+            const longRunSummary = (artifacts.reports || []).find(item => item.name === 'run-log-summary.html');
             trainingReportLink.href = trainingReport ? `/${trainingReport.path}` : '#';
             evaluationReportLink.href = evaluationReport ? `/${evaluationReport.path}` : '#';
+            longRunSummaryLink.href = longRunSummary ? `/${longRunSummary.path}` : '#';
+            longRunSummaryLinkInMenu.href = longRunSummary ? `/${longRunSummary.path}` : '#';
+        }
+
+
+        function getActivePreset(store) {
+            const activeId = store?.activePresetId;
+            return (store?.presets || []).find((preset) => preset.id === activeId) || (store?.presets || [])[0] || null;
+        }
+
+        function renderConfigFields(container, configObj, groups) {
+            container.innerHTML = '';
+            const groupedKeys = new Set();
+            (groups || []).forEach((group) => group.keys.forEach((k) => groupedKeys.add(k)));
+            const remaining = Object.keys(configObj || {}).filter((k) => !groupedKeys.has(k));
+
+            function buildGroupBlock(name, keys) {
+                const wrapper = document.createElement('div');
+                wrapper.style.marginBottom = '12px';
+                const header = document.createElement('div');
+                header.style.cssText = 'cursor:pointer; color: var(--gold); font-family: monospace, sans-serif; font-size: 0.86rem; letter-spacing: 1px; padding: 8px 0; border-bottom: 1px solid rgba(200,154,46,0.16); margin-bottom: 6px;';
+                header.textContent = `▸ ${name}`;
+                const body = document.createElement('div');
+                body.className = 'detail-grid';
+                body.style.display = 'none';
+                const expandedKey = `mg_cfg_${name}`;
+                let expanded = container.dataset['expanded_' + name] === 'true';
+                try { expanded = expanded || localStorage.getItem(expandedKey) === 'true'; } catch (_) {}
+                if (expanded) {
+                    body.style.display = '';
+                    header.textContent = `▾ ${name}`;
+                    container.dataset['expanded_' + name] = 'true';
+                }
+                header.addEventListener('click', () => {
+                    const visible = body.style.display !== 'none';
+                    body.style.display = visible ? 'none' : '';
+                    header.textContent = visible ? `▸ ${name}` : `▾ ${name}`;
+                    container.dataset['expanded_' + name] = String(!visible);
+                    try { localStorage.setItem(expandedKey, String(!visible)); } catch (_) {}
+                });
+                keys.forEach((key) => {
+                    if (!(key in (configObj || {}))) return;
+                    const value = configObj[key];
+                    const cell = document.createElement('div');
+                    cell.className = 'detail-cell';
+                    const safeValue = Array.isArray(value) || typeof value === 'object' ? JSON.stringify(value) : String(value ?? '');
+                    const tooltip = PARAM_TOOLTIPS[key] || '';
+                    const label = PARAM_LABELS[key] || key;
+                    cell.innerHTML = `<div class="detail-label" title="${tooltip}">${label}</div><div style="margin-top:8px;"><input data-config-key="${key}" value="${safeValue.replace(/"/g, '&quot;')}" title="${tooltip}" style="width:100%; background: rgba(8, 12, 14, 0.9); color: var(--text); border: 1px solid rgba(200, 154, 46, 0.16); padding: 8px 10px; font-size: 0.92rem;" /></div>`;
+                    body.appendChild(cell);
+                });
+                wrapper.appendChild(header);
+                wrapper.appendChild(body);
+                return wrapper;
+            }
+
+            (groups || []).forEach((group) => { container.appendChild(buildGroupBlock(group.name, group.keys)); });
+            if (remaining.length) {
+                container.appendChild(buildGroupBlock('其他参数', remaining));
+            }
+        }
+
+        function renderPresetSelect(selectEl, store) {
+            selectEl.innerHTML = '';
+            for (const preset of store?.presets || []) {
+                const option = document.createElement('option');
+                option.value = preset.id;
+                option.textContent = preset.id === store.activePresetId ? `${preset.name}（当前）` : preset.name;
+                if (preset.id === store.activePresetId) option.selected = true;
+                selectEl.appendChild(option);
+            }
+        }
+
+        function getPresetById(store, presetId) {
+            return (store?.presets || []).find((preset) => preset.id === presetId) || null;
+        }
+
+        function renderSelectedPresetConfig(kind) {
+            if (kind === 'manual') {
+                const preset = getPresetById(configs.manual, manualPresetSelect.value) || getActivePreset(configs.manual);
+                renderConfigFields(manualConfigFields, preset?.config || {}, MANUAL_PARAM_GROUPS);
+                return;
+            }
+            const preset = getPresetById(configs.longRun, longRunPresetSelect.value) || getActivePreset(configs.longRun);
+            renderConfigFields(longRunConfigFields, preset?.config || {}, LONG_RUN_PARAM_GROUPS);
+        }
+
+        function renderRunStatus(run) {
+            const busy = (run?.status === 'running');
+            runManualBtn.disabled = busy;
+            runLongRunBtn.disabled = busy;
+            runManualBtn.textContent = busy ? '训练进行中…' : '应用并启动训练';
+            runLongRunBtn.textContent = busy ? '训练进行中…' : '应用并启动长期训练';
+            if (!run) {
+                runStatusDetail.innerHTML = createDetailCell('状态', '暂无任务');
+                return;
+            }
+            runStatusDetail.innerHTML = [
+                createDetailCell('状态', run.status || '--'),
+                createDetailCell('类型', run.kind || '--'),
+                createDetailCell('预设ID', run.presetId || '--'),
+                createDetailCell('预设名称', run.presetName || '--'),
+                createDetailCell('开始时间', run.startedAt || '--'),
+                createDetailCell('结束时间', run.endedAt || '--'),
+                createDetailCell('结果', run.result || '--'),
+                createDetailCell('错误', run.error || '--'),
+            ].join('');
+        }
+
+        async function loadRunStatus() {
+            const response = await fetch('/api/model-manager/run-status');
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || '加载运行状态失败');
+            }
+            const currentStatus = payload.run?.status || 'idle';
+            renderRunStatus(payload.run);
+            const statusChangedFromRunning = lastRunStatus === 'running' && currentStatus !== 'running';
+            lastRunStatus = currentStatus;
+            return statusChangedFromRunning;
+        }
+
+        function parseConfigValue(raw) {
+            const trimmed = raw.trim();
+            if (trimmed === 'true') return true;
+            if (trimmed === 'false') return false;
+            if (trimmed === 'null') return null;
+            if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+            if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+                try { return JSON.parse(trimmed); } catch (_) { return raw; }
+            }
+            return raw;
+        }
+
+        function collectConfigFromContainer(container) {
+            const result = {};
+            container.querySelectorAll('[data-config-key]').forEach((input) => {
+                result[input.dataset.configKey] = parseConfigValue(input.value);
+            });
+            return result;
         }
 
         function candidateMatchesFilter(candidate) {
@@ -504,9 +854,7 @@
             ].join('');
 
             const reportLinks = [];
-            const evalJson = `${candidate.path}.eval-report.json`;
             const evalHtml = `${candidate.path}.eval-report.html`;
-            reportLinks.push(`<a href="/${evalJson}" target="_blank">打开模型评估 JSON</a>`);
             reportLinks.push(`<a href="/${evalHtml}" target="_blank">打开模型评估 HTML</a>`);
             candidateReportLinks.innerHTML = reportLinks.join('');
         }
@@ -549,11 +897,88 @@
             }
         }
 
-        async function loadArtifacts() {
-            setMessage('正在刷新模型管理数据…');
-            const response = await fetch('/api/model-manager/artifacts');
+        async function loadConfigs() {
+            const response = await fetch('/api/model-manager/configs');
             const payload = await response.json();
             if (!response.ok) {
+                throw new Error(payload.error || '加载训练配置失败');
+            }
+            configs = payload;
+            renderPresetSelect(manualPresetSelect, configs.manual);
+            renderPresetSelect(longRunPresetSelect, configs.longRun);
+            renderConfigFields(manualConfigFields, getActivePreset(configs.manual)?.config || {}, MANUAL_PARAM_GROUPS);
+            renderConfigFields(longRunConfigFields, getActivePreset(configs.longRun)?.config || {}, LONG_RUN_PARAM_GROUPS);
+        }
+
+        async function saveConfig(endpoint, container, successMessage) {
+            const payload = collectConfigFromContainer(container);
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+                throw new Error(result.error || '保存配置失败');
+            }
+            setMessage(successMessage);
+            await loadConfigs();
+        }
+
+        async function renamePreset(endpoint, presetId, currentName, successMessage) {
+            const name = prompt('请输入新的预设名称：', currentName || '');
+            if (name == null) return;
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: presetId, name }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+                throw new Error(result.error || '重命名预设失败');
+            }
+            setMessage(successMessage);
+            await loadConfigs();
+        }
+
+        async function createPreset(endpoint, container, kind, store, successMessage) {
+            const name = prompt('请输入新预设名称：');
+            if (name == null) return;
+            const presets = store?.presets || [];
+            let copySource = prompt('从哪个已有预设复制参数？（直接回车则基于当前表单的值新建）');
+            let config;
+            if (copySource && presets.some((p) => p.name === copySource || p.id === copySource)) {
+                const source = presets.find((p) => p.name === copySource || p.id === copySource);
+                config = source.config;
+            } else {
+                config = collectConfigFromContainer(container);
+            }
+            const payload = {
+                id: `${kind}-${Date.now()}`,
+                name,
+                config,
+            };
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.ok) {
+                throw new Error(result.error || '新建预设失败');
+            }
+            setMessage(successMessage);
+            await loadConfigs();
+        }
+
+        async function loadArtifacts() {
+            setMessage('正在刷新模型管理数据…');
+            const [artifactsResponse, _configs] = await Promise.all([
+                fetch('/api/model-manager/artifacts'),
+                loadConfigs(),
+            ]);
+            const payload = await artifactsResponse.json();
+            if (!artifactsResponse.ok) {
                 throw new Error(payload.error || '加载模型管理数据失败');
             }
             artifacts = payload;
@@ -635,6 +1060,25 @@
             }
         }
 
+        async function clearReports() {
+            if (!confirm('确定要清空当前已有的报告文件吗？这不会删除模型和 checkpoint，只会删除报告产物。')) {
+                return;
+            }
+            setMessage('正在清空报告…');
+            const response = await fetch('/api/model-manager/reports/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) {
+                setMessage(payload.error || '清空报告失败。', true);
+                return;
+            }
+            setMessage(`已清空 ${payload.removedCount} 份报告。`);
+            await loadArtifacts();
+        }
+
         async function copyResumeConfig() {
             const resumeText = selectedCheckpoint?.summary?.resumeExample;
             if (!resumeText) {
@@ -652,11 +1096,11 @@
             }
         }
 
-        function activateTab(tabName) {
-            const showDefaults = tabName === 'defaults';
-            defaultsPanel.classList.toggle('active', showDefaults);
-            checkpointsPanel.classList.toggle('active', !showDefaults);
-            tabButtons.forEach((button) => button.classList.toggle('active', button.dataset.tab === tabName));
+        function activateSection(sectionId) {
+            activeSection = sectionId;
+            sections.forEach((section) => section.classList.toggle('active', section.id === sectionId));
+            topNavButtons.forEach((button) => button.classList.toggle('active', button.dataset.section === sectionId));
+            try { localStorage.setItem('managerActiveSection', sectionId); } catch (_) {}
         }
 
         function setEvaluationButtonsDisabled(disabled) {
@@ -671,15 +1115,163 @@
             const open = helpList.classList.toggle('open');
             toggleHelpBtn.textContent = open ? '收起完整使用说明' : '展开完整使用说明';
         });
-        tabButtons.forEach((button) => button.addEventListener('click', () => activateTab(button.dataset.tab)));
+        topNavButtons.forEach((button) => button.addEventListener('click', () => activateSection(button.dataset.section)));
         refreshBtn.addEventListener('click', () => loadArtifacts().catch((error) => setMessage(error.message, true)));
         profileFilter.addEventListener('change', () => renderCandidates());
         promoteBtn.addEventListener('click', () => promoteCandidate());
         openEvalBtn.addEventListener('click', () => evaluateCandidate());
         openEvalAllBtn.addEventListener('click', () => evaluateAllCandidates());
+        clearReportsBtn.addEventListener('click', () => clearReports());
         copyResumeBtn.addEventListener('click', () => copyResumeConfig());
+        manualPresetSelect.addEventListener('change', () => renderSelectedPresetConfig('manual'));
+        longRunPresetSelect.addEventListener('change', () => renderSelectedPresetConfig('longRun'));
+
+        createManualPresetBtn.addEventListener('click', async () => {
+            try {
+                await createPreset('/api/model-manager/presets/manual', manualConfigFields, 'manual', configs.manual, '已新建手动训练预设。');
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+        createLongRunPresetBtn.addEventListener('click', async () => {
+            try {
+                await createPreset('/api/model-manager/presets/long-run', longRunConfigFields, 'long-run', configs.longRun, '已新建长期训练预设。');
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+
+        activateManualPresetBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/model-manager/presets/manual/activate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: manualPresetSelect.value }),
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || '激活手动训练预设失败');
+                setMessage('已切换手动训练当前预设。');
+                await loadConfigs();
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+        activateLongRunPresetBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/model-manager/presets/long-run/activate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: longRunPresetSelect.value }),
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || '激活长期训练预设失败');
+                setMessage('已切换长期训练当前预设。');
+                await loadConfigs();
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+        renameManualPresetBtn.addEventListener('click', async () => {
+            try {
+                const preset = getPresetById(configs.manual, manualPresetSelect.value);
+                await renamePreset('/api/model-manager/presets/manual/rename', manualPresetSelect.value, preset?.name, '已重命名手动训练预设。');
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+        renameLongRunPresetBtn.addEventListener('click', async () => {
+            try {
+                const preset = getPresetById(configs.longRun, longRunPresetSelect.value);
+                await renamePreset('/api/model-manager/presets/long-run/rename', longRunPresetSelect.value, preset?.name, '已重命名长期训练预设。');
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+        deleteManualPresetBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/model-manager/presets/manual/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: manualPresetSelect.value }),
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || '删除手动训练预设失败');
+                setMessage('已删除手动训练预设。');
+                await loadConfigs();
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+        deleteLongRunPresetBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/model-manager/presets/long-run/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: longRunPresetSelect.value }),
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || '删除长期训练预设失败');
+                setMessage('已删除长期训练预设。');
+                await loadConfigs();
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+        saveManualConfigBtn.addEventListener('click', async () => {
+            try {
+                await saveConfig('/api/model-manager/configs/manual', manualConfigFields, '手动训练当前预设已保存。');
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+        saveLongRunConfigBtn.addEventListener('click', async () => {
+            try {
+                await saveConfig('/api/model-manager/configs/long-run', longRunConfigFields, '长期训练当前预设已保存。');
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+        runManualBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/model-manager/runs/manual', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || '启动手动训练失败');
+                setMessage('已启动手动训练。');
+                await loadRunStatus();
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+        runLongRunBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/model-manager/runs/long-run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || '启动长期训练失败');
+                setMessage('已启动长期训练。');
+                await loadRunStatus();
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+
+        try {
+            const savedSection = localStorage.getItem('managerActiveSection');
+            if (savedSection && document.getElementById(savedSection)) {
+                activateSection(savedSection);
+            }
+        } catch (_) {}
 
         loadArtifacts().catch((error) => setMessage(error.message, true));
+        loadRunStatus().catch(() => {});
+        setInterval(async () => {
+            try {
+                const shouldRefresh = await loadRunStatus();
+                if (shouldRefresh) {
+                    await loadArtifacts();
+                    setMessage('训练任务已结束，页面数据已自动刷新。');
+                }
+            } catch (_) {}
+        }, 5000);
     </script>
 </body>
 </html>

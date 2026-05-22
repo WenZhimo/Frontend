@@ -101,6 +101,8 @@ class LongRunConfig:
     hybrid_segment_weights: tuple[float, ...] = (0.4, 0.3, 0.2, 0.1)
     # 若来源种群不兼容，是否允许跳过并继续向后补足来源 seed 数量。
     hybrid_skip_incompatible_sources: bool = True
+    # 在一次 hybrid 之后，至少要新增多少个普通 seed，才允许下一次 hybrid，再次平衡探索与融合。
+    hybrid_min_new_seeds_since_last: int = 3
     # 清理非 top-N 模型时，是否仍保留它们的最终导出 JSON。False 表示连导出一起删掉，只保留强模型。
     keep_non_topn_final_exports: bool = False
     # 长期训练日志根目录。运行事件最终会写到 <log_dir>/<profile_id>/run-log.jsonl。
@@ -254,6 +256,161 @@ def _log_event(
 
 def _build_long_run_log_path(config: LongRunConfig) -> Path:
     return resolve_project_path(f"{config.log_dir}/{config.profile_id}/run-log.jsonl")
+
+
+def _load_long_run_events(log_path: Path):
+    if not log_path.exists():
+        return []
+    events = []
+    for line in log_path.read_text(encoding='utf-8').splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return events
+
+
+def _new_seed_count_since_last_hybrid(log_path: Path) -> int:
+    events = _load_long_run_events(log_path)
+    last_hybrid_index = -1
+    for index, event in enumerate(events):
+        if event.get('event') == 'hybrid_started':
+            last_hybrid_index = index
+    if last_hybrid_index < 0:
+        return 10**9
+    return sum(1 for event in events[last_hybrid_index + 1:] if event.get('event') == 'seed_generated')
+
+
+def _long_run_summary_path(log_path: Path) -> Path:
+    return log_path.with_name('run-log-summary.html')
+
+
+def build_long_run_report_payload(events):
+    seeds = {}
+    timeline = []
+    retained = []
+    for event in events:
+        event_name = event.get('event')
+        seed = event.get('seed')
+        timeline.append({
+            'timestamp': event.get('timestampLocalText') or event.get('timestamp'),
+            'event': event_name,
+            'message': event.get('message'),
+        })
+        if seed is not None:
+            seed_entry = seeds.setdefault(str(seed), {
+                'seed': seed,
+                'profileId': event.get('profileId'),
+                'events': [],
+                'latestEvent': None,
+                'report': None,
+            })
+            seed_entry['events'].append({
+                'event': event_name,
+                'message': event.get('message'),
+                'reason': event.get('reason'),
+                'details': event.get('details'),
+            })
+            seed_entry['latestEvent'] = event_name
+            if event.get('report'):
+                seed_entry['report'] = event['report']
+        if event_name == 'retained_top_model':
+            retained.append({
+                'seed': seed,
+                'selectionScore': event.get('selectionScore'),
+                'path': event.get('path'),
+            })
+
+    return {
+        'generatedAt': datetime.now(timezone.utc).isoformat(),
+        'totalEvents': len(events),
+        'timeline': timeline,
+        'seeds': sorted(seeds.values(), key=lambda item: int(item['seed'])),
+        'retainedTopModels': retained,
+        'latestHybridSkip': next((event for event in reversed(events) if event.get('event') == 'hybrid_skipped_cooldown'), None),
+        'latestResumeSkip': next((event for event in reversed(events) if event.get('event') == 'resume_checkpoint_skipped'), None),
+    }
+
+
+def _build_seed_summary_block(seed_entry):
+    recent_items = ''.join(
+        f"<li>{event.get('message') or event.get('event') or '--'}</li>"
+        for event in seed_entry['events'][-5:]
+    ) or '<li>暂无最近事件</li>'
+    report = seed_entry.get('report') or {}
+    return (
+        f"<div class='card'>"
+        f"<h3>Seed {seed_entry['seed']}</h3>"
+        f"<p>最新阶段：{seed_entry.get('latestEvent') or '--'}</p>"
+        f"<p>最新报告选择分：{_format_float(report.get('avgSelectionScore'))}</p>"
+        f"<ul>{recent_items}</ul>"
+        f"</div>"
+    )
+
+
+def build_long_run_report_html(payload):
+    timeline_items = ''.join(
+        f"<li><strong>{item['timestamp']}</strong> · {item['message'] or item['event']}</li>"
+        for item in payload['timeline'][-50:]
+    ) or '<li>暂无事件</li>'
+    seed_blocks = ''.join(_build_seed_summary_block(seed) for seed in payload['seeds']) or '<div class="card">暂无 seed 摘要</div>'
+    retained_rows = ''.join(
+        f"<tr><td>{item['seed']}</td><td>{_format_float(item['selectionScore'])}</td><td>{item['path'] or '--'}</td></tr>"
+        for item in payload['retainedTopModels']
+    ) or '<tr><td colspan="3">暂无保留模型</td></tr>'
+    latest_hybrid_skip = payload['latestHybridSkip']
+    latest_resume_skip = payload['latestResumeSkip']
+    return f"""<!DOCTYPE html>
+<html lang='zh-CN'>
+<head>
+  <meta charset='UTF-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+  <title>长期训练日志摘要</title>
+  <style>
+    body {{ margin: 0; padding: 24px; background: #0b0f12; color: #d8d8d8; font-family: 'Segoe UI', system-ui, sans-serif; }}
+    h1, h2, h3 {{ color: #c89a2e; }}
+    .grid {{ display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }}
+    .card {{ background: rgba(10,14,16,0.92); border: 1px solid rgba(200,154,46,0.16); padding: 16px; }}
+    ul {{ line-height: 1.6; padding-left: 18px; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 12px; }}
+    th, td {{ border-bottom: 1px solid rgba(255,255,255,0.08); padding: 8px 10px; text-align: left; }}
+    .muted {{ color: #9aa7b0; }}
+  </style>
+</head>
+<body>
+  <h1>长期训练日志摘要</h1>
+  <p class='muted'>生成时间：{payload['generatedAt']} ｜ 事件总数：{payload['totalEvents']}</p>
+  <div class='grid'>
+    <div class='card'>
+      <h2>最近时间线</h2>
+      <ul>{timeline_items}</ul>
+    </div>
+    <div class='card'>
+      <h2>关键跳过原因</h2>
+      <p><strong>最近 hybrid 跳过：</strong>{(latest_hybrid_skip or {}).get('message', '无')}</p>
+      <p><strong>最近 checkpoint 跳过：</strong>{(latest_resume_skip or {}).get('message', '无')}</p>
+    </div>
+  </div>
+  <h2>Seed 摘要</h2>
+  <div class='grid'>{seed_blocks}</div>
+  <h2>当前保留 Top 模型</h2>
+  <table>
+    <thead><tr><th>Seed</th><th>选择分</th><th>路径</th></tr></thead>
+    <tbody>{retained_rows}</tbody>
+  </table>
+</body>
+</html>"""
+
+
+def write_long_run_report(log_path: Path):
+    events = _load_long_run_events(log_path)
+    payload = build_long_run_report_payload(events)
+    summary_path = _long_run_summary_path(log_path)
+    summary_path.write_text(build_long_run_report_html(payload), encoding='utf-8')
+    return summary_path
 
 
 def _log_trial_started(log_path: Path, profile_id: str, seed: int, target_generations: int, comparison_generation: int, reason: str, extra_details: str = ''):
@@ -897,6 +1054,18 @@ def _process_resume_backlog(base_config: TrainingConfig, config: LongRunConfig, 
 
 
 def _maybe_run_hybrid(base_config: TrainingConfig, config: LongRunConfig, checkpoint_dir: Path, export_dir: Path, log_path: Path, existing_seeds: set[int], rng: random.Random):
+    new_seed_count = _new_seed_count_since_last_hybrid(log_path)
+    if new_seed_count < config.hybrid_min_new_seeds_since_last:
+        _log_event(
+            log_path,
+            'hybrid_skipped_cooldown',
+            config.profile_id,
+            action='跳过hybrid融合',
+            target=f'：{config.profile_id}',
+            reason='自上次hybrid以来新增seed数量不足，继续优先探索新seed',
+            details=f'已新增seed数量：{new_seed_count}；要求最少新增seed数量：{config.hybrid_min_new_seeds_since_last}',
+        )
+        return None
     hybrid_candidate_pool = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, _full_comparison_generation(config))
     hybrid_bundle = _build_hybrid_population(config, hybrid_candidate_pool, generation=_full_comparison_generation(config))
     if hybrid_bundle is None:
@@ -1019,14 +1188,20 @@ def run_long_training(config: LongRunConfig):
     checkpoint_dir = resolve_project_path(base_config.checkpoint_dir)
     log_path = _build_long_run_log_path(config)
 
-    _process_resume_backlog(base_config, config, checkpoint_dir, export_dir, log_path)
+    result_seed = None
+    try:
+        _process_resume_backlog(base_config, config, checkpoint_dir, export_dir, log_path)
 
-    existing_seeds = _list_existing_seeds(export_dir, checkpoint_dir)
-    hybrid_seed = _maybe_run_hybrid(base_config, config, checkpoint_dir, export_dir, log_path, existing_seeds, rng)
-    if hybrid_seed is not None:
-        return hybrid_seed
+        existing_seeds = _list_existing_seeds(export_dir, checkpoint_dir)
+        hybrid_seed = _maybe_run_hybrid(base_config, config, checkpoint_dir, export_dir, log_path, existing_seeds, rng)
+        if hybrid_seed is not None:
+            result_seed = hybrid_seed
+            return result_seed
 
-    return _run_new_seed_flow(base_config, config, checkpoint_dir, export_dir, log_path, existing_seeds, rng)
+        result_seed = _run_new_seed_flow(base_config, config, checkpoint_dir, export_dir, log_path, existing_seeds, rng)
+        return result_seed
+    finally:
+        write_long_run_report(log_path)
 
 
 def main():

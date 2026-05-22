@@ -1,0 +1,60 @@
+{
+  "activePresetId": "default",
+  "presets": [
+    {
+      "id": "default",
+      "name": "默认长期训练",
+      "config": {
+        "profile_id": "pc",
+        "trial_generations": 300,
+        "full_generations": 1000,
+        "warmup_seed_count": 5,
+        "keep_top_n": 15,
+        "cleanup_interval_runs": 20,
+        "trial_min_selection_ratio_vs_default": 0.8,
+        "trial_min_selection_ratio_vs_topn_floor": 0.8,
+        "trial_min_avg_score": 30.0,
+        "trial_min_avg_frames": 1800.0,
+        "num_parents": 120,
+        "num_offspring": 240,
+        "boards_per_individual": 1,
+        "episodes_per_board": 4,
+        "starvation_scale": 1.0,
+        "score_weight": 2500.0,
+        "survival_weight": 100.0,
+        "raw_fitness_weight": 0.1,
+        "raw_fitness_cap": 300.0,
+        "zero_score_penalty": 500.0,
+        "approach_apple_weight": 12.0,
+        "repeat_cell_penalty": 3.0,
+        "stall_penalty": 10.5,
+        "population_checkpoint_enabled": true,
+        "population_checkpoint_interval": 1,
+        "resume_strict": true,
+        "parallel_evaluation_enabled": false,
+        "parallel_evaluation_workers": null,
+        "parallel_evaluation_chunksize": 1,
+        "hybrid_enabled": true,
+        "hybrid_min_seed_pool": 20,
+        "hybrid_top_seed_count": 6,
+        "hybrid_population_size": null,
+        "hybrid_segment_boundaries": [
+          0.1,
+          0.3,
+          0.6,
+          1.0
+        ],
+        "hybrid_segment_weights": [
+          0.4,
+          0.3,
+          0.2,
+          0.1
+        ],
+        "hybrid_skip_incompatible_sources": true,
+        "hybrid_min_new_seeds_since_last": 3,
+        "keep_non_topn_final_exports": false,
+        "dry_run": false
+      }
+    }
+  ]
+}
