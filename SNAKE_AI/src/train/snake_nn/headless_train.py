@@ -184,7 +184,7 @@ def _evaluate_individual_task(task):
 
 
 class HeadlessTrainer:
-    def __init__(self, config: TrainerConfig, settings_override=None):
+    def __init__(self, config: TrainerConfig, settings_override=None, initial_population=None):
         self.config = config
         self.settings = dict(default_settings)
         self.settings.update({
@@ -199,6 +199,9 @@ class HeadlessTrainer:
 
         if config.resume_from_checkpoint:
             self._load_population_checkpoint(config.resume_from_checkpoint)
+        elif initial_population is not None:
+            self.current_generation = 0
+            self.population = Population(list(initial_population.individuals))
         else:
             self.current_generation = 0
             initial_board = self.settings['board_size']

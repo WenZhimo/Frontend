@@ -12,6 +12,21 @@
 
 ---
 
+## 文档索引
+
+根目录下已经补充了几份中文说明文档，建议按需要查阅：
+
+- [新手开始说明](新手开始说明.md)
+- [目录结构说明](目录结构说明.md)
+- [模型管理页说明](模型管理页说明.md)
+- [运行测试台说明](运行测试台说明.md)
+- [手动训练说明](手动训练说明.md)
+- [长期自动训练说明](长期自动训练说明.md)
+- [评估模型说明](评估模型说明.md)
+- [Checkpoint与恢复训练说明](Checkpoint与恢复训练说明.md)
+
+---
+
 ## 一、主要入口
 
 ### 1. 本地管理服务
@@ -72,11 +87,11 @@ python src/train/snake_nn/long_run_trainer.py
 ```
 
 用途：
-- 自动生成新种子
-- 在 warmup / trial / full train 三种阶段之间切换
+- 优先恢复未完成试训的 checkpoint
+- 在 warmup / trial / full train / hybrid 之间自动切换
 - 自动批量评估候选模型
 - 根据 top-N 规则清理弱模型与旧 checkpoint
-- 持续积累候选模型池
+- 持续积累并重排候选模型池
 
 这是最适合长期后台跑模型筛选的入口。
 
@@ -143,6 +158,10 @@ Python 训练与评估源码。
 - `training-history.json`
 - `training-report.html`
 
+说明：
+- `training-history.json` / `training-report.html` 属于**每代训练历史**，会按代连续更新。
+- `<seed>-latest/` 属于**整群 checkpoint**，其覆写频率由 `population_checkpoint_interval` 控制；这和 history 的更新频率不是一回事。
+
 ### `artifacts/models/long-run/<profile>/`
 长期自动训练日志。
 
@@ -182,6 +201,12 @@ Python 训练与评估源码。
    ```
 3. 到 `artifacts/models/long-run/<profile>/run-log.jsonl` 查看运行日志
 4. 到 `artifacts/models/exports/<profile>/` 查看自动留下的 top 模型
+
+长期训练当前额外具备这些行为：
+- 会优先恢复所有“未完成试训”的 backlog checkpoint，处理完后才会创建新 seed
+- trial / full 比较使用的是目标代数对应的**最终已评估代历史快照**，而不是直接用目标代数数字本身
+- backlog 清空且历史候选池足够大时，会优先尝试跨种群 hybrid 融合，再决定是否创建新 seed
+- `training-history.json` 是每代写；`population_checkpoint_interval` 只控制整群 checkpoint 覆写频率
 
 ---
 
@@ -227,30 +252,35 @@ resume_from_checkpoint='artifacts/models/checkpoints/pc/23-latest'
 python src/train/snake_nn/long_run_trainer.py
 ```
 
-它适合长期跑，因为会自动决定“先做试训还是直接做完整训练”。
+它适合长期跑，因为会自动决定“先做试训还是直接做完整训练”，并优先处理未完成的试训 checkpoint。
 
 核心阶段：
+- **resume backlog 模式**：若目录中存在 `< trial_generations` 的 checkpoint，优先恢复这些中断 trial
 - **warmup 模式**：候选模型数量还不够时，直接完整训练，先把候选池堆起来
-- **trial 模式**：先短代数试训，看这个新种子值不值得继续
+- **trial 模式**：先短代数试训，看这个新 seed 值不值得继续
 - **full train 模式**：trial 达标后，再从 trial checkpoint 继续跑满总代数
+- **hybrid 模式**：backlog 清空且候选池足够大时，优先尝试跨种群融合，再继续训练
 
 最常改的配置：
 - `profile_id`：当前设备档位
-- `trial_generations`：试训代数
-- `full_generations`：完整训练代数
+- `trial_generations`：试训目标代数
+- `full_generations`：完整训练目标代数
 - `warmup_seed_count`：候选池少于多少时直接走 warmup
 - `keep_top_n`：最后保留多少个最好模型
-- `cleanup_interval_runs`：多久触发一次清理
+- `cleanup_interval_runs`：候选池达到多少个后触发一次清理检查
+- `population_checkpoint_interval`：整群 checkpoint 的覆写频率
+- `resume_strict`：恢复训练时是否严格校验 checkpoint 参数一致性
 - `dry_run`：只演练流程，不真的训练
 
 运行后会做这些事：
-1. 扫描现有候选模型和 checkpoint
-2. 生成一个未使用过的新 seed
-3. 根据候选池规模选择 warmup 或 trial
-4. 如有必要，从 trial checkpoint 继续跑完整训练
-5. 对当前候选池重新生成汇总评估报告
-6. 超过阈值时删除非 top-N 模型和对应 checkpoint
-7. 把运行事件写入 `artifacts/models/long-run/<profile>/run-log.jsonl`
+1. 先扫描现有候选模型和 checkpoint
+2. 若存在未完成试训的 checkpoint，则优先恢复它们，而不是立刻创建新 seed
+3. backlog 清空后，若候选池规模达到阈值，则优先尝试 hybrid 融合训练
+4. 若不触发 hybrid，再进入普通新 seed 的 warmup 或 trial 流程
+5. 如有必要，从 trial checkpoint 继续跑完整训练
+6. 对当前候选池重新生成汇总评估报告
+7. 超过阈值时删除非 top-N 模型和对应 checkpoint
+8. 把运行事件写入 `artifacts/models/long-run/<profile>/run-log.jsonl`
 
 ---
 
