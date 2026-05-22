@@ -115,6 +115,7 @@ class LongRunConfig:
 
 def _build_long_run_base_training_config(config: LongRunConfig) -> TrainingConfig:
     base = build_profile_config(TrainingConfig(), config.profile_id)
+    base.generations = config.full_generations
     base.num_parents = config.num_parents
     base.num_offspring = config.num_offspring
     base.boards_per_individual = config.boards_per_individual
