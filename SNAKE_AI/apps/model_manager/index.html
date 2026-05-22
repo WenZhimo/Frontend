@@ -383,6 +383,7 @@
                     <div class="help-summary">这里展示并保存长期自动训练的参数预设。你可以切换当前预设、保存当前预设，并直接应用它启动长期训练。</div>
                     <div class="links" style="margin-bottom: 12px;">
                         <a id="longRunSummaryLinkInMenu" href="#" target="_blank">打开长期训练日志摘要</a>
+                        <a id="regenerateSummaryLink" href="#">重新生成日志摘要</a>
                     </div>
                     <div class="field">
                         <label for="longRunPresetSelect">长期训练预设</label>
@@ -480,6 +481,7 @@
         const sections = Array.from(document.querySelectorAll('.section'));
         const longRunSummaryLink = document.getElementById('longRunSummaryLink');
         const longRunSummaryLinkInMenu = document.getElementById('longRunSummaryLinkInMenu');
+        const regenerateSummaryLink = document.getElementById('regenerateSummaryLink');
         const runStatusDetail = document.getElementById('runStatusDetail');
         const manualConfigFields = document.getElementById('manualConfigFields');
         const longRunConfigFields = document.getElementById('longRunConfigFields');
@@ -1158,6 +1160,21 @@
         clearReportsBtn.addEventListener('click', () => clearReports());
         clearTrainingDataBtn.addEventListener('click', () => clearTrainingData());
         copyResumeBtn.addEventListener('click', () => copyResumeConfig());
+        regenerateSummaryLink.addEventListener('click', async (event) => {
+            event.preventDefault();
+            try {
+                setMessage('正在重新生成长期训练日志摘要…');
+                const response = await fetch('/api/model-manager/long-run/summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || '生成日志摘要失败');
+                setMessage('长期训练日志摘要已重新生成。');
+                longRunSummaryLinkInMenu.href = `/${payload.summaryPath}`;
+                longRunSummaryLink.href = `/${payload.summaryPath}`;
+                await loadRunStatus();
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
         shutdownServerBtn.addEventListener('click', async () => {
             const hasRunning = lastRunStatus === 'running';
             const confirmMessage = hasRunning
@@ -1288,15 +1305,17 @@
                     const response = await fetch('/api/model-manager/runs/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
                     const payload = await response.json();
                     if (!response.ok || !payload.ok) throw new Error(payload.error || '终止训练失败');
+                    lastRunStatus = payload.run?.status || 'idle';
+                    renderRunStatus(payload.run);
                     setMessage('已终止手动训练。');
-                    await loadRunStatus();
                     return;
                 }
                 const response = await fetch('/api/model-manager/runs/manual', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
                 const payload = await response.json();
                 if (!response.ok || !payload.ok) throw new Error(payload.error || '启动手动训练失败');
+                lastRunStatus = payload.run?.status || 'running';
+                renderRunStatus(payload.run);
                 setMessage('已启动手动训练。');
-                await loadRunStatus();
             } catch (error) {
                 setMessage(error.message, true);
             }
@@ -1308,15 +1327,17 @@
                     const response = await fetch('/api/model-manager/runs/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
                     const payload = await response.json();
                     if (!response.ok || !payload.ok) throw new Error(payload.error || '终止训练失败');
+                    lastRunStatus = payload.run?.status || 'idle';
+                    renderRunStatus(payload.run);
                     setMessage('已终止长期训练。');
-                    await loadRunStatus();
                     return;
                 }
                 const response = await fetch('/api/model-manager/runs/long-run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
                 const payload = await response.json();
                 if (!response.ok || !payload.ok) throw new Error(payload.error || '启动长期训练失败');
+                lastRunStatus = payload.run?.status || 'running';
+                renderRunStatus(payload.run);
                 setMessage('已启动长期训练。');
-                await loadRunStatus();
             } catch (error) {
                 setMessage(error.message, true);
             }
