@@ -530,6 +530,75 @@ body {
     calc(50% + ((var(--pointer-from-left) - 0.5) * 6%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 4%));
 }
 
+.tilt-card--foil-scp .tilt-card__shine {
+  -webkit-mask-image: url('./assets/img/SCP导览卡片middle-invert-mask.webp');
+  mask-image: url('./assets/img/SCP导览卡片middle-invert-mask.webp');
+  -webkit-mask-size: cover;
+  mask-size: cover;
+  -webkit-mask-position: center center;
+  mask-position: center center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  opacity: calc(0.14 + (var(--shine-opacity) * 0.2));
+  mix-blend-mode: screen;
+  background:
+    linear-gradient(118deg,
+      transparent 18%,
+      rgba(245, 247, 255, 0.05) 34%,
+      rgba(255, 255, 255, 0.14) 46%,
+      rgba(255, 255, 255, 0.18) 50%,
+      rgba(227, 235, 255, 0.08) 58%,
+      transparent 72%),
+    linear-gradient(-14deg,
+      rgba(18, 22, 28, 0) 12%,
+      rgba(245, 248, 255, 0.04) 44%,
+      rgba(18, 22, 28, 0) 82%);
+  background-size: 220% 220%, 180% 180%;
+  background-position:
+    var(--pointer-x) var(--pointer-y),
+    calc(50% + ((var(--pointer-from-left) - 0.5) * 12%)) calc(50% + ((var(--pointer-from-top) - 0.5) * 10%));
+}
+
+.tilt-card--foil-scp .tilt-card__shine::after,
+.tilt-card--foil-scp .tilt-card__glare::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 4, 6, 0.985);
+  -webkit-mask-image: url('./assets/img/SCP导览卡片middle.webp');
+  mask-image: url('./assets/img/SCP导览卡片middle.webp');
+  -webkit-mask-size: cover;
+  mask-size: cover;
+  -webkit-mask-position: center center;
+  mask-position: center center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  pointer-events: none;
+}
+
+.tilt-card--foil-scp .tilt-card__glare {
+  -webkit-mask-image: url('./assets/img/SCP导览卡片middle-invert-mask.webp');
+  mask-image: url('./assets/img/SCP导览卡片middle-invert-mask.webp');
+  -webkit-mask-size: cover;
+  mask-size: cover;
+  -webkit-mask-position: center center;
+  mask-position: center center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  opacity: calc(0.06 + (var(--glare-opacity) * 0.16));
+  mix-blend-mode: overlay;
+  background:
+    linear-gradient(116deg,
+      transparent 24%,
+      rgba(242, 246, 255, 0.05) 40%,
+      rgba(255, 255, 255, 0.10) 49%,
+      rgba(242, 246, 255, 0.05) 58%,
+      transparent 74%);
+  background-size: 200% 200%;
+  background-position: var(--pointer-x) var(--pointer-y);
+  filter: blur(1px);
+}
+
 @media (max-width: 1280px) {
   .card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
