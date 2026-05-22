@@ -293,6 +293,8 @@ def build_long_run_report_payload(events):
     timeline = []
     retained = []
     for event in events:
+        if not isinstance(event, dict):
+            continue
         event_name = event.get('event')
         seed = event.get('seed')
         timeline.append({
@@ -315,8 +317,9 @@ def build_long_run_report_payload(events):
                 'details': event.get('details'),
             })
             seed_entry['latestEvent'] = event_name
-            if event.get('report'):
-                seed_entry['report'] = event['report']
+            report = event.get('report')
+            if isinstance(report, dict):
+                seed_entry['report'] = report
         if event_name == 'retained_top_model':
             retained.append({
                 'seed': seed,
@@ -339,6 +342,7 @@ def _build_seed_summary_block(seed_entry):
     recent_items = ''.join(
         f"<li>{event.get('message') or event.get('event') or '--'}</li>"
         for event in seed_entry['events'][-5:]
+        if isinstance(event, dict)
     ) or '<li>暂无最近事件</li>'
     report = seed_entry.get('report') or {}
     return (
