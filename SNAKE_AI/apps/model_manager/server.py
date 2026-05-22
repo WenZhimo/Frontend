@@ -713,7 +713,8 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
 
             if parsed.path == '/api/model-manager/server/shutdown':
                 self._send_json({'ok': True, 'message': '服务器即将关闭。已启动的训练任务在独立进程中运行，不受影响。'})
-                threading.Timer(0.3, lambda: sys.exit(0)).start()
+                import os
+                threading.Timer(0.3, lambda: os._exit(0)).start()
                 return
 
             if parsed.path == '/api/model-manager/training-data/clear':
