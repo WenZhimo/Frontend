@@ -381,7 +381,7 @@
                     <h2 class="panel-title">[ 长期训练参数 ]</h2>
                     <div class="help-summary">这里展示并保存长期自动训练的参数预设。你可以切换当前预设、保存当前预设，并直接应用它启动长期训练。</div>
                     <div class="links" style="margin-bottom: 12px;">
-                        <a id="longRunSummaryLinkInMenu" href="#">打开长期训练日志摘要</a>
+                        <a id="longRunSummaryLinkInMenu" href="#" target="_blank">打开长期训练日志摘要</a>
                     </div>
                     <div class="field">
                         <label for="longRunPresetSelect">长期训练预设</label>
@@ -418,9 +418,9 @@
                 <div class="panel">
                     <h2 class="panel-title">[ 报告索引 ]</h2>
                     <div class="links" style="margin-bottom: 12px;">
-                        <a id="training-report-link" href="#">打开训练报告</a>
-                        <a id="evaluation-report-link" href="#">打开评估报告</a>
-                        <a id="longRunSummaryLink" href="#">打开长期训练日志摘要</a>
+                        <a id="training-report-link" href="#" target="_blank">打开训练报告</a>
+                        <a id="evaluation-report-link" href="#" target="_blank">打开评估报告</a>
+                        <a id="longRunSummaryLink" href="#" target="_blank">打开长期训练日志摘要</a>
                     </div>
                     <div class="cards" id="reportCards"></div>
                 </div>
@@ -687,7 +687,7 @@
                 card.innerHTML = `<div class="card-label">HTML</div><div class="card-value" style="font-size:1rem;">${report.name}</div><div style="margin-top:8px;"><a href="/${report.path}" target="_blank">打开</a></div>`;
                 reportCards.appendChild(card);
             }
-            const trainingReport = (artifacts.reports || []).find(item => item.name === 'training-report.html');
+            const trainingReport = (artifacts.reports || []).find(item => item.name === 'training-report.html' && !item.path.includes('/-latest/')) || (artifacts.reports || []).find(item => item.name === 'training-report.html');
             const evaluationReport = (artifacts.reports || []).find(item => item.name === 'evaluation-report.html');
             const longRunSummary = (artifacts.reports || []).find(item => item.name === 'run-log-summary.html');
             trainingReportLink.href = trainingReport ? `/${trainingReport.path}` : '#';
@@ -856,6 +856,9 @@
             const reportLinks = [];
             const evalHtml = `${candidate.path}.eval-report.html`;
             reportLinks.push(`<a href="/${evalHtml}" target="_blank">打开模型评估 HTML</a>`);
+            const candidateProfile = metadata.profileId || (selectedCandidate?.profileId) || 'pc';
+            const trainingReportPath = `artifacts/models/checkpoints/${candidateProfile}/training-report.html`;
+            reportLinks.push(`<a href="/${trainingReportPath}" target="_blank">打开训练报告</a>`);
             candidateReportLinks.innerHTML = reportLinks.join('');
         }
 
