@@ -45,19 +45,79 @@ class LongRunConfig:
     trial_min_avg_score: float = 1.0
     # 试训模型的最低平均存活步数门槛。用于筛掉过早死亡、稳定性太差的模型。
     trial_min_avg_frames: float = 50.0
-    # 清理非 top-N 模型时，是否仍保留它们的最终导出 JSON。False 表示连导出一起删掉，只保留强模型。
-    keep_non_topn_final_exports: bool = False
+    # 每代保留为父代的精英个体数量。
+    num_parents: int = 200
+    # 每代新生成的子代数量。
+    num_offspring: int = 400
+    # 每个个体抽样多少种棋盘尺寸做评估；固定棋盘时通常为 1。
+    boards_per_individual: int = 1
+    # 同一棋盘重复跑多少局，用于降低随机性。
+    episodes_per_board: int = 4
+    # 饥饿阈值缩放系数。越大越允许长时间不吃苹果仍继续存活。
+    starvation_scale: float = 1.0
+    # 苹果奖励权重。
+    score_weight: float = 2500.0
+    # 生存奖励权重。
+    survival_weight: float = 100.0
+    # 原始 fitness 在最终选择分中的保留权重。
+    raw_fitness_weight: float = 0.1
+    # 原始 fitness 截断上限。
+    raw_fitness_cap: float = 300.0
+    # 0 苹果惩罚。
+    zero_score_penalty: float = 50.0
+    # 接近苹果奖励权重。
+    approach_apple_weight: float = 12.0
+    # 重复踩格惩罚权重。
+    repeat_cell_penalty: float = 3.0
+    # 停滞惩罚权重。
+    stall_penalty: float = 1.5
+    # 是否在训练过程中自动把最终模型晋升为默认模型；长期训练通常保持 False。
+    promote_to_default: bool = False
+    # 是否启用整群 checkpoint。
+    population_checkpoint_enabled: bool = True
+    # 每隔多少代覆写一次整群 checkpoint；这控制的是 checkpoint 频率，不影响每代 history 写入。
+    population_checkpoint_interval: int = 1
+    # 恢复训练时是否严格校验 checkpoint 参数一致性。
+    resume_strict: bool = True
     # 是否在评估阶段启用多进程并行。只影响评估吞吐，不改变遗传算法本身的演化逻辑。
     parallel_evaluation_enabled: bool = False
     # 多进程评估 worker 数量。None 表示沿用下游训练器的自动决策；手动设值适合在固定机器上调吞吐。
     parallel_evaluation_workers: int | None = None
+    # 并行评估 map 的 chunksize。
+    parallel_evaluation_chunksize: int = 1
+    # 清理非 top-N 模型时，是否仍保留它们的最终导出 JSON。False 表示连导出一起删掉，只保留强模型。
+    keep_non_topn_final_exports: bool = False
     # 长期训练日志根目录。运行事件最终会写到 <log_dir>/<profile_id>/run-log.jsonl。
     log_dir: str = LONG_RUN_ROOT.as_posix()
     # True 时只演练长期训练调度流程，不真正训练、不真正清理，用于 smoke test 和流程验证。
     dry_run: bool = False
 
 
-def _list_existing_seeds(export_dir: Path, checkpoint_dir: Path) -> set[int]:
+def _build_long_run_base_training_config(config: LongRunConfig) -> TrainingConfig:
+    base = build_profile_config(TrainingConfig(), config.profile_id)
+    base.num_parents = config.num_parents
+    base.num_offspring = config.num_offspring
+    base.boards_per_individual = config.boards_per_individual
+    base.episodes_per_board = config.episodes_per_board
+    base.starvation_scale = config.starvation_scale
+    base.score_weight = config.score_weight
+    base.survival_weight = config.survival_weight
+    base.raw_fitness_weight = config.raw_fitness_weight
+    base.raw_fitness_cap = config.raw_fitness_cap
+    base.zero_score_penalty = config.zero_score_penalty
+    base.approach_apple_weight = config.approach_apple_weight
+    base.repeat_cell_penalty = config.repeat_cell_penalty
+    base.stall_penalty = config.stall_penalty
+    base.promote_to_default = config.promote_to_default
+    base.population_checkpoint_enabled = config.population_checkpoint_enabled
+    base.population_checkpoint_interval = config.population_checkpoint_interval
+    base.resume_strict = config.resume_strict
+    base.parallel_evaluation_enabled = config.parallel_evaluation_enabled
+    base.parallel_evaluation_workers = config.parallel_evaluation_workers
+    base.parallel_evaluation_chunksize = config.parallel_evaluation_chunksize
+    return base
+
+
     seeds = set()
     if export_dir.exists():
         for path in export_dir.glob('*.json'):
@@ -151,6 +211,10 @@ def _build_run_config(base_config: TrainingConfig, *, seed: int, generations: in
             'resume_from_checkpoint': resume_from_checkpoint,
         }
     )
+
+
+def _evaluated_generation_for_target(target_generations: int) -> int:
+    return max(0, int(target_generations) - 1)
 
 
 def _history_entry_to_report(entry, *, seed: int, generation: int, profile_id: str, profile_label: str, path: Path | None = None):
@@ -370,7 +434,7 @@ def _trial_passes(config: LongRunConfig, trial_report, default_report, ranked_ca
 # 长期自动训练主流程：优先续训未完成 trial 的 checkpoint，清空 backlog 后才生成新 seed，再做 warmup / trial / full train / 排序 / 清理。
 def run_long_training(config: LongRunConfig):
     rng = random.Random()
-    base_config = build_profile_config(TrainingConfig(), config.profile_id)
+    base_config = _build_long_run_base_training_config(config)
     base_config.parallel_evaluation_enabled = config.parallel_evaluation_enabled
     base_config.parallel_evaluation_workers = config.parallel_evaluation_workers
     export_dir = resolve_project_path(base_config.export_dir)
@@ -383,7 +447,7 @@ def run_long_training(config: LongRunConfig):
             resumable = resumable_checkpoints[0]
             resumed_seed = int(resumable['seed'])
             resumed_generation = int(resumable['generation'])
-            ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.trial_generations)
+            ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, _evaluated_generation_for_target(config.trial_generations))
             _log_event(
                 log_path,
                 'resume_trial_checkpoint',
@@ -392,7 +456,7 @@ def run_long_training(config: LongRunConfig):
                 action='恢复试训checkpoint',
                 target=f'：{resumed_seed}',
                 reason='发现未完成试训的checkpoint，优先续训而不是创建新seed',
-                details=f'checkpoint目录：{resumable["checkpointPath"]}；当前代数：{resumed_generation}；试训目标代数：{config.trial_generations}；当前待续训checkpoint数量：{len(resumable_checkpoints)}',
+                details=f'checkpoint目录：{resumable["checkpointPath"]}；当前代数：{resumed_generation}；试训目标代数：{config.trial_generations}；实际比较代数：{_evaluated_generation_for_target(config.trial_generations)}；当前待续训checkpoint数量：{len(resumable_checkpoints)}',
                 checkpointPath=str(resumable['checkpointPath']),
                 checkpointGeneration=resumed_generation,
                 pendingCheckpointCount=len(resumable_checkpoints),
@@ -404,19 +468,19 @@ def run_long_training(config: LongRunConfig):
                 promote_to_default=False,
                 resume_from_checkpoint=str(resumable['checkpointPath']),
             )
-            _log_event(log_path, 'trial_started', config.profile_id, seed=resumed_seed, action='开始试训', target=f'：{resumed_seed}', reason='从未完成试训的checkpoint恢复执行', details=f'试训代数：{config.trial_generations}；checkpoint当前代数：{resumed_generation}；可比较历史候选数：{len(ranked_candidates)}', generations=config.trial_generations)
+            _log_event(log_path, 'trial_started', config.profile_id, seed=resumed_seed, action='开始试训', target=f'：{resumed_seed}', reason='从未完成试训的checkpoint恢复执行', details=f'试训目标代数：{config.trial_generations}；实际比较代数：{_evaluated_generation_for_target(config.trial_generations)}；checkpoint当前代数：{resumed_generation}；可比较历史候选数：{len(ranked_candidates)}', generations=config.trial_generations)
             if not config.dry_run:
                 trial_output = train(trial_config)
-                trial_snapshot = _load_history_snapshot(config.profile_id, resumed_seed, config.trial_generations, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+                trial_snapshot = _load_history_snapshot(config.profile_id, resumed_seed, _evaluated_generation_for_target(config.trial_generations), checkpoint_dir=checkpoint_dir, export_dir=export_dir)
                 if trial_snapshot is None:
-                    raise ValueError(f'Missing generation-matched history for resumed trial seed={resumed_seed} generation={config.trial_generations}')
+                    raise ValueError(f'Missing generation-matched history for resumed trial seed={resumed_seed} generation={_evaluated_generation_for_target(config.trial_generations)} (target={config.trial_generations})')
                 trial_report = trial_snapshot['report']
             else:
                 trial_output = export_dir / f'dry-run-trial-{resumed_seed}.json'
                 trial_report = {'avgSelectionScore': 0.0, 'avgScore': 0.0, 'avgFrames': 0.0}
-            _log_event(log_path, 'trial_finished', config.profile_id, seed=resumed_seed, action='完成试训', target=f'：{resumed_seed}', reason='checkpoint恢复后的trial阶段结束，准备进入历史候选比较', details=f'输出模型：{trial_output}；对比代数：{config.trial_generations}；平均选择分：{_format_float(trial_report["avgSelectionScore"])}；平均苹果数：{_format_float(trial_report["avgScore"])}；平均存活步数：{_format_float(trial_report["avgFrames"])}', output=str(trial_output), report=trial_report)
+            _log_event(log_path, 'trial_finished', config.profile_id, seed=resumed_seed, action='完成试训', target=f'：{resumed_seed}', reason='checkpoint恢复后的trial阶段结束，准备进入历史候选比较', details=f'输出模型：{trial_output}；试训目标代数：{config.trial_generations}；实际比较代数：{_evaluated_generation_for_target(config.trial_generations)}；平均选择分：{_format_float(trial_report["avgSelectionScore"])}；平均苹果数：{_format_float(trial_report["avgScore"])}；平均存活步数：{_format_float(trial_report["avgFrames"])}', output=str(trial_output), report=trial_report)
 
-            default_snapshot = _load_default_history(base_config, config.trial_generations, export_dir=export_dir)
+            default_snapshot = _load_default_history(base_config, _evaluated_generation_for_target(config.trial_generations), export_dir=export_dir)
             default_report = default_snapshot['report'] if default_snapshot else None
             passes, reason_info = _trial_passes(config, trial_report, default_report, ranked_candidates)
             if not passes:
@@ -428,7 +492,8 @@ def run_long_training(config: LongRunConfig):
                     trial_output.unlink()
                     _log_event(log_path, 'cleanup_deleted_export', config.profile_id, seed=resumed_seed, action='回收导出模型', target=f'：{resumed_seed}', reason='trial未通过，删除该seed的导出模型', details=f'导出文件：{trial_output}', path=str(trial_output))
                 _log_event(log_path, 'trial_rejected', config.profile_id, seed=resumed_seed, action='回收seed', target=f'：{resumed_seed}', reason=reason_info['message'], details=(
-                    f'试训代数：{config.trial_generations}；'
+                    f'试训目标代数：{config.trial_generations}；'
+                    f'实际比较代数：{_evaluated_generation_for_target(config.trial_generations)}；'
                     f'该seed平均选择分：{_format_float(reason_info.get("trialAvgSelectionScore", trial_report.get("avgSelectionScore")))}；'
                     f'该seed平均苹果数：{_format_float(reason_info.get("trialAvgScore", trial_report.get("avgScore")))}；'
                     f'该seed平均存活步数：{_format_float(reason_info.get("trialAvgFrames", trial_report.get("avgFrames")))}；'
@@ -446,9 +511,9 @@ def run_long_training(config: LongRunConfig):
             if not config.dry_run:
                 full_config = _build_run_config(base_config, seed=resumed_seed, generations=config.full_generations, promote_to_default=False, resume_from_checkpoint=str(resumable['checkpointPath']))
                 full_output = train(full_config)
-                full_snapshot = _load_history_snapshot(config.profile_id, resumed_seed, config.full_generations, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+                full_snapshot = _load_history_snapshot(config.profile_id, resumed_seed, _evaluated_generation_for_target(config.full_generations), checkpoint_dir=checkpoint_dir, export_dir=export_dir)
                 if full_snapshot is None:
-                    raise ValueError(f'Missing generation-matched history for resumed full-train seed={resumed_seed} generation={config.full_generations}')
+                    raise ValueError(f'Missing generation-matched history for resumed full-train seed={resumed_seed} generation={_evaluated_generation_for_target(config.full_generations)} (target={config.full_generations})')
                 full_report = full_snapshot['report']
             else:
                 full_output = export_dir / f'dry-run-full-{resumed_seed}.json'
@@ -456,14 +521,14 @@ def run_long_training(config: LongRunConfig):
             _log_event(log_path, 'full_train_finished', config.profile_id, seed=resumed_seed, action='完成完整训练', target=f'：{resumed_seed}', reason='full train阶段结束，准备重新进入全量历史候选池排序', details=f'输出模型：{full_output}；对比代数：{config.full_generations}；平均选择分：{_format_float(full_report["avgSelectionScore"]) if full_report else "--"}；平均苹果数：{_format_float(full_report["avgScore"]) if full_report else "--"}；平均存活步数：{_format_float(full_report["avgFrames"]) if full_report else "--"}', output=str(full_output), report=full_report)
 
             ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.full_generations)
-            _log_event(log_path, 'batch_evaluation_started', config.profile_id, seed=resumed_seed, action='开始重排历史候选池', target=f'：{config.profile_id}', reason='full train完成后，重新加载 full_generations 上的历史候选并生成汇总报告', details=f'可比较候选数：{len(ranked_candidates)}；对比代数：{config.full_generations}', candidateCount=len(ranked_candidates))
+            _log_event(log_path, 'batch_evaluation_started', config.profile_id, seed=resumed_seed, action='开始重排历史候选池', target=f'：{config.profile_id}', reason='full train完成后，重新加载 full_generations 上的历史候选并生成汇总报告', details=f'可比较候选数：{len(ranked_candidates)}；完整训练目标代数：{config.full_generations}；实际比较代数：{_evaluated_generation_for_target(config.full_generations)}', candidateCount=len(ranked_candidates))
             report_json_path = _write_bulk_report(export_dir, ranked_candidates)
             _log_event(log_path, 'batch_evaluation_finished', config.profile_id, seed=resumed_seed, action='完成历史候选池重排', target=f'：{config.profile_id}', reason='full_generations历史候选汇总报告已生成', details=f'报告文件：{report_json_path if report_json_path else "--"}；候选数：{len(ranked_candidates)}', report=str(report_json_path) if report_json_path else None)
 
             if len(ranked_candidates) >= config.cleanup_interval_runs:
                 _log_event(log_path, 'cleanup_started', config.profile_id, seed=resumed_seed, action='开始清理弱模型', target=f'：{config.profile_id}', reason='可比较候选池规模达到清理阈值', details=f'候选数：{len(ranked_candidates)}；清理阈值：{config.cleanup_interval_runs}；保留topN：{config.keep_top_n}', keepTopN=config.keep_top_n)
                 _cleanup_non_topn(config, ranked_candidates, checkpoint_dir, log_path)
-                ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.full_generations)
+                ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, _evaluated_generation_for_target(config.full_generations))
                 _write_bulk_report(export_dir, ranked_candidates)
 
             for item in ranked_candidates[:config.keep_top_n]:
@@ -475,7 +540,7 @@ def run_long_training(config: LongRunConfig):
         break
 
     existing_seeds = _list_existing_seeds(export_dir, checkpoint_dir)
-    ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.trial_generations)
+    ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, _evaluated_generation_for_target(config.trial_generations))
     generated_seed = generate_unique_seed(existing_seeds, rng)
     existing_seeds.add(generated_seed)
     _log_event(log_path, 'seed_generated', config.profile_id, seed=generated_seed, action='生成新seed', target=f'：{generated_seed}', reason='未发现待续训checkpoint，创建新seed进入长期训练流程', details=f'当前已知历史seed池数量：{len(existing_seeds) - 1}')
@@ -486,32 +551,32 @@ def run_long_training(config: LongRunConfig):
         if not config.dry_run:
             full_config = _build_run_config(base_config, seed=generated_seed, generations=config.full_generations, promote_to_default=False)
             full_output = train(full_config)
-            full_snapshot = _load_history_snapshot(config.profile_id, generated_seed, config.full_generations, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+            full_snapshot = _load_history_snapshot(config.profile_id, generated_seed, _evaluated_generation_for_target(config.full_generations), checkpoint_dir=checkpoint_dir, export_dir=export_dir)
             if full_snapshot is None:
-                raise ValueError(f'Missing generation-matched history for warmup seed={generated_seed} generation={config.full_generations}')
+                raise ValueError(f'Missing generation-matched history for warmup seed={generated_seed} generation={_evaluated_generation_for_target(config.full_generations)} (target={config.full_generations})')
             full_report = full_snapshot['report']
         else:
             full_output = export_dir / f'dry-run-{generated_seed}.json'
             full_report = None
-        _log_event(log_path, 'full_train_finished', config.profile_id, seed=generated_seed, action='完成完整训练', target=f'：{generated_seed}', reason='warmup阶段完整训练结束', details=f'输出模型：{full_output}；对比代数：{config.full_generations}；平均选择分：{_format_float(full_report["avgSelectionScore"]) if full_report else "--"}；平均苹果数：{_format_float(full_report["avgScore"]) if full_report else "--"}；平均存活步数：{_format_float(full_report["avgFrames"])}' if full_report else f'输出模型：{full_output}；对比代数：{config.full_generations}；平均选择分：--；平均苹果数：--；平均存活步数：--', output=str(full_output), report=full_report)
-        ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.full_generations)
+        _log_event(log_path, 'full_train_finished', config.profile_id, seed=generated_seed, action='完成完整训练', target=f'：{generated_seed}', reason='warmup阶段完整训练结束', details=f'输出模型：{full_output}；完整训练目标代数：{config.full_generations}；实际比较代数：{_evaluated_generation_for_target(config.full_generations)}；平均选择分：{_format_float(full_report["avgSelectionScore"]) if full_report else "--"}；平均苹果数：{_format_float(full_report["avgScore"]) if full_report else "--"}；平均存活步数：{_format_float(full_report["avgFrames"])}' if full_report else f'输出模型：{full_output}；完整训练目标代数：{config.full_generations}；实际比较代数：{_evaluated_generation_for_target(config.full_generations)}；平均选择分：--；平均苹果数：--；平均存活步数：--', output=str(full_output), report=full_report)
+        ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, _evaluated_generation_for_target(config.full_generations))
         _write_bulk_report(export_dir, ranked_candidates)
         return generated_seed
 
     trial_config = _build_run_config(base_config, seed=generated_seed, generations=config.trial_generations, promote_to_default=False)
-    _log_event(log_path, 'trial_started', config.profile_id, seed=generated_seed, action='开始试训', target=f'：{generated_seed}', reason='可比较历史模型数量已达到warmup阈值，进入trial筛选', details=f'试训代数：{config.trial_generations}；可比较历史候选数：{len(ranked_candidates)}；warmup阈值：{config.warmup_seed_count}', generations=config.trial_generations)
+    _log_event(log_path, 'trial_started', config.profile_id, seed=generated_seed, action='开始试训', target=f'：{generated_seed}', reason='可比较历史模型数量已达到warmup阈值，进入trial筛选', details=f'试训目标代数：{config.trial_generations}；实际比较代数：{_evaluated_generation_for_target(config.trial_generations)}；可比较历史候选数：{len(ranked_candidates)}；warmup阈值：{config.warmup_seed_count}', generations=config.trial_generations)
     if not config.dry_run:
         trial_output = train(trial_config)
-        trial_snapshot = _load_history_snapshot(config.profile_id, generated_seed, config.trial_generations, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+        trial_snapshot = _load_history_snapshot(config.profile_id, generated_seed, _evaluated_generation_for_target(config.trial_generations), checkpoint_dir=checkpoint_dir, export_dir=export_dir)
         if trial_snapshot is None:
-            raise ValueError(f'Missing generation-matched history for trial seed={generated_seed} generation={config.trial_generations}')
+            raise ValueError(f'Missing generation-matched history for trial seed={generated_seed} generation={_evaluated_generation_for_target(config.trial_generations)} (target={config.trial_generations})')
         trial_report = trial_snapshot['report']
     else:
         trial_output = export_dir / f'dry-run-trial-{generated_seed}.json'
         trial_report = {'avgSelectionScore': 0.0, 'avgScore': 0.0, 'avgFrames': 0.0}
-    _log_event(log_path, 'trial_finished', config.profile_id, seed=generated_seed, action='完成试训', target=f'：{generated_seed}', reason='trial阶段训练结束，准备进入历史候选比较', details=f'输出模型：{trial_output}；对比代数：{config.trial_generations}；平均选择分：{_format_float(trial_report["avgSelectionScore"])}；平均苹果数：{_format_float(trial_report["avgScore"])}；平均存活步数：{_format_float(trial_report["avgFrames"])}', output=str(trial_output), report=trial_report)
+    _log_event(log_path, 'trial_finished', config.profile_id, seed=generated_seed, action='完成试训', target=f'：{generated_seed}', reason='trial阶段训练结束，准备进入历史候选比较', details=f'输出模型：{trial_output}；试训目标代数：{config.trial_generations}；实际比较代数：{_evaluated_generation_for_target(config.trial_generations)}；平均选择分：{_format_float(trial_report["avgSelectionScore"])}；平均苹果数：{_format_float(trial_report["avgScore"])}；平均存活步数：{_format_float(trial_report["avgFrames"])}', output=str(trial_output), report=trial_report)
 
-    default_snapshot = _load_default_history(base_config, config.trial_generations, export_dir=export_dir)
+    default_snapshot = _load_default_history(base_config, _evaluated_generation_for_target(config.trial_generations), export_dir=export_dir)
     default_report = default_snapshot['report'] if default_snapshot else None
     passes, reason_info = _trial_passes(config, trial_report, default_report, ranked_candidates)
     if not passes:
@@ -523,7 +588,8 @@ def run_long_training(config: LongRunConfig):
             trial_output.unlink()
             _log_event(log_path, 'cleanup_deleted_export', config.profile_id, seed=generated_seed, action='回收导出模型', target=f'：{generated_seed}', reason='trial未通过，删除该seed的导出模型', details=f'导出文件：{trial_output}', path=str(trial_output))
         _log_event(log_path, 'trial_rejected', config.profile_id, seed=generated_seed, action='回收seed', target=f'：{generated_seed}', reason=reason_info['message'], details=(
-            f'试训代数：{config.trial_generations}；'
+            f'试训目标代数：{config.trial_generations}；'
+            f'实际比较代数：{_evaluated_generation_for_target(config.trial_generations)}；'
             f'该seed平均选择分：{_format_float(reason_info.get("trialAvgSelectionScore", trial_report.get("avgSelectionScore")))}；'
             f'该seed平均苹果数：{_format_float(reason_info.get("trialAvgScore", trial_report.get("avgScore")))}；'
             f'该seed平均存活步数：{_format_float(reason_info.get("trialAvgFrames", trial_report.get("avgFrames")))}；'
@@ -541,9 +607,9 @@ def run_long_training(config: LongRunConfig):
     if not config.dry_run:
         full_config = _build_run_config(base_config, seed=generated_seed, generations=config.full_generations, promote_to_default=False, resume_from_checkpoint=f'artifacts/models/checkpoints/{config.profile_id}/{generated_seed}-latest')
         full_output = train(full_config)
-        full_snapshot = _load_history_snapshot(config.profile_id, generated_seed, config.full_generations, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+        full_snapshot = _load_history_snapshot(config.profile_id, generated_seed, _evaluated_generation_for_target(config.full_generations), checkpoint_dir=checkpoint_dir, export_dir=export_dir)
         if full_snapshot is None:
-            raise ValueError(f'Missing generation-matched history for full-train seed={generated_seed} generation={config.full_generations}')
+            raise ValueError(f'Missing generation-matched history for full-train seed={generated_seed} generation={_evaluated_generation_for_target(config.full_generations)} (target={config.full_generations})')
         full_report = full_snapshot['report']
     else:
         full_output = export_dir / f'dry-run-full-{generated_seed}.json'
@@ -551,7 +617,7 @@ def run_long_training(config: LongRunConfig):
     _log_event(log_path, 'full_train_finished', config.profile_id, seed=generated_seed, action='完成完整训练', target=f'：{generated_seed}', reason='full train阶段结束，准备重新进入全量历史候选池排序', details=f'输出模型：{full_output}；对比代数：{config.full_generations}；平均选择分：{_format_float(full_report["avgSelectionScore"]) if full_report else "--"}；平均苹果数：{_format_float(full_report["avgScore"]) if full_report else "--"}；平均存活步数：{_format_float(full_report["avgFrames"])}' if full_report else f'输出模型：{full_output}；对比代数：{config.full_generations}；平均选择分：--；平均苹果数：--；平均存活步数：--', output=str(full_output), report=full_report)
 
     ranked_candidates = _load_ranked_history_snapshots(export_dir, checkpoint_dir, config.profile_id, config.full_generations)
-    _log_event(log_path, 'batch_evaluation_started', config.profile_id, seed=generated_seed, action='开始重排历史候选池', target=f'：{config.profile_id}', reason='full train完成后，重新加载 full_generations 上的历史候选并生成汇总报告', details=f'可比较候选数：{len(ranked_candidates)}；对比代数：{config.full_generations}', candidateCount=len(ranked_candidates))
+    _log_event(log_path, 'batch_evaluation_started', config.profile_id, seed=generated_seed, action='开始重排历史候选池', target=f'：{config.profile_id}', reason='full train完成后，重新加载 full_generations 上的历史候选并生成汇总报告', details=f'可比较候选数：{len(ranked_candidates)}；完整训练目标代数：{config.full_generations}；实际比较代数：{_evaluated_generation_for_target(config.full_generations)}', candidateCount=len(ranked_candidates))
     report_json_path = _write_bulk_report(export_dir, ranked_candidates)
     _log_event(log_path, 'batch_evaluation_finished', config.profile_id, seed=generated_seed, action='完成历史候选池重排', target=f'：{config.profile_id}', reason='full_generations历史候选汇总报告已生成', details=f'报告文件：{report_json_path if report_json_path else "--"}；候选数：{len(ranked_candidates)}', report=str(report_json_path) if report_json_path else None)
 
