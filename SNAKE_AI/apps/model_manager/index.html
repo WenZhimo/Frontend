@@ -337,7 +337,8 @@
                         </div>
                         <div style="margin-top: 10px; display: grid; gap: 10px;">
                             <button id="openEvalAllBtn">评估全部候选模型</button>
-                            <button id="clearReportsBtn">清空报告</button>
+                            <button id="clearReportsBtn">清空评估报告</button>
+                            <button id="clearTrainingDataBtn">清空训练数据</button>
                         </div>
                     </div>
                     <div class="panel">
@@ -468,6 +469,7 @@
         const openEvalBtn = document.getElementById('openEvalBtn');
         const openEvalAllBtn = document.getElementById('openEvalAllBtn');
         const clearReportsBtn = document.getElementById('clearReportsBtn');
+        const clearTrainingDataBtn = document.getElementById('clearTrainingDataBtn');
         const shutdownServerBtn = document.getElementById('shutdownServerBtn');
         const messageBox = document.getElementById('messageBox');
         const trainingReportLink = document.getElementById('training-report-link');
@@ -785,10 +787,10 @@
 
         function renderRunStatus(run) {
             const busy = (run?.status === 'running');
-            runManualBtn.disabled = busy;
-            runLongRunBtn.disabled = busy;
-            runManualBtn.textContent = busy ? '训练进行中…' : '应用并启动训练';
-            runLongRunBtn.textContent = busy ? '训练进行中…' : '应用并启动长期训练';
+            runManualBtn.disabled = false;
+            runLongRunBtn.disabled = false;
+            runManualBtn.textContent = busy ? '暂停训练' : '应用并启动训练';
+            runLongRunBtn.textContent = busy ? '暂停长期训练' : '应用并启动长期训练';
             if (!run) {
                 runStatusDetail.innerHTML = createDetailCell('状态', '暂无任务');
                 return;
@@ -1074,10 +1076,10 @@
         }
 
         async function clearReports() {
-            if (!confirm('确定要清空当前已有的报告文件吗？这不会删除模型和 checkpoint，只会删除报告产物。')) {
+            if (!confirm('确定要清空当前的评估报告吗？只会删除评估产物（evaluation-report、.eval-report），不会删除模型和 checkpoint。')) {
                 return;
             }
-            setMessage('正在清空报告…');
+            setMessage('正在清空评估报告…');
             const response = await fetch('/api/model-manager/reports/clear', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1085,10 +1087,29 @@
             });
             const payload = await response.json();
             if (!response.ok || !payload.ok) {
-                setMessage(payload.error || '清空报告失败。', true);
+                setMessage(payload.error || '清空评估报告失败。', true);
                 return;
             }
-            setMessage(`已清空 ${payload.removedCount} 份报告。`);
+            setMessage(`已清空 ${payload.removedCount} 份评估报告。`);
+            await loadArtifacts();
+        }
+
+        async function clearTrainingData() {
+            if (!confirm('确定要清空训练数据吗？\n\n将会删除：\n- profile 级训练历史（training-history.json 和 training-report.html）\n- 长期训练日志（run-log.jsonl 和 run-log-summary.html）\n\n不会删除：\n- 各 seed 的训练历史\n- checkpoint 文件\n- 模型文件\n- 评估报告')) {
+                return;
+            }
+            setMessage('正在清空训练数据…');
+            const response = await fetch('/api/model-manager/training-data/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) {
+                setMessage(payload.error || '清空训练数据失败。', true);
+                return;
+            }
+            setMessage(`已清空 ${payload.removedCount} 份训练数据。`);
             await loadArtifacts();
         }
 
@@ -1135,6 +1156,7 @@
         openEvalBtn.addEventListener('click', () => evaluateCandidate());
         openEvalAllBtn.addEventListener('click', () => evaluateAllCandidates());
         clearReportsBtn.addEventListener('click', () => clearReports());
+        clearTrainingDataBtn.addEventListener('click', () => clearTrainingData());
         copyResumeBtn.addEventListener('click', () => copyResumeConfig());
         shutdownServerBtn.addEventListener('click', async () => {
             const hasRunning = lastRunStatus === 'running';
@@ -1261,6 +1283,15 @@
         });
         runManualBtn.addEventListener('click', async () => {
             try {
+                if (lastRunStatus === 'running') {
+                    if (!confirm('确定要终止正在运行的手动训练吗？训练进程将被强制结束。')) return;
+                    const response = await fetch('/api/model-manager/runs/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                    const payload = await response.json();
+                    if (!response.ok || !payload.ok) throw new Error(payload.error || '终止训练失败');
+                    setMessage('已终止手动训练。');
+                    await loadRunStatus();
+                    return;
+                }
                 const response = await fetch('/api/model-manager/runs/manual', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
                 const payload = await response.json();
                 if (!response.ok || !payload.ok) throw new Error(payload.error || '启动手动训练失败');
@@ -1272,6 +1303,15 @@
         });
         runLongRunBtn.addEventListener('click', async () => {
             try {
+                if (lastRunStatus === 'running') {
+                    if (!confirm('确定要终止正在运行的长期训练吗？训练进程将被强制结束。')) return;
+                    const response = await fetch('/api/model-manager/runs/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                    const payload = await response.json();
+                    if (!response.ok || !payload.ok) throw new Error(payload.error || '终止训练失败');
+                    setMessage('已终止长期训练。');
+                    await loadRunStatus();
+                    return;
+                }
                 const response = await fetch('/api/model-manager/runs/long-run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
                 const payload = await response.json();
                 if (!response.ok || !payload.ok) throw new Error(payload.error || '启动长期训练失败');

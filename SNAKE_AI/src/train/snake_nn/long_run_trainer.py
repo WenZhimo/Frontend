@@ -618,7 +618,6 @@ def _resume_compatibility_mismatches(base_config: TrainingConfig, meta: dict):
         'profile_id',
     ]
     settings_fields = [
-        'board_size',
         'hidden_layer_activation',
         'output_layer_activation',
         'hidden_network_architecture',
@@ -648,7 +647,6 @@ def _resume_compatibility_mismatches(base_config: TrainingConfig, meta: dict):
         return value
 
     settings_current = {
-        'board_size': [base_config.board_size_pool[0][0], base_config.board_size_pool[0][1]] if base_config.board_size_pool else None,
         'hidden_layer_activation': 'relu',
         'output_layer_activation': 'sigmoid',
         'hidden_network_architecture': [20, 12],
@@ -682,11 +680,12 @@ def _resume_compatibility_mismatches(base_config: TrainingConfig, meta: dict):
     return mismatches
 
 
-def _scan_resumable_trial_checkpoints(base_config: TrainingConfig, checkpoint_dir: Path, profile_id: str, trial_generations: int):
-    resumable = []
+def _scan_resumable_checkpoints(base_config: TrainingConfig, checkpoint_dir: Path, profile_id: str, trial_generations: int, full_generations: int):
+    resumable_trial = []
+    resumable_full = []
     incompatible = []
     if not checkpoint_dir.exists():
-        return resumable, incompatible
+        return resumable_trial, resumable_full, incompatible
     for path in sorted(checkpoint_dir.glob('*-latest')):
         meta_path = path / 'checkpoint_meta.json'
         if not meta_path.exists():
@@ -697,7 +696,7 @@ def _scan_resumable_trial_checkpoints(base_config: TrainingConfig, checkpoint_di
         snapshot_profile = (meta.get('trainerConfigSnapshot') or {}).get('profile_id')
         if seed is None or snapshot_profile != profile_id:
             continue
-        if generation >= trial_generations:
+        if generation >= full_generations:
             continue
         mismatches = _resume_compatibility_mismatches(base_config, meta) if base_config.resume_strict else []
         item = {
@@ -710,11 +709,14 @@ def _scan_resumable_trial_checkpoints(base_config: TrainingConfig, checkpoint_di
         }
         if mismatches:
             incompatible.append(item)
+        elif generation < trial_generations:
+            resumable_trial.append(item)
         else:
-            resumable.append(item)
-    resumable.sort(key=lambda item: (item['generation'], item['seed']))
+            resumable_full.append(item)
+    resumable_trial.sort(key=lambda item: (item['generation'], item['seed']))
+    resumable_full.sort(key=lambda item: (item['generation'], item['seed']))
     incompatible.sort(key=lambda item: (item['generation'], item['seed']))
-    return resumable, incompatible
+    return resumable_trial, resumable_full, incompatible
 
 
 def _load_ranked_history_snapshots(export_dir: Path, checkpoint_dir: Path, profile_id: str, generation: int):
@@ -985,6 +987,30 @@ def _process_post_full_pool(log_path: Path, config: LongRunConfig, checkpoint_di
     return ranked_candidates
 
 
+def _resume_checkpoint_full(base_config: TrainingConfig, config: LongRunConfig, checkpoint_dir: Path, export_dir: Path, log_path: Path, resumable):
+    resumed_seed = int(resumable['seed'])
+    resumed_generation = int(resumable['generation'])
+    _log_event(
+        log_path,
+        'resume_full_checkpoint',
+        config.profile_id,
+        seed=resumed_seed,
+        action='恢复完整训练checkpoint',
+        target=f'：{resumed_seed}',
+        reason='发现未完成完整训练的checkpoint，直接续跑full train',
+        details=f'checkpoint目录：{resumable["checkpointPath"]}；当前代数：{resumed_generation}；目标完整代数：{config.full_generations}',
+        checkpointPath=str(resumable['checkpointPath']),
+        checkpointGeneration=resumed_generation,
+    )
+    _log_full_started(log_path, config.profile_id, resumed_seed, config.full_generations, {'avgSelectionScore': 0, 'avgScore': 0, 'avgFrames': 0}, '从中断点直接恢复完整训练')
+    if not config.dry_run:
+        full_config = _build_full_run_config(base_config, resumed_seed, resume_from_checkpoint=str(resumable['checkpointPath']))
+        full_output = train(full_config)
+        _full_report_from_output(config, config.profile_id, resumed_seed, checkpoint_dir, export_dir, full_output, log_path, 'checkpoint恢复后的full train阶段结束')
+    _process_post_full_pool(log_path, config, checkpoint_dir, export_dir, resumed_seed)
+    return True
+
+
 def _resume_checkpoint_trial(base_config: TrainingConfig, config: LongRunConfig, checkpoint_dir: Path, export_dir: Path, log_path: Path, resumable):
     resumed_seed = int(resumable['seed'])
     resumed_generation = int(resumable['generation'])
@@ -997,7 +1023,7 @@ def _resume_checkpoint_trial(base_config: TrainingConfig, config: LongRunConfig,
         action='恢复试训checkpoint',
         target=f'：{resumed_seed}',
         reason='发现未完成试训的checkpoint，优先续训而不是创建新seed',
-        details=f'checkpoint目录：{resumable["checkpointPath"]}；当前代数：{resumed_generation}；试训目标代数：{config.trial_generations}；实际比较代数：{_trial_comparison_generation(config)}；当前待续训checkpoint数量：{len(_scan_resumable_trial_checkpoints(base_config, checkpoint_dir, config.profile_id, config.trial_generations))}',
+        details=f'checkpoint目录：{resumable["checkpointPath"]}；当前代数：{resumed_generation}；试训目标代数：{config.trial_generations}；实际比较代数：{_trial_comparison_generation(config)}；当前待续训checkpoint数量：{len(_scan_resumable_checkpoints(base_config, checkpoint_dir, config.profile_id, config.trial_generations, config.full_generations)[0] + _scan_resumable_checkpoints(base_config, checkpoint_dir, config.profile_id, config.trial_generations, config.full_generations)[1])}',
         checkpointPath=str(resumable['checkpointPath']),
         checkpointGeneration=resumed_generation,
     )
@@ -1048,7 +1074,7 @@ def _resume_checkpoint_trial(base_config: TrainingConfig, config: LongRunConfig,
 def _process_resume_backlog(base_config: TrainingConfig, config: LongRunConfig, checkpoint_dir: Path, export_dir: Path, log_path: Path) -> bool:
     processed_any = False
     while True:
-        resumable_checkpoints, incompatible_checkpoints = _scan_resumable_trial_checkpoints(base_config, checkpoint_dir, config.profile_id, config.trial_generations)
+        trial_ckpts, full_ckpts, incompatible_checkpoints = _scan_resumable_checkpoints(base_config, checkpoint_dir, config.profile_id, config.trial_generations, config.full_generations)
         for item in incompatible_checkpoints:
             _log_event(
                 log_path,
@@ -1062,12 +1088,15 @@ def _process_resume_backlog(base_config: TrainingConfig, config: LongRunConfig, 
                 checkpointPath=str(item['checkpointPath']),
                 mismatchCount=len(item['mismatches']),
             )
-        if not resumable_checkpoints:
+        if not trial_ckpts and not full_ckpts:
             if processed_any or incompatible_checkpoints:
-                _log_event(log_path, 'resume_backlog_cleared', config.profile_id, action='未完成试训checkpoint已清空', target=f'：{config.profile_id}', reason='当前目录中已没有可恢复的未完成试训checkpoint，允许进入下一个调度阶段', details=f'试训目标代数：{config.trial_generations}')
+                _log_event(log_path, 'resume_backlog_cleared', config.profile_id, action='未完成训练checkpoint已清空', target=f'：{config.profile_id}', reason='当前目录中已没有可恢复的未完成训练checkpoint，允许进入下一个调度阶段', details=f'试训目标代数：{config.trial_generations}；完整训练目标代数：{config.full_generations}')
             return processed_any
         processed_any = True
-        _resume_checkpoint_trial(base_config, config, checkpoint_dir, export_dir, log_path, resumable_checkpoints[0])
+        if trial_ckpts:
+            _resume_checkpoint_trial(base_config, config, checkpoint_dir, export_dir, log_path, trial_ckpts[0])
+        else:
+            _resume_checkpoint_full(base_config, config, checkpoint_dir, export_dir, log_path, full_ckpts[0])
 
 
 def _maybe_run_hybrid(base_config: TrainingConfig, config: LongRunConfig, checkpoint_dir: Path, export_dir: Path, log_path: Path, existing_seeds: set[int], rng: random.Random):
