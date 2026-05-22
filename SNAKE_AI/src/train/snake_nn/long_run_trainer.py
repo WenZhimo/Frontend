@@ -698,6 +698,10 @@ def _scan_resumable_checkpoints(base_config: TrainingConfig, checkpoint_dir: Pat
             continue
         if generation >= full_generations:
             continue
+        # 用 checkpoint 里保存的目标代数判断当初是 trial 还是 warmup/full 训练。
+        # warmup 的 checkpoint 目标代数是 full_generations，应直接续 full，不能按 trial 恢复。
+        checkpoint_target = int((meta.get('trainerConfigSnapshot') or {}).get('generations', 0))
+        is_warmup_checkpoint = checkpoint_target >= full_generations
         mismatches = _resume_compatibility_mismatches(base_config, meta) if base_config.resume_strict else []
         item = {
             'seed': int(seed),
@@ -709,7 +713,7 @@ def _scan_resumable_checkpoints(base_config: TrainingConfig, checkpoint_dir: Pat
         }
         if mismatches:
             incompatible.append(item)
-        elif generation < trial_generations:
+        elif generation < trial_generations and not is_warmup_checkpoint:
             resumable_trial.append(item)
         else:
             resumable_full.append(item)
