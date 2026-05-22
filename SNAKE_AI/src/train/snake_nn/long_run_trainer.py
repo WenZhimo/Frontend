@@ -153,13 +153,25 @@ def _build_run_config(base_config: TrainingConfig, *, seed: int, generations: in
 
 
 def _build_full_run_config(base_config: TrainingConfig, seed: int, *, resume_from_checkpoint: str | None = None) -> TrainingConfig:
-    return _build_run_config(
+    config = _build_run_config(
         base_config,
         seed=seed,
         generations=base_config.generations,
         promote_to_default=False,
         resume_from_checkpoint=resume_from_checkpoint,
     )
+    if resume_from_checkpoint:
+        meta_path = resolve_project_path(resume_from_checkpoint) / 'checkpoint_meta.json'
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text(encoding='utf-8'))
+                snapshot = meta.get('trainerConfigSnapshot') or {}
+                original_name = snapshot.get('export_name')
+                if original_name:
+                    config = TrainingConfig(**{**asdict(config), 'export_name': original_name})
+            except Exception:
+                pass
+    return config
 
 
 def _evaluated_generation_for_target(target_generations: int) -> int:
