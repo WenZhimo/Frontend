@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 import sys
 import threading
 import traceback
@@ -35,10 +36,12 @@ RUN_STATE = {
     'presetId': None,
     'presetName': None,
     'status': 'idle',
+    'pid': None,
     'startedAt': None,
     'endedAt': None,
     'error': None,
     'result': None,
+    'statusPath': None,
 }
 RUN_LOCK = threading.Lock()
 
@@ -357,32 +360,78 @@ def _set_run_state(**kwargs):
         RUN_STATE.update(kwargs)
 
 
-def _start_run(kind: str, preset: dict, target):
+def _training_runner_script(config_json: str, kind: str, status_path: str):
+    return [
+        sys.executable, '-c', f'''
+import json
+import sys
+from pathlib import Path
+sys.path.insert(0, {str(PROJECT_ROOT)!r})
+sys.path.insert(0, {str(SRC_ROOT)!r})
+config = json.loads({config_json!r})
+kind = {kind!r}
+status_path = {status_path!r}
+status = {{"status": "running"}}
+Path(status_path).write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+try:
+    if kind == "manual":
+        from train.snake_nn.trainer import TrainingConfig, build_profile_config, run_seed_batch
+        from dataclasses import replace
+        profile_id = config.pop("profile_id", "pc")
+        base = TrainingConfig(**config)
+        base = build_profile_config(base, profile_id)
+        result = str(run_seed_batch(base, [base.seed]))
+    else:
+        from train.snake_nn.long_run_trainer import LongRunConfig, run_long_training
+        result = str(run_long_training(LongRunConfig(**config)))
+    status = {{"status": "succeeded", "result": result}}
+except Exception as exc:
+    import traceback
+    status = {{"status": "failed", "error": str(exc) + "\\n" + traceback.format_exc()}}
+Path(status_path).write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+''',
+    ]
+
+
+def _start_run(kind: str, preset: dict):
     with RUN_LOCK:
         if RUN_STATE['status'] == 'running':
             raise ValueError('已有训练任务正在运行')
         run_id = uuid.uuid4().hex
+        status_path = str(CONFIGS_DIR / f'run-status-{run_id}.json')
+        CONFIGS_DIR.mkdir(parents=True, exist_ok=True)
+        config_json = json.dumps(preset.get('config', {}), ensure_ascii=False)
+        cmd = _training_runner_script(config_json, kind, status_path)
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         RUN_STATE.update({
             'id': run_id,
             'kind': kind,
             'presetId': preset.get('id'),
             'presetName': preset.get('name'),
             'status': 'running',
+            'pid': proc.pid,
             'startedAt': datetime.now(timezone.utc).isoformat(),
             'endedAt': None,
             'error': None,
             'result': None,
+            'statusPath': status_path,
         })
 
-    def runner():
+    def monitor():
+        proc.wait()
+        status_payload = {'status': 'failed', 'error': 'Process exited without writing status'}
         try:
-            result = target()
-            _set_run_state(status='succeeded', endedAt=datetime.now(timezone.utc).isoformat(), result=result)
-        except Exception as exc:
-            _set_run_state(status='failed', endedAt=datetime.now(timezone.utc).isoformat(), error=f'{exc}\n{traceback.format_exc()}')
+            status_payload = json.loads(Path(status_path).read_text(encoding='utf-8'))
+        except Exception:
+            pass
+        _set_run_state(
+            status=status_payload.get('status', 'failed'),
+            endedAt=datetime.now(timezone.utc).isoformat(),
+            result=status_payload.get('result'),
+            error=status_payload.get('error'),
+        )
 
-    thread = threading.Thread(target=runner, daemon=True)
-    thread.start()
+    threading.Thread(target=monitor, daemon=True).start()
     return run_id
 
 
@@ -459,6 +508,7 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
             '/api/model-manager/presets/long-run/activate',
             '/api/model-manager/runs/manual',
             '/api/model-manager/runs/long-run',
+            '/api/model-manager/server/shutdown',
         }:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -555,7 +605,7 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
                 preset = next((item for item in store['presets'] if item.get('id') == active_id), None)
                 if not preset:
                     raise ValueError('Active manual preset not found')
-                run_id = _start_run('manual', preset, lambda: str(run_seed_batch(_manual_training_config_from_preset(preset['config']), [_manual_training_config_from_preset(preset['config']).seed])))
+                run_id = _start_run('manual', preset)
                 return self._send_json({'ok': True, 'runId': run_id, 'run': RUN_STATE})
 
             if parsed.path == '/api/model-manager/runs/long-run':
@@ -564,8 +614,13 @@ class ModelManagerHandler(SimpleHTTPRequestHandler):
                 preset = next((item for item in store['presets'] if item.get('id') == active_id), None)
                 if not preset:
                     raise ValueError('Active long-run preset not found')
-                run_id = _start_run('long-run', preset, lambda: str(run_long_training(_long_run_config_from_preset(preset['config']))))
+                run_id = _start_run('long-run', preset)
                 return self._send_json({'ok': True, 'runId': run_id, 'run': RUN_STATE})
+
+            if parsed.path == '/api/model-manager/server/shutdown':
+                self._send_json({'ok': True, 'message': '服务器即将关闭。已启动的训练任务在独立进程中运行，不受影响。'})
+                threading.Timer(0.3, lambda: sys.exit(0)).start()
+                return
 
             evaluate_all = bool(payload.get('allCandidates'))
             if evaluate_all:

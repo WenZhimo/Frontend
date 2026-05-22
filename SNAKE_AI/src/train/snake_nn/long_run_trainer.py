@@ -928,13 +928,29 @@ def _trial_passes(config: LongRunConfig, trial_report, default_report, ranked_ca
 
 # ---------- phase execution helpers ----------
 
+def _best_available_snapshot(profile_id: str, seed: int, preferred_generation: int, *, checkpoint_dir: Path, export_dir: Path | None = None):
+    snapshot = _load_history_snapshot(profile_id, seed, preferred_generation, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+    if snapshot is not None:
+        return snapshot
+    history_path = checkpoint_dir / f'{seed}-latest' / 'training-history.json'
+    generation_map = _history_generation_map(history_path)
+    if generation_map:
+        latest_gen = max(generation_map.keys())
+        return _load_history_snapshot(profile_id, seed, latest_gen, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+    return None
+
+
 def _trial_report_from_output(config: LongRunConfig, profile_id: str, seed: int, checkpoint_dir: Path, export_dir: Path, trial_output: Path, log_path: Path, reason: str, extra_details: str = ''):
-    comparison_generation = _trial_comparison_generation(config)
-    snapshot = _load_history_snapshot(profile_id, seed, comparison_generation, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+    preferred = _trial_comparison_generation(config)
+    snapshot = _best_available_snapshot(profile_id, seed, preferred, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
     if snapshot is None:
-        raise ValueError(f'Missing generation-matched history for trial seed={seed} generation={comparison_generation} (target={config.trial_generations})')
+        raise ValueError(f'Missing generation-matched history for trial seed={seed} generation={preferred} (target={config.trial_generations})')
     report = snapshot['report']
-    details = f'输出模型：{trial_output}；试训目标代数：{config.trial_generations}；实际比较代数：{comparison_generation}；平均选择分：{_format_float(report["avgSelectionScore"])}；平均苹果数：{_format_float(report["avgScore"])}；平均存活步数：{_format_float(report["avgFrames"])}'
+    actual_gen = snapshot['generation']
+    details = f'输出模型：{trial_output}；试训目标代数：{config.trial_generations}；实际比较代数：{actual_gen}'
+    if actual_gen != preferred:
+        details += f'（目标代数 {preferred} 无历史，已回退至最近可用代）'
+    details += f'；平均选择分：{_format_float(report["avgSelectionScore"])}；平均苹果数：{_format_float(report["avgScore"])}；平均存活步数：{_format_float(report["avgFrames"])}'
     if extra_details:
         details += f'；{extra_details}'
     _log_event(log_path, 'trial_finished', profile_id, seed=seed, action='完成试训', target=f'：{seed}', reason=reason, details=details, output=str(trial_output), report=report)
@@ -942,12 +958,13 @@ def _trial_report_from_output(config: LongRunConfig, profile_id: str, seed: int,
 
 
 def _full_report_from_output(config: LongRunConfig, profile_id: str, seed: int, checkpoint_dir: Path, export_dir: Path, full_output: Path, log_path: Path, reason: str):
-    comparison_generation = _full_comparison_generation(config)
-    snapshot = _load_history_snapshot(profile_id, seed, comparison_generation, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
+    preferred = _full_comparison_generation(config)
+    snapshot = _best_available_snapshot(profile_id, seed, preferred, checkpoint_dir=checkpoint_dir, export_dir=export_dir)
     if snapshot is None:
-        raise ValueError(f'Missing generation-matched history for full-train seed={seed} generation={comparison_generation} (target={config.full_generations})')
+        raise ValueError(f'Missing generation-matched history for full-train seed={seed} generation={preferred} (target={config.full_generations})')
     report = snapshot['report']
-    _log_full_finished(log_path, profile_id, seed, config.full_generations, comparison_generation, full_output, report, reason)
+    actual_gen = snapshot['generation']
+    _log_full_finished(log_path, profile_id, seed, config.full_generations, actual_gen, full_output, report, reason)
     return report
 
 
