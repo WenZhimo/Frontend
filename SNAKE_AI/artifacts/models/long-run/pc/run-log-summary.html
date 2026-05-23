@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang='zh-CN'>
+<head>
+  <meta charset='UTF-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+  <title>长期训练日志摘要</title>
+  <style>
+    body { margin: 0; padding: 24px; background: #0b0f12; color: #d8d8d8; font-family: 'Segoe UI', system-ui, sans-serif; }
+    h1, h2, h3 { color: #c89a2e; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .card { background: rgba(10,14,16,0.92); border: 1px solid rgba(200,154,46,0.16); padding: 16px; }
+    ul { line-height: 1.6; padding-left: 18px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border-bottom: 1px solid rgba(255,255,255,0.08); padding: 8px 10px; text-align: left; }
+    .muted { color: #9aa7b0; }
+  </style>
+</head>
+<body>
+  <h1>长期训练日志摘要</h1>
+  <p class='muted'>生成时间：2026-05-23T15:01:49.610809+00:00 ｜ 事件总数：2</p>
+  <div class='grid'>
+    <div class='card'>
+      <h2>最近时间线</h2>
+      <ul><li><strong>26.5.23 - 22：08</strong> · [26.5.23 - 22：08]：恢复完整训练checkpoint：8728251（由于发现未完成完整训练的checkpoint，直接续跑full train）；checkpoint目录：D:\PROJECTS\HTML\SNAKE_AI\artifacts\models\checkpoints\pc\8728251-latest；当前代数：636；目标完整代数：1000；操作结果：成功</li><li><strong>26.5.23 - 22：08</strong> · [26.5.23 - 22：08]：开始完整训练：8728251（由于从中断点直接恢复完整训练）；目标完整代数：1000；试训平均选择分：0.00；试训平均苹果数：0.00；试训平均存活步数：0.00；操作结果：成功</li></ul>
+    </div>
+    <div class='card'>
+      <h2>关键跳过原因</h2>
+      <p><strong>最近 hybrid 跳过：</strong>无</p>
+      <p><strong>最近 checkpoint 跳过：</strong>无</p>
+    </div>
+  </div>
+  <h2>Seed 摘要</h2>
+  <div class='grid'><div class='card'><h3>Seed 8728251</h3><p>最新阶段：full_train_started</p><p>最新报告选择分：--</p><ul><li>[26.5.23 - 22：08]：恢复完整训练checkpoint：8728251（由于发现未完成完整训练的checkpoint，直接续跑full train）；checkpoint目录：D:\PROJECTS\HTML\SNAKE_AI\artifacts\models\checkpoints\pc\8728251-latest；当前代数：636；目标完整代数：1000；操作结果：成功</li><li>[26.5.23 - 22：08]：开始完整训练：8728251（由于从中断点直接恢复完整训练）；目标完整代数：1000；试训平均选择分：0.00；试训平均苹果数：0.00；试训平均存活步数：0.00；操作结果：成功</li></ul></div></div>
+  <h2>当前保留 Top 模型</h2>
+  <table>
+    <thead><tr><th>Seed</th><th>选择分</th><th>路径</th></tr></thead>
+    <tbody><tr><td colspan="3">暂无保留模型</td></tr></tbody>
+  </table>
+</body>
+</html>
