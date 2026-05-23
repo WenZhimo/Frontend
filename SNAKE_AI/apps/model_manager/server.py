@@ -70,7 +70,7 @@ TRAINING_REPORT_HTML_TEMPLATE = """<!DOCTYPE html>
   <script src="__DATA_JS__"></script>
   <script>
     var payload = window.__TRAINING_PAYLOAD__ || {};
-    var history = payload.history || [];
+    var history = Array.isArray(payload.history) ? payload.history : [];
     var latest = payload.latest || {};
     var labels = history.map(function(item) { return item.generation; });
     function metric(name) { return history.map(function(item) { return item[name] != null ? item[name] : null; }); }
