@@ -67,8 +67,9 @@ TRAINING_REPORT_HTML_TEMPLATE = """<!DOCTYPE html>
     <h2 style="margin-top:0;color:var(--gold);font-size:1.1rem;">最近 20 代</h2>
     <table id="history-table"></table>
   </div>
+  <script src="__DATA_JS__"></script>
   <script>
-    var payload = __PAYLOAD__;
+    var payload = window.__TRAINING_PAYLOAD__ || {};
     var history = payload.history || [];
     var latest = payload.latest || {};
     var labels = history.map(function(item) { return item.generation; });
@@ -96,8 +97,14 @@ TRAINING_REPORT_HTML_TEMPLATE = """<!DOCTYPE html>
 </html>"""
 
 
-def _build_training_report_from_history(history_payload: dict) -> str:
-    return TRAINING_REPORT_HTML_TEMPLATE.replace('__PAYLOAD__', json.dumps(history_payload, ensure_ascii=False))
+
+def _build_training_report_from_history(history_payload: dict, seed_dir: Path) -> str:
+    data_js_path = seed_dir / 'training-history-data.js'
+    data_js_path.write_text(
+        'window.__TRAINING_PAYLOAD__ = ' + json.dumps(history_payload, ensure_ascii=False) + ';',
+        encoding='utf-8',
+    )
+    return TRAINING_REPORT_HTML_TEMPLATE.replace('__DATA_JS__', 'training-history-data.js')
 
 
 def _rebuild_profile_training_history(profile_id: str) -> dict:
@@ -139,7 +146,7 @@ def regenerate_training_report(profile_id: str) -> dict:
                 continue
         except Exception:
             continue
-        html = _build_training_report_from_history(payload)
+        html = _build_training_report_from_history(payload, seed_dir)
         report_path = seed_dir / 'training-report.html'
         report_path.write_text(html, encoding='utf-8')
         results.append({
