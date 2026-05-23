@@ -501,15 +501,35 @@ def _training_runner_script(config_json: str, kind: str, status_path: str):
     return [
         sys.executable, '-c', f'''
 import json
+import os
+import signal
 import sys
+import traceback
 from pathlib import Path
 sys.path.insert(0, {str(PROJECT_ROOT)!r})
 sys.path.insert(0, {str(SRC_ROOT)!r})
 config = json.loads({config_json!r})
 kind = {kind!r}
 status_path = {status_path!r}
-status = {{"status": "running"}}
-Path(status_path).write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+
+def write_status(status, error=None, result=None):
+    payload = {{"status": status}}
+    if error:
+        payload["error"] = error
+    if result:
+        payload["result"] = result
+    try:
+        Path(status_path).write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+def on_terminate(signum, frame):
+    write_status("killed", error="进程被外部终止(SIGTERM)")
+    os._exit(1)
+
+signal.signal(signal.SIGTERM, on_terminate)
+
+write_status("running")
 try:
     if kind == "manual":
         from train.snake_nn.trainer import TrainingConfig, build_profile_config, run_seed_batch
@@ -521,11 +541,9 @@ try:
     else:
         from train.snake_nn.long_run_trainer import LongRunConfig, run_long_training
         result = str(run_long_training(LongRunConfig(**config)))
-    status = {{"status": "succeeded", "result": result}}
+    write_status("succeeded", result=result)
 except Exception as exc:
-    import traceback
-    status = {{"status": "failed", "error": str(exc) + "\\n" + traceback.format_exc()}}
-Path(status_path).write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+    write_status("failed", error=str(exc) + "\\n" + traceback.format_exc())
 ''',
     ]
 
