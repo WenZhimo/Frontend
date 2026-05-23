@@ -423,6 +423,7 @@
                         <a id="training-report-link" href="#" target="_blank">打开训练报告</a>
                         <a id="evaluation-report-link" href="#" target="_blank">打开评估报告</a>
                         <a id="longRunSummaryLink" href="#" target="_blank">打开长期训练日志摘要</a>
+                        <a id="regenerateTrainingReportLink" href="#">重新生成训练报告</a>
                     </div>
                     <div class="cards" id="reportCards"></div>
                 </div>
@@ -482,6 +483,7 @@
         const longRunSummaryLink = document.getElementById('longRunSummaryLink');
         const longRunSummaryLinkInMenu = document.getElementById('longRunSummaryLinkInMenu');
         const regenerateSummaryLink = document.getElementById('regenerateSummaryLink');
+        const regenerateTrainingReportLink = document.getElementById('regenerateTrainingReportLink');
         const runStatusDetail = document.getElementById('runStatusDetail');
         const manualConfigFields = document.getElementById('manualConfigFields');
         const longRunConfigFields = document.getElementById('longRunConfigFields');
@@ -1171,6 +1173,19 @@
                 longRunSummaryLinkInMenu.href = `/${payload.summaryPath}`;
                 longRunSummaryLink.href = `/${payload.summaryPath}`;
                 await loadRunStatus();
+            } catch (error) {
+                setMessage(error.message, true);
+            }
+        });
+        regenerateTrainingReportLink.addEventListener('click', async (event) => {
+            event.preventDefault();
+            try {
+                setMessage('正在重新生成训练报告…');
+                const response = await fetch('/api/model-manager/training-report/regenerate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) throw new Error(payload.error || '生成训练报告失败');
+                setMessage(`已为 ${payload.regenerated} 个种子重新生成训练报告。`);
+                await loadArtifacts();
             } catch (error) {
                 setMessage(error.message, true);
             }
