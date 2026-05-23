@@ -23,6 +23,16 @@
                     </div>
                 </a>
 
+                <a href="https://www.lcknova.com/">
+                    <div class="card" data-selectable data-selectable-highlight
+                        style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px; align-items: center;">
+                        <img data-selectable data-selectable-highlight
+                            src="<?php echo get_template_directory_uri(); ?>/asset/img/www.lcknova.com.jpg"
+                            height="80px" alt="落尘客">
+                        落尘客
+                    </div>
+                </a>
+
                 <a href="https://www.wenzhimo.xyz/kappa-heavy-industries-precision-manufacturing/">
                     <div class="card" data-selectable data-selectable-highlight
                         style="display: grid;grid-template-columns: 1fr 3fr;gap: 16px;align-items: center;">
