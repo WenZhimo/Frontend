@@ -70,10 +70,10 @@ TRAINING_REPORT_HTML_TEMPLATE = """<!DOCTYPE html>
   <script src="__DATA_JS__"></script>
   <script>
     var payload = window.__TRAINING_PAYLOAD__ || {};
-    var history = Array.isArray(payload.history) ? payload.history : [];
+    var historyData = Array.isArray(payload.history) ? payload.history : [];
     var latest = payload.latest || {};
-    var labels = history.map(function(item) { return item.generation; });
-    function metric(name) { return history.map(function(item) { return item[name] != null ? item[name] : null; }); }
+    var labels = historyData.map(function(item) { return item.generation; });
+    function metric(name) { return historyData.map(function(item) { return item[name] != null ? item[name] : null; }); }
     function fixed(value, digits) { digits = digits || 2; return Number.isFinite(value) ? value.toFixed(digits) : '--'; }
     document.getElementById('summary-cards').innerHTML = [
       ['Seed', payload.seed], ['Profile', payload.profileLabel || payload.profileId || '--'], ['Latest Gen', payload.latestGeneration],
@@ -89,7 +89,7 @@ TRAINING_REPORT_HTML_TEMPLATE = """<!DOCTYPE html>
     lineChart('survivalChart', '每代最佳 Avg Survival Ratio', [{ label: 'Avg Survival Ratio', data: metric('bestAvgSurvivalRatio'), borderColor: '#ffb700' }]);
     lineChart('behaviorChart', '行为指标趋势', [{ label: 'Approach Apple', data: metric('bestAvgApproachAppleEvents'), borderColor: '#00e5ff' }, { label: 'Repeat Cell', data: metric('bestAvgRepeatCellCount'), borderColor: '#d45134' }, { label: 'Stall Steps', data: metric('bestAvgStallSteps'), borderColor: '#ffb700' }]);
     lineChart('stabilityChart', '稳定性指标', [{ label: 'Selection Std', data: metric('bestSelectionScoreStd'), borderColor: '#c89a2e' }, { label: 'Fitness Std', data: metric('bestFitnessStd'), borderColor: '#8a7dff' }]);
-    var recent = history.slice(-20).reverse();
+    var recent = historyData.slice(-20).reverse();
     var table = document.getElementById('history-table');
     table.innerHTML = '<thead><tr><th>Generation</th><th>Selection</th><th>Avg Score</th><th>Avg Frames</th><th>Survival</th></tr></thead><tbody>' + recent.map(function(item) { return '<tr><td>' + item.generation + '</td><td>' + fixed(item.bestSelectionScore) + '</td><td>' + fixed(item.bestAvgScore) + '</td><td>' + fixed(item.bestAvgFrames) + '</td><td>' + fixed(item.bestAvgSurvivalRatio) + '</td></tr>'; }).join('') + '</tbody>';
   </script>
