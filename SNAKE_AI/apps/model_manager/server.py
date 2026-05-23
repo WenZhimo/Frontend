@@ -101,7 +101,7 @@ TRAINING_REPORT_HTML_TEMPLATE = """<!DOCTYPE html>
 def _build_training_report_from_history(history_payload: dict, seed_dir: Path) -> str:
     data_js_path = seed_dir / 'training-history-data.js'
     data_js_path.write_text(
-        'window.__TRAINING_PAYLOAD__ = ' + json.dumps(history_payload, ensure_ascii=False) + ';',
+        'window.__TRAINING_PAYLOAD__ = ' + json.dumps(history_payload, ensure_ascii=True) + ';',
         encoding='utf-8',
     )
     return TRAINING_REPORT_HTML_TEMPLATE.replace('__DATA_JS__', 'training-history-data.js')

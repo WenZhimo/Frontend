@@ -41,7 +41,7 @@
   <script src="training-history-data.js"></script>
   <script>
     var payload = window.__TRAINING_PAYLOAD__ || {};
-    var history = payload.history || [];
+    var history = Array.isArray(payload.history) ? payload.history : [];
     var latest = payload.latest || {};
     var labels = history.map(function(item) { return item.generation; });
     function metric(name) { return history.map(function(item) { return item[name] != null ? item[name] : null; }); }
