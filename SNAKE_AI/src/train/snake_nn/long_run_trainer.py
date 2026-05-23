@@ -1255,20 +1255,18 @@ def run_long_training(config: LongRunConfig):
     checkpoint_dir = resolve_project_path(base_config.checkpoint_dir)
     log_path = _build_long_run_log_path(config)
 
-    result_seed = None
-    try:
-        _process_resume_backlog(base_config, config, checkpoint_dir, export_dir, log_path)
+    while True:
+        try:
+            _process_resume_backlog(base_config, config, checkpoint_dir, export_dir, log_path)
 
-        existing_seeds = _list_existing_seeds(export_dir, checkpoint_dir)
-        hybrid_seed = _maybe_run_hybrid(base_config, config, checkpoint_dir, export_dir, log_path, existing_seeds, rng)
-        if hybrid_seed is not None:
-            result_seed = hybrid_seed
-            return result_seed
+            existing_seeds = _list_existing_seeds(export_dir, checkpoint_dir)
+            hybrid_seed = _maybe_run_hybrid(base_config, config, checkpoint_dir, export_dir, log_path, existing_seeds, rng)
+            if hybrid_seed is not None:
+                continue
 
-        result_seed = _run_new_seed_flow(base_config, config, checkpoint_dir, export_dir, log_path, existing_seeds, rng)
-        return result_seed
-    finally:
-        write_long_run_report(log_path)
+            _run_new_seed_flow(base_config, config, checkpoint_dir, export_dir, log_path, existing_seeds, rng)
+        finally:
+            write_long_run_report(log_path)
 
 
 def main():
