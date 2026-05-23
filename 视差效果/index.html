@@ -1,0 +1,1472 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Moon Renderer</title>
+  <style>
+    :root {
+      --bg: #020307;
+      --panel: rgba(10, 13, 18, 0.66);
+      --panel-strong: rgba(15, 19, 27, 0.86);
+      --line: rgba(210, 224, 255, 0.14);
+      --text: rgba(238, 243, 255, 0.92);
+      --muted: rgba(208, 218, 235, 0.62);
+      --faint: rgba(208, 218, 235, 0.38);
+      --accent: #d8e8ff;
+      --accent-soft: rgba(216, 232, 255, 0.18);
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 23% 18%, rgba(255,255,255,0.16) 0 1px, transparent 1.4px),
+        radial-gradient(circle at 66% 24%, rgba(255,255,255,0.10) 0 1px, transparent 1.4px),
+        radial-gradient(circle at 81% 71%, rgba(255,255,255,0.12) 0 1px, transparent 1.4px),
+        radial-gradient(circle at 16% 78%, rgba(255,255,255,0.10) 0 1px, transparent 1.4px),
+        radial-gradient(circle at 42% 62%, rgba(255,255,255,0.09) 0 1px, transparent 1.4px),
+        radial-gradient(circle at 52% 12%, rgba(170,205,255,0.12), transparent 22%),
+        radial-gradient(circle at 80% 60%, rgba(115,144,190,0.10), transparent 28%);
+      opacity: 0.85;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      cursor: grab;
+    }
+
+    #app.is-dragging { cursor: grabbing; }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .hud {
+      position: fixed;
+      left: clamp(18px, 4vw, 56px);
+      top: clamp(18px, 4vw, 48px);
+      max-width: min(460px, calc(100vw - 36px));
+      padding: 18px 18px 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(8, 11, 16, 0.76), rgba(8, 11, 16, 0.28));
+      backdrop-filter: blur(18px);
+      box-shadow: 0 24px 80px rgba(0,0,0,0.26);
+      user-select: none;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.19em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 54px);
+      line-height: 0.95;
+      letter-spacing: -0.055em;
+      font-weight: 650;
+      text-wrap: pretty;
+    }
+
+    .hud p {
+      margin: 14px 0 0;
+      max-width: 34em;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+      text-wrap: pretty;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 16px;
+      color: var(--faint);
+      font-size: 12px;
+    }
+
+    .status::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 18px var(--accent);
+    }
+
+    .tweaks {
+      position: fixed;
+      right: clamp(14px, 3vw, 32px);
+      bottom: clamp(14px, 3vw, 32px);
+      width: min(340px, calc(100vw - 28px));
+      max-height: calc(100vh - 28px);
+      overflow: auto;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 24px 90px rgba(0,0,0,0.34);
+      user-select: none;
+    }
+
+    .tweaks__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 2px 2px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tweaks__title {
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--text);
+      padding: 7px 10px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+    }
+
+    .button:hover {
+      background: rgba(216, 232, 255, 0.27);
+      border-color: rgba(216, 232, 255, 0.36);
+      transform: translateY(-1px);
+    }
+
+    .control {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 12px;
+      align-items: center;
+      padding: 13px 2px 4px;
+    }
+
+    .control + .control,
+    .switch-row + .control,
+    .control + .switch-row {
+      border-top: 1px solid rgba(210, 224, 255, 0.09);
+    }
+
+    .control label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .value {
+      color: var(--faint);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"],
+    select {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+
+    input[type="range"] {
+      accent-color: var(--accent);
+    }
+
+    select {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
+        linear-gradient(135deg, var(--muted) 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
+        rgba(216, 232, 255, 0.08);
+      color: var(--text);
+      padding: 9px 34px 9px 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 2px 2px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+
+    .loading {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at center, rgba(25,31,43,0.52), rgba(2,3,7,0.94) 62%);
+      transition: opacity 360ms ease, visibility 360ms ease;
+      pointer-events: none;
+    }
+
+    .loading.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .loading__card {
+      width: min(360px, calc(100vw - 40px));
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel-strong);
+      text-align: center;
+      box-shadow: 0 24px 90px rgba(0,0,0,0.42);
+    }
+
+    .loading__bar {
+      height: 3px;
+      margin-top: 18px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(216, 232, 255, 0.12);
+    }
+
+    .loading__fill {
+      height: 100%;
+      width: 38%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      animation: load 1.2s ease-in-out infinite;
+    }
+
+    .error {
+      color: #ffd1d1;
+      line-height: 1.5;
+    }
+
+    @keyframes load {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(280%); }
+    }
+
+    @media (max-width: 720px) {
+      .hud {
+        padding: 14px;
+      }
+
+      .hud p {
+        display: none;
+      }
+
+      .tweaks {
+        width: min(300px, calc(100vw - 28px));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="app" aria-label="Moon render viewport"></main>
+
+  <section class="hud" aria-label="Moon render notes">
+    <p class="eyebrow">Realtime lunar renderer</p>
+    <h1>Moon Renderer</h1>
+    <p>Lightweight 保留弱视差；Medium/POM Relief 是像素级位移；Geometry Displacement 会根据高程图真实改变球体顶点轮廓。</p>
+    <div class="status" id="statusText">加载浏览器贴图</div>
+  </section>
+
+  <aside class="tweaks" aria-label="Tweaks">
+    <div class="tweaks__header">
+      <div class="tweaks__title">Tweaks</div>
+      <button class="button" id="resetButton" type="button">Reset view</button>
+    </div>
+
+    <div class="control">
+      <label for="renderMode">Render mode</label>
+      <span class="value" id="renderModeValue">Lightweight</span>
+      <select id="renderMode">
+        <option value="lightweight" selected>Lightweight</option>
+        <option value="medium">Medium realism</option>
+        <option value="heavy">POM / Relief Mapping</option>
+        <option value="geometry">Geometry Displacement</option>
+        <option value="hybrid">Hybrid: Geo + micro POM</option>
+      </select>
+    </div>
+
+    <div class="control">
+      <label for="quality">Quality</label>
+      <span class="value" id="qualityValue">Medium</span>
+      <select id="quality">
+        <option value="low" selected>Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+      </select>
+    </div>
+
+    <div class="control">
+      <label for="lightPower">Sunlight</label>
+      <span class="value" id="lightPowerValue">1.30</span>
+      <input id="lightPower" type="range" min="0.4" max="2.2" step="0.01" value="1.30" />
+    </div>
+
+    <div class="control">
+      <label for="sunAngle">Sun angle</label>
+      <span class="value" id="sunAngleValue">-38°</span>
+      <input id="sunAngle" type="range" min="-120" max="120" step="1" value="-38" />
+    </div>
+
+    <div class="control">
+      <label for="normalStrength">Normal relief</label>
+      <span class="value" id="normalStrengthValue">1.20</span>
+      <input id="normalStrength" type="range" min="0" max="2.6" step="0.01" value="1.20" />
+    </div>
+
+    <div class="control">
+      <label for="parallaxScale">Parallax</label>
+      <span class="value" id="parallaxScaleValue">0.032</span>
+      <input id="parallaxScale" type="range" min="0" max="0.050" step="0.001" value="0.032" />
+    </div>
+
+    <div class="control">
+      <label for="selfShadowStrength">Self-shadow</label>
+      <span class="value" id="selfShadowStrengthValue">0.55</span>
+      <input id="selfShadowStrength" type="range" min="0" max="1" step="0.01" value="0.55" />
+    </div>
+
+    <div class="control">
+      <label for="geometryDetail">Geometry detail</label>
+      <span class="value" id="geometryDetailValue">Medium</span>
+      <select id="geometryDetail">
+        <option value="low">Low</option>
+        <option value="medium" selected>Medium</option>
+        <option value="high">High</option>
+      </select>
+    </div>
+
+    <div class="control">
+      <label for="displaceStrength">Displace strength</label>
+      <span class="value" id="displaceStrengthValue">0.080</span>
+      <input id="displaceStrength" type="range" min="0" max="0.22" step="0.005" value="0.080" />
+    </div>
+
+    <div class="switch-row">
+      <label for="autoRotate">Auto rotate</label>
+      <input id="autoRotate" type="checkbox" checked />
+    </div>
+  </aside>
+
+  <div class="loading" id="loadingOverlay" role="status">
+    <div class="loading__card">
+      <div id="loadingText">Preparing lunar surface</div>
+      <div class="loading__bar"><div class="loading__fill"></div></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
+
+    const app = document.querySelector('#app');
+    const loadingOverlay = document.querySelector('#loadingOverlay');
+    const loadingText = document.querySelector('#loadingText');
+    const statusText = document.querySelector('#statusText');
+
+    const controls = {
+      renderMode: document.querySelector('#renderMode'),
+      quality: document.querySelector('#quality'),
+      lightPower: document.querySelector('#lightPower'),
+      sunAngle: document.querySelector('#sunAngle'),
+      normalStrength: document.querySelector('#normalStrength'),
+      parallaxScale: document.querySelector('#parallaxScale'),
+      selfShadowStrength: document.querySelector('#selfShadowStrength'),
+      geometryDetail: document.querySelector('#geometryDetail'),
+      displaceStrength: document.querySelector('#displaceStrength'),
+      autoRotate: document.querySelector('#autoRotate'),
+      resetButton: document.querySelector('#resetButton'),
+      renderModeValue: document.querySelector('#renderModeValue'),
+      qualityValue: document.querySelector('#qualityValue'),
+      lightPowerValue: document.querySelector('#lightPowerValue'),
+      sunAngleValue: document.querySelector('#sunAngleValue'),
+      normalStrengthValue: document.querySelector('#normalStrengthValue'),
+      parallaxScaleValue: document.querySelector('#parallaxScaleValue'),
+      selfShadowStrengthValue: document.querySelector('#selfShadowStrengthValue'),
+      geometryDetailValue: document.querySelector('#geometryDetailValue'),
+      displaceStrengthValue: document.querySelector('#displaceStrengthValue'),
+    };
+
+    if (window.matchMedia('(max-width: 720px)').matches || (window.devicePixelRatio || 1) > 2.2) {
+      controls.quality.value = 'low';
+    }
+
+    const texturePaths = {
+      albedo: 'assets/moon-albedo-4k.jpg',
+      height: 'assets/moon-height-2k.png',
+      heightPacked: 'assets/moon-height-2k-packed.png',
+      normal: 'assets/moon-normal-2k.png',
+    };
+
+    const qualitySteps = {
+      low: 5,
+      medium: 8,
+      high: 12,
+    };
+
+    const heavyQualitySteps = {
+      low: 12,
+      medium: 20,
+      high: 32,
+    };
+
+    const heavyBinarySteps = {
+      low: 3,
+      medium: 4,
+      high: 5,
+    };
+
+    const state = {
+      yaw: -0.45,
+      pitch: 0.08,
+      targetYaw: -0.45,
+      targetPitch: 0.08,
+      distance: 7.4,
+      targetDistance: 7.4,
+      isDragging: false,
+      pointerX: 0,
+      pointerY: 0,
+    };
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, state.distance);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x020307, 1);
+    app.appendChild(renderer.domElement);
+
+    const moonGroup = new THREE.Group();
+    scene.add(moonGroup);
+
+    const sharedUniforms = {
+      albedoMap: { value: null },
+      heightMap: { value: null },
+      heightMapHigh: { value: null },
+      normalMap: { value: null },
+      sunDirection: { value: new THREE.Vector3() },
+      lightPower: { value: Number(controls.lightPower.value) },
+      ambientPower: { value: 0.095 },
+      normalStrength: { value: Number(controls.normalStrength.value) },
+      parallaxScale: { value: Number(controls.parallaxScale.value) },
+      exposure: { value: 1.04 },
+      qualitySteps: { value: qualitySteps[controls.quality.value] },
+      heavySteps: { value: heavyQualitySteps[controls.quality.value] },
+      heavyBinarySteps: { value: heavyBinarySteps[controls.quality.value] },
+      selfShadowStrength: { value: Number(controls.selfShadowStrength.value) },
+      lunarMix: { value: 0.66 },
+    };
+
+    const moonVertexShader = `
+      varying vec2 vUv;
+      varying vec3 vNormalW;
+      varying vec3 vPositionW;
+      varying vec3 vTangentW;
+      varying vec3 vBitangentW;
+
+      void main() {
+        vUv = uv;
+
+        vec3 sphereNormal = normalize(position);
+        vec3 tangentObj = normalize(cross(vec3(0.0, 1.0, 0.0), sphereNormal));
+        if (length(tangentObj) < 0.001) {
+          tangentObj = vec3(1.0, 0.0, 0.0);
+        }
+        vec3 bitangentObj = normalize(cross(sphereNormal, tangentObj));
+
+        mat3 worldMatrix = mat3(modelMatrix);
+        vNormalW = normalize(normalMatrix * normal);
+        vTangentW = normalize(worldMatrix * tangentObj);
+        vBitangentW = normalize(worldMatrix * bitangentObj);
+        vPositionW = (modelMatrix * vec4(position, 1.0)).xyz;
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    const lightweightFragmentShader = `
+      precision highp float;
+
+      uniform sampler2D albedoMap;
+      uniform sampler2D heightMap;
+      uniform sampler2D normalMap;
+      uniform vec3 sunDirection;
+      uniform float lightPower;
+      uniform float ambientPower;
+      uniform float normalStrength;
+      uniform float parallaxScale;
+      uniform float exposure;
+
+      varying vec2 vUv;
+      varying vec3 vNormalW;
+      varying vec3 vPositionW;
+      varying vec3 vTangentW;
+      varying vec3 vBitangentW;
+
+      vec2 parallaxUv(vec2 uv, vec3 viewDir, mat3 tbn) {
+        vec3 viewTangent = normalize(vec3(
+          dot(viewDir, tbn[0]),
+          dot(viewDir, tbn[1]),
+          dot(viewDir, tbn[2])
+        ));
+
+        float height = texture2D(heightMap, uv).r;
+        float facing = smoothstep(0.08, 0.72, viewTangent.z);
+        float offsetAmount = (height - 0.5) * parallaxScale * facing / max(viewTangent.z, 0.35);
+        return uv - viewTangent.xy * offsetAmount;
+      }
+
+      void main() {
+        vec3 geometricNormal = normalize(vNormalW);
+        vec3 viewDir = normalize(cameraPosition - vPositionW);
+        vec3 tangent = normalize(vTangentW);
+        vec3 bitangent = normalize(vBitangentW);
+        mat3 tbn = mat3(tangent, bitangent, geometricNormal);
+
+        vec2 uv = parallaxUv(vUv, viewDir, tbn);
+        vec3 albedo = texture2D(albedoMap, uv).rgb;
+
+        vec3 normalSample = texture2D(normalMap, uv).rgb * 2.0 - 1.0;
+        normalSample.xy *= normalStrength;
+        normalSample = normalize(normalSample);
+        vec3 normal = normalize(tbn * normalSample);
+
+        float direct = max(dot(normal, normalize(sunDirection)), 0.0);
+        float softTerminator = smoothstep(0.0, 0.38, direct);
+        float diffuse = mix(direct, softTerminator, 0.42) * lightPower;
+
+        float geoLight = max(dot(geometricNormal, normalize(sunDirection)), 0.0);
+        float rim = pow(1.0 - max(dot(geometricNormal, viewDir), 0.0), 2.6) * smoothstep(-0.08, 0.55, geoLight) * 0.08;
+        float night = pow(max(dot(geometricNormal, viewDir), 0.0), 0.8) * ambientPower;
+
+        vec3 color = albedo * (diffuse + night) + vec3(0.72, 0.82, 1.0) * rim;
+        color *= exposure;
+        color = color / (color + vec3(0.82));
+        color = pow(color, vec3(0.454545));
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    const mediumFragmentShader = `
+      precision highp float;
+
+      uniform sampler2D albedoMap;
+      uniform sampler2D heightMapHigh;
+      uniform sampler2D normalMap;
+      uniform vec3 sunDirection;
+      uniform float lightPower;
+      uniform float ambientPower;
+      uniform float normalStrength;
+      uniform float parallaxScale;
+      uniform float exposure;
+      uniform float qualitySteps;
+      uniform float selfShadowStrength;
+      uniform float lunarMix;
+
+      varying vec2 vUv;
+      varying vec3 vNormalW;
+      varying vec3 vPositionW;
+      varying vec3 vTangentW;
+      varying vec3 vBitangentW;
+
+      vec2 safeUv(vec2 uv) {
+        return vec2(fract(uv.x), clamp(uv.y, 0.002, 0.998));
+      }
+
+      float sampleHeight(vec2 uv) {
+        vec3 packedHeight = texture2D(heightMapHigh, safeUv(uv)).rgb;
+        return dot(packedHeight.rg, vec2(65280.0, 255.0)) / 65535.0;
+      }
+
+      vec3 parallaxOcclusion(vec2 uv, vec3 viewTangent) {
+        float poleFade = smoothstep(0.015, 0.12, uv.y) * smoothstep(0.015, 0.12, 1.0 - uv.y);
+        float stableView = smoothstep(0.04, 0.22, viewTangent.z);
+        float viewAngle = 1.0 - smoothstep(0.35, 0.96, viewTangent.z);
+        float steps = mix(max(8.0, qualitySteps * 0.45), qualitySteps, viewAngle);
+        float layerDepth = 1.0 / steps;
+        float amount = parallaxScale * poleFade * stableView;
+        vec2 deltaUv = viewTangent.xy / max(viewTangent.z, 0.20) * amount / steps;
+
+        vec2 currentUv = uv;
+        vec2 previousUv = uv;
+        float currentLayer = 0.0;
+        float previousLayer = 0.0;
+        float currentHeight = sampleHeight(currentUv);
+        float previousHeight = currentHeight;
+
+        for (int i = 0; i < 12; i++) {
+          if (float(i) >= steps || currentLayer >= currentHeight) {
+            break;
+          }
+          previousUv = currentUv;
+          previousLayer = currentLayer;
+          previousHeight = currentHeight;
+          currentUv -= deltaUv;
+          currentLayer += layerDepth;
+          currentHeight = sampleHeight(currentUv);
+        }
+
+        float afterDepth = currentHeight - currentLayer;
+        float beforeDepth = previousHeight - previousLayer;
+        float denom = max(abs(afterDepth - beforeDepth), 0.0001);
+        float weight = clamp(afterDepth / denom, 0.0, 1.0);
+        vec2 finalUv = mix(currentUv, previousUv, weight);
+        float finalHeight = sampleHeight(finalUv);
+        return vec3(safeUv(finalUv), finalHeight);
+      }
+
+      float heightSelfShadow(vec2 uv, float height, vec3 lightTangent, float geometricLight) {
+        if (lightTangent.z <= 0.025 || selfShadowStrength <= 0.001) {
+          return 1.0;
+        }
+
+        float steps = clamp(floor(qualitySteps * 0.34), 2.0, 6.0);
+        float poleFade = smoothstep(0.02, 0.14, uv.y) * smoothstep(0.02, 0.14, 1.0 - uv.y);
+        vec2 rayStep = lightTangent.xy / max(lightTangent.z, 0.16) * parallaxScale * 2.25 * poleFade / steps;
+        float shadow = 0.0;
+
+        for (int i = 0; i < 6; i++) {
+          if (float(i) >= steps) {
+            break;
+          }
+          float t = (float(i) + 1.0) / steps;
+          vec2 testUv = uv + rayStep * (float(i) + 1.0);
+          float blocker = sampleHeight(testUv);
+          float bias = 0.010 + t * 0.048 + geometricLight * 0.016;
+          shadow = max(shadow, smoothstep(0.0, 0.075, blocker - height - bias));
+        }
+
+        float terminatorWeight = 1.0 - smoothstep(0.12, 0.62, geometricLight);
+        float strength = selfShadowStrength * terminatorWeight;
+        return mix(1.0, 1.0 - shadow, strength);
+      }
+
+      float lunarDiffuse(float normalLight, float normalView) {
+        float lambert = normalLight;
+        float lommelSeeliger = (2.0 * normalLight) / max(normalLight + normalView, 0.08);
+        float lunar = mix(lambert, lommelSeeliger, lunarMix);
+        float terminator = smoothstep(0.0, 0.065, normalLight);
+        return lunar * terminator;
+      }
+
+      void main() {
+        vec3 geometricNormal = normalize(vNormalW);
+        vec3 viewDir = normalize(cameraPosition - vPositionW);
+        vec3 tangent = normalize(vTangentW);
+        vec3 bitangent = normalize(vBitangentW);
+        mat3 tbn = mat3(tangent, bitangent, geometricNormal);
+
+        vec3 viewTangent = normalize(vec3(
+          dot(viewDir, tangent),
+          dot(viewDir, bitangent),
+          dot(viewDir, geometricNormal)
+        ));
+        vec3 lightTangent = normalize(vec3(
+          dot(normalize(sunDirection), tangent),
+          dot(normalize(sunDirection), bitangent),
+          dot(normalize(sunDirection), geometricNormal)
+        ));
+
+        vec3 pom = parallaxOcclusion(vUv, viewTangent);
+        vec2 uv = pom.xy;
+        float heightHit = pom.z;
+
+        vec3 albedo = texture2D(albedoMap, uv).rgb;
+        vec3 normalSample = texture2D(normalMap, uv).rgb * 2.0 - 1.0;
+        normalSample.xy *= normalStrength;
+        normalSample = normalize(normalSample);
+        vec3 normal = normalize(tbn * normalSample);
+
+        float nDotL = max(dot(normal, normalize(sunDirection)), 0.0);
+        float nDotV = max(dot(normal, viewDir), 0.0);
+        float geoLight = max(dot(geometricNormal, normalize(sunDirection)), 0.0);
+        float disk = lunarDiffuse(nDotL, nDotV);
+        float localShadow = heightSelfShadow(uv, heightHit, lightTangent, geoLight);
+        float direct = disk * localShadow * lightPower;
+
+        float powder = pow(1.0 - nDotV, 2.0) * 0.035 * smoothstep(0.0, 0.55, geoLight);
+        float night = pow(max(dot(geometricNormal, viewDir), 0.0), 0.8) * ambientPower * 0.72;
+        float microOcclusion = mix(0.94, 1.04, heightHit);
+
+        vec3 color = albedo * (direct * microOcclusion + night) + vec3(0.67, 0.76, 0.92) * powder;
+        color *= exposure;
+        color = color / (color + vec3(0.78));
+        color = pow(color, vec3(0.454545));
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    const heavyFragmentShader = `
+      precision highp float;
+
+      uniform sampler2D albedoMap;
+      uniform sampler2D heightMapHigh;
+      uniform sampler2D normalMap;
+      uniform vec3 sunDirection;
+      uniform float lightPower;
+      uniform float ambientPower;
+      uniform float normalStrength;
+      uniform float parallaxScale;
+      uniform float exposure;
+      uniform float heavySteps;
+      uniform float heavyBinarySteps;
+      uniform float selfShadowStrength;
+      uniform float lunarMix;
+
+      varying vec2 vUv;
+      varying vec3 vNormalW;
+      varying vec3 vPositionW;
+      varying vec3 vTangentW;
+      varying vec3 vBitangentW;
+
+      vec2 safeUv(vec2 uv) {
+        return vec2(fract(uv.x), clamp(uv.y, 0.002, 0.998));
+      }
+
+      float sampleHeight(vec2 uv) {
+        vec3 packedHeight = texture2D(heightMapHigh, safeUv(uv)).rgb;
+        return dot(packedHeight.rg, vec2(65280.0, 255.0)) / 65535.0;
+      }
+
+      vec3 reliefMapping(vec2 uv, vec3 viewTangent) {
+        float poleFade = smoothstep(0.018, 0.14, uv.y) * smoothstep(0.018, 0.14, 1.0 - uv.y);
+        float stableView = smoothstep(0.09, 0.34, viewTangent.z);
+        float grazingFade = smoothstep(0.06, 0.28, viewTangent.z);
+        float viewAngle = 1.0 - smoothstep(0.36, 0.96, viewTangent.z);
+        float steps = mix(max(8.0, heavySteps * 0.45), heavySteps, viewAngle);
+        float amount = parallaxScale * 0.86 * poleFade * stableView * grazingFade * mix(0.55, 1.0, viewAngle);
+        float layerDepth = 1.0 / steps;
+        vec2 deltaUv = viewTangent.xy / max(viewTangent.z, 0.22) * amount / steps;
+
+        vec2 lowUv = uv;
+        vec2 highUv = uv;
+        float lowLayer = 0.0;
+        float highLayer = 0.0;
+        float lowHeight = sampleHeight(uv);
+        float highHeight = lowHeight;
+        vec2 currentUv = uv;
+        float currentLayer = 0.0;
+        float currentHeight = lowHeight;
+
+        for (int i = 0; i < 32; i++) {
+          if (float(i) >= steps || currentLayer >= currentHeight) {
+            break;
+          }
+          lowUv = currentUv;
+          lowLayer = currentLayer;
+          lowHeight = currentHeight;
+          currentUv -= deltaUv;
+          currentLayer += layerDepth;
+          currentHeight = sampleHeight(currentUv);
+          highUv = currentUv;
+          highLayer = currentLayer;
+          highHeight = currentHeight;
+        }
+
+        if (highLayer <= 0.0 || highLayer < highHeight) {
+          return vec3(safeUv(currentUv), currentHeight);
+        }
+
+        for (int i = 0; i < 5; i++) {
+          if (float(i) >= heavyBinarySteps) {
+            break;
+          }
+          vec2 midUv = (lowUv + highUv) * 0.5;
+          float midLayer = (lowLayer + highLayer) * 0.5;
+          float midHeight = sampleHeight(midUv);
+          if (midLayer < midHeight) {
+            lowUv = midUv;
+            lowLayer = midLayer;
+            lowHeight = midHeight;
+          } else {
+            highUv = midUv;
+            highLayer = midLayer;
+            highHeight = midHeight;
+          }
+        }
+
+        vec2 finalUv = safeUv((lowUv + highUv) * 0.5);
+        return vec3(finalUv, sampleHeight(finalUv));
+      }
+
+      float reliefShadow(vec2 uv, float height, vec3 lightTangent, float geometricLight) {
+        if (lightTangent.z <= 0.02 || selfShadowStrength <= 0.001) {
+          return 1.0;
+        }
+
+        float poleFade = smoothstep(0.02, 0.14, uv.y) * smoothstep(0.02, 0.14, 1.0 - uv.y);
+        float steps = clamp(floor(heavySteps * 0.44), 6.0, 14.0);
+        vec2 rayStep = lightTangent.xy / max(lightTangent.z, 0.13) * parallaxScale * 2.75 * poleFade / steps;
+        float contact = 0.0;
+        float horizon = 0.0;
+
+        for (int i = 0; i < 14; i++) {
+          if (float(i) >= steps) {
+            break;
+          }
+          float t = (float(i) + 1.0) / steps;
+          vec2 testUv = uv + rayStep * (float(i) + 1.0);
+          float blocker = sampleHeight(testUv);
+          float bias = 0.012 + t * 0.060 + geometricLight * 0.020;
+          contact = max(contact, smoothstep(0.0, 0.060, blocker - height - bias));
+          float slope = (blocker - height) / max(t, 0.06);
+          horizon = max(horizon, smoothstep(0.06, 0.26, slope - lightTangent.z * 0.05));
+        }
+
+        float terminatorWeight = 1.0 - smoothstep(0.16, 0.78, geometricLight);
+        float shadow = max(contact * 0.76, horizon * terminatorWeight);
+        float strength = selfShadowStrength * mix(0.48, 1.0, terminatorWeight);
+        return clamp(mix(1.0, 1.0 - shadow * 0.78, strength), 0.28, 1.0);
+      }
+
+      float lunarDiffuse(float normalLight, float normalView) {
+        float lambert = normalLight;
+        float lommelSeeliger = (2.0 * normalLight) / max(normalLight + normalView, 0.08);
+        float lunar = mix(lambert, lommelSeeliger, lunarMix);
+        float terminator = smoothstep(0.0, 0.050, normalLight);
+        return lunar * terminator;
+      }
+
+      void main() {
+        vec3 geometricNormal = normalize(vNormalW);
+        vec3 viewDir = normalize(cameraPosition - vPositionW);
+        vec3 tangent = normalize(vTangentW);
+        vec3 bitangent = normalize(vBitangentW);
+        mat3 tbn = mat3(tangent, bitangent, geometricNormal);
+
+        vec3 viewTangent = normalize(vec3(
+          dot(viewDir, tangent),
+          dot(viewDir, bitangent),
+          dot(viewDir, geometricNormal)
+        ));
+        vec3 lightTangent = normalize(vec3(
+          dot(normalize(sunDirection), tangent),
+          dot(normalize(sunDirection), bitangent),
+          dot(normalize(sunDirection), geometricNormal)
+        ));
+
+        vec3 relief = reliefMapping(vUv, viewTangent);
+        vec2 uv = relief.xy;
+        float heightHit = relief.z;
+
+        vec3 albedo = texture2D(albedoMap, uv).rgb;
+        vec3 normalSample = texture2D(normalMap, uv).rgb * 2.0 - 1.0;
+        normalSample.xy *= normalStrength;
+        normalSample = normalize(normalSample);
+        vec3 normal = normalize(tbn * normalSample);
+
+        float nDotL = max(dot(normal, normalize(sunDirection)), 0.0);
+        float nDotV = max(dot(normal, viewDir), 0.0);
+        float geoLight = max(dot(geometricNormal, normalize(sunDirection)), 0.0);
+        float disk = lunarDiffuse(nDotL, nDotV);
+        float localShadow = reliefShadow(uv, heightHit, lightTangent, geoLight);
+        float direct = disk * localShadow * lightPower;
+
+        float powder = pow(1.0 - nDotV, 2.15) * 0.030 * smoothstep(0.0, 0.55, geoLight);
+        float night = pow(max(dot(geometricNormal, viewDir), 0.0), 0.8) * ambientPower * 0.60;
+        float microOcclusion = mix(0.91, 1.06, heightHit);
+
+        vec3 color = albedo * (direct * microOcclusion + night) + vec3(0.64, 0.72, 0.88) * powder;
+        color *= exposure;
+        color = color / (color + vec3(0.76));
+        color = pow(color, vec3(0.454545));
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    const hybridFragmentShader = `
+      precision highp float;
+
+      uniform sampler2D albedoMap;
+      uniform sampler2D heightMapHigh;
+      uniform sampler2D normalMap;
+      uniform vec3 sunDirection;
+      uniform float lightPower;
+      uniform float ambientPower;
+      uniform float normalStrength;
+      uniform float parallaxScale;
+      uniform float exposure;
+      uniform float qualitySteps;
+      uniform float selfShadowStrength;
+      uniform float lunarMix;
+
+      varying vec2 vUv;
+      varying vec3 vNormalW;
+      varying vec3 vPositionW;
+      varying vec3 vTangentW;
+      varying vec3 vBitangentW;
+
+      vec2 safeUv(vec2 uv) {
+        return vec2(fract(uv.x), clamp(uv.y, 0.002, 0.998));
+      }
+
+      float sampleHeight(vec2 uv) {
+        vec3 packedHeight = texture2D(heightMapHigh, safeUv(uv)).rgb;
+        return dot(packedHeight.rg, vec2(65280.0, 255.0)) / 65535.0;
+      }
+
+      float microHeight(vec2 uv) {
+        vec2 texel = vec2(1.0 / 2048.0, 1.0 / 1024.0) * 4.0;
+        float center = sampleHeight(uv);
+        float macroAvg = center * 0.36;
+        macroAvg += sampleHeight(uv + vec2(texel.x, 0.0)) * 0.12;
+        macroAvg += sampleHeight(uv - vec2(texel.x, 0.0)) * 0.12;
+        macroAvg += sampleHeight(uv + vec2(0.0, texel.y)) * 0.12;
+        macroAvg += sampleHeight(uv - vec2(0.0, texel.y)) * 0.12;
+        macroAvg += sampleHeight(uv + texel) * 0.07;
+        macroAvg += sampleHeight(uv - texel) * 0.07;
+        return clamp(center - macroAvg, -0.18, 0.18);
+      }
+
+      vec2 microPomUv(vec2 uv, vec3 viewTangent) {
+        float poleFade = smoothstep(0.025, 0.14, uv.y) * smoothstep(0.025, 0.14, 1.0 - uv.y);
+        float viewFade = smoothstep(0.16, 0.42, viewTangent.z);
+        float viewAngle = 1.0 - smoothstep(0.40, 0.96, viewTangent.z);
+        float steps = clamp(floor(qualitySteps * 0.62), 3.0, 8.0);
+        float microScale = parallaxScale * 0.16 * poleFade * viewFade * mix(0.45, 1.0, viewAngle);
+        vec2 direction = viewTangent.xy / max(viewTangent.z, 0.36);
+        vec2 uvStep = direction * microScale / steps;
+        vec2 currentUv = uv;
+        float layer = 0.0;
+        float layerStep = 1.0 / steps;
+        float h = microHeight(currentUv) + 0.5;
+
+        for (int i = 0; i < 8; i++) {
+          if (float(i) >= steps || layer >= h) {
+            break;
+          }
+          currentUv -= uvStep;
+          layer += layerStep;
+          h = microHeight(currentUv) + 0.5;
+        }
+
+        vec2 offset = currentUv - uv;
+        offset = clamp(offset, vec2(-0.006), vec2(0.006));
+        return safeUv(uv + offset);
+      }
+
+      float microSelfShadow(vec2 uv, vec3 lightTangent, float geometricLight) {
+        if (lightTangent.z <= 0.04 || selfShadowStrength <= 0.001) {
+          return 1.0;
+        }
+        float steps = clamp(floor(qualitySteps * 0.42), 2.0, 5.0);
+        vec2 rayStep = lightTangent.xy / max(lightTangent.z, 0.28) * parallaxScale * 0.16 / steps;
+        float center = microHeight(uv);
+        float shadow = 0.0;
+        for (int i = 0; i < 5; i++) {
+          if (float(i) >= steps) {
+            break;
+          }
+          float t = (float(i) + 1.0) / steps;
+          float blocker = microHeight(uv + rayStep * (float(i) + 1.0));
+          shadow = max(shadow, smoothstep(0.015, 0.10, blocker - center - t * 0.030));
+        }
+        float terminatorWeight = 1.0 - smoothstep(0.16, 0.72, geometricLight);
+        return mix(1.0, 1.0 - shadow * 0.48, selfShadowStrength * terminatorWeight * 0.45);
+      }
+
+      float lunarDiffuse(float normalLight, float normalView) {
+        float lambert = normalLight;
+        float lommelSeeliger = (2.0 * normalLight) / max(normalLight + normalView, 0.08);
+        float lunar = mix(lambert, lommelSeeliger, lunarMix);
+        float terminator = smoothstep(0.0, 0.060, normalLight);
+        return lunar * terminator;
+      }
+
+      void main() {
+        vec3 geometricNormal = normalize(vNormalW);
+        vec3 viewDir = normalize(cameraPosition - vPositionW);
+        vec3 tangent = normalize(vTangentW);
+        vec3 bitangent = normalize(vBitangentW);
+        mat3 tbn = mat3(tangent, bitangent, geometricNormal);
+
+        vec3 viewTangent = normalize(vec3(
+          dot(viewDir, tangent),
+          dot(viewDir, bitangent),
+          dot(viewDir, geometricNormal)
+        ));
+        vec3 lightTangent = normalize(vec3(
+          dot(normalize(sunDirection), tangent),
+          dot(normalize(sunDirection), bitangent),
+          dot(normalize(sunDirection), geometricNormal)
+        ));
+
+        vec2 uv = microPomUv(vUv, viewTangent);
+        vec3 albedo = texture2D(albedoMap, uv).rgb;
+        vec3 normalSample = texture2D(normalMap, uv).rgb * 2.0 - 1.0;
+        normalSample.xy *= normalStrength;
+        normalSample = normalize(normalSample);
+        vec3 normal = normalize(tbn * normalSample);
+
+        float nDotL = max(dot(normal, normalize(sunDirection)), 0.0);
+        float nDotV = max(dot(normal, viewDir), 0.0);
+        float geoLight = max(dot(geometricNormal, normalize(sunDirection)), 0.0);
+        float disk = lunarDiffuse(nDotL, nDotV);
+        float shadow = microSelfShadow(uv, lightTangent, geoLight);
+        float direct = disk * shadow * lightPower;
+        float night = pow(max(dot(geometricNormal, viewDir), 0.0), 0.8) * ambientPower * 0.66;
+        float powder = pow(1.0 - nDotV, 2.1) * 0.025 * smoothstep(0.0, 0.55, geoLight);
+
+        vec3 color = albedo * (direct + night) + vec3(0.65, 0.74, 0.90) * powder;
+        color *= exposure;
+        color = color / (color + vec3(0.78));
+        color = pow(color, vec3(0.454545));
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    const lightweightMaterial = new THREE.ShaderMaterial({
+      uniforms: sharedUniforms,
+      vertexShader: moonVertexShader,
+      fragmentShader: lightweightFragmentShader,
+    });
+
+    const mediumMaterial = new THREE.ShaderMaterial({
+      uniforms: sharedUniforms,
+      vertexShader: moonVertexShader,
+      fragmentShader: mediumFragmentShader,
+    });
+
+    const heavyMaterial = new THREE.ShaderMaterial({
+      uniforms: sharedUniforms,
+      vertexShader: moonVertexShader,
+      fragmentShader: heavyFragmentShader,
+    });
+
+    const geometryMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        ...sharedUniforms,
+        parallaxScale: { value: 0.0 },
+      },
+      vertexShader: moonVertexShader,
+      fragmentShader: lightweightFragmentShader,
+    });
+
+    const hybridMaterial = new THREE.ShaderMaterial({
+      uniforms: sharedUniforms,
+      vertexShader: moonVertexShader,
+      fragmentShader: hybridFragmentShader,
+    });
+
+    const moonGeometry = new THREE.SphereGeometry(2, 192, 96);
+    const moon = new THREE.Mesh(moonGeometry, lightweightMaterial);
+    moonGroup.add(moon);
+
+    const haloMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.BackSide,
+      uniforms: {
+        glowColor: { value: new THREE.Color(0xb8d2ff) },
+        glowPower: { value: 0.30 },
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vView;
+
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vNormal = normalize(normalMatrix * normal);
+          vView = normalize(cameraPosition - worldPosition.xyz);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 glowColor;
+        uniform float glowPower;
+        varying vec3 vNormal;
+        varying vec3 vView;
+
+        void main() {
+          float edge = pow(1.0 - abs(dot(normalize(vNormal), normalize(vView))), 2.2);
+          gl_FragColor = vec4(glowColor, edge * glowPower);
+        }
+      `,
+    });
+
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(2.08, 128, 64), haloMaterial);
+    moonGroup.add(halo);
+
+    const geometryDetailSegments = {
+      low: [96, 48],
+      medium: [128, 64],
+      high: [192, 96],
+    };
+
+    let heightSampler = null;
+    let baseMoonGeometry = moonGeometry;
+    let displacedGeometryRecord = null;
+
+    function smoothstep(edge0, edge1, value) {
+      const t = THREE.MathUtils.clamp((value - edge0) / (edge1 - edge0), 0, 1);
+      return t * t * (3 - 2 * t);
+    }
+
+    function createHeightSampler(texture, packed) {
+      const image = texture.image;
+      const width = image.naturalWidth || image.videoWidth || image.width;
+      const height = image.naturalHeight || image.videoHeight || image.height;
+      const canvas = typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(width, height)
+        : Object.assign(document.createElement('canvas'), { width, height });
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(image, 0, 0, width, height);
+      const pixels = context.getImageData(0, 0, width, height).data;
+
+      function sampleNearest(x, y) {
+        const index = (y * width + x) * 4;
+        if (packed) {
+          return (pixels[index] * 256 + pixels[index + 1]) / 65535;
+        }
+        return pixels[index] / 255;
+      }
+
+      return {
+        width,
+        height,
+        packed,
+        sample(u, v) {
+          const wrappedU = u - Math.floor(u);
+          const clampedV = THREE.MathUtils.clamp(v, 0, 1);
+          const x = wrappedU * (width - 1);
+          const y = (1 - clampedV) * (height - 1);
+          const x0 = Math.floor(x);
+          const y0 = Math.floor(y);
+          const x1 = (x0 + 1) % width;
+          const y1 = Math.min(y0 + 1, height - 1);
+          const tx = x - x0;
+          const ty = y - y0;
+          const h00 = sampleNearest(x0, y0);
+          const h10 = sampleNearest(x1, y0);
+          const h01 = sampleNearest(x0, y1);
+          const h11 = sampleNearest(x1, y1);
+          return THREE.MathUtils.lerp(
+            THREE.MathUtils.lerp(h00, h10, tx),
+            THREE.MathUtils.lerp(h01, h11, tx),
+            ty,
+          );
+        },
+      };
+    }
+
+    function buildDisplacedGeometry(detail, strength) {
+      if (!heightSampler) return baseMoonGeometry;
+      const [widthSegments, heightSegments] = geometryDetailSegments[detail] || geometryDetailSegments.medium;
+      const start = performance.now();
+      const geometry = new THREE.SphereGeometry(2, widthSegments, heightSegments);
+      const position = geometry.attributes.position;
+      const uv = geometry.attributes.uv;
+      const vertex = new THREE.Vector3();
+      const direction = new THREE.Vector3();
+
+      for (let i = 0; i < position.count; i += 1) {
+        vertex.fromBufferAttribute(position, i);
+        direction.copy(vertex).normalize();
+        const u = uv.getX(i);
+        const v = uv.getY(i);
+        const heightValue = heightSampler.sample(u, v);
+        const poleFade = smoothstep(0.025, 0.13, v) * smoothstep(0.025, 0.13, 1 - v);
+        const radius = 2 + (heightValue - 0.5) * strength * poleFade;
+        position.setXYZ(i, direction.x * radius, direction.y * radius, direction.z * radius);
+      }
+
+      position.needsUpdate = true;
+      geometry.computeVertexNormals();
+      const duration = performance.now() - start;
+      displacedGeometryRecord = { geometry, detail, strength, vertices: position.count, duration };
+      console.info(`Geometry Displacement: ${position.count} vertices, ${duration.toFixed(1)}ms, detail=${detail}, strength=${strength.toFixed(3)}`);
+      return geometry;
+    }
+
+    function ensureDisplacedGeometry() {
+      const detail = controls.geometryDetail.value;
+      const strength = Number(controls.displaceStrength.value);
+      if (
+        displacedGeometryRecord &&
+        displacedGeometryRecord.detail === detail &&
+        Math.abs(displacedGeometryRecord.strength - strength) < 0.0001
+      ) {
+        return displacedGeometryRecord.geometry;
+      }
+      if (displacedGeometryRecord?.geometry && displacedGeometryRecord.geometry !== moon.geometry) {
+        displacedGeometryRecord.geometry.dispose();
+      }
+      if (displacedGeometryRecord?.geometry === moon.geometry) {
+        moon.geometry = baseMoonGeometry;
+      }
+      return buildDisplacedGeometry(detail, strength);
+    }
+
+    function applyRenderMode() {
+      const mode = controls.renderMode.value;
+      if (mode === 'heavy') {
+        moon.geometry = baseMoonGeometry;
+        moon.material = heavyMaterial;
+        controls.renderModeValue.textContent = 'POM / Relief';
+        controls.quality.disabled = false;
+        controls.selfShadowStrength.disabled = false;
+        controls.geometryDetail.disabled = true;
+        controls.displaceStrength.disabled = true;
+        statusText.textContent = `POM / Relief Mapping / ${controls.quality.value} / high GPU cost`;
+        return;
+      }
+
+      if (mode === 'medium') {
+        moon.geometry = baseMoonGeometry;
+        moon.material = mediumMaterial;
+        controls.renderModeValue.textContent = 'Medium realism';
+        controls.quality.disabled = false;
+        controls.selfShadowStrength.disabled = false;
+        controls.geometryDetail.disabled = true;
+        controls.displaceStrength.disabled = true;
+        statusText.textContent = `Medium realism / ${controls.quality.value} quality`;
+        return;
+      }
+
+      if (mode === 'hybrid') {
+        moon.geometry = ensureDisplacedGeometry();
+        moon.material = hybridMaterial;
+        controls.renderModeValue.textContent = 'Hybrid';
+        controls.quality.disabled = false;
+        controls.selfShadowStrength.disabled = false;
+        controls.geometryDetail.disabled = false;
+        controls.displaceStrength.disabled = false;
+        const vertices = displacedGeometryRecord ? displacedGeometryRecord.vertices : moon.geometry.attributes.position.count;
+        statusText.textContent = `Hybrid / ${vertices} vertices / ${controls.quality.value} micro POM`;
+        return;
+      }
+
+      if (mode === 'geometry') {
+        moon.geometry = ensureDisplacedGeometry();
+        moon.material = geometryMaterial;
+        controls.renderModeValue.textContent = 'Geometry';
+        controls.quality.disabled = true;
+        controls.selfShadowStrength.disabled = true;
+        controls.geometryDetail.disabled = false;
+        controls.displaceStrength.disabled = false;
+        const vertices = displacedGeometryRecord ? displacedGeometryRecord.vertices : moon.geometry.attributes.position.count;
+        statusText.textContent = `Geometry Displacement / ${vertices} vertices`;
+        return;
+      }
+
+      moon.geometry = baseMoonGeometry;
+      moon.material = lightweightMaterial;
+      controls.renderModeValue.textContent = 'Lightweight';
+      controls.quality.disabled = true;
+      controls.selfShadowStrength.disabled = true;
+      controls.geometryDetail.disabled = true;
+      controls.displaceStrength.disabled = true;
+      statusText.textContent = 'Lightweight / weak parallax';
+    }
+
+    function setSunDirection() {
+      const angle = THREE.MathUtils.degToRad(Number(controls.sunAngle.value));
+      sharedUniforms.sunDirection.value.set(Math.sin(angle), 0.24, Math.cos(angle)).normalize();
+      controls.sunAngleValue.textContent = `${controls.sunAngle.value}°`;
+    }
+
+    function updateUniformsFromControls() {
+      sharedUniforms.lightPower.value = Number(controls.lightPower.value);
+      sharedUniforms.normalStrength.value = Number(controls.normalStrength.value);
+      sharedUniforms.parallaxScale.value = Number(controls.parallaxScale.value);
+      sharedUniforms.selfShadowStrength.value = Number(controls.selfShadowStrength.value);
+      sharedUniforms.qualitySteps.value = qualitySteps[controls.quality.value];
+      sharedUniforms.heavySteps.value = heavyQualitySteps[controls.quality.value];
+      sharedUniforms.heavyBinarySteps.value = heavyBinarySteps[controls.quality.value];
+
+      controls.qualityValue.textContent = controls.quality.options[controls.quality.selectedIndex].text;
+      controls.lightPowerValue.textContent = sharedUniforms.lightPower.value.toFixed(2);
+      controls.normalStrengthValue.textContent = sharedUniforms.normalStrength.value.toFixed(2);
+      controls.parallaxScaleValue.textContent = sharedUniforms.parallaxScale.value.toFixed(3);
+      controls.selfShadowStrengthValue.textContent = sharedUniforms.selfShadowStrength.value.toFixed(2);
+      controls.geometryDetailValue.textContent = controls.geometryDetail.options[controls.geometryDetail.selectedIndex].text;
+      controls.displaceStrengthValue.textContent = Number(controls.displaceStrength.value).toFixed(3);
+      setSunDirection();
+      applyRenderMode();
+    }
+
+    function loadTexture(path, colorSpace = THREE.NoColorSpace) {
+      return new Promise((resolve, reject) => {
+        new THREE.TextureLoader().load(
+          path,
+          (texture) => {
+            texture.colorSpace = colorSpace;
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.ClampToEdgeWrapping;
+            texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            resolve(texture);
+          },
+          undefined,
+          () => reject(new Error(`无法加载 ${path}`)),
+        );
+      });
+    }
+
+    async function loadAssets() {
+      try {
+        const [albedo, height, normal] = await Promise.all([
+          loadTexture(texturePaths.albedo, THREE.SRGBColorSpace),
+          loadTexture(texturePaths.height),
+          loadTexture(texturePaths.normal),
+        ]);
+
+        let heightHigh = height;
+        try {
+          heightHigh = await loadTexture(texturePaths.heightPacked);
+        } catch (error) {
+          console.warn('packed height fallback:', error.message);
+        }
+
+        sharedUniforms.albedoMap.value = albedo;
+        sharedUniforms.heightMap.value = height;
+        sharedUniforms.heightMapHigh.value = heightHigh;
+        sharedUniforms.normalMap.value = normal;
+        heightSampler = createHeightSampler(heightHigh, heightHigh !== height);
+        updateUniformsFromControls();
+        loadingOverlay.classList.add('is-hidden');
+      } catch (error) {
+        loadingText.innerHTML = `<span class="error">${error.message}<br>请确认通过本地服务器打开 index.html，而不是直接 file:// 打开。</span>`;
+        statusText.textContent = '贴图加载失败';
+        throw error;
+      }
+    }
+
+    function onPointerDown(event) {
+      state.isDragging = true;
+      state.pointerX = event.clientX;
+      state.pointerY = event.clientY;
+      app.classList.add('is-dragging');
+      app.setPointerCapture?.(event.pointerId);
+    }
+
+    function onPointerMove(event) {
+      if (!state.isDragging) return;
+      const dx = event.clientX - state.pointerX;
+      const dy = event.clientY - state.pointerY;
+      state.pointerX = event.clientX;
+      state.pointerY = event.clientY;
+      state.targetYaw += dx * 0.006;
+      state.targetPitch = THREE.MathUtils.clamp(state.targetPitch + dy * 0.004, -1.18, 1.18);
+    }
+
+    function onPointerUp(event) {
+      state.isDragging = false;
+      app.classList.remove('is-dragging');
+      app.releasePointerCapture?.(event.pointerId);
+    }
+
+    function onWheel(event) {
+      event.preventDefault();
+      state.targetDistance = THREE.MathUtils.clamp(state.targetDistance + event.deltaY * 0.0024, 3.6, 8.8);
+    }
+
+    function resetView() {
+      state.targetYaw = -0.45;
+      state.targetPitch = 0.08;
+      state.targetDistance = 7.4;
+    }
+
+    function onResize() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    }
+
+    app.addEventListener('pointerdown', onPointerDown);
+    app.addEventListener('pointermove', onPointerMove);
+    app.addEventListener('pointerup', onPointerUp);
+    app.addEventListener('pointercancel', onPointerUp);
+    app.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('resize', onResize);
+
+    controls.renderMode.addEventListener('change', updateUniformsFromControls);
+    controls.quality.addEventListener('change', updateUniformsFromControls);
+    controls.lightPower.addEventListener('input', updateUniformsFromControls);
+    controls.sunAngle.addEventListener('input', updateUniformsFromControls);
+    controls.normalStrength.addEventListener('input', updateUniformsFromControls);
+    controls.parallaxScale.addEventListener('input', updateUniformsFromControls);
+    controls.selfShadowStrength.addEventListener('input', updateUniformsFromControls);
+    controls.geometryDetail.addEventListener('change', updateUniformsFromControls);
+    controls.displaceStrength.addEventListener('input', updateUniformsFromControls);
+    controls.resetButton.addEventListener('click', resetView);
+
+    updateUniformsFromControls();
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+      const delta = Math.min(clock.getDelta(), 0.05);
+
+      if (controls.autoRotate.checked && !state.isDragging) {
+        state.targetYaw += delta * 0.055;
+      }
+
+      state.yaw = THREE.MathUtils.lerp(state.yaw, state.targetYaw, 0.085);
+      state.pitch = THREE.MathUtils.lerp(state.pitch, state.targetPitch, 0.085);
+      state.distance = THREE.MathUtils.lerp(state.distance, state.targetDistance, 0.12);
+
+      moonGroup.rotation.set(state.pitch, state.yaw, 0);
+      camera.position.set(0, 0, state.distance);
+      camera.lookAt(0, 0, 0);
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    loadAssets().then(() => {
+      animate();
+    });
+  </script>
+</body>
+</html>
