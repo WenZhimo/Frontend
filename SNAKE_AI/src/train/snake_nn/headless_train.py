@@ -777,7 +777,16 @@ class HeadlessTrainer:
         preserved_history = seed_history_path.read_text(encoding='utf-8') if seed_history_path.exists() else None
         preserved_report = seed_report_path.read_text(encoding='utf-8') if seed_report_path.exists() else None
         if checkpoint_path.exists():
-            rmtree(checkpoint_path)
+            try:
+                rmtree(checkpoint_path)
+            except OSError:
+                import time
+                time.sleep(0.2)
+                try:
+                    rmtree(checkpoint_path)
+                except OSError:
+                    print(f'[snake_nn.headless_train] 警告：无法删除旧 checkpoint 目录 {checkpoint_path}，跳过本次整群保存')
+                    return
         checkpoint_path.mkdir(parents=True, exist_ok=False)
         if preserved_history is not None:
             (checkpoint_path / 'training-history.json').write_text(preserved_history, encoding='utf-8')

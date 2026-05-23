@@ -619,37 +619,30 @@ def recover_orphaned_run_state():
                 except OSError:
                     pass
             recovered_status = status_data.get('status', 'unknown')
-            if recovered_status == 'running' and not alive:
-                recovered_status = 'failed'
+            if recovered_status != 'running':
                 status_file.unlink(missing_ok=True)
+                continue
+            if not alive:
+                status_file.unlink(missing_ok=True)
+                continue
             with RUN_LOCK:
                 if RUN_STATE['status'] == 'running':
                     return
-                if alive:
-                    RUN_STATE.update({
-                        'id': status_file.stem.replace('run-status-', ''),
-                        'kind': 'recovered',
-                        'presetId': None,
-                        'presetName': None,
-                        'status': 'running',
-                        'pid': saved_pid,
-                        'startedAt': None,
-                        'endedAt': None,
-                        'error': None,
-                        'result': None,
-                        'statusPath': str(status_file),
-                    })
-                    _start_monitor_for_existing(status_file, saved_pid)
-                    return
                 RUN_STATE.update({
                     'id': status_file.stem.replace('run-status-', ''),
-                    'status': recovered_status,
                     'kind': 'recovered',
+                    'presetId': None,
+                    'presetName': None,
+                    'status': 'running',
+                    'pid': saved_pid,
                     'startedAt': None,
-                    'endedAt': datetime.now(timezone.utc).isoformat(),
-                    'result': status_data.get('result'),
-                    'error': status_data.get('error') or ('服务器关闭时训练进程被终止' if status_data.get('status') == 'running' else '服务器重启后恢复的训练结果'),
+                    'endedAt': None,
+                    'error': None,
+                    'result': None,
+                    'statusPath': str(status_file),
                 })
+                _start_monitor_for_existing(status_file, saved_pid)
+                return
         except Exception:
             pass
 
