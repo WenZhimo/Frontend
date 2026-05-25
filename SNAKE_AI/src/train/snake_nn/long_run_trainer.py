@@ -537,8 +537,19 @@ def _is_population_snapshot_compatible(reference_snapshot, candidate_snapshot):
 def _history_generation_map(history_path: Path):
     if not history_path.exists():
         return {}
-    data = json.loads(history_path.read_text(encoding='utf-8'))
-    return {int(item['generation']): item for item in data.get('history', [])}
+    try:
+        raw_text = history_path.read_text(encoding='utf-8')
+        if not raw_text.strip():
+            return {}
+        data = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    history = data.get('history', [])
+    if not isinstance(history, list):
+        return {}
+    return {int(item['generation']): item for item in history if isinstance(item, dict) and 'generation' in item}
 
 
 def _history_entry_to_report(entry, *, seed: int, generation: int, profile_id: str, profile_label: str, path: Path | None = None):
@@ -703,6 +714,10 @@ def _scan_resumable_checkpoints(base_config: TrainingConfig, checkpoint_dir: Pat
     incompatible = []
     if not checkpoint_dir.exists():
         return resumable_trial, resumable_full, incompatible
+    # checkpoint/history 里的 generation 是“已评估代数索引”，目标 1000 的最后一代是 999。
+    # 因此完成判定必须和 target-1 比较，不能直接和 target_generations 比较。
+    trial_done_generation = _evaluated_generation_for_target(trial_generations)
+    full_done_generation = _evaluated_generation_for_target(full_generations)
     for path in sorted(checkpoint_dir.glob('*-latest')):
         meta_path = path / 'checkpoint_meta.json'
         if not meta_path.exists():
@@ -713,7 +728,7 @@ def _scan_resumable_checkpoints(base_config: TrainingConfig, checkpoint_dir: Pat
         snapshot_profile = (meta.get('trainerConfigSnapshot') or {}).get('profile_id')
         if seed is None or snapshot_profile != profile_id:
             continue
-        if generation >= full_generations:
+        if generation >= full_done_generation:
             continue
         # 用 checkpoint 里保存的目标代数判断当初是 trial 还是 warmup/full 训练。
         # warmup 的 checkpoint 目标代数是 full_generations，应直接续 full，不能按 trial 恢复。
@@ -730,7 +745,7 @@ def _scan_resumable_checkpoints(base_config: TrainingConfig, checkpoint_dir: Pat
         }
         if mismatches:
             incompatible.append(item)
-        elif generation < trial_generations and not is_warmup_checkpoint:
+        elif generation < trial_done_generation and not is_warmup_checkpoint:
             resumable_trial.append(item)
         else:
             resumable_full.append(item)
