@@ -562,8 +562,26 @@ class HeadlessTrainer:
     def _load_history(self, history_path: Path):
         if not history_path.exists():
             return []
-        data = json.loads(history_path.read_text(encoding='utf-8'))
-        return data.get('history', [])
+        raw_text = history_path.read_text(encoding='utf-8')
+        if not raw_text.strip():
+            backup_path = history_path.with_suffix(history_path.suffix + f'.empty-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}.bak')
+            history_path.replace(backup_path)
+            print(f'[snake_nn.headless_train] 警告：训练历史文件为空，已备份并从空历史继续：{backup_path}')
+            return []
+        try:
+            data = json.loads(raw_text)
+        except json.JSONDecodeError as exc:
+            backup_path = history_path.with_suffix(history_path.suffix + f'.invalid-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}.bak')
+            history_path.replace(backup_path)
+            print(f'[snake_nn.headless_train] 警告：训练历史文件无法解析，已备份并从空历史继续：{backup_path} | {exc}')
+            return []
+        if not isinstance(data, dict):
+            backup_path = history_path.with_suffix(history_path.suffix + f'.invalid-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}.bak')
+            history_path.replace(backup_path)
+            print(f'[snake_nn.headless_train] 警告：训练历史文件格式异常，已备份并从空历史继续：{backup_path}')
+            return []
+        history = data.get('history', [])
+        return history if isinstance(history, list) else []
 
     def _load_training_history(self):
         return self._load_history(self._training_history_path())
