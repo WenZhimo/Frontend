@@ -537,8 +537,19 @@ def _is_population_snapshot_compatible(reference_snapshot, candidate_snapshot):
 def _history_generation_map(history_path: Path):
     if not history_path.exists():
         return {}
-    data = json.loads(history_path.read_text(encoding='utf-8'))
-    return {int(item['generation']): item for item in data.get('history', [])}
+    try:
+        raw_text = history_path.read_text(encoding='utf-8')
+        if not raw_text.strip():
+            return {}
+        data = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    history = data.get('history', [])
+    if not isinstance(history, list):
+        return {}
+    return {int(item['generation']): item for item in history if isinstance(item, dict) and 'generation' in item}
 
 
 def _history_entry_to_report(entry, *, seed: int, generation: int, profile_id: str, profile_label: str, path: Path | None = None):
