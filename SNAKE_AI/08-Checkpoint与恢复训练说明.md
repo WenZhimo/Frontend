@@ -156,10 +156,11 @@ artifacts/models/checkpoints/<profile>/*-latest/checkpoint_meta.json
 
 如果发现：
 
-- 当前代数 `< trial_generations`
+- 当前已评估代数尚未达到试训最后比较代数（`trial_generations - 1`）
+- 或已过试训阶段但尚未达到完整训练最后比较代数（`full_generations - 1`）
 - 且与当前长期训练参数兼容
 
-就会优先恢复这些未完成试训的 checkpoint。
+就会优先恢复这些未完成 checkpoint。
 
 ### 优先级
 
