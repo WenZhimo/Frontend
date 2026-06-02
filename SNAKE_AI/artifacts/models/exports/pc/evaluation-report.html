@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snake AI 评估报告</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #070a0c;
+      --panel: rgba(7, 10, 12, 0.86);
+      --text: #d8d8d8;
+      --muted: #9aa7b0;
+      --gold: #c89a2e;
+      --cyan: #00e5ff;
+      --danger: #d45134;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top right, rgba(0, 229, 255, 0.08), transparent 30%), linear-gradient(180deg, #050709, #0a0d10); color: var(--text); font-family: "Segoe UI", system-ui, sans-serif; padding: 24px; }
+    h1 { margin: 0 0 8px; color: var(--gold); }
+    p { color: var(--muted); }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0 24px; }
+    .card, .panel { background: var(--panel); border: 1px solid rgba(200, 154, 46, 0.16); padding: 14px; }
+    .label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .value { margin-top: 8px; font-size: 1.2rem; color: var(--gold); font-family: monospace, sans-serif; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    canvas { width: 100% !important; height: 360px !important; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.92rem; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>Snake AI 评估报告</h1>
+  <p>展示模型 summary、按棋盘尺寸结果，以及候选模型与 baseline 的比较。</p>
+  <div class="cards" id="summary-cards"></div>
+  <div class="grid">
+    <div class="panel"><canvas id="summaryChart"></canvas></div>
+    <div class="panel"><canvas id="boardScoreChart"></canvas></div>
+    <div class="panel"><canvas id="boardFramesChart"></canvas></div>
+    <div class="panel"><canvas id="comparisonChart"></canvas></div>
+  </div>
+  <div class="panel" style="margin-top: 18px;">
+    <h2 style="margin-top:0;color:var(--gold);font-size:1.1rem;">模型摘要</h2>
+    <table id="summary-table"></table>
+  </div>
+  <script>
+    const payload = {"generatedAt": "2026-05-27T23:34:58.186890+00:00", "reports": [{"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-1619844-000.json", "avgSelectionScore": 192837.25, "avgFitness": 1.0665649817522145e+19, "avgScore": 59.75, "avgFrames": 2981.75, "avgSurvivalRatio": 1.0, "avgApproachAppleEvents": 1876.25, "avgRepeatCellCount": 2467.0, "avgStallSteps": 1104.5, "fitnessStd": 1.5237306354591207e+19, "selectionScoreStd": 15420.72410143246, "results": [], "historyEntry": {"generation": 999, "populationSize": 600, "bestSelectionScore": 192837.25, "bestAvgFitness": 1.0665649817522145e+19, "bestAvgScore": 59.75, "bestAvgFrames": 2981.75, "bestAvgSurvivalRatio": 1.0, "bestAvgApproachAppleEvents": 1876.25, "bestAvgRepeatCellCount": 2467.0, "bestAvgStallSteps": 1104.5, "bestFitnessStd": 1.5237306354591207e+19, "bestSelectionScoreStd": 15420.72410143246, "seed": 1619844, "profileId": "pc", "profileLabel": "PC 16:9", "timestamp": "2026-05-22T01:44:54.913935+00:00"}, "seed": 1619844, "generation": 999, "profileId": "pc", "profileLabel": "PC 16:9", "label": "pc-1000-1619844-000.json"}, {"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-8728251-000.json", "avgSelectionScore": 130767.5, "avgFitness": 6860952558736437.0, "avgScore": 50.5, "avgFrames": 2518.5, "avgSurvivalRatio": 1.0, "avgApproachAppleEvents": 1630.0, "avgRepeatCellCount": 1951.25, "avgStallSteps": 887.5, "fitnessStd": 7373203973022036.0, "selectionScoreStd": 7623.644568052737, "results": [], "historyEntry": {"generation": 999, "populationSize": 360, "bestSelectionScore": 130767.5, "bestAvgFitness": 6860952558736437.0, "bestAvgScore": 50.5, "bestAvgFrames": 2518.5, "bestAvgSurvivalRatio": 1.0, "bestAvgApproachAppleEvents": 1630.0, "bestAvgRepeatCellCount": 1951.25, "bestAvgStallSteps": 887.5, "bestFitnessStd": 7373203973022036.0, "bestSelectionScoreStd": 7623.644568052737, "seed": 8728251, "profileId": "pc", "profileLabel": "PC 16:9", "timestamp": "2026-05-24T09:37:20.483809+00:00"}, "seed": 8728251, "generation": 999, "profileId": "pc", "profileLabel": "PC 16:9", "label": "pc-1000-8728251-000.json"}, {"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-7726984-000.json", "avgSelectionScore": 118410.25, "avgFitness": 5.770239776728673e+17, "avgScore": 45.75, "avgFrames": 2171.0, "avgSurvivalRatio": 1.0, "avgApproachAppleEvents": 1410.0, "avgRepeatCellCount": 1678.25, "avgStallSteps": 760.0, "fitnessStd": 9.981345563744364e+17, "selectionScoreStd": 28521.669212854635, "results": [], "historyEntry": {"generation": 999, "populationSize": 360, "bestSelectionScore": 118410.25, "bestAvgFitness": 5.770239776728673e+17, "bestAvgScore": 45.75, "bestAvgFrames": 2171.0, "bestAvgSurvivalRatio": 1.0, "bestAvgApproachAppleEvents": 1410.0, "bestAvgRepeatCellCount": 1678.25, "bestAvgStallSteps": 760.0, "bestFitnessStd": 9.981345563744364e+17, "bestSelectionScoreStd": 28521.669212854635, "seed": 7726984, "profileId": "pc", "profileLabel": "PC 16:9", "timestamp": "2026-05-27T23:34:54.333905+00:00"}, "seed": 7726984, "generation": 999, "profileId": "pc", "profileLabel": "PC 16:9", "label": "pc-1000-7726984-000.json"}, {"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-4145461-000.json", "avgSelectionScore": 109472.875, "avgFitness": 4505800799102402.0, "avgScore": 42.75, "avgFrames": 2380.25, "avgSurvivalRatio": 1.0, "avgApproachAppleEvents": 1477.0, "avgRepeatCellCount": 1927.5, "avgStallSteps": 902.25, "fitnessStd": 7799192731191105.0, "selectionScoreStd": 18676.585275335397, "results": [], "historyEntry": {"generation": 999, "populationSize": 360, "bestSelectionScore": 109472.875, "bestAvgFitness": 4505800799102402.0, "bestAvgScore": 42.75, "bestAvgFrames": 2380.25, "bestAvgSurvivalRatio": 1.0, "bestAvgApproachAppleEvents": 1477.0, "bestAvgRepeatCellCount": 1927.5, "bestAvgStallSteps": 902.25, "bestFitnessStd": 7799192731191105.0, "bestSelectionScoreStd": 18676.585275335397, "seed": 4145461, "profileId": "pc", "profileLabel": "PC 16:9", "timestamp": "2026-05-26T00:20:22.244876+00:00"}, "seed": 4145461, "generation": 999, "profileId": "pc", "profileLabel": "PC 16:9", "label": "pc-1000-4145461-000.json"}, {"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-5027780-000.json", "avgSelectionScore": 14932.475694444445, "avgFitness": 23755.901811978452, "avgScore": 5.75, "avgFrames": 293.75, "avgSurvivalRatio": 0.4522569444444444, "avgApproachAppleEvents": 174.25, "avgRepeatCellCount": 121.5, "avgStallSteps": 118.5, "fitnessStd": 20929.544632542606, "selectionScoreStd": 8427.93818886439, "results": [], "historyEntry": {"generation": 999, "populationSize": 360, "bestSelectionScore": 14932.475694444445, "bestAvgFitness": 23755.901811978452, "bestAvgScore": 5.75, "bestAvgFrames": 293.75, "bestAvgSurvivalRatio": 0.4522569444444444, "bestAvgApproachAppleEvents": 174.25, "bestAvgRepeatCellCount": 121.5, "bestAvgStallSteps": 118.5, "bestFitnessStd": 20929.544632542606, "bestSelectionScoreStd": 8427.93818886439, "seed": 5027780, "profileId": "pc", "profileLabel": "PC 16:9", "timestamp": "2026-05-23T00:10:21.365931+00:00"}, "seed": 5027780, "generation": 999, "profileId": "pc", "profileLabel": "PC 16:9", "label": "pc-1000-5027780-000.json"}, {"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-8035930-000.json", "avgSelectionScore": 7900.953125, "avgFitness": 5938.7276178896545, "avgScore": 3.0, "avgFrames": 65.25, "avgSurvivalRatio": 0.11328125, "avgApproachAppleEvents": 46.0, "avgRepeatCellCount": 0.25, "avgStallSteps": 18.25, "fitnessStd": 5109.723964038441, "selectionScoreStd": 3150.639642873969, "results": [], "historyEntry": {"generation": 999, "populationSize": 360, "bestSelectionScore": 7900.953125, "bestAvgFitness": 5938.7276178896545, "bestAvgScore": 3.0, "bestAvgFrames": 65.25, "bestAvgSurvivalRatio": 0.11328125, "bestAvgApproachAppleEvents": 46.0, "bestAvgRepeatCellCount": 0.25, "bestAvgStallSteps": 18.25, "bestFitnessStd": 5109.723964038441, "bestSelectionScoreStd": 3150.639642873969, "seed": 8035930, "profileId": "pc", "profileLabel": "PC 16:9", "timestamp": "2026-05-24T14:00:39.817395+00:00"}, "seed": 8035930, "generation": 999, "profileId": "pc", "profileLabel": "PC 16:9", "label": "pc-1000-8035930-000.json"}], "boardSummaries": [{"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-1619844-000.json", "label": "pc-1000-1619844-000.json", "items": []}, {"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-8728251-000.json", "label": "pc-1000-8728251-000.json", "items": []}, {"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-7726984-000.json", "label": "pc-1000-7726984-000.json", "items": []}, {"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-4145461-000.json", "label": "pc-1000-4145461-000.json", "items": []}, {"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-5027780-000.json", "label": "pc-1000-5027780-000.json", "items": []}, {"model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-8035930-000.json", "label": "pc-1000-8035930-000.json", "items": []}], "comparison": null};
+    const reports = payload.reports || [];
+    const boardSummaries = payload.boardSummaries || [];
+    const comparison = payload.comparison || null;
+
+    function fixed(value, digits = 2) { return Number.isFinite(value) ? value.toFixed(digits) : '--'; }
+    const labels = reports.map(report => report.label || report.model.split(/[\/]/).pop());
+    document.getElementById('summary-cards').innerHTML = [
+      ['Models', reports.length],
+      ['Generated At', (payload.generatedAt || '').replace('T', ' ').slice(0, 19)],
+      ['Comparison', comparison ? (comparison.better ? 'Candidate Better' : 'Keep Baseline') : '--'],
+    ].map(([label, value]) => `<div class="card"><div class="label">${label}</div><div class="value">${value}</div></div>`).join('');
+
+    function barChart(id, title, datasets, labels) {
+      new Chart(document.getElementById(id), {
+        type: 'bar',
+        data: { labels, datasets },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#d8d8d8' } }, title: { display: true, text: title, color: '#c89a2e' } }, scales: { x: { ticks: { color: '#9aa7b0' } }, y: { ticks: { color: '#9aa7b0' } } } }
+      });
+    }
+
+    barChart('summaryChart', '模型总体摘要', [
+      { label: 'Selection Score', data: reports.map(r => r.avgSelectionScore), backgroundColor: 'rgba(0,229,255,0.55)' },
+      { label: 'Avg Score', data: reports.map(r => r.avgScore), backgroundColor: 'rgba(200,154,46,0.55)' },
+      { label: 'Avg Frames', data: reports.map(r => r.avgFrames), backgroundColor: 'rgba(123,216,143,0.55)' },
+    ], labels);
+
+    const boardLabels = Array.from(new Set(boardSummaries.flatMap(item => item.items.map(entry => `${entry.boardSize[0]}x${entry.boardSize[1]}`))));
+    barChart('boardScoreChart', '按棋盘尺寸 Avg Score', boardSummaries.map((entry, idx) => ({
+      label: entry.label || entry.model.split(/[\/]/).pop(),
+      data: boardLabels.map(label => {
+        const item = entry.items.find(board => `${board.boardSize[0]}x${board.boardSize[1]}` === label);
+        return item ? item.avgScore : null;
+      }),
+      backgroundColor: ['rgba(0,229,255,0.55)','rgba(200,154,46,0.55)','rgba(123,216,143,0.55)','rgba(138,125,255,0.55)'][idx % 4],
+    })), boardLabels);
+    barChart('boardFramesChart', '按棋盘尺寸 Avg Frames', boardSummaries.map((entry, idx) => ({
+      label: entry.label || entry.model.split(/[\/]/).pop(),
+      data: boardLabels.map(label => {
+        const item = entry.items.find(board => `${board.boardSize[0]}x${board.boardSize[1]}` === label);
+        return item ? item.avgFrames : null;
+      }),
+      backgroundColor: ['rgba(255,183,0,0.55)','rgba(0,229,255,0.55)','rgba(200,154,46,0.55)','rgba(123,216,143,0.55)'][idx % 4],
+    })), boardLabels);
+
+    const comparisonLabels = comparison ? ['Selection Δ', 'Fitness Δ', 'Score Δ', 'Frames Δ'] : [];
+    barChart('comparisonChart', 'Candidate vs Baseline 差值', comparison ? [{
+      label: 'Delta',
+      data: [comparison.deltas.selection, comparison.deltas.fitness, comparison.deltas.score, comparison.deltas.frames],
+      backgroundColor: ['rgba(0,229,255,0.55)','rgba(200,154,46,0.55)','rgba(123,216,143,0.55)','rgba(212,81,52,0.55)'],
+    }] : [{ label: 'No Comparison', data: [] }], comparisonLabels);
+
+    const table = document.getElementById('summary-table');
+    table.innerHTML = `<thead><tr><th>模型</th><th>选择分</th><th>苹果数</th><th>存活步数</th><th>选择分标准差</th></tr></thead><tbody>${reports.map(report => `<tr><td>${report.label || report.model}</td><td>${fixed(report.avgSelectionScore)}</td><td>${fixed(report.avgScore)}</td><td>${fixed(report.avgFrames)}</td><td>${fixed(report.selectionScoreStd)}</td></tr>`).join('')}</tbody>`;
+  </script>
+</body>
+</html>
