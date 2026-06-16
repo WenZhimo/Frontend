@@ -1,0 +1,14 @@
+{
+    "apple_seed": 899016,
+    "board_size": [
+        32,
+        18
+    ],
+    "initial_velocity": "r",
+    "lifespan": Infinity,
+    "start_pos": {
+        "x": 16,
+        "y": 9
+    },
+    "starting_direction": "r"
+}
