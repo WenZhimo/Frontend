@@ -1,0 +1,300 @@
+{
+  "generatedAt": "2026-05-23T16:27:25.910316+00:00",
+  "reports": [
+    {
+      "model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\best-of-batch.json",
+      "avgFitness": 7.673845534663173e+22,
+      "avgSelectionScore": 242221.75,
+      "avgScore": 74.0,
+      "avgFrames": 5269.0,
+      "avgSurvivalRatio": 1.0,
+      "avgApproachAppleEvents": 3116.5,
+      "avgRepeatCellCount": 4693.0,
+      "avgStallSteps": 2151.5,
+      "fitnessStd": 7.437727210519691e+22,
+      "selectionScoreStd": 10104.75,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 2.3611832414348247e+21,
+          "selectionScore": 232117.0,
+          "score": 71.0,
+          "frames": 4982.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 2939.0,
+          "repeatCellCount": 4406.0,
+          "stallSteps": 2042.0,
+          "uniqueHeadCells": 576.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 1.5111572745182865e+23,
+          "selectionScore": 252326.5,
+          "score": 77.0,
+          "frames": 5556.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 3294.0,
+          "repeatCellCount": 4980.0,
+          "stallSteps": 2261.0,
+          "uniqueHeadCells": 576.0
+        }
+      ],
+      "label": "best-of-batch.json"
+    },
+    {
+      "model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-1619844-000.json",
+      "avgFitness": 137439408023.31406,
+      "avgSelectionScore": 74378.80902777778,
+      "avgScore": 23.0,
+      "avgFrames": 890.5,
+      "avgSurvivalRatio": 0.7855902777777778,
+      "avgApproachAppleEvents": 623.0,
+      "avgRepeatCellCount": 602.0,
+      "avgStallSteps": 266.5,
+      "fitnessStd": 137439371786.11374,
+      "selectionScoreStd": 48487.19097222222,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 36237.20030680139,
+          "selectionScore": 25891.618055555555,
+          "score": 8.0,
+          "frames": 329.0,
+          "survivalRatio": 0.5711805555555556,
+          "approachAppleEvents": 205.0,
+          "repeatCellCount": 157.0,
+          "stallSteps": 123.0,
+          "uniqueHeadCells": 172.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 274878779809.4278,
+          "selectionScore": 122866.0,
+          "score": 38.0,
+          "frames": 1452.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 1041.0,
+          "repeatCellCount": 1047.0,
+          "stallSteps": 410.0,
+          "uniqueHeadCells": 405.0
+        }
+      ],
+      "label": "pc-1000-1619844-000.json"
+    },
+    {
+      "model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-23-000.json",
+      "avgFitness": 9.44473297013734e+21,
+      "avgSelectionScore": 192776.5,
+      "avgScore": 58.5,
+      "avgFrames": 4153.5,
+      "avgSurvivalRatio": 1.0,
+      "avgApproachAppleEvents": 2526.5,
+      "avgRepeatCellCount": 3577.5,
+      "avgStallSteps": 1626.0,
+      "fitnessStd": 9.444732961341246e+21,
+      "selectionScoreStd": 50590.5,
+      "scoreWeight": 3000.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 50.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 1.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 8796093853825.188,
+          "selectionScore": 142186.0,
+          "score": 43.0,
+          "frames": 3090.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 1869.0,
+          "repeatCellCount": 2514.0,
+          "stallSteps": 1220.0,
+          "uniqueHeadCells": 576.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 1.8889465931478585e+22,
+          "selectionScore": 243367.0,
+          "score": 74.0,
+          "frames": 5217.0,
+          "survivalRatio": 1.0,
+          "approachAppleEvents": 3184.0,
+          "repeatCellCount": 4641.0,
+          "stallSteps": 2032.0,
+          "uniqueHeadCells": 576.0
+        }
+      ],
+      "label": "pc-1000-23-000.json"
+    },
+    {
+      "model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-5027780-000.json",
+      "avgFitness": 532.9709585668913,
+      "avgSelectionScore": 2556.7256944444443,
+      "avgScore": 1.0,
+      "avgFrames": 80.5,
+      "avgSurvivalRatio": 0.13975694444444445,
+      "avgApproachAppleEvents": 38.0,
+      "avgRepeatCellCount": 2.5,
+      "avgStallSteps": 41.5,
+      "fitnessStd": 0.100079611522915,
+      "selectionScoreStd": 86.33680555555566,
+      "scoreWeight": 2500.0,
+      "survivalWeight": 100.0,
+      "rawFitnessWeight": 0.1,
+      "rawFitnessCap": 300.0,
+      "zeroScorePenalty": 500.0,
+      "approachAppleWeight": 12.0,
+      "repeatCellPenalty": 3.0,
+      "stallPenalty": 10.5,
+      "results": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 0,
+          "fitness": 533.0710381784143,
+          "selectionScore": 2643.0625,
+          "score": 1.0,
+          "frames": 81.0,
+          "survivalRatio": 0.140625,
+          "approachAppleEvents": 42.0,
+          "repeatCellCount": 2.0,
+          "stallSteps": 38.0,
+          "uniqueHeadCells": 79.0
+        },
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "episode": 1,
+          "fitness": 532.8708789553684,
+          "selectionScore": 2470.3888888888887,
+          "score": 1.0,
+          "frames": 80.0,
+          "survivalRatio": 0.1388888888888889,
+          "approachAppleEvents": 34.0,
+          "repeatCellCount": 3.0,
+          "stallSteps": 45.0,
+          "uniqueHeadCells": 77.0
+        }
+      ],
+      "label": "pc-1000-5027780-000.json"
+    }
+  ],
+  "boardSummaries": [
+    {
+      "model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\best-of-batch.json",
+      "label": "best-of-batch.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 242221.75,
+          "avgFitness": 7.673845534663173e+22,
+          "avgScore": 74.0,
+          "avgFrames": 5269.0,
+          "avgSurvivalRatio": 1.0
+        }
+      ]
+    },
+    {
+      "model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-1619844-000.json",
+      "label": "pc-1000-1619844-000.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 74378.80902777778,
+          "avgFitness": 137439408023.31406,
+          "avgScore": 23.0,
+          "avgFrames": 890.5,
+          "avgSurvivalRatio": 0.7855902777777778
+        }
+      ]
+    },
+    {
+      "model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-23-000.json",
+      "label": "pc-1000-23-000.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 192776.5,
+          "avgFitness": 9.44473297013734e+21,
+          "avgScore": 58.5,
+          "avgFrames": 4153.5,
+          "avgSurvivalRatio": 1.0
+        }
+      ]
+    },
+    {
+      "model": "D:\\PROJECTS\\HTML\\SNAKE_AI\\artifacts\\models\\exports\\pc\\pc-1000-5027780-000.json",
+      "label": "pc-1000-5027780-000.json",
+      "items": [
+        {
+          "boardSize": [
+            32,
+            18
+          ],
+          "avgSelectionScore": 2556.7256944444443,
+          "avgFitness": 532.9709585668913,
+          "avgScore": 1.0,
+          "avgFrames": 80.5,
+          "avgSurvivalRatio": 0.13975694444444445
+        }
+      ]
+    }
+  ],
+  "comparison": null
+}
