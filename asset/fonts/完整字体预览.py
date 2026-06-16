@@ -6,8 +6,8 @@ from PIL import Image, ImageDraw, ImageFont
 INPUT_DIR = Path(r"D:\盒子\HTML\asset\fonts")
 OUTPUT_IMAGE = Path(__file__).with_name("完整字体预览.png")
 PREVIEW_TEXT = "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 汉字预览测试 文于止墨丰川祥子实验"
-FONT_SIZE = 120
-TITLE_SIZE = 80
+FONT_SIZE = 200
+TITLE_SIZE = 140
 PADDING = 40
 LINE_SPACING = 20
 TITLE_LINE_SPACING = 20

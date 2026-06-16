@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>点阵风页面 · Dot Matrix Poster</title>
+  <style>
+    @font-face {
+      font-family: "BoutiqueBitmap7x7";
+      src: url("assets/fonts/boutique-bitmap-7x7-circle-dot.ttf") format("truetype");
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "ZCOOLQingKe";
+      src: url("assets/fonts/zcool-qingke-huangyou.ttf") format("truetype");
+      font-display: swap;
+    }
+
+    :root {
+      --ink: #050505;
+      --paper: #f4ef2a;
+      --signal: #ff3300;
+      --white: #f7f0df;
+      --muted: rgba(247, 240, 223, 0.72);
+      --line: rgba(247, 240, 223, 0.14);
+      --hot: #fff056;
+      --panel: rgba(5, 5, 5, 0.72);
+      --focus: #f4ef2a;
+      --font-display: "BoutiqueBitmap7x7", "ZCOOLQingKe", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+      --font-body: "ZCOOLQingKe", "BoutiqueBitmap7x7", "Microsoft YaHei UI", Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      overflow: hidden;
+      background: var(--ink);
+      color: var(--white);
+      font-family: var(--font-body);
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+
+    canvas#matrixCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      background: var(--ink);
+      cursor: crosshair;
+    }
+
+    .semantic-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      color: transparent;
+    }
+
+    .semantic-copy {
+      position: absolute;
+      left: 7vw;
+      top: 9vh;
+      width: min(860px, 80vw);
+      pointer-events: none;
+      opacity: 0.001;
+      user-select: none;
+    }
+
+    .semantic-copy h1,
+    .semantic-copy p {
+      margin: 0;
+    }
+
+    .hit-zone {
+      position: absolute;
+      pointer-events: auto;
+      appearance: none;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: transparent;
+      cursor: pointer;
+      outline: none;
+      touch-action: manipulation;
+    }
+
+    .hit-zone:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 6px;
+      background: rgba(244, 239, 42, 0.06);
+    }
+
+    .hit-zone[aria-pressed="true"] {
+      background: rgba(255, 51, 0, 0.06);
+    }
+
+    .poster-ui {
+      position: fixed;
+      right: 22px;
+      bottom: 18px;
+      z-index: 3;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      pointer-events: none;
+      color: var(--muted);
+      font: 11px/1 var(--font-body);
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      mix-blend-mode: difference;
+    }
+
+    .poster-ui kbd {
+      border: 1px solid rgba(247, 240, 223, 0.42);
+      padding: 6px 8px;
+      color: var(--white);
+      background: rgba(247, 240, 223, 0.06);
+      font: inherit;
+    }
+
+    @media (max-width: 760px) {
+      .poster-ui {
+        left: 16px;
+        right: auto;
+        bottom: 14px;
+        max-width: calc(100vw - 32px);
+        flex-wrap: wrap;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      canvas#matrixCanvas {
+        cursor: default;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="matrixCanvas" aria-hidden="true"></canvas>
+
+  <main class="semantic-layer" aria-label="点阵风交互海报页面">
+    <section class="semantic-copy">
+      <h1>把整个网页切成真正的点阵屏。</h1>
+      <p>Canvas 负责把文字、图形、光标与动效全部量化到极小网格；透明 DOM 负责按钮、键盘焦点与可访问语义。</p>
+    </section>
+
+    <button class="hit-zone" id="modeZone" type="button" aria-pressed="false" aria-label="切换点阵密度"></button>
+    <button class="hit-zone" id="pulseZone" type="button" aria-pressed="false" aria-label="触发海报脉冲"></button>
+    <button class="hit-zone" id="invertZone" type="button" aria-pressed="false" aria-label="反转海报配色"></button>
+  </main>
+
+  <div class="poster-ui" aria-hidden="true">
+    <kbd>Click modules</kbd>
+    <kbd>Drag cursor</kbd>
+    <kbd>1/2/3 toggles</kbd>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('matrixCanvas');
+      const ctx = canvas.getContext('2d');
+      const zones = {
+        mode: document.getElementById('modeZone'),
+        pulse: document.getElementById('pulseZone'),
+        invert: document.getElementById('invertZone'),
+      };
+
+      const fontStack = {
+        display: 'BoutiqueBitmap7x7, ZCOOLQingKe, Microsoft YaHei UI, sans-serif',
+        body: 'ZCOOLQingKe, BoutiqueBitmap7x7, Microsoft YaHei UI, Consolas, monospace',
+        mono: 'BoutiqueBitmap7x7, Ubuntu Mono, Consolas, monospace',
+      };
+
+      const state = {
+        grid: 4,
+        dense: false,
+        pulse: 0,
+        inverted: false,
+        active: 'mode',
+        tick: 0,
+        dpr: 1,
+        width: 0,
+        height: 0,
+        lastFrame: 0,
+        pointer: { x: window.innerWidth * 0.72, y: window.innerHeight * 0.34, tx: window.innerWidth * 0.72, ty: window.innerHeight * 0.34, down: false },
+        zoneRects: {},
+        reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      };
+
+      const palette = {
+        dark: {
+          bg: '#050505',
+          fg: '#f7f0df',
+          paper: '#f4ef2a',
+          signal: '#ff3300',
+          muted: 'rgba(247, 240, 223, 0.62)',
+          dim: 'rgba(247, 240, 223, 0.18)',
+          shadow: 'rgba(0, 0, 0, 0.84)',
+        },
+        light: {
+          bg: '#f4ef2a',
+          fg: '#050505',
+          paper: '#050505',
+          signal: '#ff3300',
+          muted: 'rgba(5, 5, 5, 0.64)',
+          dim: 'rgba(5, 5, 5, 0.18)',
+          shadow: 'rgba(244, 239, 42, 0.5)',
+        },
+      };
+
+      const copy = {
+        kicker: 'VIRTUAL DOT-MATRIX / FULL SCREEN GRID',
+        headline: ['把网页', '切成', '点阵屏'],
+        body: '不是给内容盖一层滤镜，而是把可见内容真正投射到微型网格：文字、块面、光标、按钮状态都在同一张虚拟点阵里发光。',
+        modules: [
+          { id: 'mode', label: 'GRID', value: '04PX', detail: '切换 4px / 3px 网格密度' },
+          { id: 'pulse', label: 'PULSE', value: 'SCAN', detail: '触发一次全屏海报脉冲' },
+          { id: 'invert', label: 'INK', value: 'REV', detail: '反转黑黄高对比配色' },
+        ],
+      };
+
+
+      function colors() {
+        return state.inverted ? palette.light : palette.dark;
+      }
+
+      function resize() {
+        state.dpr = Math.min(window.devicePixelRatio || 1, 2);
+        state.width = window.innerWidth;
+        state.height = window.innerHeight;
+        canvas.width = Math.floor(state.width * state.dpr);
+        canvas.height = Math.floor(state.height * state.dpr);
+        canvas.style.width = `${state.width}px`;
+        canvas.style.height = `${state.height}px`;
+        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+        layoutZones();
+      }
+
+      function snap(value) {
+        return Math.round(value / state.grid) * state.grid;
+      }
+
+      function setRect(element, rect) {
+        element.style.left = `${rect.x}px`;
+        element.style.top = `${rect.y}px`;
+        element.style.width = `${rect.w}px`;
+        element.style.height = `${rect.h}px`;
+      }
+
+      function layout() {
+        const margin = clamp(state.width * 0.06, 22, 96);
+        const top = clamp(state.height * 0.07, 26, 76);
+        const headlineSize = clamp(state.width * 0.108, 54, 168);
+        const lineHeight = headlineSize * 0.82;
+        const headlineWidth = Math.min(state.width - margin * 1.5, 1180);
+        const compactModules = state.width < 680;
+        const moduleGap = compactModules ? clamp(state.width * 0.016, 6, 10) : clamp(state.width * 0.018, 10, 26);
+        const moduleW = compactModules ? (state.width - margin * 2 - moduleGap * 2) / 3 : clamp(state.width * 0.18, 148, 270);
+        const moduleH = compactModules ? clamp(state.height * 0.105, 78, 104) : clamp(state.height * 0.12, 86, 128);
+        const moduleY = state.height - moduleH - clamp(state.height * 0.095, 70, 110);
+        const startX = compactModules ? (state.width - moduleW * 3 - moduleGap * 2) / 2 : margin;
+
+        return {
+          margin,
+          top,
+          headlineSize,
+          lineHeight,
+          headlineWidth,
+          bodyX: margin,
+          bodyY: top + lineHeight * 3.18,
+          bodyW: Math.min(state.width - margin * 2, 760),
+          modules: copy.modules.map((item, index) => ({
+            ...item,
+            x: startX + index * (moduleW + moduleGap),
+            y: moduleY,
+            w: moduleW,
+            h: moduleH,
+          })),
+          sideX: state.width - margin - clamp(state.width * 0.24, 230, 390),
+          sideY: top + clamp(state.height * 0.05, 20, 80),
+          sideW: clamp(state.width * 0.24, 230, 390),
+          sideH: clamp(state.height * 0.34, 230, 410),
+        };
+      }
+
+      function layoutZones() {
+        const l = layout();
+        l.modules.forEach(module => {
+          state.zoneRects[module.id] = module;
+          setRect(zones[module.id], module);
+        });
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function drawDot(x, y, color, size = state.grid - 1, alpha = 1) {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+        const s = Math.max(1, Math.min(size, state.grid - 1));
+        ctx.fillRect(snap(x), snap(y), s, s);
+        ctx.globalAlpha = 1;
+      }
+
+      function fillDotRect(x, y, w, h, color, density = 1, phase = 0) {
+        const step = state.grid;
+        const x0 = snap(x);
+        const y0 = snap(y);
+        const x1 = snap(x + w);
+        const y1 = snap(y + h);
+        for (let yy = y0; yy <= y1; yy += step) {
+          for (let xx = x0; xx <= x1; xx += step) {
+            if (density < 1) {
+              const pattern = Math.abs(((xx / step) * 7 + (yy / step) * 11 + phase) % 10);
+              if (pattern > density * 10) continue;
+            }
+            drawDot(xx, yy, color, state.grid - 1, 1);
+          }
+        }
+      }
+
+      function strokeDotRect(x, y, w, h, color, thickness = 1, density = 1) {
+        for (let i = 0; i < thickness; i += 1) {
+          fillDotRect(x + i * state.grid, y + i * state.grid, w - i * state.grid * 2, state.grid, color, density);
+          fillDotRect(x + i * state.grid, y + h - i * state.grid, w - i * state.grid * 2, state.grid, color, density);
+          fillDotRect(x + i * state.grid, y + i * state.grid, state.grid, h - i * state.grid * 2, color, density);
+          fillDotRect(x + w - i * state.grid, y + i * state.grid, state.grid, h - i * state.grid * 2, color, density);
+        }
+      }
+
+      function dotText(text, x, y, options = {}) {
+        const c = colors();
+        const font = options.font || `${options.weight || 900} ${options.size || 72}px ${options.family || fontStack.display}`;
+        const color = options.color || c.fg;
+        const maxWidth = options.maxWidth || state.width;
+        const align = options.align || 'left';
+        const letterSpacing = options.letterSpacing || 0;
+        const jitter = options.jitter || 0;
+        const alpha = options.alpha ?? 1;
+        const offsetX = jitter ? Math.sin((x + state.tick) * 0.03) * jitter : 0;
+        const offsetY = jitter ? Math.cos((y - state.tick) * 0.025) * jitter : 0;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+        ctx.font = font;
+        ctx.textBaseline = 'top';
+        ctx.textAlign = align;
+        ctx.imageSmoothingEnabled = false;
+
+        if (letterSpacing !== 0) {
+          const chars = [...text];
+          const total = chars.reduce((sum, char) => sum + ctx.measureText(char).width + letterSpacing, -letterSpacing);
+          let cursorX = align === 'center' ? x - total / 2 : x;
+          if (align === 'right') cursorX = x - total;
+          chars.forEach(char => {
+            ctx.fillText(char, snap(cursorX + offsetX), snap(y + offsetY), maxWidth);
+            cursorX += ctx.measureText(char).width + letterSpacing;
+          });
+        } else {
+          ctx.fillText(text, snap(x + offsetX), snap(y + offsetY), maxWidth);
+        }
+
+        ctx.restore();
+      }
+
+      function wrapTextToDots(text, x, y, maxWidth, options = {}) {
+        const size = options.size || 18;
+        const lineHeight = options.lineHeight || size * 1.62;
+        const font = `${options.weight || 600} ${size}px ${options.family || fontStack.body}`;
+        ctx.save();
+        ctx.font = font;
+        const words = [...text];
+        let line = '';
+        let lineIndex = 0;
+        words.forEach(char => {
+          const test = line + char;
+          if (ctx.measureText(test).width > maxWidth && line) {
+            dotText(line, x, y + lineIndex * lineHeight, { ...options, size, font, maxWidth });
+            line = char;
+            lineIndex += 1;
+          } else {
+            line = test;
+          }
+        });
+        if (line) {
+          dotText(line, x, y + lineIndex * lineHeight, { ...options, size, font, maxWidth });
+        }
+        ctx.restore();
+      }
+
+      function drawBackground() {
+        const c = colors();
+        ctx.fillStyle = c.bg;
+        ctx.fillRect(0, 0, state.width, state.height);
+
+        const minor = state.grid * 9;
+        ctx.globalAlpha = state.inverted ? 0.1 : 0.07;
+        for (let x = 0; x < state.width; x += minor) {
+          for (let y = 0; y < state.height; y += state.grid * 3) {
+            drawDot(x, y, c.fg, state.grid - 1, 0.32);
+          }
+        }
+        for (let y = 0; y < state.height; y += minor) {
+          for (let x = 0; x < state.width; x += state.grid * 3) {
+            drawDot(x, y, c.fg, state.grid - 1, 0.28);
+          }
+        }
+        ctx.globalAlpha = 1;
+
+        const sweepY = (state.tick * 0.38) % (state.height + 260) - 130;
+        const sweepColor = state.inverted ? c.fg : c.paper;
+        fillDotRect(0, sweepY, state.width, state.grid * 3, sweepColor, 0.72);
+        fillDotRect(0, sweepY + state.grid * 8, state.width, state.grid, c.signal, 0.36);
+      }
+
+      function drawHero(l) {
+        const c = colors();
+        dotText(copy.kicker, l.margin, l.top, {
+          size: clamp(state.width * 0.012, 12, 18),
+          weight: 800,
+          family: fontStack.mono,
+          color: c.signal,
+          letterSpacing: 2,
+        });
+
+        const headlineX = l.margin;
+        copy.headline.forEach((line, index) => {
+          const isHot = index === 1;
+          dotText(line, headlineX, l.top + clamp(34, 28, 42) + index * l.lineHeight, {
+            size: l.headlineSize,
+            weight: 900,
+            family: fontStack.display,
+            color: isHot ? c.signal : c.paper,
+            maxWidth: l.headlineWidth,
+            jitter: state.pulse > 0 ? state.pulse * 3 : 0,
+          });
+        });
+
+        const underlineY = l.top + l.lineHeight * 3 + clamp(48, 28, 60);
+        fillDotRect(l.margin, underlineY, Math.min(state.width - l.margin * 2, 880), state.grid * 2, c.paper, 0.92);
+        fillDotRect(l.margin, underlineY + state.grid * 5, Math.min(state.width - l.margin * 2, 560), state.grid, c.signal, 0.84);
+
+        wrapTextToDots(copy.body, l.bodyX, l.bodyY, l.bodyW, {
+          size: clamp(state.width * 0.014, 15, 22),
+          weight: 700,
+          family: fontStack.body,
+          color: c.fg,
+          lineHeight: clamp(state.width * 0.027, 28, 42),
+        });
+      }
+
+      function drawSidePanel(l) {
+        const c = colors();
+        const x = l.sideX;
+        const y = l.sideY;
+        const w = l.sideW;
+        const h = l.sideH;
+        if (state.width < 900) return;
+
+        fillDotRect(x, y, w, h, state.inverted ? 'rgba(5,5,5,0.10)' : 'rgba(247,240,223,0.05)', 0.38);
+        strokeDotRect(x, y, w, h, c.fg, 1, 0.66);
+        fillDotRect(x + state.grid * 3, y + state.grid * 3, w - state.grid * 6, state.grid * 8, c.signal, 0.88);
+        dotText('DOT MAP', x + state.grid * 5, y + state.grid * 5, {
+          size: clamp(w * 0.09, 18, 34),
+          weight: 900,
+          family: fontStack.display,
+          color: c.bg,
+        });
+
+        const cols = 28;
+        const rows = 22;
+        const cell = Math.floor(Math.min((w - state.grid * 10) / cols, (h - state.grid * 18) / rows) / state.grid) * state.grid || state.grid;
+        const gx = x + state.grid * 5;
+        const gy = y + state.grid * 16;
+        for (let row = 0; row < rows; row += 1) {
+          for (let col = 0; col < cols; col += 1) {
+            const dx = gx + col * cell;
+            const dy = gy + row * cell;
+            const wave = Math.sin(col * 0.55 + state.tick * 0.025) + Math.cos(row * 0.7 - state.tick * 0.018);
+            const dist = Math.hypot(dx - state.pointer.x, dy - state.pointer.y);
+            const active = wave > 0.5 || dist < 110;
+            const color = dist < 110 ? c.signal : (active ? c.paper : c.fg);
+            drawDot(dx, dy, color, Math.max(1, cell * 0.62), active ? 0.9 : 0.24);
+          }
+        }
+
+        dotText('MOUSE → FIELD DEFORMS', x + state.grid * 5, y + h - state.grid * 9, {
+          size: clamp(w * 0.035, 10, 14),
+          weight: 700,
+          family: fontStack.mono,
+          color: c.muted,
+        });
+      }
+
+      function drawModules(l) {
+        const c = colors();
+        l.modules.forEach((module, index) => {
+          const isActive = state.active === module.id;
+          const isPressed = zones[module.id].getAttribute('aria-pressed') === 'true';
+          const hoverBoost = isActive ? 1 : 0;
+          const fill = isPressed ? c.signal : (isActive ? c.paper : c.dim);
+          const text = isPressed ? c.bg : (isActive ? c.bg : c.fg);
+
+          fillDotRect(module.x, module.y, module.w, module.h, fill, isActive || isPressed ? 0.92 : 0.28, index);
+          strokeDotRect(module.x, module.y, module.w, module.h, isActive ? c.signal : c.fg, isActive ? 2 : 1, isActive ? 0.96 : 0.5);
+          fillDotRect(module.x + state.grid * 3, module.y + state.grid * 3, module.w - state.grid * 6, state.grid, isActive ? c.bg : c.signal, 0.84);
+
+          dotText(module.label, module.x + state.grid * 5, module.y + state.grid * 7, {
+            size: clamp(module.w * 0.1, 14, 25),
+            weight: 900,
+            family: fontStack.mono,
+            color: text,
+          });
+          dotText(module.value, module.x + state.grid * 5, module.y + module.h * 0.42 - hoverBoost * state.grid, {
+            size: clamp(module.w * 0.24, 34, 64),
+            weight: 900,
+            family: fontStack.display,
+            color: text,
+          });
+          if (module.w > 130) {
+            dotText(module.detail, module.x + state.grid * 5, module.y + module.h - state.grid * 9, {
+              size: clamp(module.w * 0.043, 10, 13),
+              weight: 700,
+              family: fontStack.body,
+              color: isActive || isPressed ? text : c.muted,
+              maxWidth: module.w - state.grid * 10,
+            });
+          }
+        });
+      }
+
+      function drawPointerField() {
+        const c = colors();
+        const p = state.pointer;
+        const radius = p.down ? 170 : 110;
+        const rings = p.down ? 7 : 5;
+        for (let r = 0; r < rings; r += 1) {
+          const rr = radius - r * 20 + Math.sin(state.tick * 0.08 + r) * 8;
+          for (let a = 0; a < Math.PI * 2; a += Math.PI / 42) {
+            const x = p.x + Math.cos(a) * rr;
+            const y = p.y + Math.sin(a) * rr;
+            const pulseAlpha = clamp(1 - r / rings, 0.12, 0.9);
+            drawDot(x, y, r % 2 ? c.paper : c.signal, state.grid - 1, pulseAlpha * 0.78);
+          }
+        }
+
+        fillDotRect(p.x - state.grid * 3, p.y, state.grid * 7, state.grid, c.signal, 1);
+        fillDotRect(p.x, p.y - state.grid * 3, state.grid, state.grid * 7, c.signal, 1);
+      }
+
+      function drawPulse() {
+        if (state.pulse <= 0) return;
+        const c = colors();
+        const amount = state.pulse;
+        const bandH = state.grid * clamp(amount * 18, 1, 26);
+        fillDotRect(0, state.height * 0.48 - bandH * 0.5, state.width, bandH, c.signal, 0.82);
+        fillDotRect(0, state.height * 0.48 + bandH * 0.8, state.width, state.grid * 2, c.paper, 0.9);
+        dotText('SIGNAL OVERDRIVE', state.width / 2, state.height * 0.49 - clamp(state.width * 0.035, 18, 44), {
+          align: 'center',
+          size: clamp(state.width * 0.044, 32, 78),
+          weight: 900,
+          family: fontStack.display,
+          color: c.bg,
+        });
+      }
+
+      function drawFrame() {
+        const c = colors();
+        const inset = state.grid * 4;
+        strokeDotRect(inset, inset, state.width - inset * 2, state.height - inset * 2, c.signal, 1, 0.72);
+        fillDotRect(inset, inset, clamp(state.width * 0.22, 120, 320), state.grid * 2, c.paper, 0.9);
+        fillDotRect(state.width - inset - clamp(state.width * 0.18, 120, 260), state.height - inset - state.grid * 2, clamp(state.width * 0.18, 120, 260), state.grid * 2, c.paper, 0.9);
+      }
+
+      function render() {
+        const l = layout();
+        const c = colors();
+        state.tick += state.reducedMotion ? 0.25 : 1;
+        state.pointer.x += (state.pointer.tx - state.pointer.x) * 0.12;
+        state.pointer.y += (state.pointer.ty - state.pointer.y) * 0.12;
+        state.pulse = Math.max(0, state.pulse - 0.018);
+
+        drawBackground();
+        drawFrame();
+        drawHero(l);
+        drawSidePanel(l);
+        drawModules(l);
+        drawPointerField();
+        drawPulse();
+
+        ctx.globalAlpha = state.inverted ? 0.08 : 0.14;
+        ctx.fillStyle = c.shadow;
+        for (let y = 0; y < state.height; y += state.grid * 4) {
+          ctx.fillRect(0, y, state.width, state.grid);
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function setActive(id) {
+        state.active = id;
+      }
+
+      function startPulseRender() {
+        window.clearInterval(pulseTimer);
+        pulseTimer = window.setInterval(() => {
+          if (state.pulse <= 0.02) {
+            window.clearInterval(pulseTimer);
+            pulseTimer = 0;
+            return;
+          }
+          render();
+        }, 80);
+      }
+
+      function toggle(id) {
+        setActive(id);
+        const zone = zones[id];
+        const current = zone.getAttribute('aria-pressed') === 'true';
+        if (id === 'mode') {
+          state.dense = !state.dense;
+          state.grid = state.dense ? 3 : 4;
+          zone.setAttribute('aria-pressed', String(state.dense));
+          layoutZones();
+          state.pulse = Math.max(state.pulse, 0.6);
+        }
+        if (id === 'pulse') {
+          state.pulse = 1;
+          zone.setAttribute('aria-pressed', 'true');
+          window.setTimeout(() => zone.setAttribute('aria-pressed', 'false'), 340);
+        }
+        if (id === 'invert') {
+          state.inverted = !state.inverted;
+          zone.setAttribute('aria-pressed', String(!current));
+          state.pulse = Math.max(state.pulse, 0.72);
+        }
+        requestRender();
+        startPulseRender();
+      }
+
+      Object.entries(zones).forEach(([id, zone]) => {
+        zone.addEventListener('pointerenter', () => { setActive(id); requestRender(); });
+        zone.addEventListener('focus', () => { setActive(id); requestRender(); });
+        zone.addEventListener('click', () => toggle(id));
+      });
+
+      window.addEventListener('pointermove', event => {
+        state.pointer.tx = event.clientX;
+        state.pointer.ty = event.clientY;
+        for (const [id, rect] of Object.entries(state.zoneRects)) {
+          if (event.clientX >= rect.x && event.clientX <= rect.x + rect.w && event.clientY >= rect.y && event.clientY <= rect.y + rect.h) {
+            setActive(id);
+          }
+        }
+        requestRender();
+      });
+      window.addEventListener('pointerdown', () => {
+        state.pointer.down = true;
+        requestRender();
+      });
+      window.addEventListener('pointerup', () => {
+        state.pointer.down = false;
+        requestRender();
+      });
+      window.addEventListener('keydown', event => {
+        if (event.key === '1') toggle('mode');
+        if (event.key === '2') toggle('pulse');
+        if (event.key === '3') toggle('invert');
+      });
+      window.addEventListener('resize', () => {
+        resize();
+        requestRender();
+      });
+
+      let renderQueued = false;
+      let pulseTimer = 0;
+      function requestRender() {
+        if (renderQueued) return;
+        renderQueued = true;
+        requestAnimationFrame(() => {
+          renderQueued = false;
+          render();
+        });
+      }
+
+      resize();
+      render();
+      document.fonts.ready.then(() => {
+        requestRender();
+      });
+    })();
+  </script>
+</body>
+</html>
