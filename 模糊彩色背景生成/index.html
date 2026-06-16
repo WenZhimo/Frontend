@@ -1,0 +1,2191 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>本地照片渐变生成器</title>
+  <style>
+    :root {
+      --paper: #f4f1ea;
+      --ink: #161a18;
+      --muted: #6d7169;
+      --line: #d8d1c4;
+      --panel: rgba(255, 253, 247, .88);
+      --panel-solid: #fffdf7;
+      --accent: #0e6f64;
+      --accent-2: #d04932;
+      --shadow: 0 28px 70px rgba(23, 25, 20, .16), 0 6px 18px rgba(23, 25, 20, .08);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: Bahnschrift, "Segoe UI", sans-serif;
+      background:
+        linear-gradient(90deg, rgba(22, 26, 24, .055) 1px, transparent 1px),
+        linear-gradient(rgba(22, 26, 24, .045) 1px, transparent 1px),
+        var(--paper);
+      background-size: 44px 44px;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+      color: inherit;
+    }
+
+    button {
+      border: 0;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(420px, 1fr) 370px;
+      gap: 22px;
+      padding: 22px;
+    }
+
+    .stage {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 16px;
+    }
+
+    .masthead {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+      font-size: clamp(31px, 4.2vw, 72px);
+      line-height: .92;
+      font-weight: 700;
+      max-width: 780px;
+    }
+
+    .status {
+      min-width: 168px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      background: rgba(255, 253, 247, .68);
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+    }
+
+    .canvas-shell {
+      position: relative;
+      min-height: 360px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.54), rgba(255,255,255,.12)),
+        repeating-linear-gradient(-45deg, rgba(22,26,24,.035) 0 1px, transparent 1px 12px);
+      overflow: hidden;
+      box-shadow: inset 0 1px rgba(255, 255, 255, .9);
+    }
+
+    #gradientCanvas {
+      width: min(72vh, 100%);
+      max-width: 900px;
+      aspect-ratio: var(--preview-aspect, 1 / 1);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      cursor: crosshair;
+      display: block;
+    }
+
+    .pin-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .pin {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border: 2px solid #fff;
+      border-radius: 999px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.34);
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+      cursor: grab;
+      transition: width .14s ease, height .14s ease, box-shadow .14s ease;
+    }
+
+    .pin:hover,
+    .pin.active {
+      width: 26px;
+      height: 26px;
+      box-shadow: 0 0 0 5px rgba(255,255,255,.45), 0 8px 24px rgba(0,0,0,.24);
+    }
+
+    .panel {
+      align-self: start;
+      position: sticky;
+      top: 18px;
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+      border: 1px solid rgba(216, 209, 196, .85);
+      border-radius: var(--radius);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-section:last-child {
+      border-bottom: 0;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .icon-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .icon-btn,
+    .primary-btn,
+    .ghost-btn {
+      height: 34px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+    }
+
+    .icon-btn {
+      width: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: var(--panel-solid);
+    }
+
+    .icon-btn:hover,
+    .primary-btn:hover,
+    .ghost-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .primary-btn {
+      padding: 0 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--ink);
+      color: #fffdf7;
+      font-weight: 700;
+    }
+
+    .ghost-btn {
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--line);
+      background: var(--panel-solid);
+    }
+
+    .dropzone {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: 96px;
+      border: 1px dashed #b8ad9b;
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.45);
+      cursor: pointer;
+      text-align: center;
+      color: var(--muted);
+      padding: 16px;
+    }
+
+    .dropzone.dragging {
+      border-color: var(--accent);
+      background: rgba(14, 111, 100, .08);
+      color: var(--ink);
+    }
+
+    .dropzone input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .photo-sampler {
+      margin-top: 12px;
+      display: none;
+      position: relative;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: #ebe5d9;
+    }
+
+    .photo-sampler.visible {
+      display: block;
+    }
+
+    .photo-actions {
+      display: none;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .photo-actions.visible {
+      display: grid;
+    }
+
+    #photoCanvas {
+      width: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    .sampler-pins {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .sampler-pin {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 2px 9px rgba(0,0,0,.42);
+      pointer-events: auto;
+      cursor: grab;
+    }
+
+    .control-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+    }
+
+    .field-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .field-inline {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    label,
+    .range-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .meta-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .reset-btn {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel-solid);
+      color: var(--muted);
+      cursor: pointer;
+      transition: transform .12s ease, border-color .12s ease, color .12s ease, background .12s ease;
+      flex: 0 0 auto;
+    }
+
+    .reset-btn:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      color: var(--ink);
+      background: #fff;
+    }
+
+    select,
+    .number-input,
+    .hex-input {
+      width: 100%;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-solid);
+      outline: 0;
+    }
+
+    select {
+      padding: 0 10px;
+    }
+
+    .number-input {
+      padding: 0 9px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .colors {
+      display: grid;
+      gap: 7px;
+    }
+
+    .color-row {
+      display: grid;
+      grid-template-columns: 30px 1fr 34px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .swatch {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .hex-input {
+      padding: 0 10px;
+      text-transform: uppercase;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hint {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .download-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .full {
+      grid-column: 1 / -1;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%) translateY(16px);
+      opacity: 0;
+      pointer-events: none;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: #fffdf7;
+      box-shadow: 0 12px 32px rgba(0,0,0,.22);
+      transition: opacity .18s ease, transform .18s ease;
+      font-size: 13px;
+      z-index: 10;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .option-tooltip {
+      position: fixed;
+      z-index: 30;
+      width: min(340px, calc(100vw - 28px));
+      padding: 12px 14px;
+      border: 1px solid rgba(255, 253, 247, .16);
+      border-radius: var(--radius);
+      background: rgba(22, 26, 24, .94);
+      color: #fffdf7;
+      box-shadow: 0 18px 42px rgba(0, 0, 0, .24);
+      font-size: 12px;
+      line-height: 1.55;
+      opacity: 0;
+      pointer-events: none;
+      transform: translate3d(-50%, 8px, 0);
+      transition: opacity .12s ease, transform .12s ease;
+      white-space: pre-line;
+    }
+
+    .option-tooltip.visible {
+      opacity: 1;
+      transform: translate3d(-50%, 0, 0);
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .panel {
+        position: static;
+        max-height: none;
+      }
+
+      #gradientCanvas {
+        width: min(88vw, 720px);
+      }
+
+      .masthead {
+        align-items: start;
+        flex-direction: column;
+      }
+
+      .status {
+        width: 100%;
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="stage" aria-label="渐变预览">
+      <header class="masthead">
+        <h1>照片渐变工作室</h1>
+        <div class="status" id="status">准备生成本地渐变</div>
+      </header>
+      <div class="canvas-shell" id="canvasShell">
+        <canvas id="gradientCanvas" width="900" height="900"></canvas>
+        <div class="pin-layer" id="pinLayer" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="生成参数">
+      <section class="panel-section">
+        <div class="section-head">
+          <h2>照片取色</h2>
+          <button class="icon-btn" id="clearPhoto" title="清除照片">×</button>
+        </div>
+        <label class="dropzone" id="dropzone">
+          <span>拖入图片、粘贴截图，或点击选择文件</span>
+          <input id="fileInput" type="file" accept="image/*">
+        </label>
+        <div class="photo-sampler" id="photoSampler">
+          <canvas id="photoCanvas" width="640" height="420"></canvas>
+          <div class="sampler-pins" id="samplerPins"></div>
+        </div>
+        <div class="photo-actions" id="photoActions">
+          <button class="ghost-btn" id="smartPick">智能取色</button>
+          <button class="ghost-btn" id="resetPhotoPoints">重置取样点</button>
+        </div>
+        <p class="hint">拖动照片上的取色点会重新采样颜色；拖动大画布上的点会改变颜色在渐变里的位置。</p>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-head">
+          <h2>渐变</h2>
+          <div class="icon-row">
+            <button class="icon-btn" id="randomize" title="随机配色">↻</button>
+            <button class="icon-btn" id="addColor" title="增加颜色">＋</button>
+          </div>
+        </div>
+        <div class="control-grid">
+          <div class="field">
+            <div class="field-head">
+              <label for="gradientType">渐变类型</label>
+              <button class="reset-btn" type="button" data-reset-control="gradientType" aria-label="重置渐变类型" title="重置为默认值">↺</button>
+            </div>
+            <select id="gradientType">
+              <option value="mesh">网格</option>
+              <option value="ribbons">流纹</option>
+              <option value="cells">柔和块面</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>融合半径</span><div class="meta-actions"><output id="spreadOut">64</output><button class="reset-btn" type="button" data-reset-control="spread" aria-label="重置融合半径" title="重置为默认值">↺</button></div></div>
+            <input id="spread" type="range" min="24" max="120" value="64">
+          </div>
+          <div class="colors" id="colors"></div>
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-head">
+          <h2>扭曲</h2>
+        </div>
+        <div class="control-grid">
+          <div class="field">
+            <div class="field-head">
+              <label for="warpShape">扭曲形态</label>
+              <button class="reset-btn" type="button" data-reset-control="warpShape" aria-label="重置扭曲形态" title="重置为默认值">↺</button>
+            </div>
+            <select id="warpShape">
+              <option value="flow">流动</option>
+              <option value="swirl">旋涡</option>
+              <option value="fold">折叠</option>
+              <option value="still">静止</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>扭曲强度</span><div class="meta-actions"><output id="warpOut">28</output><button class="reset-btn" type="button" data-reset-control="warp" aria-label="重置扭曲强度" title="重置为默认值">↺</button></div></div>
+            <input id="warp" type="range" min="0" max="70" value="28">
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>扭曲尺度</span><div class="meta-actions"><output id="warpSizeOut">44</output><button class="reset-btn" type="button" data-reset-control="warpSize" aria-label="重置扭曲尺度" title="重置为默认值">↺</button></div></div>
+            <input id="warpSize" type="range" min="12" max="90" value="44">
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>噪点</span><div class="meta-actions"><output id="noiseOut">10</output><button class="reset-btn" type="button" data-reset-control="noise" aria-label="重置噪点" title="重置为默认值">↺</button></div></div>
+            <input id="noise" type="range" min="0" max="40" value="10">
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-head">
+          <h2>滤镜</h2>
+          <button class="icon-btn" id="resetFilter" title="重置滤镜">↺</button>
+        </div>
+        <div class="control-grid">
+          <div class="field">
+            <div class="field-head">
+              <label for="filterPreset">滤镜预设</label>
+              <button class="reset-btn" type="button" data-reset-control="filterPreset" aria-label="重置滤镜预设" title="重置为默认值">↺</button>
+            </div>
+            <select id="filterPreset">
+              <option value="none">无</option>
+              <option value="vivid">鲜艳</option>
+              <option value="soft">柔和</option>
+              <option value="film">胶片</option>
+              <option value="cool">冷调</option>
+              <option value="mono">黑白</option>
+              <option value="custom">自定义</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>亮度</span><div class="meta-actions"><output id="brightnessOut">100</output><button class="reset-btn" type="button" data-reset-control="brightness" aria-label="重置亮度" title="重置为默认值">↺</button></div></div>
+            <input id="brightness" type="range" min="50" max="150" value="100">
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>对比度</span><div class="meta-actions"><output id="contrastOut">100</output><button class="reset-btn" type="button" data-reset-control="contrast" aria-label="重置对比度" title="重置为默认值">↺</button></div></div>
+            <input id="contrast" type="range" min="50" max="160" value="100">
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>饱和度</span><div class="meta-actions"><output id="saturationOut">100</output><button class="reset-btn" type="button" data-reset-control="saturation" aria-label="重置饱和度" title="重置为默认值">↺</button></div></div>
+            <input id="saturation" type="range" min="0" max="180" value="100">
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>色相</span><div class="meta-actions"><output id="hueOut">0</output><button class="reset-btn" type="button" data-reset-control="hue" aria-label="重置色相" title="重置为默认值">↺</button></div></div>
+            <input id="hue" type="range" min="-180" max="180" value="0">
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>冷暖</span><div class="meta-actions"><output id="warmthOut">0</output><button class="reset-btn" type="button" data-reset-control="warmth" aria-label="重置冷暖" title="重置为默认值">↺</button></div></div>
+            <input id="warmth" type="range" min="-100" max="100" value="0">
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>暗角</span><div class="meta-actions"><output id="vignetteOut">0</output><button class="reset-btn" type="button" data-reset-control="vignette" aria-label="重置暗角" title="重置为默认值">↺</button></div></div>
+            <input id="vignette" type="range" min="0" max="80" value="0">
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>过渡锐度</span><div class="meta-actions"><output id="sharpnessOut">0</output><button class="reset-btn" type="button" data-reset-control="sharpness" aria-label="重置过渡锐度" title="重置为默认值">↺</button></div></div>
+            <input id="sharpness" type="range" min="0" max="100" value="0">
+          </div>
+          <div class="field">
+            <div class="range-meta"><span>细节锐度</span><div class="meta-actions"><output id="detailSharpnessOut">0</output><button class="reset-btn" type="button" data-reset-control="detailSharpness" aria-label="重置细节锐度" title="重置为默认值">↺</button></div></div>
+            <input id="detailSharpness" type="range" min="0" max="100" value="0">
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-head">
+          <h2>导出</h2>
+        </div>
+        <div class="control-grid">
+          <div class="field-inline">
+            <div class="field">
+              <div class="field-head">
+                <label for="exportW">宽度</label>
+                <button class="reset-btn" type="button" data-reset-control="exportW" aria-label="重置宽度" title="重置为默认值">↺</button>
+              </div>
+              <input id="exportW" class="number-input" type="number" min="64" max="4096" value="1600">
+            </div>
+            <div class="field">
+              <div class="field-head">
+                <label for="exportH">高度</label>
+                <button class="reset-btn" type="button" data-reset-control="exportH" aria-label="重置高度" title="重置为默认值">↺</button>
+              </div>
+              <input id="exportH" class="number-input" type="number" min="64" max="4096" value="1600">
+            </div>
+          </div>
+          <div class="download-row">
+            <button class="primary-btn" id="downloadPng">↓ 下载图片</button>
+            <button class="ghost-btn" id="copyCss">⧉ 复制样式</button>
+            <button class="ghost-btn full" id="squareSize">□ 使用方形尺寸</button>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </main>
+  <div class="toast" id="toast"></div>
+  <div class="option-tooltip" id="optionTooltip" role="tooltip"></div>
+
+  <script>
+    const canvas = document.getElementById("gradientCanvas");
+    let gradientRenderer = null;
+    const shell = document.getElementById("canvasShell");
+    const pinLayer = document.getElementById("pinLayer");
+    const photoCanvas = document.getElementById("photoCanvas");
+    const photoCtx = photoCanvas.getContext("2d", { willReadFrequently: true });
+    const samplerPins = document.getElementById("samplerPins");
+    const photoSampler = document.getElementById("photoSampler");
+    const photoActions = document.getElementById("photoActions");
+    const statusEl = document.getElementById("status");
+    const toast = document.getElementById("toast");
+    const optionTooltip = document.getElementById("optionTooltip");
+
+    const controls = {
+      gradientType: document.getElementById("gradientType"),
+      warpShape: document.getElementById("warpShape"),
+      spread: document.getElementById("spread"),
+      warp: document.getElementById("warp"),
+      warpSize: document.getElementById("warpSize"),
+      noise: document.getElementById("noise"),
+      filterPreset: document.getElementById("filterPreset"),
+      brightness: document.getElementById("brightness"),
+      contrast: document.getElementById("contrast"),
+      saturation: document.getElementById("saturation"),
+      hue: document.getElementById("hue"),
+      warmth: document.getElementById("warmth"),
+      vignette: document.getElementById("vignette"),
+      sharpness: document.getElementById("sharpness"),
+      detailSharpness: document.getElementById("detailSharpness"),
+      exportW: document.getElementById("exportW"),
+      exportH: document.getElementById("exportH")
+    };
+
+    const outputs = {
+      spread: document.getElementById("spreadOut"),
+      warp: document.getElementById("warpOut"),
+      warpSize: document.getElementById("warpSizeOut"),
+      noise: document.getElementById("noiseOut"),
+      brightness: document.getElementById("brightnessOut"),
+      contrast: document.getElementById("contrastOut"),
+      saturation: document.getElementById("saturationOut"),
+      hue: document.getElementById("hueOut"),
+      warmth: document.getElementById("warmthOut"),
+      vignette: document.getElementById("vignetteOut"),
+      sharpness: document.getElementById("sharpnessOut"),
+      detailSharpness: document.getElementById("detailSharpnessOut")
+    };
+
+    const colorSeeds = [
+      ["#183a37", "#ffb84d", "#d34731", "#f7f1df", "#307c89"],
+      ["#17202a", "#f2c14e", "#f78154", "#4d9078", "#b4436c"],
+      ["#212922", "#efc88b", "#c46d5e", "#6f8f72", "#e7e0c5"],
+      ["#102b3f", "#f87060", "#cdd7d6", "#b3a394", "#f5b841"]
+    ];
+
+    const filterControls = ["brightness", "contrast", "saturation", "hue", "warmth", "vignette", "sharpness", "detailSharpness"];
+    const neutralFilter = { brightness: 100, contrast: 100, saturation: 100, hue: 0, warmth: 0, vignette: 0, sharpness: 0, detailSharpness: 0 };
+    const filterPresets = {
+      none: neutralFilter,
+      vivid: { brightness: 104, contrast: 118, saturation: 135, hue: 0, warmth: 8, vignette: 8, sharpness: 14, detailSharpness: 6 },
+      soft: { brightness: 108, contrast: 86, saturation: 92, hue: 0, warmth: 6, vignette: 0, sharpness: 0, detailSharpness: 0 },
+      film: { brightness: 94, contrast: 112, saturation: 78, hue: -8, warmth: 28, vignette: 22, sharpness: 8, detailSharpness: 5 },
+      cool: { brightness: 103, contrast: 106, saturation: 104, hue: -10, warmth: -34, vignette: 10, sharpness: 6, detailSharpness: 4 },
+      mono: { brightness: 100, contrast: 118, saturation: 0, hue: 0, warmth: 0, vignette: 18, sharpness: 16, detailSharpness: 8 },
+      custom: null
+    };
+
+    const controlDefaults = {
+      gradientType: "mesh",
+      spread: 64,
+      warpShape: "flow",
+      warp: 28,
+      warpSize: 44,
+      noise: 10,
+      filterPreset: "none",
+      brightness: 100,
+      contrast: 100,
+      saturation: 100,
+      hue: 0,
+      warmth: 0,
+      vignette: 0,
+      sharpness: 0,
+      detailSharpness: 0,
+      exportW: 1600,
+      exportH: 1600
+    };
+
+    const tooltipText = {
+      fileInput: () => "照片取色：上传或拖入图片后，系统会从图片中提取颜色并生成渐变。\n适合把照片、截图、海报里的主色转成模糊背景。图片越有明确色块，智能取色越稳定；图片色彩越杂，生成结果越偏综合平均。",
+      clearPhoto: () => "清除照片：移除当前上传的图片，仅保留当前色板和渐变。\n这不会清空已生成的颜色，适合在取色后继续手动微调。",
+      smartPick: () => "智能取色：重新分析照片里的代表色，并把色点放到图片中较有代表性的位置。\n如果当前颜色太接近或没有抓住主体色，可以点击它重新提取；图片对比越清晰，结果越准确。",
+      resetPhotoPoints: () => "重置取样点：把照片取色点恢复到固定的五个采样位置。\n适合智能取色不满意时，回到更可控的手动采样起点。",
+      randomize: () => "随机配色：生成一组新的预设色彩和色点位置。\n用于快速探索方向；点击后会覆盖当前色板，但不影响上传图片本身。",
+      addColor: () => "增加颜色：向渐变中加入一个新的色点。\n颜色越多，画面层次更丰富，但也更容易变浑浊；颜色较少时，过渡更干净、更简洁。",
+      gradientType: () => {
+        const current = {
+          mesh: "当前为 网格：多个色点互相融合，适合柔和、自然的模糊背景。",
+          ribbons: "当前为 流纹：在色点融合基础上加入带状流动感，适合更有动势的背景。",
+          cells: "当前为 柔和块面：色块边界更集中，适合更明显的区域分布。"
+        }[controls.gradientType.value];
+        return `渐变类型：决定颜色之间如何混合和分布。\n${current}\n切换类型不会改变色板，只改变渲染方式。`;
+      },
+      spread: () => `融合半径：控制每个颜色点对周围区域的影响方式。当前值 ${controls.spread.value}。\n调小：颜色混合更开，边界更软更糊，过渡更容易融在一起。\n调大：每个颜色点的主导范围更集中，边界更清晰，分区感更强。`,
+      warpShape: () => {
+        const current = {
+          flow: "当前为 流动：产生类似流体推动的轻微弯曲。",
+          swirl: "当前为 旋涡：围绕中心产生旋转扭曲。",
+          fold: "当前为 折叠：产生折叠、波纹式扭曲。",
+          still: "当前为 静止：关闭形态扭曲，只保留色点混合。"
+        }[controls.warpShape.value];
+        return `扭曲形态：决定扭曲如何改变渐变流向。\n${current}\n想要安静平整的背景用静止；想要更动态的画面用流动、旋涡或折叠。`;
+      },
+      warp: () => `扭曲强度：控制扭曲力度。当前值 ${controls.warp.value}。\n调小：画面更平稳，颜色按点位自然扩散。\n调大：颜色流向更弯曲，画面更有动势；过高时局部颜色会挤压得更明显。`,
+      warpSize: () => `扭曲尺度：控制扭曲纹理的尺度。当前值 ${controls.warpSize.value}。\n调小：扭曲变化更密、更碎，细节更多。\n调大：扭曲变化更宽、更慢，整体像大面积流动。`,
+      noise: () => `噪点：给渐变叠加细密颗粒材质。当前值 ${controls.noise.value}。\n调小：画面更干净、更数码、更平滑。\n调大：颗粒更明显，减少纯渐变的塑料感，带来胶片或纸面质感；过高会显得更粗粝。`,
+      filterPreset: () => {
+        const current = {
+          none: "当前为 无：不主动改变色彩，保留原始渐变结果。",
+          vivid: "当前为 鲜艳：提高饱和度和对比度，让颜色更鲜明、更适合封面背景。",
+          soft: "当前为 柔和：降低对比并略微提亮，让画面更柔和、更适合轻量界面背景。",
+          film: "当前为 胶片：略微压暗、加暖并降低饱和，接近复古胶片质感。",
+          cool: "当前为 冷调：降低色温并轻微提亮，让画面更冷静、更偏科技感。",
+          mono: "当前为 黑白：大幅降低饱和度，接近黑白或低彩背景。",
+          custom: "当前为 自定义：你已经手动调整滤镜参数，系统保留这些自定义数值。"
+        }[controls.filterPreset.value];
+        return `滤镜预设：一键写入亮度、对比度、饱和度、色相、冷暖、暗角、过渡锐度和细节锐度参数。\n${current}\n选择预设后仍然可以继续拖动下面的滑块微调；手动修改后会切换为自定义。`;
+      },
+      brightness: () => `亮度：控制画面整体明暗。当前值 ${controls.brightness.value}。\n调小：整体变暗，颜色更沉稳，阴影更厚。\n调大：整体变亮，背景更轻、更通透；过高时浅色区域会丢失层次。`,
+      contrast: () => `对比度：控制明暗和颜色之间的反差。当前值 ${controls.contrast.value}。\n调小：边界更柔、层次更灰，适合低干扰背景。\n调大：色块更分明、冲击力更强；过高时渐变会显得更硬。`,
+      saturation: () => `饱和度：控制色彩浓度。当前值 ${controls.saturation.value}。\n调小：颜色更灰、更克制，接近黑白时适合做文字底图。\n调大：颜色更鲜艳、更有能量；过高时容易变得刺眼或失真。`,
+      hue: () => `色相：整体旋转色相。当前值 ${controls.hue.value}。\n向左或向右拖动会把所有颜色沿色相环偏移，适合快速探索另一套配色。\n它会改变颜色倾向，但不会改变色点位置和渐变结构。`,
+      warmth: () => `冷暖：控制画面冷暖。当前值 ${controls.warmth.value}。\n调小：增加蓝青倾向，画面更冷、更清爽。\n调大：增加红黄倾向，画面更暖、更像夕阳或胶片色。`,
+      vignette: () => `暗角：控制边缘压暗强度。当前值 ${controls.vignette.value}。\n调小：四周保持明亮，画面更平铺、更适合无缝背景。\n调大：边缘逐渐变暗，把视觉焦点推向中心；过高会有明显镜头暗角。`,
+      sharpness: () => `过渡锐度：增强大范围色彩过渡和色块边界的清晰程度。当前值 ${controls.sharpness.value}。\n调小：色块边缘更柔和，画面更像雾化或印刷感。\n调大：色块交界更清楚，过渡带更有层次；它先作用于干净渐变，再叠加噪点，所以无噪点时也能看到变化。`,
+      detailSharpness: () => `细节锐度：增强小范围像素细节，尤其会影响噪点、颗粒和细小边缘。当前值 ${controls.detailSharpness.value}。\n调小：颗粒和细节更柔和，画面更平滑。\n调大：噪点纹理、微小边缘和局部质感更清楚；它在噪点之后执行，所以有噪点时变化会更明显。`,
+      exportW: () => `宽度：设置输出图片的像素宽度，并同步改变预览画布的横向比例。当前 ${controls.exportW.value}px。\n数值越小：文件更轻、导出更快，但清晰度较低。\n数值越大：适合高清封面或大屏背景，但导出更慢、文件更大。`,
+      exportH: () => `高度：设置输出图片的像素高度，并同步改变预览画布的纵向比例。当前 ${controls.exportH.value}px。\n数值越小：更适合缩略图或快速预览。\n数值越大：更适合海报、视频背景和高分屏。`,
+      downloadPng: () => "下载图片：按当前画面、色点、扭曲、噪点、滤镜和导出尺寸生成图片。\n导出会使用当前设置；如果尺寸很大，生成时间会变长。",
+      copyCss: () => "复制样式：复制一段近似的径向渐变背景样式。\n样式只能近似色点扩散，不能完整还原扭曲、噪点和像素级滤镜；适合网页背景快速占位。",
+      resetFilter: () => "重置滤镜：把滤镜预设恢复为无，并把亮度、对比度、饱和度、色相、冷暖、暗角、过渡锐度和细节锐度全部恢复到中性值。\n这不会改变色点、照片取色、扭曲或噪点。",
+      squareSize: () => "使用方形尺寸：把导出宽高统一为较大的那个数值。\n适合头像、封面、社交平台背景等需要 1:1 画布的场景。"
+    };
+
+    const PREVIEW_SIZE = 900;
+    const BALANCED_SIZE = 900;
+    const FULL_SIZE = 900;
+    const DISPLAY_RENDER_SIZE = 260;
+
+    const state = {
+      colors: [
+        { hex: "#183a37", x: .15, y: .18 },
+        { hex: "#ffb84d", x: .83, y: .14 },
+        { hex: "#d34731", x: .22, y: .82 },
+        { hex: "#f7f1df", x: .64, y: .72 },
+        { hex: "#307c89", x: .52, y: .43 }
+      ],
+      active: 0,
+      image: null,
+      imageBitmap: null,
+      renderFrame: null,
+      pendingRenderSize: 0,
+      finalRenderTimer: null,
+      isDragging: false,
+      toastTimer: null
+    };
+
+    function clamp(value, min = 0, max = 1) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function clampByte(value) {
+      return Math.round(clamp(value, 0, 255));
+    }
+
+    function collectExportDimensions() {
+      return {
+        width: Math.round(clamp(Number(controls.exportW.value) || 1600, 64, 4096)),
+        height: Math.round(clamp(Number(controls.exportH.value) || 1600, 64, 4096))
+      };
+    }
+
+    function previewRenderDimensions(maxSide = FULL_SIZE) {
+      const { width, height } = collectExportDimensions();
+      const longest = Math.max(width, height) || 1;
+      const previewWidth = Math.max(1, Math.round(maxSide * (width / longest)));
+      const previewHeight = Math.max(1, Math.round(maxSide * (height / longest)));
+      return { width: previewWidth, height: previewHeight };
+    }
+
+    function updatePreviewFrame() {
+      const { width, height } = collectExportDimensions();
+      const shellRect = shell.getBoundingClientRect();
+      const usableWidth = Math.max(280, Math.min(900, Math.floor(shellRect.width - 32)));
+      const usableHeight = Math.max(280, Math.min(900, Math.floor(window.innerHeight - 180)));
+      let displayWidth = usableWidth;
+      let displayHeight = Math.max(1, Math.round(displayWidth * height / width));
+      if (displayHeight > usableHeight) {
+        displayHeight = usableHeight;
+        displayWidth = Math.max(1, Math.round(displayHeight * width / height));
+      }
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
+      canvas.style.setProperty("--preview-aspect", `${width} / ${height}`);
+    }
+
+    function filterIsNeutral(settings) {
+      return Math.abs(settings.brightness - 100) < .01
+        && Math.abs(settings.contrast - 100) < .01
+        && Math.abs(settings.saturation - 100) < .01
+        && Math.abs(settings.hue) < .01
+        && Math.abs(settings.warmth) < .01
+        && Math.abs(settings.vignette) < .01
+        && Math.abs(settings.sharpness) < .01;
+    }
+
+    function applySharpness(image, width, height, sharpness) {
+      if (sharpness <= 0) return;
+      const data = image.data;
+      const source = new Uint8ClampedArray(data);
+      const strength = sharpness / 100 * 3.1;
+      const radius = Math.round(clamp(Math.min(width, height) * (.014 + sharpness * .0002), 6, 58));
+      const halfRadius = Math.max(2, Math.round(radius * .5));
+      const sampleOffsets = [
+        [-radius, 0], [radius, 0], [0, -radius], [0, radius],
+        [-radius, -radius], [radius, -radius], [-radius, radius], [radius, radius],
+        [-halfRadius, 0], [halfRadius, 0], [0, -halfRadius], [0, halfRadius]
+      ];
+
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const index = (y * width + x) * 4;
+          for (let channel = 0; channel < 3; channel += 1) {
+            let localTotal = 0;
+            for (let i = 0; i < sampleOffsets.length; i += 1) {
+              const sx = clamp(x + sampleOffsets[i][0], 0, width - 1);
+              const sy = clamp(y + sampleOffsets[i][1], 0, height - 1);
+              localTotal += source[(sy * width + sx) * 4 + channel];
+            }
+            const offset = index + channel;
+            const localAverage = localTotal / sampleOffsets.length;
+            data[offset] = clampByte(source[offset] + (source[offset] - localAverage) * strength);
+          }
+        }
+      }
+    }
+
+    function applyDetailSharpness(image, width, height, detailSharpness) {
+      if (detailSharpness <= 0) return;
+      const data = image.data;
+      const source = new Uint8ClampedArray(data);
+      const strength = detailSharpness / 100 * .85;
+      const center = 1 + strength * 4;
+      const side = strength;
+      const row = width * 4;
+
+      for (let y = 1; y < height - 1; y += 1) {
+        for (let x = 1; x < width - 1; x += 1) {
+          const index = y * row + x * 4;
+          for (let channel = 0; channel < 3; channel += 1) {
+            const offset = index + channel;
+            data[offset] = clampByte(
+              source[offset] * center
+              - source[offset - 4] * side
+              - source[offset + 4] * side
+              - source[offset - row] * side
+              - source[offset + row] * side
+            );
+          }
+        }
+      }
+    }
+
+    function applyDetailSharpnessToCanvas(targetCtx, width, height, detailSharpness) {
+      if (detailSharpness <= 0) return;
+      const image = targetCtx.getImageData(0, 0, width, height);
+      applyDetailSharpness(image, width, height, detailSharpness);
+      targetCtx.putImageData(image, 0, 0);
+    }
+
+    function applyImageFilters(targetCtx, width, height, settings) {
+      if (filterIsNeutral(settings)) return;
+
+      const image = targetCtx.getImageData(0, 0, width, height);
+      const data = image.data;
+      const brightness = settings.brightness / 100;
+      const contrast = settings.contrast / 100;
+      const saturation = settings.saturation / 100;
+      const warmth = settings.warmth;
+      const vignette = settings.vignette / 100;
+      const sharpness = settings.sharpness;
+      const hue = settings.hue * Math.PI / 180;
+      const cosHue = Math.cos(hue);
+      const sinHue = Math.sin(hue);
+      const cx = (width - 1) * .5;
+      const cy = (height - 1) * .5;
+      const maxDist = Math.sqrt(cx * cx + cy * cy) || 1;
+
+      let offset = 0;
+      for (let y = 0; y < height; y += 1) {
+        const dy = y - cy;
+        for (let x = 0; x < width; x += 1) {
+          let r = data[offset];
+          let g = data[offset + 1];
+          let b = data[offset + 2];
+
+          r = (r - 128) * contrast + 128;
+          g = (g - 128) * contrast + 128;
+          b = (b - 128) * contrast + 128;
+
+          r *= brightness;
+          g *= brightness;
+          b *= brightness;
+
+          const gray = r * .2126 + g * .7152 + b * .0722;
+          r = gray + (r - gray) * saturation;
+          g = gray + (g - gray) * saturation;
+          b = gray + (b - gray) * saturation;
+
+          if (settings.hue !== 0) {
+            const nr = (.213 + cosHue * .787 - sinHue * .213) * r
+              + (.715 - cosHue * .715 - sinHue * .715) * g
+              + (.072 - cosHue * .072 + sinHue * .928) * b;
+            const ng = (.213 - cosHue * .213 + sinHue * .143) * r
+              + (.715 + cosHue * .285 + sinHue * .140) * g
+              + (.072 - cosHue * .072 - sinHue * .283) * b;
+            const nb = (.213 - cosHue * .213 - sinHue * .787) * r
+              + (.715 - cosHue * .715 + sinHue * .715) * g
+              + (.072 + cosHue * .928 + sinHue * .072) * b;
+            r = nr;
+            g = ng;
+            b = nb;
+          }
+
+          r += warmth * .42;
+          g += warmth * .10;
+          b -= warmth * .36;
+
+          if (vignette > 0) {
+            const dx = x - cx;
+            const dist = Math.sqrt(dx * dx + dy * dy) / maxDist;
+            const edge = clamp((dist - .34) / .66, 0, 1);
+            const falloff = edge * edge * (3 - 2 * edge);
+            const shade = 1 - falloff * vignette * .92;
+            r *= shade;
+            g *= shade;
+            b *= shade;
+          }
+
+          data[offset] = clampByte(r);
+          data[offset + 1] = clampByte(g);
+          data[offset + 2] = clampByte(b);
+          offset += 4;
+        }
+      }
+
+      applySharpness(image, width, height, sharpness);
+      targetCtx.putImageData(image, 0, 0);
+    }
+
+    function setFilterValues(values) {
+      filterControls.forEach((id) => {
+        controls[id].value = values[id];
+      });
+      updateOutputs();
+    }
+
+    function applyFilterPreset(presetId) {
+      const preset = filterPresets[presetId] || filterPresets.none;
+      if (!preset) return;
+      setFilterValues(preset);
+    }
+
+    function resetFilter() {
+      controls.filterPreset.value = "none";
+      setFilterValues(neutralFilter);
+      scheduleRender(FULL_SIZE);
+      showToast("滤镜已重置");
+    }
+
+    function resetControl(controlId) {
+      if (controlId === "filterPreset") {
+        resetFilter();
+        return;
+      }
+
+      const control = controls[controlId];
+      if (!control || !(controlId in controlDefaults)) return;
+      control.value = String(controlDefaults[controlId]);
+      if (filterControls.includes(controlId)) {
+        controls.filterPreset.value = "custom";
+      }
+      updateOutputs();
+      scheduleRender(FULL_SIZE);
+      scheduleFinalRender(260);
+      showToast("参数已重置");
+    }
+
+    function hexToRgb(hex) {
+      const clean = hex.replace("#", "").trim();
+      const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+      const number = Number.parseInt(full, 16);
+      return {
+        r: (number >> 16) & 255,
+        g: (number >> 8) & 255,
+        b: number & 255
+      };
+    }
+
+    function rgbToHex(r, g, b) {
+      return "#" + [r, g, b].map((v) => clamp(Math.round(v), 0, 255).toString(16).padStart(2, "0")).join("");
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add("show");
+      clearTimeout(state.toastTimer);
+      state.toastTimer = setTimeout(() => toast.classList.remove("show"), 1700);
+    }
+
+    function tooltipFor(element) {
+      if (element.dataset.resetControl) {
+        const label = (element.getAttribute("aria-label") || "重置参数").replace(/^重置/, "");
+        if (element.dataset.resetControl === "filterPreset") {
+          return "重置滤镜预设：恢复为“无”，并把亮度、对比度、饱和度、色相、冷暖、暗角、过渡锐度和细节锐度全部恢复到默认值。";
+        }
+        return `重置${label}：把这个参数恢复到默认值。\n只影响当前这一项，不会改变其它参数、色点或图片。`;
+      }
+      const key = element.dataset.tooltipId;
+      if (key && tooltipText[key]) return tooltipText[key]();
+      if (element.dataset.tooltip) return element.dataset.tooltip;
+      if (element.matches('input[type="checkbox"], input[type="radio"]')) {
+        return "开关选项：用于启用或关闭某个效果。\n勾选时效果生效；取消勾选时效果关闭。";
+      }
+      return "";
+    }
+
+    function moveTooltip(event) {
+      const padding = 16;
+      const rect = optionTooltip.getBoundingClientRect();
+      const x = clamp(event.clientX, padding + rect.width / 2, window.innerWidth - padding - rect.width / 2);
+      const y = Math.min(window.innerHeight - padding - rect.height, event.clientY + 18);
+      optionTooltip.style.left = `${x}px`;
+      optionTooltip.style.top = `${Math.max(padding, y)}px`;
+    }
+
+    function showOptionTooltip(element, event) {
+      const text = tooltipFor(element);
+      if (!text) return;
+      optionTooltip.textContent = text;
+      optionTooltip.classList.add("visible");
+      moveTooltip(event);
+    }
+
+    function hideOptionTooltip() {
+      optionTooltip.classList.remove("visible");
+    }
+
+    function bindOptionTooltips() {
+      const ids = [
+        "fileInput", "clearPhoto", "smartPick", "resetPhotoPoints", "randomize", "addColor",
+        "gradientType", "spread", "warpShape", "warp", "warpSize", "noise",
+        "filterPreset", "brightness", "contrast", "saturation", "hue", "warmth", "vignette", "sharpness", "detailSharpness", "resetFilter",
+        "exportW", "exportH", "downloadPng", "copyCss", "squareSize"
+      ];
+
+      ids.forEach((id) => {
+        const element = document.getElementById(id);
+        if (!element) return;
+        element.dataset.tooltipId = id;
+        if (element.title) element.removeAttribute("title");
+      });
+
+      document.querySelectorAll("[data-reset-control]").forEach((element) => {
+        if (element.title) element.removeAttribute("title");
+      });
+
+      document.querySelectorAll('label[for], .range-meta').forEach((element) => {
+        const id = element.getAttribute("for") || element.parentElement?.querySelector("[data-tooltip-id]")?.dataset.tooltipId;
+        if (id) element.dataset.tooltipId = id;
+      });
+
+      document.addEventListener("pointerover", (event) => {
+        const target = event.target.closest("[data-tooltip-id], [data-tooltip], [data-reset-control]");
+        if (target) showOptionTooltip(target, event);
+      });
+      document.addEventListener("pointermove", (event) => {
+        if (optionTooltip.classList.contains("visible")) moveTooltip(event);
+      });
+      document.addEventListener("pointerout", (event) => {
+        const target = event.target.closest("[data-tooltip-id], [data-tooltip], [data-reset-control]");
+        if (target && !target.contains(event.relatedTarget)) hideOptionTooltip();
+      });
+      document.addEventListener("focusin", (event) => {
+        const target = event.target.closest("[data-tooltip-id], [data-tooltip], [data-reset-control]");
+        if (!target) return;
+        const rect = target.getBoundingClientRect();
+        showOptionTooltip(target, {
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.bottom
+        });
+      });
+      document.addEventListener("focusout", hideOptionTooltip);
+    }
+
+    function scheduleRender(size = FULL_SIZE) {
+      state.pendingRenderSize = Math.max(state.pendingRenderSize || 0, size);
+      if (state.renderFrame) return;
+      state.renderFrame = requestAnimationFrame(() => {
+        const nextSize = state.pendingRenderSize || FULL_SIZE;
+        state.pendingRenderSize = 0;
+        state.renderFrame = null;
+        render(nextSize);
+      });
+    }
+
+    function scheduleFinalRender(delay = 180) {
+      clearTimeout(state.finalRenderTimer);
+      state.finalRenderTimer = setTimeout(() => {
+        if (!state.isDragging) scheduleRender(FULL_SIZE);
+      }, delay);
+    }
+
+    function updateOutputs() {
+      Object.keys(outputs).forEach((key) => {
+        outputs[key].textContent = controls[key].value;
+      });
+    }
+
+    function normalizedPointFromEvent(event, element) {
+      const rect = element.getBoundingClientRect();
+      return {
+        x: clamp((event.clientX - rect.left) / rect.width),
+        y: clamp((event.clientY - rect.top) / rect.height)
+      };
+    }
+
+    function canvasPlacement() {
+      const canvasRect = canvas.getBoundingClientRect();
+      const shellRect = shell.getBoundingClientRect();
+      return {
+        left: canvasRect.left - shellRect.left,
+        top: canvasRect.top - shellRect.top,
+        width: canvasRect.width,
+        height: canvasRect.height
+      };
+    }
+
+    function positionGradientPin(pin, color, placement = canvasPlacement()) {
+      pin.style.left = `${placement.left + color.x * placement.width}px`;
+      pin.style.top = `${placement.top + color.y * placement.height}px`;
+      pin.style.background = color.hex;
+    }
+
+    function updateGradientPin(index) {
+      const pin = pinLayer.children[index];
+      if (!pin) return;
+      positionGradientPin(pin, state.colors[index]);
+      pin.classList.toggle("active", index === state.active);
+    }
+
+    function updateAllGradientPins() {
+      const placement = canvasPlacement();
+      [...pinLayer.children].forEach((pin, index) => {
+        const color = state.colors[index];
+        if (!color) return;
+        positionGradientPin(pin, color, placement);
+        pin.classList.toggle("active", index === state.active);
+      });
+    }
+
+    function renderPins() {
+      const placement = canvasPlacement();
+      pinLayer.innerHTML = "";
+
+      state.colors.forEach((color, index) => {
+        const pin = document.createElement("button");
+        pin.className = "pin" + (index === state.active ? " active" : "");
+        positionGradientPin(pin, color, placement);
+        pin.title = `颜色 ${index + 1}`;
+        pin.addEventListener("pointerdown", (event) => startGradientDrag(event, index));
+        pinLayer.appendChild(pin);
+      });
+    }
+
+    function renderSamplerPins() {
+      samplerPins.innerHTML = "";
+      if (!state.image) return;
+
+      state.colors.forEach((color, index) => {
+        const pin = document.createElement("button");
+        pin.className = "sampler-pin";
+        pin.style.left = `${color.x * 100}%`;
+        pin.style.top = `${color.y * 100}%`;
+        pin.style.background = color.hex;
+        pin.title = `照片取色 ${index + 1}`;
+        pin.addEventListener("pointerdown", (event) => startSamplerDrag(event, index));
+        samplerPins.appendChild(pin);
+      });
+    }
+
+    function renderColorList() {
+      const colorsEl = document.getElementById("colors");
+      colorsEl.innerHTML = "";
+      state.colors.forEach((color, index) => {
+        const row = document.createElement("div");
+        row.className = "color-row";
+
+        const swatch = document.createElement("input");
+        swatch.className = "swatch";
+        swatch.type = "color";
+        swatch.value = color.hex;
+        swatch.setAttribute("aria-label", `选择颜色 ${index + 1}`);
+        swatch.dataset.tooltip = `颜色选择器：修改第 ${index + 1} 个色点的颜色。\n颜色越亮，局部区域越明亮；颜色越暗，局部区域越沉稳。高饱和颜色会更醒目，低饱和颜色会更柔和。`;
+        swatch.addEventListener("input", () => updateColor(index, swatch.value));
+
+        const hex = document.createElement("input");
+        hex.className = "hex-input";
+        hex.value = color.hex.toUpperCase();
+        hex.setAttribute("aria-label", `颜色 ${index + 1} 十六进制`);
+        hex.dataset.tooltip = `十六进制颜色值：精确输入第 ${index + 1} 个色点的颜色，例如 #FFB84D。\n适合从设计稿或品牌色板复制颜色。输入更亮的值会提高局部亮度；输入更暗的值会压低局部明度。`;
+        hex.addEventListener("change", () => {
+          const clean = hex.value.trim();
+          if (/^#?[0-9a-fA-F]{6}$/.test(clean)) {
+            updateColor(index, clean.startsWith("#") ? clean : `#${clean}`);
+          } else {
+            hex.value = state.colors[index].hex.toUpperCase();
+          }
+        });
+
+        const remove = document.createElement("button");
+        remove.className = "icon-btn";
+        remove.textContent = "×";
+        remove.setAttribute("aria-label", "删除颜色");
+        remove.dataset.tooltip = `删除颜色：移除第 ${index + 1} 个色点。\n色点减少后，渐变会更简洁、更少层次；至少会保留两个颜色，避免画面失去渐变基础。`;
+        remove.disabled = state.colors.length <= 2;
+        remove.addEventListener("click", () => removeColor(index));
+
+        row.append(swatch, hex, remove);
+        colorsEl.appendChild(row);
+      });
+    }
+
+    function updateColor(index, hex) {
+      state.colors[index].hex = hex.toLowerCase();
+      state.active = index;
+      renderColorList();
+      renderPins();
+      renderSamplerPins();
+      scheduleRender(BALANCED_SIZE);
+      scheduleFinalRender();
+    }
+
+    function startGradientDrag(event, index) {
+      event.preventDefault();
+      event.stopPropagation();
+      state.active = index;
+      renderColorList();
+      updateAllGradientPins();
+      state.isDragging = true;
+      const draggedPin = event.currentTarget;
+      draggedPin.setPointerCapture(event.pointerId);
+      const move = (moveEvent) => {
+        const point = normalizedPointFromEvent(moveEvent, canvas);
+        state.colors[index].x = point.x;
+        state.colors[index].y = point.y;
+        updateGradientPin(index);
+        scheduleRender(PREVIEW_SIZE);
+      };
+      const up = () => {
+        state.isDragging = false;
+        if (draggedPin.hasPointerCapture?.(event.pointerId)) {
+          draggedPin.releasePointerCapture(event.pointerId);
+        }
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        renderPins();
+        scheduleRender(FULL_SIZE);
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+    }
+
+    function startSamplerDrag(event, index) {
+      event.preventDefault();
+      event.stopPropagation();
+      state.active = index;
+      state.isDragging = true;
+      const draggedPin = event.currentTarget;
+      draggedPin.setPointerCapture(event.pointerId);
+      const move = (moveEvent) => {
+        const point = normalizedPointFromEvent(moveEvent, photoCanvas);
+        state.colors[index].x = point.x;
+        state.colors[index].y = point.y;
+        state.colors[index].hex = samplePhoto(point.x, point.y);
+        if (!state.renderFrame) renderColorList();
+        updateGradientPin(index);
+        renderSamplerPins();
+        scheduleRender(PREVIEW_SIZE);
+      };
+      const up = () => {
+        state.isDragging = false;
+        if (draggedPin.hasPointerCapture?.(event.pointerId)) {
+          draggedPin.releasePointerCapture(event.pointerId);
+        }
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        renderColorList();
+        renderPins();
+        renderSamplerPins();
+        scheduleRender(FULL_SIZE);
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+    }
+
+    function addColor() {
+      const angle = state.colors.length * 2.399963;
+      const radius = .23 + Math.random() * .2;
+      const x = clamp(.5 + Math.cos(angle) * radius);
+      const y = clamp(.5 + Math.sin(angle) * radius);
+      const hex = state.image ? samplePhoto(x, y) : randomPaletteColor();
+      state.colors.push({ hex, x, y });
+      state.active = state.colors.length - 1;
+      refreshUI();
+    }
+
+    function removeColor(index) {
+      if (state.colors.length <= 2) return;
+      state.colors.splice(index, 1);
+      state.active = clamp(state.active, 0, state.colors.length - 1);
+      refreshUI();
+    }
+
+    function randomPaletteColor() {
+      const hue = Math.floor(Math.random() * 360);
+      const saturation = 48 + Math.floor(Math.random() * 36);
+      const light = 36 + Math.floor(Math.random() * 34);
+      const temp = document.createElement("canvas").getContext("2d");
+      temp.fillStyle = `hsl(${hue} ${saturation}% ${light}%)`;
+      return temp.fillStyle;
+    }
+
+    function randomize() {
+      const palette = colorSeeds[Math.floor(Math.random() * colorSeeds.length)];
+      state.colors = palette.map((hex, index) => ({
+        hex,
+        x: clamp(.5 + Math.cos((index / palette.length) * Math.PI * 2 - .8) * (.25 + Math.random() * .18)),
+        y: clamp(.5 + Math.sin((index / palette.length) * Math.PI * 2 - .8) * (.25 + Math.random() * .18))
+      }));
+      state.active = 0;
+      refreshUI();
+      showToast("已生成一组新颜色");
+    }
+
+    function drawPhoto() {
+      if (!state.image) return;
+      const maxW = 720;
+      const ratio = state.image.width / state.image.height;
+      photoCanvas.width = maxW;
+      photoCanvas.height = Math.round(maxW / ratio);
+      photoCtx.clearRect(0, 0, photoCanvas.width, photoCanvas.height);
+      photoCtx.drawImage(state.image, 0, 0, photoCanvas.width, photoCanvas.height);
+    }
+
+    function samplePhoto(x, y) {
+      if (!state.image) return state.colors[state.active]?.hex || "#000000";
+      const px = Math.floor(clamp(x) * (photoCanvas.width - 1));
+      const py = Math.floor(clamp(y) * (photoCanvas.height - 1));
+      const data = photoCtx.getImageData(px, py, 1, 1).data;
+      return rgbToHex(data[0], data[1], data[2]);
+    }
+
+    function fixedPhotoPalette() {
+      const positions = [
+        [.18, .18], [.8, .18], [.5, .5], [.22, .78], [.76, .72]
+      ];
+      return positions.map(([x, y]) => ({ x, y, hex: samplePhoto(x, y) }));
+    }
+
+    function colorDistance(a, b) {
+      const dr = a.r - b.r;
+      const dg = a.g - b.g;
+      const db = a.b - b.b;
+      const dx = (a.x - b.x) * 255;
+      const dy = (a.y - b.y) * 255;
+      return dr * dr + dg * dg + db * db + dx * dx * .18 + dy * dy * .18;
+    }
+
+    function extractPhotoPalette(count = 5) {
+      if (!state.image) return null;
+      const width = photoCanvas.width;
+      const height = photoCanvas.height;
+      const image = photoCtx.getImageData(0, 0, width, height).data;
+      const step = Math.max(4, Math.floor(Math.sqrt((width * height) / 5200)));
+      const pixels = [];
+
+      for (let y = 0; y < height; y += step) {
+        for (let x = 0; x < width; x += step) {
+          const offset = (y * width + x) * 4;
+          const r = image[offset];
+          const g = image[offset + 1];
+          const b = image[offset + 2];
+          const alpha = image[offset + 3];
+          if (alpha < 160) continue;
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          const saturation = max - min;
+          const lightness = (max + min) / 2;
+          const edgePenalty = lightness < 10 || lightness > 246 ? .25 : 1;
+          pixels.push({
+            r,
+            g,
+            b,
+            x: x / Math.max(1, width - 1),
+            y: y / Math.max(1, height - 1),
+            priority: (saturation + 24) * edgePenalty
+          });
+        }
+      }
+
+      if (pixels.length < count) return fixedPhotoPalette();
+
+      const centers = [];
+      centers.push(pixels.reduce((best, pixel) => pixel.priority > best.priority ? pixel : best, pixels[0]));
+      while (centers.length < count) {
+        let next = pixels[0];
+        let nextScore = -1;
+        for (const pixel of pixels) {
+          const nearest = Math.min(...centers.map((center) => colorDistance(pixel, center)));
+          const score = nearest * (1 + pixel.priority / 255);
+          if (score > nextScore) {
+            next = pixel;
+            nextScore = score;
+          }
+        }
+        centers.push(next);
+      }
+
+      for (let iteration = 0; iteration < 7; iteration += 1) {
+        const buckets = centers.map(() => ({ r: 0, g: 0, b: 0, x: 0, y: 0, weight: 0 }));
+        for (const pixel of pixels) {
+          let bestIndex = 0;
+          let bestDistance = Infinity;
+          centers.forEach((center, index) => {
+            const distance = colorDistance(pixel, center);
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              bestIndex = index;
+            }
+          });
+          const weight = 1 + pixel.priority / 120;
+          const bucket = buckets[bestIndex];
+          bucket.r += pixel.r * weight;
+          bucket.g += pixel.g * weight;
+          bucket.b += pixel.b * weight;
+          bucket.x += pixel.x * weight;
+          bucket.y += pixel.y * weight;
+          bucket.weight += weight;
+        }
+        buckets.forEach((bucket, index) => {
+          if (bucket.weight === 0) return;
+          centers[index] = {
+            r: bucket.r / bucket.weight,
+            g: bucket.g / bucket.weight,
+            b: bucket.b / bucket.weight,
+            x: bucket.x / bucket.weight,
+            y: bucket.y / bucket.weight,
+            priority: centers[index].priority
+          };
+        });
+      }
+
+      return centers
+        .map((center) => ({
+          hex: rgbToHex(center.r, center.g, center.b),
+          x: clamp(center.x),
+          y: clamp(center.y)
+        }))
+        .sort((a, b) => a.y - b.y || a.x - b.x);
+    }
+
+    function smartPickFromPhoto(showMessage = true) {
+      if (!state.image) {
+        showToast("请先上传一张图片");
+        return;
+      }
+      const count = clamp(state.colors.length || 5, 4, 8);
+      state.colors = extractPhotoPalette(count) || fixedPhotoPalette();
+      state.active = 0;
+      refreshUI();
+      statusEl.textContent = "已提取照片中的代表色";
+      if (showMessage) showToast("智能取色完成");
+    }
+
+    async function loadImage(file) {
+      if (!file || !file.type.startsWith("image/")) return;
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        state.image = image;
+        drawPhoto();
+        state.colors = extractPhotoPalette(5) || fixedPhotoPalette();
+        state.active = 0;
+        photoSampler.classList.add("visible");
+        photoActions.classList.add("visible");
+        refreshUI();
+        statusEl.textContent = `已从 ${file.name} 取色`;
+        URL.revokeObjectURL(url);
+      };
+      image.src = url;
+    }
+
+    function clearPhoto() {
+      state.image = null;
+      photoCtx.clearRect(0, 0, photoCanvas.width, photoCanvas.height);
+      photoSampler.classList.remove("visible");
+      photoActions.classList.remove("visible");
+      renderSamplerPins();
+      statusEl.textContent = "照片已清除，仍可手动调色";
+    }
+
+    function applyWarp(x, y, settings) {
+      const warpRatio = clamp(settings.warp / 70, 0, 1);
+      const amount = Math.pow(warpRatio, 1.08) * .36;
+      const sizeRatio = clamp((settings.warpSize - 12) / 78, 0, 1);
+      const scale = 12 - sizeRatio * 9.6;
+      if (settings.warpShape === "still" || amount === 0) return { x, y };
+
+      if (settings.warpShape === "swirl") {
+        const dx = x - .5;
+        const dy = y - .5;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const ring = Math.sin((1 - dist) * scale + Math.atan2(dy, dx) * 1.2);
+        const angle = amount * (2.2 + scale * .32) * (1 - Math.min(.86, dist)) + ring * amount * 1.1;
+        const ca = Math.cos(angle);
+        const sa = Math.sin(angle);
+        return {
+          x: .5 + dx * ca - dy * sa,
+          y: .5 + dx * sa + dy * ca
+        };
+      }
+
+      if (settings.warpShape === "fold") {
+        const foldX = Math.sin((x + y) * scale + Math.sin(y * scale * 1.3) * 1.7);
+        const foldY = Math.cos((x - y) * scale * 1.08 + Math.sin(x * scale) * 1.25);
+        return {
+          x: x + (foldX + Math.sin(y * scale * .55) * .45) * amount * .9,
+          y: y + (foldY + Math.cos(x * scale * .65) * .35) * amount * .9
+        };
+      }
+
+      const flowX = Math.sin(y * scale + Math.cos(x * scale * .7) * 2.1);
+      const flowY = Math.cos(x * scale * .92 + Math.sin(y * scale * .78) * 1.8);
+      return {
+        x: x + (flowX + Math.sin((x + y) * scale * .52) * .5) * amount * .82,
+        y: y + (flowY + Math.cos((x - y) * scale * .62) * .38) * amount * .82
+      };
+    }
+
+    function seededNoise(x, y) {
+      const xi = Math.floor(x);
+      const yi = Math.floor(y);
+      const value = Math.sin(xi * 12.9898 + yi * 78.233) * 43758.5453123;
+      return value - Math.floor(value) - .5;
+    }
+
+    function writeMeshPixel(data, offset, x, y, settings) {
+      const warped = applyWarp(x, y, settings);
+      const power = 1.8 + settings.spread / 36;
+      let total = 0;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+
+      settings.colors.forEach((color) => {
+        const dx = warped.x - color.x;
+        const dy = warped.y - color.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        let weight;
+        if (settings.gradientType === "cells") {
+          weight = 1 / (Math.pow(distance + .015, power * 2.1));
+        } else if (settings.gradientType === "ribbons") {
+          const ribbon = Math.abs(Math.sin((warped.x * 1.3 + warped.y * .7 + color.x) * Math.PI));
+          weight = 1 / (Math.pow(distance + .035 + ribbon * .08, power));
+        } else {
+          weight = 1 / (Math.pow(distance + .03, power));
+        }
+        total += weight;
+        r += color.r * weight;
+        g += color.g * weight;
+        b += color.b * weight;
+      });
+
+      const noiseAmount = settings.noise / 100;
+      const grain = seededNoise(x * 4096, y * 4096) * 255 * noiseAmount;
+      data[offset] = clamp(r / total + grain, 0, 255);
+      data[offset + 1] = clamp(g / total + grain, 0, 255);
+      data[offset + 2] = clamp(b / total + grain, 0, 255);
+      data[offset + 3] = 255;
+    }
+
+    function collectSettings() {
+      return {
+        gradientType: controls.gradientType.value,
+        warpShape: controls.warpShape.value,
+        spread: Number(controls.spread.value),
+        warp: Number(controls.warp.value),
+        warpSize: Number(controls.warpSize.value),
+        noise: Number(controls.noise.value),
+        brightness: Number(controls.brightness.value),
+        contrast: Number(controls.contrast.value),
+        saturation: Number(controls.saturation.value),
+        hue: Number(controls.hue.value),
+        warmth: Number(controls.warmth.value),
+        vignette: Number(controls.vignette.value),
+        sharpness: Number(controls.sharpness.value),
+        detailSharpness: Number(controls.detailSharpness.value),
+        preview: false,
+        colors: state.colors.map((color) => ({ ...color, ...hexToRgb(color.hex) }))
+      };
+    }
+
+    function createShader(gl, type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        throw new Error(gl.getShaderInfoLog(shader) || "Shader compile failed");
+      }
+      return shader;
+    }
+
+    function createGradientRenderer(targetCanvas) {
+      const options = {
+        antialias: false,
+        depth: false,
+        stencil: false,
+        premultipliedAlpha: false,
+        preserveDrawingBuffer: true
+      };
+      const gl = targetCanvas.getContext("webgl2", options)
+        || targetCanvas.getContext("webgl", options)
+        || targetCanvas.getContext("experimental-webgl", options);
+      if (!gl) return null;
+
+      targetCanvas.addEventListener("webglcontextlost", (event) => {
+        event.preventDefault();
+        targetCanvas._gradientRenderer = null;
+      });
+
+      const vertexSource = `
+        attribute vec2 aPosition;
+        varying vec2 vUv;
+        void main() {
+          vUv = vec2(aPosition.x * 0.5 + 0.5, 1.0 - (aPosition.y * 0.5 + 0.5));
+          gl_Position = vec4(aPosition, 0.0, 1.0);
+        }
+      `;
+      const fragmentSource = `
+        precision highp float;
+        const int MAX_COLORS = 8;
+        uniform int uColorCount;
+        uniform int uGradientType;
+        uniform int uWarpShape;
+        uniform vec3 uColors[MAX_COLORS];
+        uniform vec2 uPoints[MAX_COLORS];
+        uniform float uSpread;
+        uniform float uWarp;
+        uniform float uWarpSize;
+        uniform float uNoise;
+        varying vec2 vUv;
+
+        vec2 applyWarp(vec2 point) {
+          float warpRatio = clamp(uWarp / 70.0, 0.0, 1.0);
+          float amount = pow(warpRatio, 1.08) * 0.36;
+          float sizeRatio = clamp((uWarpSize - 12.0) / 78.0, 0.0, 1.0);
+          float scale = 12.0 - sizeRatio * 9.6;
+          if (uWarpShape == 3 || amount == 0.0) return point;
+
+          if (uWarpShape == 1) {
+            vec2 delta = point - vec2(0.5);
+            float dist = length(delta);
+            float ring = sin((1.0 - dist) * scale + atan(delta.y, delta.x) * 1.2);
+            float angle = amount * (2.2 + scale * 0.32) * (1.0 - min(0.86, dist)) + ring * amount * 1.1;
+            float ca = cos(angle);
+            float sa = sin(angle);
+            return vec2(0.5) + vec2(delta.x * ca - delta.y * sa, delta.x * sa + delta.y * ca);
+          }
+
+          if (uWarpShape == 2) {
+            float foldX = sin((point.x + point.y) * scale + sin(point.y * scale * 1.3) * 1.7);
+            float foldY = cos((point.x - point.y) * scale * 1.08 + sin(point.x * scale) * 1.25);
+            return vec2(
+              point.x + (foldX + sin(point.y * scale * 0.55) * 0.45) * amount * 0.9,
+              point.y + (foldY + cos(point.x * scale * 0.65) * 0.35) * amount * 0.9
+            );
+          }
+
+          float flowX = sin(point.y * scale + cos(point.x * scale * 0.7) * 2.1);
+          float flowY = cos(point.x * scale * 0.92 + sin(point.y * scale * 0.78) * 1.8);
+          return vec2(
+            point.x + (flowX + sin((point.x + point.y) * scale * 0.52) * 0.5) * amount * 0.82,
+            point.y + (flowY + cos((point.x - point.y) * scale * 0.62) * 0.38) * amount * 0.82
+          );
+        }
+
+        float seededNoise(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123) - 0.5;
+        }
+
+        void addColor(vec3 colorValue, vec2 pointValue, vec2 warped, float powerValue, inout float total, inout vec3 mixed) {
+          vec2 delta = warped - pointValue;
+          float distanceValue = length(delta);
+          float spreadValue = clamp(uSpread / 120.0, 0.0, 1.0);
+          float softness = mix(42.0, 5.0, spreadValue);
+          float baseDistance = distanceValue * distanceValue * softness;
+          float weight = 1.0 / (baseDistance + 0.025);
+          if (uGradientType == 2) {
+            weight = 1.0 / (distanceValue * distanceValue * 96.0 + 0.012);
+          } else if (uGradientType == 1) {
+            float ribbon = abs(sin((warped.x * 1.3 + warped.y * 0.7 + pointValue.x) * 3.14159265359));
+            weight = 1.0 / (baseDistance + ribbon * 0.9 + 0.03);
+          }
+            total += weight;
+          mixed += colorValue * weight;
+        }
+
+        void main() {
+          vec2 warped = applyWarp(vUv);
+          float powerValue = 1.8 + uSpread / 36.0;
+          float total = 0.0;
+          vec3 mixed = vec3(0.0);
+
+          if (uColorCount > 0) addColor(uColors[0], uPoints[0], warped, powerValue, total, mixed);
+          if (uColorCount > 1) addColor(uColors[1], uPoints[1], warped, powerValue, total, mixed);
+          if (uColorCount > 2) addColor(uColors[2], uPoints[2], warped, powerValue, total, mixed);
+          if (uColorCount > 3) addColor(uColors[3], uPoints[3], warped, powerValue, total, mixed);
+          if (uColorCount > 4) addColor(uColors[4], uPoints[4], warped, powerValue, total, mixed);
+          if (uColorCount > 5) addColor(uColors[5], uPoints[5], warped, powerValue, total, mixed);
+          if (uColorCount > 6) addColor(uColors[6], uPoints[6], warped, powerValue, total, mixed);
+          if (uColorCount > 7) addColor(uColors[7], uPoints[7], warped, powerValue, total, mixed);
+
+          vec3 color = mixed / total;
+          color += seededNoise(vUv * vec2(998.0, 997.0)) * uNoise / 100.0;
+          gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
+        }
+      `;
+
+      const program = gl.createProgram();
+      gl.attachShader(program, createShader(gl, gl.VERTEX_SHADER, vertexSource));
+      gl.attachShader(program, createShader(gl, gl.FRAGMENT_SHADER, fragmentSource));
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        throw new Error(gl.getProgramInfoLog(program) || "Shader link failed");
+      }
+
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+
+      const locations = {
+        position: gl.getAttribLocation(program, "aPosition"),
+        colorCount: gl.getUniformLocation(program, "uColorCount"),
+        gradientType: gl.getUniformLocation(program, "uGradientType"),
+        warpShape: gl.getUniformLocation(program, "uWarpShape"),
+        colors: gl.getUniformLocation(program, "uColors[0]"),
+        points: gl.getUniformLocation(program, "uPoints[0]"),
+        spread: gl.getUniformLocation(program, "uSpread"),
+        warp: gl.getUniformLocation(program, "uWarp"),
+        warpSize: gl.getUniformLocation(program, "uWarpSize"),
+        noise: gl.getUniformLocation(program, "uNoise")
+      };
+
+      return {
+        render(width, height, settings, shouldFinish = false) {
+          if (targetCanvas.width !== width) targetCanvas.width = width;
+          if (targetCanvas.height !== height) targetCanvas.height = height;
+          gl.viewport(0, 0, width, height);
+          gl.useProgram(program);
+          gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+          gl.enableVertexAttribArray(locations.position);
+          gl.vertexAttribPointer(locations.position, 2, gl.FLOAT, false, 0, 0);
+
+          const colorData = new Float32Array(8 * 3);
+          const pointData = new Float32Array(8 * 2);
+          settings.colors.slice(0, 8).forEach((color, index) => {
+            colorData[index * 3] = color.r / 255;
+            colorData[index * 3 + 1] = color.g / 255;
+            colorData[index * 3 + 2] = color.b / 255;
+            pointData[index * 2] = color.x;
+            pointData[index * 2 + 1] = color.y;
+          });
+
+          const typeMap = { mesh: 0, ribbons: 1, cells: 2 };
+          const shapeMap = { flow: 0, swirl: 1, fold: 2, still: 3 };
+          gl.uniform1i(locations.colorCount, Math.min(settings.colors.length, 8));
+          gl.uniform1i(locations.gradientType, typeMap[settings.gradientType] ?? 0);
+          gl.uniform1i(locations.warpShape, shapeMap[settings.warpShape] ?? 0);
+          gl.uniform3fv(locations.colors, colorData);
+          gl.uniform2fv(locations.points, pointData);
+          gl.uniform1f(locations.spread, settings.spread);
+          gl.uniform1f(locations.warp, settings.warp);
+          gl.uniform1f(locations.warpSize, settings.warpSize);
+          gl.uniform1f(locations.noise, settings.noise);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          gl.flush();
+          if (shouldFinish) gl.finish();
+        }
+      };
+    }
+
+    function renderToCpu(targetCanvas, width, height, settings) {
+      if (targetCanvas.width !== width) targetCanvas.width = width;
+      if (targetCanvas.height !== height) targetCanvas.height = height;
+      const targetCtx = targetCanvas._gradientCtx || targetCanvas.getContext("2d", { willReadFrequently: true });
+      targetCanvas._gradientCtx = targetCtx;
+      const image = targetCtx.createImageData(width, height);
+      const data = image.data;
+      let offset = 0;
+      const invW = 1 / Math.max(1, width - 1);
+      const invH = 1 / Math.max(1, height - 1);
+      for (let y = 0; y < height; y += 1) {
+        const ny = y * invH;
+        for (let x = 0; x < width; x += 1) {
+          writeMeshPixel(data, offset, x * invW, ny, settings);
+          offset += 4;
+        }
+      }
+      targetCtx.putImageData(image, 0, 0);
+    }
+
+    function drawFineNoise(targetCanvas, targetCtx, width, height, settings) {
+      if (settings.noise <= 0) return;
+      const grainSize = Math.min(1200, Math.max(640, Math.round(Math.max(width, height))));
+      const grainKey = `${grainSize}:${settings.noise}`;
+      let grainCanvas = targetCanvas._grainCanvas;
+      if (!grainCanvas || targetCanvas._grainKey !== grainKey) {
+        grainCanvas = document.createElement("canvas");
+        targetCanvas._grainCanvas = grainCanvas;
+        targetCanvas._grainKey = grainKey;
+        grainCanvas.width = grainSize;
+        grainCanvas.height = grainSize;
+        const grainCtx = grainCanvas.getContext("2d", { willReadFrequently: true });
+        const grain = grainCtx.createImageData(grainSize, grainSize);
+        const amount = 70 + settings.noise * 2.2;
+        const alphaBase = Math.min(58, 7 + settings.noise * 1.25);
+        for (let index = 0; index < grain.data.length; index += 4) {
+          const random = Math.sin(index * 12.9898) * 43758.5453;
+          const centered = random - Math.floor(random) - .5;
+          const value = 128 + Math.sign(centered || .5) * amount + centered * 24;
+          const alpha = alphaBase * (.55 + Math.abs(centered));
+          grain.data[index] = value;
+          grain.data[index + 1] = value;
+          grain.data[index + 2] = value;
+          grain.data[index + 3] = alpha;
+        }
+        grainCtx.putImageData(grain, 0, 0);
+      }
+      targetCtx.globalCompositeOperation = "source-over";
+      targetCtx.imageSmoothingEnabled = false;
+      targetCtx.drawImage(grainCanvas, 0, 0, width, height);
+    }
+
+    function renderNativeGradient(targetCanvas, width, height, settings) {
+      if (targetCanvas.width !== width) targetCanvas.width = width;
+      if (targetCanvas.height !== height) targetCanvas.height = height;
+      const targetCtx = targetCanvas._nativeGradientCtx || targetCanvas.getContext("2d", { willReadFrequently: true });
+      targetCanvas._nativeGradientCtx = targetCtx;
+      const maxSize = Math.max(width, height);
+      const radiusBase = maxSize * (.46 + settings.spread / 130);
+
+      targetCtx.clearRect(0, 0, width, height);
+      targetCtx.globalCompositeOperation = "source-over";
+      targetCtx.globalAlpha = 1;
+      targetCtx.fillStyle = settings.colors[0]?.hex || "#111111";
+      targetCtx.fillRect(0, 0, width, height);
+
+      settings.colors.forEach((color, index) => {
+        const warped = applyWarp(color.x, color.y, settings);
+        const cx = clamp(warped.x, -.25, 1.25) * width;
+        const cy = clamp(warped.y, -.25, 1.25) * height;
+        const typeScale = settings.gradientType === "cells" ? .72 : settings.gradientType === "ribbons" ? 1.18 : 1;
+        const radius = radiusBase * typeScale * (index === 0 ? 1.08 : 1);
+        const gradient = targetCtx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        const alpha = settings.gradientType === "cells" ? .96 : .82;
+        gradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`);
+        gradient.addColorStop(.42, `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha * .62})`);
+        gradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+        targetCtx.fillStyle = gradient;
+        targetCtx.fillRect(0, 0, width, height);
+
+        if (settings.gradientType === "ribbons") {
+          const angle = (index / Math.max(1, settings.colors.length - 1)) * Math.PI;
+          const offset = Math.cos(angle) * width * .36;
+          const ribbon = targetCtx.createLinearGradient(cx - offset, cy - height * .5, cx + offset, cy + height * .5);
+          ribbon.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+          ribbon.addColorStop(.48, `rgba(${color.r}, ${color.g}, ${color.b}, .34)`);
+          ribbon.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+          targetCtx.fillStyle = ribbon;
+          targetCtx.fillRect(0, 0, width, height);
+        }
+      });
+
+      applyImageFilters(targetCtx, width, height, settings);
+      drawFineNoise(targetCanvas, targetCtx, width, height, settings);
+      applyDetailSharpnessToCanvas(targetCtx, width, height, settings.detailSharpness);
+      targetCtx.globalCompositeOperation = "source-over";
+    }
+
+    function renderTo(targetCanvas, width, height) {
+      const settings = collectSettings();
+      if (targetCanvas === canvas) {
+        const buffer = targetCanvas._warpBuffer || document.createElement("canvas");
+        targetCanvas._warpBuffer = buffer;
+        const ratio = height / Math.max(1, width);
+        const bufferW = DISPLAY_RENDER_SIZE;
+        const bufferH = Math.max(1, Math.round(DISPLAY_RENDER_SIZE * ratio));
+        renderToCpu(buffer, bufferW, bufferH, { ...settings, noise: 0 });
+
+        if (targetCanvas.width !== width) targetCanvas.width = width;
+        if (targetCanvas.height !== height) targetCanvas.height = height;
+        const targetCtx = targetCanvas._displayCtx || targetCanvas.getContext("2d", { willReadFrequently: true });
+        targetCanvas._displayCtx = targetCtx;
+        targetCtx.clearRect(0, 0, width, height);
+        targetCtx.imageSmoothingEnabled = true;
+        targetCtx.imageSmoothingQuality = "high";
+        targetCtx.drawImage(buffer, 0, 0, width, height);
+        applyImageFilters(targetCtx, width, height, settings);
+        drawFineNoise(targetCanvas, targetCtx, width, height, settings);
+        applyDetailSharpnessToCanvas(targetCtx, width, height, settings.detailSharpness);
+        return;
+      }
+
+      renderToCpu(targetCanvas, width, height, { ...settings, noise: 0 });
+      applyImageFilters(targetCanvas._gradientCtx, width, height, settings);
+      drawFineNoise(targetCanvas, targetCanvas._gradientCtx, width, height, settings);
+      applyDetailSharpnessToCanvas(targetCanvas._gradientCtx, width, height, settings.detailSharpness);
+    }
+
+    function render(size = FULL_SIZE) {
+      updatePreviewFrame();
+      const previewSize = previewRenderDimensions(size);
+      renderTo(canvas, previewSize.width, previewSize.height);
+      updateOutputs();
+      updateAllGradientPins();
+    }
+
+    function refreshUI() {
+      renderColorList();
+      renderPins();
+      renderSamplerPins();
+      scheduleRender();
+    }
+
+    function downloadPng() {
+      const { width, height } = collectExportDimensions();
+      const exportCanvas = document.createElement("canvas");
+      statusEl.textContent = `正在导出 ${width}×${height}`;
+      setTimeout(() => {
+        renderTo(exportCanvas, width, height);
+        const link = document.createElement("a");
+        link.download = `照片渐变-${width}x${height}.png`;
+        link.href = exportCanvas.toDataURL("image/png");
+        link.click();
+        statusEl.textContent = "图片已生成";
+      }, 30);
+    }
+
+    async function copyCss() {
+      const css = `background:
+${state.colors.map((color) => `  radial-gradient(circle at ${Math.round(color.x * 100)}% ${Math.round(color.y * 100)}%, ${color.hex} 0, transparent ${controls.spread.value}%)`).join(",\n")},
+  ${state.colors[0].hex};`;
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+        await navigator.clipboard.writeText(css);
+      } catch {
+        const field = document.createElement("textarea");
+        field.value = css;
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        document.execCommand("copy");
+        field.remove();
+      }
+      showToast("已复制近似背景样式");
+    }
+
+    function bindControls() {
+      document.getElementById("addColor").addEventListener("click", addColor);
+      document.getElementById("randomize").addEventListener("click", randomize);
+      document.getElementById("clearPhoto").addEventListener("click", clearPhoto);
+      document.getElementById("smartPick").addEventListener("click", () => smartPickFromPhoto(true));
+      document.getElementById("resetPhotoPoints").addEventListener("click", () => {
+        if (!state.image) return;
+        state.colors = fixedPhotoPalette();
+        state.active = 0;
+        refreshUI();
+        statusEl.textContent = "已重置为固定取样点";
+      });
+      document.getElementById("downloadPng").addEventListener("click", downloadPng);
+      document.getElementById("copyCss").addEventListener("click", copyCss);
+      document.getElementById("resetFilter").addEventListener("click", resetFilter);
+      controls.filterPreset.addEventListener("change", () => {
+        applyFilterPreset(controls.filterPreset.value);
+      });
+      document.getElementById("squareSize").addEventListener("click", () => {
+        const current = collectExportDimensions();
+        const size = Math.max(current.width, current.height);
+        controls.exportW.value = size;
+        controls.exportH.value = size;
+        updateOutputs();
+        scheduleRender(FULL_SIZE);
+      });
+
+      document.querySelectorAll("[data-reset-control]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          resetControl(button.dataset.resetControl);
+        });
+      });
+
+      Object.values(controls).forEach((control) => {
+        control.addEventListener("input", () => {
+          if (filterControls.includes(control.id)) controls.filterPreset.value = "custom";
+          updateOutputs();
+          scheduleRender(control.type === "range" ? PREVIEW_SIZE : BALANCED_SIZE);
+          scheduleFinalRender();
+        });
+        control.addEventListener("change", () => {
+          if (filterControls.includes(control.id)) controls.filterPreset.value = "custom";
+          updateOutputs();
+          scheduleRender(FULL_SIZE);
+        });
+      });
+
+      document.getElementById("fileInput").addEventListener("change", (event) => {
+        loadImage(event.target.files[0]);
+      });
+
+      const dropzone = document.getElementById("dropzone");
+      ["dragenter", "dragover"].forEach((type) => {
+        dropzone.addEventListener(type, (event) => {
+          event.preventDefault();
+          dropzone.classList.add("dragging");
+        });
+      });
+      ["dragleave", "drop"].forEach((type) => {
+        dropzone.addEventListener(type, (event) => {
+          event.preventDefault();
+          dropzone.classList.remove("dragging");
+        });
+      });
+      dropzone.addEventListener("drop", (event) => {
+        loadImage(event.dataTransfer.files[0]);
+      });
+
+      window.addEventListener("paste", (event) => {
+        const item = [...event.clipboardData.items].find((entry) => entry.type.startsWith("image/"));
+        if (item) loadImage(item.getAsFile());
+      });
+
+      canvas.addEventListener("pointerdown", (event) => {
+        if (!event.shiftKey && !event.altKey) return;
+        const point = normalizedPointFromEvent(event, canvas);
+        state.colors[state.active].x = point.x;
+        state.colors[state.active].y = point.y;
+        refreshUI();
+        scheduleRender(FULL_SIZE);
+      });
+
+      photoCanvas.addEventListener("pointerdown", (event) => {
+        if (!state.image) return;
+        const point = normalizedPointFromEvent(event, photoCanvas);
+        state.colors[state.active].x = point.x;
+        state.colors[state.active].y = point.y;
+        state.colors[state.active].hex = samplePhoto(point.x, point.y);
+        refreshUI();
+      });
+
+      window.addEventListener("resize", () => {
+        updatePreviewFrame();
+        renderPins();
+        renderSamplerPins();
+      });
+    }
+
+    bindOptionTooltips();
+    bindControls();
+    renderColorList();
+    renderPins();
+    renderSamplerPins();
+    updateOutputs();
+    render(FULL_SIZE);
+  </script>
+</body>
+</html>
