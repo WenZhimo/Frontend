@@ -1,0 +1,1253 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>傅里叶级数连杆生成器</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23f3f1e8'/%3E%3Cpath d='M7 20c5-12 12 12 18 0' fill='none' stroke='%230c766d' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f1e8;
+      --panel: #fbfaf4;
+      --panel-2: #ebe7d9;
+      --ink: #20201d;
+      --muted: #68665e;
+      --line: #d8d2bf;
+      --accent: #0c766d;
+      --accent-2: #c23b22;
+      --accent-3: #355c9a;
+      --shadow: 0 18px 45px rgba(50, 45, 32, 0.13);
+      --radius: 8px;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(90deg, rgba(32, 32, 29, 0.035) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(32, 32, 29, 0.035) 1px, transparent 1px),
+        var(--bg);
+      background-size: 24px 24px;
+      color: var(--ink);
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+      background: #fffdf6;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible {
+      outline: 3px solid rgba(12, 118, 109, 0.24);
+      outline-offset: 2px;
+    }
+
+    .app {
+      width: min(1680px, 100%);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 392px;
+      gap: 18px;
+    }
+
+    .stage-shell,
+    .side {
+      min-width: 0;
+    }
+
+    .toolbar,
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(251, 250, 244, 0.94);
+      box-shadow: var(--shadow);
+    }
+
+    .toolbar {
+      min-height: 72px;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .title p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .action {
+      height: 38px;
+      padding: 0 12px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .action.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .action.warn {
+      color: var(--accent-2);
+    }
+
+    .canvas-wrap {
+      position: relative;
+      margin-top: 18px;
+      height: calc(100vh - 126px);
+      min-height: 560px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #fcfbf6;
+      box-shadow: var(--shadow);
+    }
+
+    #drawCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    .status-strip {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .pill {
+      border: 1px solid rgba(216, 210, 191, 0.9);
+      border-radius: 999px;
+      background: rgba(251, 250, 244, 0.88);
+      color: var(--muted);
+      padding: 7px 10px;
+      font-size: 12px;
+      backdrop-filter: blur(6px);
+    }
+
+    .side {
+      display: grid;
+      grid-template-rows: auto auto minmax(220px, 1fr);
+      gap: 14px;
+      max-height: calc(100vh - 36px);
+    }
+
+    .panel {
+      padding: 14px;
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .control-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .range-tools {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .max-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .max-control input {
+      width: 76px;
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fffdf6;
+      color: var(--ink);
+      padding: 0 8px;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .field-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .field label,
+    .check-row span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .value {
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .check-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .check-row {
+      min-height: 36px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fffdf6;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .check-row input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-height: 58px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel-2);
+    }
+
+    .stat b {
+      display: block;
+      font-size: 17px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .spectrum-wrap {
+      height: 178px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fffdf6;
+      overflow: hidden;
+    }
+
+    #spectrumCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .table-panel {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 0;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fffdf6;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--panel-2);
+    }
+
+    th,
+    td {
+      padding: 8px 9px;
+      border-bottom: 1px solid var(--line);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th:first-child,
+    td:first-child {
+      text-align: left;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .empty-row {
+      color: var(--muted);
+      text-align: left;
+    }
+
+    @media (max-width: 1080px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        max-height: none;
+        grid-template-rows: auto;
+      }
+
+      .canvas-wrap {
+        height: 62vh;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .app {
+        padding: 10px;
+        gap: 10px;
+      }
+
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        justify-content: stretch;
+      }
+
+      .action {
+        flex: 1 1 calc(50% - 8px);
+      }
+
+      .canvas-wrap {
+        margin-top: 10px;
+        min-height: 420px;
+      }
+
+      .check-grid,
+      .stats {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="stage-shell" aria-label="绘制和动画工作区">
+      <div class="toolbar">
+        <div class="title">
+          <h1>傅里叶级数连杆生成器</h1>
+          <p>手绘一条闭合曲线，生成按频率旋转的连杆组，并导出可编辑 SVG。</p>
+        </div>
+        <div class="actions">
+          <button class="action primary" id="generateBtn" type="button">生成连杆</button>
+          <button class="action" id="playBtn" type="button">暂停</button>
+          <button class="action" id="exportBtn" type="button">导出 SVG</button>
+          <button class="action warn" id="clearBtn" type="button">清空</button>
+        </div>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="drawCanvas" aria-label="手绘闭合曲线画布"></canvas>
+        <div class="status-strip">
+          <div class="pill" id="modeLabel">拖动画布开始绘制</div>
+          <div class="pill" id="cursorLabel">x 0, y 0</div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side" aria-label="参数面板">
+      <section class="panel">
+        <h2>参数面板</h2>
+        <div class="control-grid">
+          <div class="field">
+            <div class="field-row">
+              <label for="harmonicsRange">连杆数量</label>
+              <span class="value" id="harmonicsValue">48</span>
+            </div>
+            <div class="range-tools">
+              <input id="harmonicsRange" type="range" min="4" max="180" step="1" value="48">
+              <label class="max-control" for="harmonicsMax">上限
+                <input id="harmonicsMax" type="number" min="4" max="2048" step="1" value="180">
+              </label>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="field-row">
+              <label for="samplesRange">采样点数</label>
+              <span class="value" id="samplesValue">512</span>
+            </div>
+            <div class="range-tools">
+              <input id="samplesRange" type="range" min="128" max="4096" step="128" value="512">
+              <label class="max-control" for="samplesMax">上限
+                <input id="samplesMax" type="number" min="128" max="8192" step="128" value="4096">
+              </label>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="field-row">
+              <label for="smoothRange">平滑强度</label>
+              <span class="value" id="smoothValue">2</span>
+            </div>
+            <div class="range-tools">
+              <input id="smoothRange" type="range" min="0" max="5" step="1" value="2">
+              <label class="max-control" for="smoothMax">上限
+                <input id="smoothMax" type="number" min="1" max="10" step="1" value="5">
+              </label>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="field-row">
+              <label for="speedRange">动画速度</label>
+              <span class="value" id="speedValue">1.00x</span>
+            </div>
+            <div class="range-tools">
+              <input id="speedRange" type="range" min="0.15" max="3" step="0.05" value="1">
+              <label class="max-control" for="speedMax">上限
+                <input id="speedMax" type="number" min="0.2" max="12" step="0.05" value="3">
+              </label>
+            </div>
+          </div>
+
+          <div class="check-grid">
+            <label class="check-row">
+              <input id="smoothToggle" type="checkbox" checked>
+              <span>启用平滑</span>
+            </label>
+            <label class="check-row">
+              <input id="showOriginal" type="checkbox" checked>
+              <span>原始曲线</span>
+            </label>
+            <label class="check-row">
+              <input id="showCircles" type="checkbox" checked>
+              <span>旋转圆</span>
+            </label>
+            <label class="check-row">
+              <input id="showTrail" type="checkbox" checked>
+              <span>绘制轨迹</span>
+            </label>
+          </div>
+
+          <div class="stats" aria-label="生成统计">
+            <div class="stat">
+              <b id="pointCount">0</b>
+              <span>手绘点</span>
+            </div>
+            <div class="stat">
+              <b id="sampledCount">0</b>
+              <span>采样点</span>
+            </div>
+            <div class="stat">
+              <b id="chainCount">0</b>
+              <span>连杆</span>
+            </div>
+            <div class="stat">
+              <b id="errorValue">-</b>
+              <span>均方误差</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>频谱图</h2>
+        <div class="spectrum-wrap">
+          <canvas id="spectrumCanvas" aria-label="傅里叶频谱图"></canvas>
+        </div>
+      </section>
+
+      <section class="panel table-panel">
+        <h2>连杆列表</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>序号</th>
+                <th>频率</th>
+                <th>半径</th>
+                <th>相位</th>
+              </tr>
+            </thead>
+            <tbody id="linkageRows">
+              <tr><td class="empty-row" colspan="4">生成后显示连杆参数</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("drawCanvas");
+    const ctx = canvas.getContext("2d");
+    const spectrumCanvas = document.getElementById("spectrumCanvas");
+    const spectrumCtx = spectrumCanvas.getContext("2d");
+
+    const ui = {
+      generateBtn: document.getElementById("generateBtn"),
+      playBtn: document.getElementById("playBtn"),
+      exportBtn: document.getElementById("exportBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      harmonicsRange: document.getElementById("harmonicsRange"),
+      samplesRange: document.getElementById("samplesRange"),
+      smoothRange: document.getElementById("smoothRange"),
+      speedRange: document.getElementById("speedRange"),
+      harmonicsMax: document.getElementById("harmonicsMax"),
+      samplesMax: document.getElementById("samplesMax"),
+      smoothMax: document.getElementById("smoothMax"),
+      speedMax: document.getElementById("speedMax"),
+      smoothToggle: document.getElementById("smoothToggle"),
+      showOriginal: document.getElementById("showOriginal"),
+      showCircles: document.getElementById("showCircles"),
+      showTrail: document.getElementById("showTrail"),
+      harmonicsValue: document.getElementById("harmonicsValue"),
+      samplesValue: document.getElementById("samplesValue"),
+      smoothValue: document.getElementById("smoothValue"),
+      speedValue: document.getElementById("speedValue"),
+      pointCount: document.getElementById("pointCount"),
+      sampledCount: document.getElementById("sampledCount"),
+      chainCount: document.getElementById("chainCount"),
+      errorValue: document.getElementById("errorValue"),
+      linkageRows: document.getElementById("linkageRows"),
+      modeLabel: document.getElementById("modeLabel"),
+      cursorLabel: document.getElementById("cursorLabel")
+    };
+
+    const state = {
+      rawPoints: [],
+      processedPoints: [],
+      coefficients: [],
+      selectedCoefficients: [],
+      trail: [],
+      isDrawing: false,
+      isPlaying: true,
+      t: 0,
+      lastFrame: performance.now(),
+      previewError: null
+    };
+
+    function resizeCanvas(canvasEl) {
+      const rect = canvasEl.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.max(1, Math.floor(rect.width * dpr));
+      const height = Math.max(1, Math.floor(rect.height * dpr));
+      if (canvasEl.width !== width || canvasEl.height !== height) {
+        canvasEl.width = width;
+        canvasEl.height = height;
+      }
+      const context = canvasEl.getContext("2d");
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function canvasPoint(event) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      };
+    }
+
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function lerp(a, b, t) {
+      return {
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t
+      };
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function snapToStep(value, min, step) {
+      return min + Math.round((value - min) / step) * step;
+    }
+
+    function decimalsOf(value) {
+      const text = String(value);
+      return text.includes(".") ? text.split(".")[1].length : 0;
+    }
+
+    function configureRangeMax(range, maxInput) {
+      const min = Number(range.min);
+      const hardMax = Number(maxInput.max);
+      const step = Number(range.step) || 1;
+      const rawMax = Number(maxInput.value);
+      const safeMax = clamp(Number.isFinite(rawMax) ? rawMax : Number(range.max), min, hardMax);
+      const steppedMax = clamp(snapToStep(safeMax, min, step), min, hardMax);
+      const formattedMax = steppedMax.toFixed(decimalsOf(step));
+
+      range.max = formattedMax;
+      maxInput.value = formattedMax;
+      if (Number(range.value) > Number(formattedMax)) {
+        range.value = formattedMax;
+      }
+    }
+
+    function configureAllRangeMaxes() {
+      configureRangeMax(ui.harmonicsRange, ui.harmonicsMax);
+      configureRangeMax(ui.samplesRange, ui.samplesMax);
+      configureRangeMax(ui.smoothRange, ui.smoothMax);
+      configureRangeMax(ui.speedRange, ui.speedMax);
+    }
+
+    function closeCurve(points) {
+      if (points.length < 2) return points.slice();
+      const closed = points.slice();
+      const first = closed[0];
+      const last = closed[closed.length - 1];
+      if (dist(first, last) > 0.5) {
+        closed.push({ x: first.x, y: first.y });
+      }
+      return closed;
+    }
+
+    function chaikinClosed(points, iterations) {
+      if (points.length < 4 || iterations <= 0) return points.slice();
+      let result = closeCurve(points).slice(0, -1);
+      for (let iter = 0; iter < iterations; iter += 1) {
+        const next = [];
+        for (let i = 0; i < result.length; i += 1) {
+          const p = result[i];
+          const q = result[(i + 1) % result.length];
+          next.push({
+            x: p.x * 0.75 + q.x * 0.25,
+            y: p.y * 0.75 + q.y * 0.25
+          });
+          next.push({
+            x: p.x * 0.25 + q.x * 0.75,
+            y: p.y * 0.25 + q.y * 0.75
+          });
+        }
+        result = next;
+      }
+      result.push({ ...result[0] });
+      return result;
+    }
+
+    function resampleClosed(points, sampleCount) {
+      const closed = closeCurve(points);
+      if (closed.length < 3) return [];
+
+      const lengths = [0];
+      let total = 0;
+      for (let i = 1; i < closed.length; i += 1) {
+        total += dist(closed[i - 1], closed[i]);
+        lengths.push(total);
+      }
+      if (total <= 0) return [];
+
+      const resampled = [];
+      let segment = 1;
+      for (let i = 0; i < sampleCount; i += 1) {
+        const target = (i / sampleCount) * total;
+        while (segment < lengths.length - 1 && lengths[segment] < target) {
+          segment += 1;
+        }
+        const prevLength = lengths[segment - 1];
+        const nextLength = lengths[segment];
+        const localT = (target - prevLength) / Math.max(0.0001, nextLength - prevLength);
+        resampled.push(lerp(closed[segment - 1], closed[segment], localT));
+      }
+      return resampled;
+    }
+
+    function dft(points) {
+      const n = points.length;
+      const coefficients = [];
+      for (let k = 0; k < n; k += 1) {
+        let re = 0;
+        let im = 0;
+        let cos = 1;
+        let sin = 0;
+        const angleStep = (-2 * Math.PI * k) / n;
+        const stepCos = Math.cos(angleStep);
+        const stepSin = Math.sin(angleStep);
+        for (let j = 0; j < n; j += 1) {
+          const x = points[j].x;
+          const y = points[j].y;
+          re += x * cos - y * sin;
+          im += x * sin + y * cos;
+          const nextCos = cos * stepCos - sin * stepSin;
+          sin = cos * stepSin + sin * stepCos;
+          cos = nextCos;
+        }
+        re /= n;
+        im /= n;
+        const frequency = k <= n / 2 ? k : k - n;
+        coefficients.push({
+          k,
+          frequency,
+          re,
+          im,
+          amplitude: Math.hypot(re, im),
+          phase: Math.atan2(im, re)
+        });
+      }
+      return coefficients;
+    }
+
+    function selectCoefficients(coefficients, count) {
+      return coefficients
+        .filter(coef => coef.frequency !== 0)
+        .sort((a, b) => b.amplitude - a.amplitude)
+        .slice(0, count)
+        .sort((a, b) => {
+          const abs = Math.abs(a.frequency) - Math.abs(b.frequency);
+          return abs || a.frequency - b.frequency;
+        });
+    }
+
+    function evaluate(coefficients, t) {
+      let x = 0;
+      let y = 0;
+      const chain = [];
+
+      const dc = state.coefficients.find(coef => coef.frequency === 0);
+      if (dc) {
+        x += dc.re;
+        y += dc.im;
+      }
+
+      for (const coef of coefficients) {
+        const start = { x, y };
+        const angle = coef.frequency * 2 * Math.PI * t + coef.phase;
+        x += coef.amplitude * Math.cos(angle);
+        y += coef.amplitude * Math.sin(angle);
+        chain.push({
+          start,
+          end: { x, y },
+          radius: coef.amplitude,
+          angle,
+          frequency: coef.frequency,
+          phase: coef.phase
+        });
+      }
+
+      return { point: { x, y }, chain };
+    }
+
+    function toScreen(p) {
+      return p;
+    }
+
+    function drawPath(context, points, options) {
+      if (points.length < 2) return;
+      context.save();
+      context.lineWidth = options.width;
+      context.strokeStyle = options.stroke;
+      context.globalAlpha = options.alpha ?? 1;
+      context.beginPath();
+      points.forEach((p, index) => {
+        const sp = options.screen ? toScreen(p) : p;
+        if (index === 0) context.moveTo(sp.x, sp.y);
+        else context.lineTo(sp.x, sp.y);
+      });
+      if (options.closed) context.closePath();
+      context.stroke();
+      context.restore();
+    }
+
+    function drawCanvas() {
+      resizeCanvas(canvas);
+      const rect = canvas.getBoundingClientRect();
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      ctx.fillStyle = "#fcfbf6";
+      ctx.fillRect(0, 0, rect.width, rect.height);
+
+      drawGrid(rect.width, rect.height);
+
+      if (state.rawPoints.length > 1) {
+        drawPath(ctx, state.rawPoints, {
+          width: 2,
+          stroke: "#20201d",
+          alpha: state.selectedCoefficients.length ? 0.18 : 0.85,
+          closed: false,
+          screen: false
+        });
+      }
+
+      if (ui.showOriginal.checked && state.processedPoints.length > 1) {
+        drawPath(ctx, state.processedPoints, {
+          width: 2,
+          stroke: "#355c9a",
+          alpha: 0.42,
+          closed: true,
+          screen: true
+        });
+      }
+
+      if (state.selectedCoefficients.length) {
+        const current = evaluate(state.selectedCoefficients, state.t);
+
+        if (ui.showCircles.checked) {
+          for (const link of current.chain) {
+            const start = toScreen(link.start);
+            ctx.beginPath();
+            ctx.arc(start.x, start.y, link.radius, 0, Math.PI * 2);
+            ctx.strokeStyle = "rgba(12, 118, 109, 0.16)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+
+        for (const link of current.chain) {
+          const start = toScreen(link.start);
+          const end = toScreen(link.end);
+          ctx.beginPath();
+          ctx.moveTo(start.x, start.y);
+          ctx.lineTo(end.x, end.y);
+          ctx.strokeStyle = "#0c766d";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(end.x, end.y, 3.2, 0, Math.PI * 2);
+          ctx.fillStyle = "#0c766d";
+          ctx.fill();
+        }
+
+        if (ui.showTrail.checked && state.trail.length > 1) {
+          drawPath(ctx, state.trail, {
+            width: 2.5,
+            stroke: "#c23b22",
+            alpha: 0.95,
+            closed: false,
+            screen: true
+          });
+        }
+
+        const head = toScreen(current.point);
+        ctx.beginPath();
+        ctx.arc(head.x, head.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = "#c23b22";
+        ctx.fill();
+      }
+    }
+
+    function drawGrid(width, height) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(32, 32, 29, 0.055)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= width; x += 24) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= height; y += 24) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawSpectrum() {
+      resizeCanvas(spectrumCanvas);
+      const rect = spectrumCanvas.getBoundingClientRect();
+      spectrumCtx.clearRect(0, 0, rect.width, rect.height);
+      spectrumCtx.fillStyle = "#fffdf6";
+      spectrumCtx.fillRect(0, 0, rect.width, rect.height);
+
+      const items = state.coefficients
+        .filter(coef => coef.frequency !== 0)
+        .sort((a, b) => Math.abs(a.frequency) - Math.abs(b.frequency))
+        .slice(0, 96);
+
+      if (!items.length) {
+        spectrumCtx.fillStyle = "#68665e";
+        spectrumCtx.font = "13px Segoe UI, Microsoft YaHei, sans-serif";
+        spectrumCtx.fillText("生成后显示频谱", 16, 28);
+        return;
+      }
+
+      const maxAmp = Math.max(...items.map(item => item.amplitude), 1);
+      const barGap = 2;
+      const barWidth = Math.max(2, (rect.width - 28) / items.length - barGap);
+      const baseY = rect.height - 24;
+
+      spectrumCtx.strokeStyle = "#d8d2bf";
+      spectrumCtx.beginPath();
+      spectrumCtx.moveTo(14, baseY);
+      spectrumCtx.lineTo(rect.width - 10, baseY);
+      spectrumCtx.stroke();
+
+      items.forEach((item, index) => {
+        const height = (item.amplitude / maxAmp) * (rect.height - 48);
+        const x = 14 + index * (barWidth + barGap);
+        const y = baseY - height;
+        const selected = state.selectedCoefficients.some(coef => coef.k === item.k);
+        spectrumCtx.fillStyle = selected ? "#0c766d" : "rgba(53, 92, 154, 0.42)";
+        spectrumCtx.fillRect(x, y, barWidth, height);
+      });
+
+      spectrumCtx.fillStyle = "#68665e";
+      spectrumCtx.font = "11px Segoe UI, Microsoft YaHei, sans-serif";
+      spectrumCtx.fillText("低频", 14, rect.height - 7);
+      spectrumCtx.fillText("高频", rect.width - 42, rect.height - 7);
+    }
+
+    function rebuild() {
+      const samples = Number(ui.samplesRange.value);
+      const harmonics = Number(ui.harmonicsRange.value);
+      const smoothIterations = ui.smoothToggle.checked ? Number(ui.smoothRange.value) : 0;
+
+      if (state.rawPoints.length < 6) {
+        state.processedPoints = [];
+        state.coefficients = [];
+        state.selectedCoefficients = [];
+        state.trail = [];
+        state.previewError = null;
+        updateStats();
+        renderLinkageRows();
+        drawSpectrum();
+        return;
+      }
+
+      const closed = closeCurve(state.rawPoints);
+      const smoothed = chaikinClosed(closed, smoothIterations);
+      const resampled = resampleClosed(smoothed, samples);
+      state.processedPoints = resampled;
+      state.coefficients = dft(state.processedPoints);
+      state.selectedCoefficients = selectCoefficients(state.coefficients, harmonics);
+      state.trail = [];
+      state.t = 0;
+      state.previewError = reconstructionError();
+      updateStats();
+      renderLinkageRows();
+      drawSpectrum();
+    }
+
+    function reconstructionError() {
+      if (!state.processedPoints.length || !state.selectedCoefficients.length) return null;
+      const n = state.processedPoints.length;
+      let total = 0;
+      for (let i = 0; i < n; i += 1) {
+        const t = i / n;
+        const p = evaluate(state.selectedCoefficients, t).point;
+        const target = state.processedPoints[i];
+        total += (p.x - target.x) ** 2 + (p.y - target.y) ** 2;
+      }
+      return Math.sqrt(total / n);
+    }
+
+    function updateStats() {
+      ui.pointCount.textContent = String(state.rawPoints.length);
+      ui.sampledCount.textContent = String(state.processedPoints.length);
+      ui.chainCount.textContent = String(state.selectedCoefficients.length);
+      ui.errorValue.textContent = state.previewError == null ? "-" : state.previewError.toFixed(1);
+      ui.harmonicsValue.textContent = ui.harmonicsRange.value;
+      ui.samplesValue.textContent = ui.samplesRange.value;
+      ui.smoothValue.textContent = ui.smoothToggle.checked ? ui.smoothRange.value : "关";
+      ui.speedValue.textContent = `${Number(ui.speedRange.value).toFixed(2)}x`;
+    }
+
+    function renderLinkageRows() {
+      if (!state.selectedCoefficients.length) {
+        ui.linkageRows.innerHTML = '<tr><td class="empty-row" colspan="4">生成后显示连杆参数</td></tr>';
+        return;
+      }
+
+      ui.linkageRows.innerHTML = state.selectedCoefficients
+        .map((coef, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${coef.frequency}</td>
+            <td>${coef.amplitude.toFixed(2)}</td>
+            <td>${coef.phase.toFixed(2)}</td>
+          </tr>
+        `)
+        .join("");
+    }
+
+    function animationLoop(now) {
+      const dt = Math.min(0.05, (now - state.lastFrame) / 1000);
+      state.lastFrame = now;
+
+      if (state.isPlaying && state.selectedCoefficients.length) {
+        const speed = Number(ui.speedRange.value);
+        state.t = (state.t + dt * 0.12 * speed) % 1;
+        const p = evaluate(state.selectedCoefficients, state.t).point;
+        state.trail.push(p);
+        const maxTrail = Math.max(80, state.processedPoints.length);
+        if (state.trail.length > maxTrail) state.trail.shift();
+      }
+
+      drawCanvas();
+      requestAnimationFrame(animationLoop);
+    }
+
+    function pathData(points, screen = false) {
+      if (!points.length) return "";
+      return points.map((p, index) => {
+        const q = screen ? toScreen(p) : p;
+        return `${index === 0 ? "M" : "L"} ${q.x.toFixed(2)} ${q.y.toFixed(2)}`;
+      }).join(" ") + " Z";
+    }
+
+    function exportSvg() {
+      if (!state.selectedCoefficients.length) {
+        ui.modeLabel.textContent = "请先生成连杆";
+        return;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const current = evaluate(state.selectedCoefficients, state.t);
+      const reconstructed = Array.from({ length: 720 }, (_, i) => evaluate(state.selectedCoefficients, i / 720).point);
+      const circles = current.chain.map(link => {
+        const p = toScreen(link.start);
+        return `<circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="${link.radius.toFixed(2)}" fill="none" stroke="#0c766d" stroke-opacity="0.18" stroke-width="1"/>`;
+      }).join("\n    ");
+      const rods = current.chain.map(link => {
+        const a = toScreen(link.start);
+        const b = toScreen(link.end);
+        return `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="#0c766d" stroke-width="2" stroke-linecap="round"/>`;
+      }).join("\n    ");
+
+      const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${rect.width.toFixed(0)}" height="${rect.height.toFixed(0)}" viewBox="0 0 ${rect.width.toFixed(0)} ${rect.height.toFixed(0)}">
+  <rect width="100%" height="100%" fill="#fcfbf6"/>
+  <path d="${pathData(state.processedPoints, true)}" fill="none" stroke="#355c9a" stroke-opacity="0.35" stroke-width="2"/>
+  <path d="${pathData(reconstructed, true)}" fill="none" stroke="#c23b22" stroke-width="2.5"/>
+  <g id="fourier-linkage">
+    ${circles}
+    ${rods}
+  </g>
+</svg>`;
+
+      const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "fourier-linkage.svg";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      ui.modeLabel.textContent = "SVG 已导出";
+    }
+
+    function seedExample() {
+      const rect = canvas.getBoundingClientRect();
+      const cx = rect.width * 0.48;
+      const cy = rect.height * 0.48;
+      const points = [];
+      for (let i = 0; i < 220; i += 1) {
+        const t = (i / 220) * Math.PI * 2;
+        const r = 120 + 34 * Math.sin(3 * t + 0.5) + 18 * Math.cos(5 * t);
+        points.push({
+          x: cx + r * Math.cos(t) + 22 * Math.sin(2 * t),
+          y: cy + r * Math.sin(t) + 12 * Math.cos(4 * t)
+        });
+      }
+      state.rawPoints = points;
+      rebuild();
+      ui.modeLabel.textContent = "已载入示例，可直接改参数";
+    }
+
+    canvas.addEventListener("pointerdown", event => {
+      canvas.setPointerCapture(event.pointerId);
+      state.isDrawing = true;
+      state.rawPoints = [canvasPoint(event)];
+      state.selectedCoefficients = [];
+      state.coefficients = [];
+      state.processedPoints = [];
+      state.trail = [];
+      ui.modeLabel.textContent = "正在绘制，松开后闭合曲线";
+      updateStats();
+      drawSpectrum();
+    });
+
+    canvas.addEventListener("pointermove", event => {
+      const point = canvasPoint(event);
+      ui.cursorLabel.textContent = `x ${Math.round(point.x)}, y ${Math.round(point.y)}`;
+      if (!state.isDrawing) return;
+      const last = state.rawPoints[state.rawPoints.length - 1];
+      if (!last || dist(last, point) > 2) {
+        state.rawPoints.push(point);
+        ui.pointCount.textContent = String(state.rawPoints.length);
+      }
+    });
+
+    canvas.addEventListener("pointerup", event => {
+      if (!state.isDrawing) return;
+      state.isDrawing = false;
+      canvas.releasePointerCapture(event.pointerId);
+      state.rawPoints = closeCurve(state.rawPoints);
+      ui.modeLabel.textContent = state.rawPoints.length >= 6 ? "已闭合，点击生成连杆" : "点太少，请重新绘制";
+      updateStats();
+    });
+
+    canvas.addEventListener("pointercancel", () => {
+      state.isDrawing = false;
+    });
+
+    ui.generateBtn.addEventListener("click", () => {
+      rebuild();
+      ui.modeLabel.textContent = state.selectedCoefficients.length ? "连杆已生成" : "请先手绘闭合曲线";
+    });
+
+    ui.playBtn.addEventListener("click", () => {
+      state.isPlaying = !state.isPlaying;
+      ui.playBtn.textContent = state.isPlaying ? "暂停" : "播放";
+    });
+
+    ui.exportBtn.addEventListener("click", exportSvg);
+
+    ui.clearBtn.addEventListener("click", () => {
+      state.rawPoints = [];
+      state.processedPoints = [];
+      state.coefficients = [];
+      state.selectedCoefficients = [];
+      state.trail = [];
+      state.previewError = null;
+      ui.modeLabel.textContent = "拖动画布开始绘制";
+      updateStats();
+      renderLinkageRows();
+      drawSpectrum();
+    });
+
+    [
+      ui.harmonicsRange,
+      ui.samplesRange,
+      ui.smoothRange,
+      ui.smoothToggle
+    ].forEach(input => {
+      input.addEventListener("input", () => {
+        updateStats();
+        if (state.rawPoints.length >= 6) rebuild();
+      });
+    });
+
+    [
+      [ui.harmonicsRange, ui.harmonicsMax],
+      [ui.samplesRange, ui.samplesMax],
+      [ui.smoothRange, ui.smoothMax],
+      [ui.speedRange, ui.speedMax]
+    ].forEach(([range, maxInput]) => {
+      maxInput.addEventListener("change", () => {
+        configureRangeMax(range, maxInput);
+        updateStats();
+        if (state.rawPoints.length >= 6 && range !== ui.speedRange) rebuild();
+      });
+    });
+
+    [
+      ui.speedRange,
+      ui.showOriginal,
+      ui.showCircles,
+      ui.showTrail
+    ].forEach(input => {
+      input.addEventListener("input", updateStats);
+    });
+
+    window.addEventListener("resize", () => {
+      drawSpectrum();
+    });
+
+    resizeCanvas(canvas);
+    resizeCanvas(spectrumCanvas);
+    configureAllRangeMaxes();
+    updateStats();
+    renderLinkageRows();
+    drawSpectrum();
+    seedExample();
+    requestAnimationFrame(animationLoop);
+  </script>
+</body>
+</html>
