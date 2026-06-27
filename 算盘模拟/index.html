@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>中国算盘运算模拟器</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workbench" aria-label="算盘运算控制台">
+        <div class="panel input-panel">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">算</div>
+            <div>
+              <h1>中国算盘模拟器</h1>
+              <p>输入组合运算，观察算珠逐杆归位、进位与中间结果。</p>
+            </div>
+          </div>
+
+          <label class="expression-label" for="expression">运算式</label>
+          <div class="expression-row">
+            <input
+              id="expression"
+              type="text"
+              spellcheck="false"
+              value="(128 + 76) * 3 - sqrt(144)"
+              aria-describedby="supportText"
+            />
+            <button id="runBtn" class="primary-button" type="button">
+              <span class="button-icon" aria-hidden="true">▶</span>
+              演算
+            </button>
+          </div>
+          <p id="supportText" class="support-text">
+            支持 +、-、*、/、^、%、括号、sqrt、cbrt、abs、pow，可自由组合。
+          </p>
+
+          <div class="toolbar" aria-label="演示控制">
+            <button id="stepBtn" type="button">
+              <span class="button-icon" aria-hidden="true">↷</span>
+              单步
+            </button>
+            <button id="pauseBtn" type="button">
+              <span class="button-icon" aria-hidden="true">Ⅱ</span>
+              暂停
+            </button>
+            <button id="resetBtn" type="button">
+              <span class="button-icon" aria-hidden="true">↺</span>
+              归零
+            </button>
+            <label class="speed-control" for="speed">
+              <span>速度</span>
+              <input id="speed" type="range" min="0.45" max="1.8" step="0.05" value="1" />
+            </label>
+          </div>
+
+          <div class="examples" aria-label="示例算式">
+            <button type="button" data-expression="372 + 458 - 69">加减进退位</button>
+            <button type="button" data-expression="24 * 37 + 18">乘法累加</button>
+            <button type="button" data-expression="(980 / 14) + sqrt(225)">除法与开方</button>
+            <button type="button" data-expression="pow(12, 2) - 8^2">乘方组合</button>
+          </div>
+
+          <div class="result-board">
+            <div>
+              <span class="caption">当前值</span>
+              <strong id="currentValue">0</strong>
+            </div>
+            <div>
+              <span class="caption">最终结果</span>
+              <strong id="finalValue">待演算</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel step-panel">
+          <div class="step-heading">
+            <span class="caption">运算流程</span>
+            <span id="stepCounter">0 / 0</span>
+          </div>
+          <ol id="timeline" class="timeline" aria-live="polite"></ol>
+          <div id="microStep" class="micro-step">算盘归零，等待演算。</div>
+        </div>
+      </section>
+
+      <section class="abacus-stage" aria-label="中国古代算盘动画">
+        <div class="stage-header">
+          <div>
+            <span class="caption">二五珠式</span>
+            <h2>十档整数，四档小数</h2>
+          </div>
+          <div id="statusText" class="status-pill">就绪</div>
+        </div>
+        <div class="abacus" id="abacus" role="img" aria-label="动画算盘"></div>
+        <div class="legend">
+          <span>上珠靠梁为 5</span>
+          <span>下珠靠梁为 1</span>
+          <span>红点为小数梁位</span>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

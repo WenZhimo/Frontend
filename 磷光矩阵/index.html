@@ -1,0 +1,1120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>普通网页滤镜测试基准</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #24272d;
+      --muted: #6b7280;
+      --paper: #ffffff;
+      --soft: #f5f7fb;
+      --line: #dde2ea;
+      --blue: #2368c4;
+      --blue-dark: #174c92;
+      --green: #168a5a;
+      --orange: #c76818;
+      --shadow: 0 14px 34px rgba(31, 41, 55, 0.10);
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--soft);
+      color: var(--ink);
+      font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+      line-height: 1.65;
+    }
+
+    img,
+    video,
+    canvas {
+      max-width: 100%;
+      display: block;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover { text-decoration: underline; }
+
+    button,
+    input,
+    select,
+    textarea { font: inherit; }
+
+    .siteHeader {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.96);
+    }
+
+    .headerInner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 14px 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .brandMark {
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, #2368c4, #63a1e8);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .nav a { color: inherit; }
+
+    .page {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+      gap: 28px;
+      align-items: stretch;
+      margin-bottom: 28px;
+    }
+
+    .heroCopy,
+    .panel,
+    .card,
+    .mediaBox {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+
+    .heroCopy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 360px;
+      padding: clamp(28px, 5vw, 56px);
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    p { margin-top: 0; }
+
+    h1 {
+      max-width: 720px;
+      margin-bottom: 18px;
+      font-size: clamp(34px, 5vw, 62px);
+      line-height: 1.06;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-bottom: 16px;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      font-size: 19px;
+      line-height: 1.3;
+    }
+
+    .lead {
+      max-width: 660px;
+      margin-bottom: 24px;
+      color: #4b5563;
+      font-size: 18px;
+    }
+
+    .heroActions,
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 0 16px;
+      border: 1px solid var(--blue);
+      border-radius: 6px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .button.secondary {
+      border-color: var(--line);
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .button:hover {
+      text-decoration: none;
+      background: var(--blue-dark);
+    }
+
+    .button.secondary:hover { background: #f8fafc; }
+
+    .heroMedia,
+    .mediaBox { overflow: hidden; }
+
+    .photo {
+      min-height: 360px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,0.22)),
+        url("../asset/img/metropolis-8800792_1280.jpg") center / cover;
+    }
+
+    .caption {
+      margin: 0;
+      padding: 12px 14px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 28px 0;
+    }
+
+    .card,
+    .panel { padding: 24px; }
+
+    .card { padding: 20px; }
+
+    .metric {
+      margin-bottom: 8px;
+      color: var(--blue);
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .muted { color: var(--muted); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .panel { margin-bottom: 22px; }
+
+    .article p { color: #3f4652; }
+
+    .quote {
+      margin: 22px 0;
+      padding: 18px 20px;
+      border-left: 4px solid var(--blue);
+      background: #f7faff;
+      color: #2f3a4c;
+    }
+
+    .toolbar { margin-bottom: 16px; }
+
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      padding: 6px 12px;
+      color: #4b5563;
+      font-size: 13px;
+    }
+
+    .tableWrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #f8fafc;
+      color: #4b5563;
+      font-weight: 700;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+    }
+
+    .status::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .ok { color: var(--green); }
+    .warn { color: var(--orange); }
+
+    .sampleVideo {
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      background: #111827;
+      object-fit: cover;
+    }
+
+    .asideStack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .formGrid {
+      display: grid;
+      gap: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      color: #374151;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid #cfd6e0;
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 11px;
+    }
+
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+
+    .testBlocks {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .colorBlock {
+      min-height: 72px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+    }
+
+    .logoGrid,
+    .canvasGrid,
+    .chartGrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .assetFrame,
+    .chartCard {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .assetSurface {
+      display: grid;
+      place-items: center;
+      min-height: 190px;
+      padding: 20px;
+      background:
+        linear-gradient(45deg, #f8fafc 25%, transparent 25%),
+        linear-gradient(-45deg, #f8fafc 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #f8fafc 75%),
+        linear-gradient(-45deg, transparent 75%, #f8fafc 75%),
+        #eef2f7;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+      background-size: 24px 24px;
+    }
+
+    .assetSurface img {
+      width: min(260px, 82%);
+      max-height: 150px;
+      object-fit: contain;
+    }
+
+    .dynamicCanvas {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 10;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .chartCanvasWrap {
+      position: relative;
+      height: 270px;
+      padding: 14px;
+    }
+
+    .chartHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 14px 0;
+    }
+
+    .chartHeader h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .smallButton {
+      min-height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      padding: 0 10px;
+      cursor: pointer;
+    }
+
+    .smallButton:hover { background: #f8fafc; }
+
+    .shaderMount {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      pointer-events: none;
+    }
+
+    body[data-filter-preview="on"] .shaderMount { display: block; }
+    body[data-phosphor-renderer="on"] .shaderMount { display: block; }
+
+    .phosphorControls {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .controlRow {
+      display: grid;
+      gap: 6px;
+    }
+
+    .controlRow output {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .controlRow input[type="range"] {
+      padding: 0;
+    }
+
+    .siteFooter {
+      margin-top: 34px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .hero,
+      .layout,
+      .grid,
+      .logoGrid,
+      .canvasGrid,
+      .chartGrid {
+        grid-template-columns: 1fr;
+      }
+
+      .headerInner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .nav { flex-wrap: wrap; }
+    }
+
+    @media (max-width: 560px) {
+      .page {
+        width: min(100vw - 22px, 1180px);
+        padding-top: 18px;
+      }
+
+      .heroCopy,
+      .panel,
+      .card { padding: 18px; }
+
+      .testBlocks { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header class="siteHeader">
+    <div class="headerInner">
+      <a class="brand" href="#top" aria-label="返回顶部">
+        <span class="brandMark" aria-hidden="true"></span>
+        <span>Baseline Site</span>
+      </a>
+      <nav class="nav" aria-label="主导航">
+        <a href="#article">文章</a>
+        <a href="#dashboard">数据</a>
+        <a href="#vectors">SVG</a>
+        <a href="#dynamic-canvas">Canvas</a>
+        <a href="#charts">图表</a>
+        <a href="#media">媒体</a>
+        <a href="#form">表单</a>
+        <a href="#shader-api">滤镜接口</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top" class="page" data-shader-target="page">
+    <section class="hero" aria-label="页面头图">
+      <div class="heroCopy">
+        <p class="eyebrow">Unfiltered webpage benchmark</p>
+        <h1>一份用于测试网页滤镜的普通页面</h1>
+        <p class="lead">这个页面保持常规网页外观：普通字体、真实布局、图片、SVG、Canvas、图表、视频、表格、表单和滚动内容都不带任何滤镜。后续 shader 可以通过页面底部预留的接口挂载。</p>
+        <div class="heroActions">
+          <a class="button" href="#shader-api">查看接口</a>
+          <a class="button secondary" href="#charts">查看图表</a>
+        </div>
+      </div>
+      <figure class="mediaBox heroMedia">
+        <div class="photo" role="img" aria-label="城市建筑照片"></div>
+        <figcaption class="caption">普通 JPG 背景图，用于观察滤镜对照片和渐变叠层的影响。</figcaption>
+      </figure>
+    </section>
+
+    <section class="grid" aria-label="摘要指标">
+      <article class="card">
+        <div class="metric">32</div>
+        <h3>文本样式</h3>
+        <p class="muted">标题、正文、链接、按钮、小号说明文字，用来检查滤镜对文字可读性的影响。</p>
+      </article>
+      <article class="card">
+        <div class="metric">12</div>
+        <h3>界面组件</h3>
+        <p class="muted">卡片、表格、标签、输入框、导航、图片、视频、SVG、Canvas 和图表。</p>
+      </article>
+      <article class="card">
+        <div class="metric">1</div>
+        <h3>挂载接口</h3>
+        <p class="muted">页面保留一个全局对象和一个 canvas 容器，供后续滤镜代码接管。</p>
+      </article>
+    </section>
+
+    <div class="layout">
+      <div>
+        <section id="article" class="panel article">
+          <p class="eyebrow">Article sample</p>
+          <h2>为什么需要普通网页作为滤镜基准</h2>
+          <p>开发网页滤镜时，最容易被误判的是效果本身。若测试页面已经带有辉光、暗背景、特殊字体或像素化视觉，就很难判断 shader 是否真的适合普通网站。这个页面提供的是更接近日常网页的输入。</p>
+          <p>这里包含长段落、中文标点、英文词组、内联链接、粗细不同的标题和普通按钮。后续滤镜可以覆盖整个页面，也可以只覆盖带有 <code>data-shader-target</code> 的区域。</p>
+          <blockquote class="quote">基准页的责任不是好看得像最终效果，而是暴露最终效果在真实内容上的问题。</blockquote>
+          <p>你可以把滤镜代码独立写成一个 JS 文件，然后调用 <code>window.WebShaderTestHost.mount</code> 取得覆盖层。当前实现只提供占位接口，不会改变任何视觉输出。</p>
+        </section>
+
+        <section id="dashboard" class="panel">
+          <p class="eyebrow">Dashboard sample</p>
+          <h2>模拟数据区域</h2>
+          <div class="toolbar" aria-label="筛选条件">
+            <span class="chip">全部项目</span>
+            <span class="chip">最近 30 天</span>
+            <span class="chip">桌面端</span>
+            <span class="chip">浅色主题</span>
+          </div>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>项目</th>
+                  <th>类型</th>
+                  <th>亮度</th>
+                  <th>运动</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>正文阅读页</td>
+                  <td>Text</td>
+                  <td>中</td>
+                  <td>低</td>
+                  <td><span class="status ok">稳定</span></td>
+                </tr>
+                <tr>
+                  <td>视频素材</td>
+                  <td>Media</td>
+                  <td>高</td>
+                  <td>中</td>
+                  <td><span class="status warn">需观察</span></td>
+                </tr>
+                <tr>
+                  <td>Canvas 动画</td>
+                  <td>Canvas</td>
+                  <td>中</td>
+                  <td>高</td>
+                  <td><span class="status warn">需观察</span></td>
+                </tr>
+                <tr>
+                  <td>数据图表</td>
+                  <td>Chart</td>
+                  <td>中</td>
+                  <td>低</td>
+                  <td><span class="status ok">稳定</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" aria-label="颜色块测试">
+          <p class="eyebrow">Color blocks</p>
+          <h2>纯色与边界测试</h2>
+          <div class="testBlocks">
+            <div class="colorBlock" style="background:#ffffff"></div>
+            <div class="colorBlock" style="background:#111827"></div>
+            <div class="colorBlock" style="background:#2368c4"></div>
+            <div class="colorBlock" style="background:#f3c14b"></div>
+            <div class="colorBlock" style="background:#168a5a"></div>
+            <div class="colorBlock" style="background:#c2410c"></div>
+            <div class="colorBlock" style="background:linear-gradient(135deg,#fff,#2368c4)"></div>
+            <div class="colorBlock" style="background:repeating-linear-gradient(90deg,#fff 0 8px,#dbe4f0 8px 16px)"></div>
+          </div>
+        </section>
+
+        <section id="vectors" class="panel">
+          <p class="eyebrow">SVG assets</p>
+          <h2>SVG 图片测试</h2>
+          <p class="muted">这里直接引用本地 SVG 文件，用于观察后续滤镜对矢量边缘、透明背景、纯色块和图形细节的影响。</p>
+          <div class="logoGrid">
+            <figure class="assetFrame">
+              <div class="assetSurface">
+                <img src="../asset/img/logo.svg" alt="logo.svg 矢量图">
+              </div>
+              <figcaption class="caption">logo.svg</figcaption>
+            </figure>
+            <figure class="assetFrame">
+              <div class="assetSurface">
+                <img src="../asset/img/logo2.svg" alt="logo2.svg 矢量图">
+              </div>
+              <figcaption class="caption">logo2.svg</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section id="dynamic-canvas" class="panel">
+          <p class="eyebrow">Native Canvas</p>
+          <h2>Canvas 动态画布</h2>
+          <p class="muted">两个画布均由 Canvas 2D 实时生成，不使用 shader。它们提供线条、粒子、渐变、透明度、运动模糊感和高频细节。</p>
+          <div class="canvasGrid">
+            <figure class="assetFrame">
+              <canvas id="orbitCanvas" class="dynamicCanvas" width="720" height="450" aria-label="轨道粒子动态画布"></canvas>
+              <figcaption class="caption">轨道粒子：曲线、透明叠加、连续运动。</figcaption>
+            </figure>
+            <figure class="assetFrame">
+              <canvas id="signalCanvas" class="dynamicCanvas" width="720" height="450" aria-label="信号网格动态画布"></canvas>
+              <figcaption class="caption">信号网格：细线、文字、脉冲和高频闪动。</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section id="charts" class="panel">
+          <p class="eyebrow">Chart.js</p>
+          <h2>交互图表测试</h2>
+          <p class="muted">图表使用本地 Chart.js UMD 文件生成。鼠标悬停可触发 tooltip，按钮会随机刷新数据，用来检查滤镜对 canvas 图表、颜色、网格线和交互状态的影响。</p>
+          <div class="chartGrid">
+            <article class="chartCard">
+              <div class="chartHeader">
+                <h3>折线趋势</h3>
+                <button class="smallButton" type="button" data-chart-action="line">刷新</button>
+              </div>
+              <div class="chartCanvasWrap">
+                <canvas id="lineChart"></canvas>
+              </div>
+            </article>
+            <article class="chartCard">
+              <div class="chartHeader">
+                <h3>柱线组合</h3>
+                <button class="smallButton" type="button" data-chart-action="combo">刷新</button>
+              </div>
+              <div class="chartCanvasWrap">
+                <canvas id="comboChart"></canvas>
+              </div>
+            </article>
+            <article class="chartCard">
+              <div class="chartHeader">
+                <h3>占比环图</h3>
+                <button class="smallButton" type="button" data-chart-action="doughnut">刷新</button>
+              </div>
+              <div class="chartCanvasWrap">
+                <canvas id="doughnutChart"></canvas>
+              </div>
+            </article>
+            <article class="chartCard">
+              <div class="chartHeader">
+                <h3>能力雷达</h3>
+                <button class="smallButton" type="button" data-chart-action="radar">刷新</button>
+              </div>
+              <div class="chartCanvasWrap">
+                <canvas id="radarChart"></canvas>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>
+
+      <aside class="asideStack">
+        <section id="media" class="mediaBox">
+          <video class="sampleVideo" controls muted loop playsinline autoplay poster="../asset/img/camera-2598507_1280.jpg">
+            <source src="../asset/video/samplelib-10s.mp4" type="video/mp4">
+            当前浏览器无法播放 MP4 视频。
+          </video>
+          <p class="caption">真实 MP4 视频素材，包含更丰富的运动和画面细节，用于观察后续滤镜对动态画面、控制条和媒体边界的影响。</p>
+        </section>
+
+        <section id="form" class="panel">
+          <p class="eyebrow">Form sample</p>
+          <h2>表单样例</h2>
+          <form class="formGrid">
+            <label>
+              测试名称
+              <input type="text" value="普通网页基准测试">
+            </label>
+            <label>
+              内容类型
+              <select>
+                <option>整页滤镜</option>
+                <option>局部容器滤镜</option>
+                <option>视频滤镜</option>
+              </select>
+            </label>
+            <label>
+              备注
+              <textarea>这里保留普通输入控件，用于检查滤镜对焦点、边框、光标和文字输入区域的影响。</textarea>
+            </label>
+            <button class="button" type="button">保存样例</button>
+          </form>
+        </section>
+
+        <section id="shader-api" class="panel">
+          <p class="eyebrow">Shader API</p>
+          <h2>磷光渲染器</h2>
+          <p class="muted">测试页只负责初始化独立渲染器。视觉重建、矩阵、发光、bloom 和镜头扩散均由 <code>phosphor/renderer</code> 模块处理。</p>
+          <div class="phosphorControls" aria-label="磷光渲染参数">
+            <button id="toggleMount" class="button secondary" type="button">启用磷光矩阵</button>
+            <div class="controlRow">
+              <span>Backend</span>
+              <output id="backendOutput">pending</output>
+            </div>
+            <label class="controlRow">
+              质量
+              <select id="phosphorQuality">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <label class="controlRow">
+              矩阵间距
+              <input id="matrixPitchControl" type="range" min="4" max="14" value="8" step="1">
+              <output id="matrixPitchOutput">8</output>
+            </label>
+            <label class="controlRow">
+              Bloom 强度
+              <input id="bloomControl" type="range" min="0.65" max="1.45" value="1.08" step="0.01">
+              <output id="bloomOutput">1.08</output>
+            </label>
+            <label class="controlRow">
+              暗部噪声
+              <input id="noiseControl" type="range" min="0" max="0.08" value="0.035" step="0.005">
+              <output id="noiseOutput">0.035</output>
+            </label>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <footer class="siteFooter">
+      <p>Baseline Site 是一个无滤镜测试页面。所有视觉效果来自普通 HTML/CSS，不使用像素字体，也不运行 shader。</p>
+    </footer>
+  </main>
+
+  <canvas id="shaderMount" class="shaderMount" data-shader-mount aria-hidden="true"></canvas>
+
+  <script src="../asset/lib/chartjs/chart.umd.min.js"></script>
+  <script>
+    const shaderMount = document.getElementById("shaderMount");
+    const toggleMount = document.getElementById("toggleMount");
+    const chartRegistry = {};
+
+    function resizeShaderMount() {
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      shaderMount.width = Math.round(window.innerWidth * ratio);
+      shaderMount.height = Math.round(window.innerHeight * ratio);
+      shaderMount.style.width = `${window.innerWidth}px`;
+      shaderMount.style.height = `${window.innerHeight}px`;
+    }
+
+    function drawMountBoundary() {
+      const ctx = shaderMount.getContext("2d");
+      const ratio = shaderMount.width / Math.max(window.innerWidth, 1);
+      ctx.clearRect(0, 0, shaderMount.width, shaderMount.height);
+      ctx.save();
+      ctx.scale(ratio, ratio);
+      ctx.strokeStyle = "rgba(35, 104, 196, 0.85)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 7]);
+      ctx.strokeRect(12, 12, window.innerWidth - 24, window.innerHeight - 24);
+      ctx.fillStyle = "rgba(35, 104, 196, 0.10)";
+      ctx.fillRect(12, 12, window.innerWidth - 24, window.innerHeight - 24);
+      ctx.restore();
+    }
+
+    window.WebShaderTestHost = {
+      version: "0.1.0",
+      target: document.querySelector("[data-shader-target='page']"),
+      mount: shaderMount,
+      resize: resizeShaderMount,
+      enablePreview() {
+        document.body.dataset.filterPreview = "on";
+        resizeShaderMount();
+        drawMountBoundary();
+      },
+      disablePreview() {
+        delete document.body.dataset.filterPreview;
+        shaderMount.getContext("2d").clearRect(0, 0, shaderMount.width, shaderMount.height);
+      },
+    };
+
+    window.addEventListener("resize", () => {
+      resizeShaderMount();
+      if (document.body.dataset.filterPreview === "on") {
+        drawMountBoundary();
+      }
+    });
+
+    resizeShaderMount();
+
+    function fitCanvasToDisplay(canvas) {
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width * ratio));
+      const height = Math.max(1, Math.round(rect.height * ratio));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      return { width, height, ratio };
+    }
+
+    function drawOrbitCanvas(time) {
+      const canvas = document.getElementById("orbitCanvas");
+      const ctx = canvas.getContext("2d");
+      const { width, height } = fitCanvasToDisplay(canvas);
+      ctx.clearRect(0, 0, width, height);
+
+      const gradient = ctx.createLinearGradient(0, 0, width, height);
+      gradient.addColorStop(0, "#f8fafc");
+      gradient.addColorStop(1, "#e6eef8");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.save();
+      ctx.translate(width / 2, height / 2);
+      for (let ring = 0; ring < 7; ring += 1) {
+        const radius = Math.min(width, height) * (0.13 + ring * 0.055);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, radius * 1.38, radius * 0.58, ring * 0.36 + time * 0.12, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(35, 104, 196, ${0.12 + ring * 0.025})`;
+        ctx.lineWidth = 1 + ring * 0.18;
+        ctx.stroke();
+      }
+
+      for (let i = 0; i < 52; i += 1) {
+        const angle = time * (0.28 + (i % 5) * 0.018) + i * 0.78;
+        const radius = Math.min(width, height) * (0.08 + (i % 13) * 0.018);
+        const x = Math.cos(angle) * radius * (1.2 + (i % 3) * 0.2);
+        const y = Math.sin(angle * 1.17) * radius * 0.78;
+        ctx.beginPath();
+        ctx.fillStyle = i % 4 === 0 ? "rgba(22, 138, 90, 0.74)" : "rgba(35, 104, 196, 0.64)";
+        ctx.arc(x, y, 2.4 + (i % 5), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawSignalCanvas(time) {
+      const canvas = document.getElementById("signalCanvas");
+      const ctx = canvas.getContext("2d");
+      const { width, height, ratio } = fitCanvasToDisplay(canvas);
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#fbfcff";
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.strokeStyle = "#d8e0eb";
+      ctx.lineWidth = 1 * ratio;
+      const step = 28 * ratio;
+      for (let x = 0; x < width; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < height; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      ctx.lineWidth = 2 * ratio;
+      ctx.strokeStyle = "#2368c4";
+      ctx.beginPath();
+      for (let x = 0; x <= width; x += 3 * ratio) {
+        const p = x / width;
+        const wave = Math.sin(p * Math.PI * 8 + time * 2.8) * 0.10;
+        const pulse = Math.sin(p * Math.PI * 46 + time * 8) * 0.025;
+        const burst = Math.exp(-Math.abs(p - ((time * 0.07) % 1)) * 18) * Math.sin(p * 190) * 0.18;
+        const y = height * (0.52 + wave + pulse + burst);
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = "#374151";
+      ctx.font = `${13 * ratio}px Segoe UI, sans-serif`;
+      ctx.fillText("Canvas 2D signal / live generated", 18 * ratio, 28 * ratio);
+      ctx.fillStyle = "rgba(199, 104, 24, 0.82)";
+      for (let i = 0; i < 9; i += 1) {
+        const x = ((time * 52 * ratio) + i * width / 9) % width;
+        ctx.fillRect(x, height * 0.18, 3 * ratio, height * 0.64);
+      }
+    }
+
+    function animateDynamicCanvases(now) {
+      const time = now * 0.001;
+      drawOrbitCanvas(time);
+      drawSignalCanvas(time);
+      requestAnimationFrame(animateDynamicCanvases);
+    }
+
+    function randomValues(count, min, max) {
+      return Array.from({ length: count }, () => Math.round(min + Math.random() * (max - min)));
+    }
+
+    function commonChartOptions() {
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: "index",
+          intersect: false,
+        },
+        plugins: {
+          legend: {
+            labels: {
+              boxWidth: 12,
+              usePointStyle: true,
+            },
+          },
+          tooltip: {
+            enabled: true,
+          },
+        },
+      };
+    }
+
+    function createCharts() {
+      if (!window.Chart) return;
+      const labels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+      chartRegistry.line = new Chart(document.getElementById("lineChart"), {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "阅读量",
+              data: [42, 58, 49, 72, 86, 77, 96],
+              borderColor: "#2368c4",
+              backgroundColor: "rgba(35, 104, 196, 0.14)",
+              fill: true,
+              tension: 0.35,
+            },
+            {
+              label: "互动",
+              data: [18, 22, 26, 32, 41, 39, 52],
+              borderColor: "#168a5a",
+              backgroundColor: "rgba(22, 138, 90, 0.12)",
+              fill: true,
+              tension: 0.35,
+            },
+          ],
+        },
+        options: commonChartOptions(),
+      });
+
+      chartRegistry.combo = new Chart(document.getElementById("comboChart"), {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "曝光",
+              data: [64, 76, 69, 88, 93, 82, 101],
+              backgroundColor: "rgba(35, 104, 196, 0.68)",
+            },
+            {
+              label: "转化率",
+              data: [34, 38, 36, 44, 47, 43, 51],
+              type: "line",
+              borderColor: "#c76818",
+              backgroundColor: "rgba(199, 104, 24, 0.16)",
+              tension: 0.28,
+            },
+          ],
+        },
+        options: commonChartOptions(),
+      });
+
+      chartRegistry.doughnut = new Chart(document.getElementById("doughnutChart"), {
+        type: "doughnut",
+        data: {
+          labels: ["文本", "图像", "视频", "Canvas", "SVG"],
+          datasets: [{
+            data: [28, 22, 18, 17, 15],
+            backgroundColor: ["#2368c4", "#168a5a", "#c76818", "#6b7280", "#8b5cf6"],
+            borderColor: "#ffffff",
+            borderWidth: 3,
+          }],
+        },
+        options: {
+          ...commonChartOptions(),
+          cutout: "58%",
+        },
+      });
+
+      chartRegistry.radar = new Chart(document.getElementById("radarChart"), {
+        type: "radar",
+        data: {
+          labels: ["文字", "边缘", "色彩", "运动", "透明", "控件"],
+          datasets: [
+            {
+              label: "基准内容",
+              data: [85, 72, 78, 64, 58, 74],
+              borderColor: "#2368c4",
+              backgroundColor: "rgba(35, 104, 196, 0.18)",
+              pointBackgroundColor: "#2368c4",
+            },
+            {
+              label: "滤镜关注",
+              data: [76, 88, 91, 82, 69, 61],
+              borderColor: "#c76818",
+              backgroundColor: "rgba(199, 104, 24, 0.16)",
+              pointBackgroundColor: "#c76818",
+            },
+          ],
+        },
+        options: {
+          ...commonChartOptions(),
+          scales: {
+            r: {
+              suggestedMin: 0,
+              suggestedMax: 100,
+            },
+          },
+        },
+      });
+    }
+
+    document.querySelectorAll("[data-chart-action]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const chart = chartRegistry[button.dataset.chartAction];
+        if (!chart) return;
+        chart.data.datasets.forEach((dataset) => {
+          dataset.data = randomValues(dataset.data.length, 12, 104);
+        });
+        chart.update();
+      });
+    });
+
+    createCharts();
+    requestAnimationFrame(animateDynamicCanvases);
+  </script>
+  <script type="module" src="test/phosphor-demo.js"></script>
+</body>
+</html>

@@ -1,0 +1,350 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Cormorant+Garamond:wght@500;600;700&display=swap');
+
+:root {
+  color-scheme: dark;
+  --bg: #090b0a;
+  --panel: #101512;
+  --panel-soft: #151b17;
+  --panel-alt: #131915;
+  --line: #27312c;
+  --line-strong: #39453c;
+  --text: #edf0e7;
+  --muted: #95a096;
+  --accent: #8dc36a;
+  --accent-soft: #bfdc9a;
+  --accent-2: #d6ae73;
+  --danger: #b97258;
+  --shadow: rgba(0, 0, 0, 0.34);
+  --radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  color: var(--text);
+  background:
+    linear-gradient(180deg, rgba(14, 18, 16, 0.88), rgba(6, 8, 7, 0.98)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.025) 0,
+      rgba(255, 255, 255, 0.025) 1px,
+      transparent 1px,
+      transparent 28px
+    ),
+    linear-gradient(135deg, #0b0f0d 0%, #101513 55%, #0c100e 100%);
+  letter-spacing: 0;
+  overflow: hidden;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  color: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(310px, 386px) minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+}
+
+.control-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem;
+  border-right: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(22, 28, 24, 0.9), rgba(13, 17, 15, 0.96)),
+    linear-gradient(90deg, rgba(141, 195, 106, 0.04), transparent 22%);
+  overflow: auto;
+}
+
+.rail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.25rem;
+}
+
+.rail-header h1 {
+  margin: 0;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.9rem;
+  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.rail-header p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.icon-button,
+.ghost-button,
+.segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 10px;
+  transition:
+    transform 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.icon-button,
+.ghost-button {
+  width: 2.25rem;
+  height: 2.25rem;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.icon-button:hover,
+.ghost-button:hover,
+.segment:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+}
+
+.section-block {
+  padding: 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(20, 25, 22, 0.84), rgba(14, 18, 16, 0.96));
+  box-shadow: 0 16px 30px var(--shadow);
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.section-head h2 {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--accent-soft);
+  text-transform: none;
+}
+
+.meter {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.field {
+  display: grid;
+  gap: 0.42rem;
+  margin-top: 0.68rem;
+}
+
+.field span {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+input[type='text'],
+select {
+  width: 100%;
+  min-height: 2.4rem;
+  padding: 0.55rem 0.7rem;
+  color: var(--text);
+  background: rgba(7, 10, 8, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+}
+
+input[type='text']:focus,
+select:focus,
+input[type='range']:focus-visible,
+button:focus-visible {
+  border-color: rgba(141, 195, 106, 0.72);
+  box-shadow: 0 0 0 3px rgba(141, 195, 106, 0.18);
+  outline: none;
+}
+
+input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.segmented {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+  scrollbar-width: thin;
+}
+
+.segment {
+  min-width: max-content;
+  padding: 0.48rem 0.75rem;
+  background: rgba(8, 12, 10, 0.66);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.segment.active {
+  color: #0d160f;
+  background: linear-gradient(180deg, var(--accent-soft), var(--accent));
+  border-color: transparent;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.stats-grid div {
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  background: rgba(7, 10, 8, 0.68);
+  border: 1px solid var(--line);
+}
+
+.stats-grid dt {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.stats-grid dd {
+  margin: 0.22rem 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.stage-pane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  padding: 1rem;
+}
+
+.stage-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: calc(var(--radius) + 2px);
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(circle at top, rgba(141, 195, 106, 0.06), transparent 38%),
+    linear-gradient(180deg, #101613, #090b0a);
+  box-shadow: 0 22px 42px rgba(0, 0, 0, 0.45);
+}
+
+.viewport-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.viewport-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.stage-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  background: linear-gradient(180deg, rgba(6, 8, 7, 0), rgba(6, 8, 7, 0.78));
+  pointer-events: none;
+}
+
+.stage-overlay div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.stage-overlay strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.stage-overlay span {
+  font-size: 0.75rem;
+  color: rgba(237, 240, 231, 0.78);
+}
+
+@media (max-width: 960px) {
+  body {
+    overflow: auto;
+  }
+
+  .app-shell {
+    grid-template-columns: 1fr;
+    min-height: 100%;
+  }
+
+  .control-rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .stage-pane {
+    min-height: 72vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .control-rail {
+    padding: 0.75rem;
+  }
+
+  .stage-pane {
+    padding: 0.75rem;
+  }
+
+  .rail-header {
+    align-items: flex-start;
+  }
+
+  .stage-overlay {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
