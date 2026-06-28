@@ -1080,7 +1080,7 @@
       this.errorRetryTime = 0;
       this.pipeline.invalidate();
       this.surface.resize();
-      if (!this.running) this.render(performance.now());
+      if (!this.running) this.renderFrame(performance.now());
     }
   
     start() {
@@ -1131,11 +1131,10 @@
       this.hasRenderedStaticFrame = false;
     }
   
-    render(time = performance.now()) {
+    renderFrame(time = performance.now()) {
       const frameInterval = 1000 / Math.max(1, this.config.frameRate);
       const realtimeSource = sourceNeedsRealtimeUpload(this.source, this.sourceUpdateMode);
       if (this.lastError && time < this.errorRetryTime) {
-        if (this.running) this.rafId = window.requestAnimationFrame(this.render);
         return;
       }
       const shouldRender = realtimeSource ||
@@ -1154,7 +1153,10 @@
           this.errorRetryTime = time + 250;
         }
       }
+    }
   
+    render(time = performance.now()) {
+      this.renderFrame(time);
       if (this.running) {
         this.rafId = window.requestAnimationFrame(this.render);
       }

@@ -12,6 +12,7 @@ const copy = {
     initializing: "WebGL2 初始化中",
     libraryMissing: "库未加载",
     unsupported: "WebGL2 不可用",
+    destroyed: "演示已停止",
   },
   errors: {
     imageLoad: "图片无法加载。",
@@ -53,14 +54,8 @@ const sourceButtons = [...document.querySelectorAll("[data-source]")];
 const { PhosphorMediaRenderer } = window.Phosphor || {};
 
 let renderer = null;
-let activeAdapter = null;
-let currentImageAdapter = null;
-let currentVideoAdapter = null;
-let builtInCanvasAdapter = null;
-let builtInImageAdapter = null;
-let builtInVideoAdapter = null;
 let generatedVideoStream = null;
-let isRenderLoopRunning = true;
+let isDemoPlaying = true;
 let appRafId = 0;
 let frameCount = 0;
 let fpsStart = performance.now();
@@ -76,16 +71,16 @@ function syncOutputs() {
   noiseValue.textContent = Number(noiseControl.value).toFixed(3);
 }
 
-function updateSourceButtons(kind) {
+function updateSourceButtons(tab) {
   sourceButtons.forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.source === kind));
+    button.setAttribute("aria-pressed", String(button.dataset.source === tab));
   });
 }
 
-function showSourcePreview(kind) {
-  imageSource.classList.toggle("hidden", kind !== "image");
-  videoSource.classList.toggle("hidden", kind !== "video");
-  canvasSource.classList.toggle("hidden", kind !== "canvas");
+function showSourcePreview(previewKind) {
+  imageSource.classList.toggle("hidden", previewKind !== "image");
+  videoSource.classList.toggle("hidden", previewKind !== "video");
+  canvasSource.classList.toggle("hidden", previewKind !== "canvas");
 }
 
 function isGifFile(file) {
@@ -333,49 +328,91 @@ async function decodeGifFrames(file) {
   return frames;
 }
 
-function createObjectUrlAdapterBase(file, objectUrl) {
-  return {
-    kind: "image",
-    label: file.name,
-    rendererSource: null,
-    sourceUpdateMode: "auto",
-    previewKind: "image",
-    tab: "image",
-    update() {},
-    dispose() {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    },
-  };
+function createSourceAdapter(definition) {
+  return Object.freeze({
+    id: definition.id,
+    mediaKind: definition.mediaKind,
+    tab: definition.tab,
+    previewKind: definition.previewKind,
+    label: definition.label,
+    rendererSource: definition.rendererSource,
+    sourceUpdateMode: definition.sourceUpdateMode,
+    update: definition.update || (() => {}),
+    dispose: definition.dispose || (() => {}),
+  });
 }
 
+function createSourceRegistry() {
+  const registry = {
+    active: null,
+    lastImage: null,
+    lastVideo: null,
+    builtInCanvas: null,
+    builtInImage: null,
+    builtInVideo: null,
+    replaceLocal(adapter) {
+      if (adapter.tab === "image") {
+        if (this.lastImage && this.lastImage !== this.builtInImage) this.lastImage.dispose();
+        this.lastImage = adapter;
+      } else if (adapter.tab === "video") {
+        if (this.lastVideo && this.lastVideo !== this.builtInVideo) this.lastVideo.dispose();
+        this.lastVideo = adapter;
+      }
+      this.active = adapter;
+      return adapter;
+    },
+    setActive(adapter) {
+      this.active = adapter;
+      return adapter;
+    },
+    dispose() {
+      const adapters = new Set([
+        this.active,
+        this.lastImage,
+        this.lastVideo,
+        this.builtInCanvas,
+        this.builtInImage,
+        this.builtInVideo,
+      ]);
+      adapters.forEach((adapter) => adapter?.dispose());
+      this.active = null;
+      this.lastImage = null;
+      this.lastVideo = null;
+      this.builtInCanvas = null;
+      this.builtInImage = null;
+      this.builtInVideo = null;
+    },
+  };
+  return registry;
+}
+
+const sourceRegistry = createSourceRegistry();
+
 function createBuiltInCanvasAdapter() {
-  return {
-    kind: "canvas",
+  return createSourceAdapter({
+    id: "built-in-canvas",
+    mediaKind: "canvas",
+    tab: "canvas",
+    previewKind: "canvas",
     label: copy.labels.builtInCanvas,
     rendererSource: canvasSource,
     sourceUpdateMode: "realtime",
-    previewKind: "canvas",
-    tab: "canvas",
-    update(time) {
-      drawBuiltInCanvas(time);
-    },
-    dispose() {},
-  };
+    update: drawBuiltInCanvas,
+  });
 }
 
 async function createBuiltInImageAdapter() {
   if (!imageSource.src) imageSource.src = createGeneratedImage();
   await waitForImage(imageSource);
-  return {
-    kind: "image",
+  return createSourceAdapter({
+    id: "built-in-image",
+    mediaKind: "image",
+    tab: "image",
+    previewKind: "image",
     label: copy.labels.builtInImage,
     rendererSource: imageSource,
     sourceUpdateMode: "static",
-    previewKind: "image",
-    tab: "image",
-    update() {},
-    dispose() {},
-  };
+  });
 }
 
 async function createBuiltInVideoAdapter() {
@@ -391,36 +428,38 @@ async function createBuiltInVideoAdapter() {
   videoSource.muted = true;
   await waitForVideo(videoSource);
   await playVideo(videoSource);
-  return {
-    kind: "video",
+  return createSourceAdapter({
+    id: "built-in-video",
+    mediaKind: "video",
+    tab: "video",
+    previewKind: "video",
     label: copy.labels.builtInVideo,
     rendererSource: videoSource,
     sourceUpdateMode: "auto",
-    previewKind: "video",
-    tab: "video",
-    update(time) {
-      drawGeneratedVideo(time);
-    },
-    dispose() {},
-  };
+    update: drawGeneratedVideo,
+  });
 }
 
 async function createBitmapAdapter(file, objectUrl) {
-  const adapter = createObjectUrlAdapterBase(file, objectUrl);
   imageSource.src = objectUrl;
   await waitForImage(imageSource);
   const bitmap = await createImageBitmap(file);
-  adapter.rendererSource = bitmap;
-  adapter.sourceUpdateMode = "static";
-  adapter.dispose = () => {
-    bitmap.close();
-    URL.revokeObjectURL(objectUrl);
-  };
-  return adapter;
+  return createSourceAdapter({
+    id: `bitmap:${file.name}`,
+    mediaKind: "image",
+    tab: "image",
+    previewKind: "image",
+    label: file.name,
+    rendererSource: bitmap,
+    sourceUpdateMode: "static",
+    dispose() {
+      bitmap.close();
+      URL.revokeObjectURL(objectUrl);
+    },
+  });
 }
 
 async function createGifAdapter(file, objectUrl) {
-  const adapter = createObjectUrlAdapterBase(file, objectUrl);
   const canvas = document.createElement("canvas");
   imageSource.src = objectUrl;
   await waitForImage(imageSource);
@@ -445,47 +484,52 @@ async function createGifAdapter(file, objectUrl) {
   }
 
   if (!animation) {
-    animation = { canvas, image: imageSource, frameIndex: 0 };
+    animation = { canvas, image: imageSource };
     drawImageElementToCanvas(imageSource, canvas);
   }
 
-  adapter.rendererSource = canvas;
-  adapter.sourceUpdateMode = "realtime";
-  adapter.animation = animation;
-  adapter.update = (time) => {
-    if (animation.frames?.length) updateDecodedGifFrame(animation, time);
-    else if (animation.image?.complete && animation.image.naturalWidth) drawImageElementToCanvas(animation.image, canvas);
-  };
-  adapter.dispose = () => {
-    animation.frames?.forEach((frame) => frame.bitmap?.close?.());
-    URL.revokeObjectURL(objectUrl);
-  };
-  return adapter;
+  return createSourceAdapter({
+    id: `gif:${file.name}`,
+    mediaKind: "gif",
+    tab: "image",
+    previewKind: "image",
+    label: file.name,
+    rendererSource: canvas,
+    sourceUpdateMode: "realtime",
+    update(time) {
+      if (animation.frames?.length) updateDecodedGifFrame(animation, time);
+      else if (animation.image?.complete && animation.image.naturalWidth) drawImageElementToCanvas(animation.image, canvas);
+    },
+    dispose() {
+      animation.frames?.forEach((frame) => frame.bitmap?.close?.());
+      URL.revokeObjectURL(objectUrl);
+    },
+  });
 }
 
 async function createSvgAdapter(file, objectUrl) {
-  const adapter = createObjectUrlAdapterBase(file, objectUrl);
   const canvas = document.createElement("canvas");
   imageSource.src = objectUrl;
   await waitForImage(imageSource);
   drawImageElementToCanvas(imageSource, canvas);
-  adapter.rendererSource = canvas;
-  adapter.sourceUpdateMode = "realtime";
-  adapter.update = () => {
-    if (imageSource.complete && imageSource.naturalWidth) drawImageElementToCanvas(imageSource, canvas);
-  };
-  adapter.dispose = () => {
-    URL.revokeObjectURL(objectUrl);
-  };
-  return adapter;
+  return createSourceAdapter({
+    id: `svg:${file.name}`,
+    mediaKind: "svg",
+    tab: "image",
+    previewKind: "image",
+    label: file.name,
+    rendererSource: canvas,
+    sourceUpdateMode: "realtime",
+    update() {
+      if (imageSource.complete && imageSource.naturalWidth) drawImageElementToCanvas(imageSource, canvas);
+    },
+    dispose() {
+      URL.revokeObjectURL(objectUrl);
+    },
+  });
 }
 
 async function createVideoAdapter(file, objectUrl) {
-  const adapter = createObjectUrlAdapterBase(file, objectUrl);
-  adapter.kind = "video";
-  adapter.previewKind = "video";
-  adapter.tab = "video";
-  adapter.sourceUpdateMode = "auto";
   videoSource.pause();
   videoSource.srcObject = null;
   videoSource.src = objectUrl;
@@ -494,16 +538,23 @@ async function createVideoAdapter(file, objectUrl) {
   videoSource.load();
   await waitForVideo(videoSource);
   await playVideo(videoSource);
-  adapter.rendererSource = videoSource;
-  adapter.dispose = () => {
-    videoSource.pause();
-    if (videoSource.src === objectUrl) {
-      videoSource.removeAttribute("src");
-      videoSource.load();
-    }
-    URL.revokeObjectURL(objectUrl);
-  };
-  return adapter;
+  return createSourceAdapter({
+    id: `video:${file.name}`,
+    mediaKind: "video",
+    tab: "video",
+    previewKind: "video",
+    label: file.name,
+    rendererSource: videoSource,
+    sourceUpdateMode: "auto",
+    dispose() {
+      videoSource.pause();
+      if (videoSource.src === objectUrl) {
+        videoSource.removeAttribute("src");
+        videoSource.load();
+      }
+      URL.revokeObjectURL(objectUrl);
+    },
+  });
 }
 
 async function playVideo(video) {
@@ -536,14 +587,17 @@ function ensureRenderer(source) {
     sourceUpdateMode: "auto",
     ...rendererConfig(),
   });
-  window.PhosphorMediaDemo.renderer = renderer;
   return renderer;
+}
+
+function renderDemoFrame(time = performance.now()) {
+  renderer?.renderFrame(time);
 }
 
 function applyActiveSource(adapter) {
   if (!adapter?.rendererSource) return;
   setError();
-  activeAdapter = adapter;
+  sourceRegistry.setActive(adapter);
   updateSourceButtons(adapter.tab);
   showSourcePreview(adapter.previewKind);
   sourceLabel.textContent = adapter.label;
@@ -554,33 +608,33 @@ function applyActiveSource(adapter) {
     fit: fitMode.value,
     sourceUpdateMode: adapter.sourceUpdateMode,
   });
-  toggleRender.textContent = isRenderLoopRunning ? copy.buttons.pause : copy.buttons.resume;
-  activeRenderer.render(performance.now());
+  toggleRender.textContent = isDemoPlaying ? copy.buttons.pause : copy.buttons.resume;
+  renderDemoFrame();
   syncMetrics();
 }
 
 async function selectSourceTab(tab) {
   try {
     if (tab === "canvas") {
-      if (!builtInCanvasAdapter) builtInCanvasAdapter = createBuiltInCanvasAdapter();
-      applyActiveSource(builtInCanvasAdapter);
+      sourceRegistry.builtInCanvas ||= createBuiltInCanvasAdapter();
+      applyActiveSource(sourceRegistry.builtInCanvas);
       return;
     }
     if (tab === "video") {
-      if (currentVideoAdapter) {
-        applyActiveSource(currentVideoAdapter);
+      if (sourceRegistry.lastVideo) {
+        applyActiveSource(sourceRegistry.lastVideo);
         return;
       }
-      if (!builtInVideoAdapter) builtInVideoAdapter = await createBuiltInVideoAdapter();
-      applyActiveSource(builtInVideoAdapter);
+      sourceRegistry.builtInVideo ||= await createBuiltInVideoAdapter();
+      applyActiveSource(sourceRegistry.builtInVideo);
       return;
     }
-    if (currentImageAdapter) {
-      applyActiveSource(currentImageAdapter);
+    if (sourceRegistry.lastImage) {
+      applyActiveSource(sourceRegistry.lastImage);
       return;
     }
-    if (!builtInImageAdapter) builtInImageAdapter = await createBuiltInImageAdapter();
-    applyActiveSource(builtInImageAdapter);
+    sourceRegistry.builtInImage ||= await createBuiltInImageAdapter();
+    applyActiveSource(sourceRegistry.builtInImage);
   } catch (error) {
     setError(error.message);
   }
@@ -605,13 +659,7 @@ async function loadLocalFile(file) {
   try {
     setError();
     const nextAdapter = await createAdapterForFile(file);
-    if (nextAdapter.tab === "image") {
-      if (currentImageAdapter && currentImageAdapter !== builtInImageAdapter) currentImageAdapter.dispose();
-      currentImageAdapter = nextAdapter;
-    } else if (nextAdapter.tab === "video") {
-      if (currentVideoAdapter && currentVideoAdapter !== builtInVideoAdapter) currentVideoAdapter.dispose();
-      currentVideoAdapter = nextAdapter;
-    }
+    sourceRegistry.replaceLocal(nextAdapter);
     applyActiveSource(nextAdapter);
   } catch (error) {
     setError(error.message);
@@ -623,7 +671,7 @@ function updateRendererConfig() {
   if (!renderer) return;
   renderer.updateConfig(rendererConfig());
   renderer.fit = fitMode.value;
-  renderer.render(performance.now());
+  renderDemoFrame();
   syncMetrics();
 }
 
@@ -639,10 +687,10 @@ function syncMetrics() {
 
 function tick(time) {
   appRafId = requestAnimationFrame(tick);
-  if (!isRenderLoopRunning) return;
+  if (!isDemoPlaying) return;
 
-  activeAdapter?.update(time);
-  renderer?.render(time);
+  sourceRegistry.active?.update(time);
+  renderDemoFrame(time);
 
   frameCount += 1;
   if (time - fpsStart >= 500) {
@@ -651,6 +699,18 @@ function tick(time) {
     fpsStart = time;
     syncMetrics();
   }
+}
+
+function destroyDemo() {
+  isDemoPlaying = false;
+  if (appRafId) cancelAnimationFrame(appRafId);
+  appRafId = 0;
+  renderer?.destroy();
+  renderer = null;
+  sourceRegistry.dispose();
+  generatedVideoStream?.getTracks?.().forEach((track) => track.stop());
+  generatedVideoStream = null;
+  statusText.textContent = copy.status.destroyed;
 }
 
 sourceButtons.forEach((button) => {
@@ -683,15 +743,15 @@ window.addEventListener("drop", (event) => {
 });
 
 toggleRender.addEventListener("click", () => {
-  isRenderLoopRunning = !isRenderLoopRunning;
-  toggleRender.textContent = isRenderLoopRunning ? copy.buttons.pause : copy.buttons.resume;
+  isDemoPlaying = !isDemoPlaying;
+  toggleRender.textContent = isDemoPlaying ? copy.buttons.pause : copy.buttons.resume;
   syncMetrics();
 });
 
 fitMode.addEventListener("change", () => {
   if (!renderer) return;
   renderer.fit = fitMode.value;
-  renderer.render(performance.now());
+  renderDemoFrame();
   syncMetrics();
 });
 
@@ -703,7 +763,7 @@ qualityMode.addEventListener("change", () => {
   bloomControl.value = state.config.bloomStrength;
   diffusionControl.value = state.config.diffusionStrength;
   syncOutputs();
-  renderer.render(performance.now());
+  renderDemoFrame();
   syncMetrics();
 });
 
@@ -713,23 +773,26 @@ qualityMode.addEventListener("change", () => {
 
 window.addEventListener("resize", () => {
   sizeCanvasSource();
-  renderer?.render(performance.now());
+  renderDemoFrame();
 });
 
 window.PhosphorMediaDemo = {
-  get renderer() {
-    return renderer;
-  },
-  set renderer(value) {
-    renderer = value;
-  },
-  getActiveAdapter: () => activeAdapter,
   getState: () => {
     const state = renderer?.getState();
-    return state ? { ...state, running: isRenderLoopRunning } : null;
+    return state ? {
+      ...state,
+      demoPlaying: isDemoPlaying,
+      activeSource: sourceRegistry.active ? {
+        id: sourceRegistry.active.id,
+        mediaKind: sourceRegistry.active.mediaKind,
+        tab: sourceRegistry.active.tab,
+        label: sourceRegistry.active.label,
+      } : null,
+    } : null;
   },
   loadLocalFile,
   selectSourceTab,
+  destroy: destroyDemo,
 };
 
 syncOutputs();
