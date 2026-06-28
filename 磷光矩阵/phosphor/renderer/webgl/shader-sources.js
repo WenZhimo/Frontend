@@ -15,6 +15,8 @@ precision highp float;
 
 uniform sampler2D u_source;
 uniform vec2 u_resolution;
+uniform vec4 u_sourceRect;
+uniform vec4 u_outputRect;
 uniform float u_matrixPitch;
 uniform float u_cellFillRatio;
 uniform float u_threshold;
@@ -43,9 +45,14 @@ void main() {
   float bodyMask = smoothstep(cellHalf + 0.02, cellHalf - 0.02, squareDistance);
   float glowMask = smoothstep(0.86, 0.18, length(local - 0.5));
 
-  vec2 sampleUv = (cellOrigin + vec2(0.5) * u_matrixPitch) / u_resolution;
-  vec3 source = texture(u_source, sampleUv).rgb;
-  float energy = max(0.0, (luminance(source) - u_threshold) * u_contrast);
+  vec2 baseUv = (cellOrigin + vec2(0.5) * u_matrixPitch) / u_resolution;
+  vec2 contentUv = (baseUv - u_outputRect.xy) / u_outputRect.zw;
+  vec2 inside = step(vec2(0.0), contentUv) * step(contentUv, vec2(1.0));
+  float outputMask = inside.x * inside.y;
+  vec2 sampleUv = u_sourceRect.xy + contentUv * u_sourceRect.zw;
+  vec4 sourceSample = texture(u_source, clamp(sampleUv, vec2(0.0), vec2(1.0)));
+  float sourceAlpha = sourceSample.a * outputMask;
+  float energy = max(0.0, (luminance(sourceSample.rgb) * sourceAlpha - u_threshold) * u_contrast);
   energy = pow(clamp(energy, 0.0, 1.0), 0.78) * u_brightness;
 
   float hot = pow(clamp(energy, 0.0, 1.0), 1.55);
@@ -56,7 +63,7 @@ void main() {
   vec3 core = u_coreColor * max(0.0, energy - 0.34) * coreMask * u_coreIntensity;
   vec3 color = glow + body + core;
 
-  outColor = vec4(color, clamp(max(max(color.r, color.g), color.b), 0.0, 1.0));
+  outColor = vec4(color, clamp(max(max(color.r, color.g), color.b), 0.0, 1.0) * sourceAlpha);
 }
 `;
 

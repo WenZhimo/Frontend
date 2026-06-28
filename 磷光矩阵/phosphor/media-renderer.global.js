@@ -1,0 +1,845 @@
+(function () {
+  "use strict";
+
+  const PHOSPHOR_DEFAULT_CONFIG = {
+    target: null,
+    mount: null,
+    backend: "webgl2",
+    quality: "medium",
+    motionMode: "realtime",
+    accessibilityMode: "preserveDom",
+    maxDpr: 1,
+    frameRate: 45,
+    sourceFrameInterval: 520,
+    sourceScale: 0.55,
+    matrixPitch: 8,
+    cellFillRatio: 0.42,
+    threshold: 0.055,
+    brightness: 1.18,
+    contrast: 1.36,
+    coreIntensity: 1.48,
+    bloomRadius: 22,
+    bloomStrength: 1.08,
+    diffusionStrength: 0.48,
+    blackLevel: 0.94,
+    noiseAmount: 0.026,
+    vignetteStrength: 0.42,
+    flickerAmount: 0.025,
+    opacity: 1,
+    phosphorPalette: {
+      core: [235, 244, 255],
+      hot: [164, 204, 255],
+      glow: [98, 128, 255],
+      outer: [48, 52, 176],
+      black: [2, 5, 12],
+    },
+  };
+
+  const QUALITY_PRESETS = {
+    low: {
+      maxDpr: 1,
+      frameRate: 30,
+      sourceFrameInterval: 720,
+      sourceScale: 0.42,
+      matrixPitch: 10,
+      bloomRadius: 16,
+      bloomStrength: 0.88,
+      diffusionStrength: 0.32,
+    },
+    medium: {
+      maxDpr: 1,
+      frameRate: 45,
+      sourceFrameInterval: 520,
+      sourceScale: 0.55,
+      matrixPitch: 8,
+      bloomRadius: 22,
+      bloomStrength: 1.08,
+      diffusionStrength: 0.42,
+    },
+    high: {
+      maxDpr: 1.25,
+      frameRate: 60,
+      sourceFrameInterval: 420,
+      sourceScale: 0.66,
+      matrixPitch: 5,
+      bloomRadius: 28,
+      bloomStrength: 1.18,
+      diffusionStrength: 0.5,
+    },
+  };
+
+  const FULLSCREEN_VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+in vec2 a_position;
+out vec2 v_uv;
+
+void main() {
+  v_uv = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
+`;
+
+  const MATRIX_EMISSION_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+uniform sampler2D u_source;
+uniform vec2 u_resolution;
+uniform vec4 u_sourceRect;
+uniform vec4 u_outputRect;
+uniform float u_matrixPitch;
+uniform float u_cellFillRatio;
+uniform float u_threshold;
+uniform float u_brightness;
+uniform float u_contrast;
+uniform float u_coreIntensity;
+uniform vec3 u_coreColor;
+uniform vec3 u_hotColor;
+uniform vec3 u_glowColor;
+
+in vec2 v_uv;
+out vec4 outColor;
+
+float luminance(vec3 color) {
+  return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+
+void main() {
+  vec2 pixel = v_uv * u_resolution;
+  vec2 cell = floor(pixel / u_matrixPitch);
+  vec2 cellOrigin = cell * u_matrixPitch;
+  vec2 local = (pixel - cellOrigin) / u_matrixPitch;
+  vec2 centerDelta = abs(local - 0.5);
+  float squareDistance = max(centerDelta.x, centerDelta.y);
+  float cellHalf = u_cellFillRatio * 0.5;
+  float bodyMask = smoothstep(cellHalf + 0.02, cellHalf - 0.02, squareDistance);
+  float glowMask = smoothstep(0.86, 0.18, length(local - 0.5));
+
+  vec2 baseUv = (cellOrigin + vec2(0.5) * u_matrixPitch) / u_resolution;
+  vec2 contentUv = (baseUv - u_outputRect.xy) / u_outputRect.zw;
+  vec2 inside = step(vec2(0.0), contentUv) * step(contentUv, vec2(1.0));
+  float outputMask = inside.x * inside.y;
+  vec2 sampleUv = u_sourceRect.xy + contentUv * u_sourceRect.zw;
+  vec4 sourceSample = texture(u_source, clamp(sampleUv, vec2(0.0), vec2(1.0)));
+  float sourceAlpha = sourceSample.a * outputMask;
+  float energy = max(0.0, (luminance(sourceSample.rgb) * sourceAlpha - u_threshold) * u_contrast);
+  energy = pow(clamp(energy, 0.0, 1.0), 0.78) * u_brightness;
+
+  float hot = pow(clamp(energy, 0.0, 1.0), 1.55);
+  vec3 bodyColor = mix(u_hotColor, u_coreColor, hot);
+  float coreMask = smoothstep(0.18, 0.02, length(local - 0.5));
+  vec3 glow = u_glowColor * energy * glowMask * 0.5;
+  vec3 body = bodyColor * energy * bodyMask * 0.92;
+  vec3 core = u_coreColor * max(0.0, energy - 0.34) * coreMask * u_coreIntensity;
+  vec3 color = glow + body + core;
+
+  outColor = vec4(color, clamp(max(max(color.r, color.g), color.b), 0.0, 1.0) * sourceAlpha);
+}
+`;
+
+  const BLOOM_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+uniform sampler2D u_texture;
+uniform vec2 u_texel;
+uniform float u_radius;
+uniform float u_strength;
+uniform vec3 u_glowColor;
+
+in vec2 v_uv;
+out vec4 outColor;
+
+void main() {
+  vec4 sum = vec4(0.0);
+  sum += texture(u_texture, v_uv) * 0.18;
+  sum += texture(u_texture, v_uv + vec2( u_texel.x, 0.0) * u_radius) * 0.12;
+  sum += texture(u_texture, v_uv + vec2(-u_texel.x, 0.0) * u_radius) * 0.12;
+  sum += texture(u_texture, v_uv + vec2(0.0,  u_texel.y) * u_radius) * 0.12;
+  sum += texture(u_texture, v_uv + vec2(0.0, -u_texel.y) * u_radius) * 0.12;
+  sum += texture(u_texture, v_uv + vec2( u_texel.x,  u_texel.y) * u_radius * 0.72) * 0.085;
+  sum += texture(u_texture, v_uv + vec2(-u_texel.x,  u_texel.y) * u_radius * 0.72) * 0.085;
+  sum += texture(u_texture, v_uv + vec2( u_texel.x, -u_texel.y) * u_radius * 0.72) * 0.085;
+  sum += texture(u_texture, v_uv + vec2(-u_texel.x, -u_texel.y) * u_radius * 0.72) * 0.085;
+  vec3 color = mix(sum.rgb, sum.rgb * u_glowColor * 1.85, 0.42);
+  outColor = vec4(color * u_strength, sum.a);
+}
+`;
+
+  const COMPOSE_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+uniform sampler2D u_emission;
+uniform sampler2D u_bloomA;
+uniform sampler2D u_bloomB;
+uniform vec2 u_resolution;
+uniform float u_time;
+uniform float u_matrixPitch;
+uniform float u_noiseAmount;
+uniform float u_vignetteStrength;
+uniform float u_diffusionStrength;
+uniform float u_flickerAmount;
+uniform float u_opacity;
+uniform vec3 u_blackColor;
+
+in vec2 v_uv;
+out vec4 outColor;
+
+float hash(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+void main() {
+  vec2 pixel = v_uv * u_resolution;
+  vec3 emission = texture(u_emission, v_uv).rgb;
+  vec3 bloomA = texture(u_bloomA, v_uv).rgb;
+  vec3 bloomB = texture(u_bloomB, v_uv).rgb;
+
+  float flicker = 1.0 + sin(u_time * 0.013) * u_flickerAmount;
+  vec3 color = u_blackColor;
+  color += bloomB * (0.86 + u_diffusionStrength * 0.55);
+  color += bloomA * 0.66;
+  color += emission * u_opacity * flicker;
+
+  vec2 grid = abs(fract(pixel / u_matrixPitch) - 0.5);
+  float gridLine = 1.0 - smoothstep(0.42, 0.5, max(grid.x, grid.y));
+  color += vec3(0.015, 0.024, 0.075) * gridLine;
+
+  float n = hash(pixel + u_time * 0.021);
+  color += vec3(n * 0.6, n * 0.72, n) * u_noiseAmount;
+
+  float dist = distance(v_uv, vec2(0.5));
+  float vignette = smoothstep(0.28, 0.86, dist) * u_vignetteStrength;
+  color *= 1.0 - vignette;
+
+  outColor = vec4(color, 1.0);
+}
+`;
+
+  function createPhosphorConfig(config = {}) {
+    const quality = config.quality || PHOSPHOR_DEFAULT_CONFIG.quality;
+    const preset = QUALITY_PRESETS[quality] || QUALITY_PRESETS.medium;
+    return {
+      ...PHOSPHOR_DEFAULT_CONFIG,
+      ...preset,
+      ...config,
+      quality,
+      phosphorPalette: {
+        ...PHOSPHOR_DEFAULT_CONFIG.phosphorPalette,
+        ...(config.phosphorPalette || {}),
+      },
+    };
+  }
+
+  function applyQualityPreset(currentConfig, quality) {
+    return createPhosphorConfig({
+      ...currentConfig,
+      ...(QUALITY_PRESETS[quality] || QUALITY_PRESETS.medium),
+      quality,
+    });
+  }
+
+  function resizeCanvas(canvas, width, height) {
+    const nextWidth = Math.max(1, Math.round(width));
+    const nextHeight = Math.max(1, Math.round(height));
+    if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+      canvas.width = nextWidth;
+      canvas.height = nextHeight;
+    }
+  }
+
+  function normalizeColor(color) {
+    return [color[0] / 255, color[1] / 255, color[2] / 255];
+  }
+
+  function isVideoReady(source) {
+    return !(source instanceof HTMLVideoElement) ||
+      (source.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && source.videoWidth > 0 && source.videoHeight > 0);
+  }
+
+  function shouldReallocateTexture(source) {
+    return source instanceof HTMLVideoElement || source instanceof HTMLImageElement;
+  }
+
+  function createShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      const message = gl.getShaderInfoLog(shader);
+      gl.deleteShader(shader);
+      throw new Error(`WebGL shader compile failed: ${message}`);
+    }
+    return shader;
+  }
+
+  function createProgram(gl, vertexSource, fragmentSource) {
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexSource);
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      const message = gl.getProgramInfoLog(program);
+      gl.deleteProgram(program);
+      gl.deleteShader(vertexShader);
+      gl.deleteShader(fragmentShader);
+      throw new Error(`WebGL program link failed: ${message}`);
+    }
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+    return program;
+  }
+
+  function createTexture(gl, width, height, options = {}) {
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, options.filter || gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, options.filter || gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, Math.max(1, width), Math.max(1, height), 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    return texture;
+  }
+
+  function resizeTexture(gl, texture, width, height) {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, Math.max(1, width), Math.max(1, height), 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  }
+
+  function setTextureImage(gl, texture, source) {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+  }
+
+  function updateTextureImage(gl, texture, source) {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, source);
+  }
+
+  function createFramebuffer(gl, texture) {
+    const framebuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
+      gl.deleteFramebuffer(framebuffer);
+      throw new Error(`WebGL framebuffer incomplete: ${status}`);
+    }
+    return framebuffer;
+  }
+
+  function createFullscreenGeometry(gl) {
+    const vao = gl.createVertexArray();
+    const buffer = gl.createBuffer();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1,
+       1, -1,
+      -1,  1,
+      -1,  1,
+       1, -1,
+       1,  1,
+    ]), gl.STATIC_DRAW);
+    return { vao, buffer };
+  }
+
+  function bindFullscreenAttribute(gl, program, geometry) {
+    const location = gl.getAttribLocation(program, "a_position");
+    gl.bindVertexArray(geometry.vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, geometry.buffer);
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(location, 2, gl.FLOAT, false, 0, 0);
+  }
+
+  function bindTextureUnit(gl, unit, texture) {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+  }
+
+  function setUniforms(gl, program, uniforms) {
+    Object.entries(uniforms).forEach(([name, value]) => {
+      const location = gl.getUniformLocation(program, name);
+      if (location === null) return;
+      if (typeof value === "number") gl.uniform1f(location, value);
+      else if (Array.isArray(value) && value.length === 2) gl.uniform2f(location, value[0], value[1]);
+      else if (Array.isArray(value) && value.length === 3) gl.uniform3f(location, value[0], value[1], value[2]);
+      else if (Array.isArray(value) && value.length === 4) gl.uniform4f(location, value[0], value[1], value[2], value[3]);
+      else if (Number.isInteger(value?.unit)) gl.uniform1i(location, value.unit);
+    });
+  }
+
+  function computeFitRects(sourceWidth, sourceHeight, outputWidth, outputHeight, fit) {
+    const sourceAspect = sourceWidth / Math.max(1, sourceHeight);
+    const outputAspect = outputWidth / Math.max(1, outputHeight);
+    const sourceRect = [0, 0, 1, 1];
+    const outputRect = [0, 0, 1, 1];
+
+    if (fit === "stretch") return { sourceRect, outputRect };
+
+    if (fit === "contain") {
+      if (sourceAspect > outputAspect) {
+        const height = outputAspect / sourceAspect;
+        outputRect[1] = (1 - height) / 2;
+        outputRect[3] = height;
+      } else {
+        const width = sourceAspect / outputAspect;
+        outputRect[0] = (1 - width) / 2;
+        outputRect[2] = width;
+      }
+      return { sourceRect, outputRect };
+    }
+
+    if (fit === "fit-width") {
+      const height = sourceAspect / outputAspect;
+      if (height < 1) {
+        sourceRect[1] = (1 - height) / 2;
+        sourceRect[3] = height;
+      }
+      return { sourceRect, outputRect };
+    }
+
+    if (fit === "fit-height") {
+      const width = outputAspect / sourceAspect;
+      if (width < 1) {
+        sourceRect[0] = (1 - width) / 2;
+        sourceRect[2] = width;
+      }
+      return { sourceRect, outputRect };
+    }
+
+    if (sourceAspect > outputAspect) {
+      const width = outputAspect / sourceAspect;
+      sourceRect[0] = (1 - width) / 2;
+      sourceRect[2] = width;
+    } else {
+      const height = sourceAspect / outputAspect;
+      sourceRect[1] = (1 - height) / 2;
+      sourceRect[3] = height;
+    }
+    return { sourceRect, outputRect };
+  }
+
+  class WebGLMediaPipeline {
+    static isSupported() {
+      const probe = document.createElement("canvas");
+      const gl = probe.getContext("webgl2", {
+        alpha: true,
+        antialias: false,
+        depth: false,
+        stencil: false,
+        preserveDrawingBuffer: false,
+        premultipliedAlpha: false,
+      });
+      if (!gl) return false;
+      const loseContext = gl.getExtension("WEBGL_lose_context");
+      if (loseContext) loseContext.loseContext();
+      return true;
+    }
+
+    constructor(surface, config) {
+      this.surface = surface;
+      this.config = config;
+      this.gl = surface.canvas.getContext("webgl2", {
+        alpha: true,
+        antialias: false,
+        depth: false,
+        stencil: false,
+        preserveDrawingBuffer: false,
+        premultipliedAlpha: false,
+      });
+      if (!this.gl) throw new Error("WebGL2 is not available.");
+      this.sourceTextureSize = "";
+      this.lastTrace = null;
+      this.init();
+      this.resize();
+    }
+
+    init() {
+      const gl = this.gl;
+      this.geometry = createFullscreenGeometry(gl);
+      this.matrixProgram = createProgram(gl, FULLSCREEN_VERTEX_SHADER, MATRIX_EMISSION_FRAGMENT_SHADER);
+      this.bloomProgram = createProgram(gl, FULLSCREEN_VERTEX_SHADER, BLOOM_FRAGMENT_SHADER);
+      this.composeProgram = createProgram(gl, FULLSCREEN_VERTEX_SHADER, COMPOSE_FRAGMENT_SHADER);
+      [this.matrixProgram, this.bloomProgram, this.composeProgram].forEach((program) => {
+        bindFullscreenAttribute(gl, program, this.geometry);
+      });
+      this.sourceTexture = createTexture(gl, 1, 1, { filter: gl.LINEAR });
+      this.emissionTexture = createTexture(gl, 1, 1, { filter: gl.LINEAR });
+      this.bloomATexture = createTexture(gl, 1, 1, { filter: gl.LINEAR });
+      this.bloomBTexture = createTexture(gl, 1, 1, { filter: gl.LINEAR });
+      this.emissionFramebuffer = createFramebuffer(gl, this.emissionTexture);
+      this.bloomAFramebuffer = createFramebuffer(gl, this.bloomATexture);
+      this.bloomBFramebuffer = createFramebuffer(gl, this.bloomBTexture);
+    }
+
+    resize() {
+      const gl = this.gl;
+      const width = this.surface.width;
+      const height = this.surface.height;
+      const bloomScale = this.config.quality === "high" ? 0.5 : this.config.quality === "low" ? 0.28 : 0.38;
+      this.width = width;
+      this.height = height;
+      this.bloomWidth = Math.max(1, Math.round(width * bloomScale));
+      this.bloomHeight = Math.max(1, Math.round(height * bloomScale));
+      gl.viewport(0, 0, width, height);
+      resizeTexture(gl, this.emissionTexture, width, height);
+      resizeTexture(gl, this.bloomATexture, this.bloomWidth, this.bloomHeight);
+      resizeTexture(gl, this.bloomBTexture, this.bloomWidth, this.bloomHeight);
+    }
+
+    invalidate() {
+      this.sourceTextureSize = "";
+    }
+
+    renderMediaSource(source, surface, config, time, options = {}) {
+      this.surface = surface;
+      this.config = config;
+      if (this.width !== surface.width || this.height !== surface.height) this.resize();
+      if (!isVideoReady(source)) {
+        throw new Error("Video source has no drawable frame yet.");
+      }
+
+      const sourceWidth = Math.max(1, source.videoWidth || source.naturalWidth || source.width || source.displayWidth || 1);
+      const sourceHeight = Math.max(1, source.videoHeight || source.naturalHeight || source.height || source.displayHeight || 1);
+      const textureSize = `${sourceWidth}x${sourceHeight}`;
+      if (this.sourceTextureSize === textureSize && !shouldReallocateTexture(source)) {
+        updateTextureImage(this.gl, this.sourceTexture, source);
+      } else {
+        setTextureImage(this.gl, this.sourceTexture, source);
+        this.sourceTextureSize = textureSize;
+      }
+
+      const fitRects = computeFitRects(
+        sourceWidth,
+        sourceHeight,
+        surface.width,
+        surface.height,
+        options.fit || "contain",
+      );
+      const sourceRect = options.sourceRect || fitRects.sourceRect;
+      const outputRect = options.outputRect || fitRects.outputRect;
+
+      this.renderMatrixEmission(config, sourceRect, outputRect);
+      this.renderBloom(config);
+      this.renderCompose(config, time);
+      this.lastTrace = {
+        backend: "webgl2",
+        sourceFrame: { width: sourceWidth, height: sourceHeight, canvas: source },
+        modules: [
+          "MediaTexture",
+          "MatrixQuantizationPass",
+          "PhosphorEmissionPass",
+          "BloomDownsampleUpsamplePass",
+          "LensDiffusionComposePass",
+        ],
+      };
+      return this.lastTrace;
+    }
+
+    renderMatrixEmission(config, sourceRect, outputRect = [0, 0, 1, 1]) {
+      const gl = this.gl;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.emissionFramebuffer);
+      gl.viewport(0, 0, this.width, this.height);
+      gl.useProgram(this.matrixProgram);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      bindTextureUnit(gl, 0, this.sourceTexture);
+      setUniforms(gl, this.matrixProgram, {
+        u_source: { unit: 0 },
+        u_resolution: [this.width, this.height],
+        u_sourceRect: sourceRect,
+        u_outputRect: outputRect,
+        u_matrixPitch: config.matrixPitch * this.surface.dpr,
+        u_cellFillRatio: config.cellFillRatio,
+        u_threshold: config.threshold,
+        u_brightness: config.brightness,
+        u_contrast: config.contrast,
+        u_coreIntensity: config.coreIntensity,
+        u_coreColor: normalizeColor(config.phosphorPalette.core),
+        u_hotColor: normalizeColor(config.phosphorPalette.hot),
+        u_glowColor: normalizeColor(config.phosphorPalette.glow),
+      });
+      gl.bindVertexArray(this.geometry.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+
+    renderBloom(config) {
+      const gl = this.gl;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.bloomAFramebuffer);
+      gl.viewport(0, 0, this.bloomWidth, this.bloomHeight);
+      gl.useProgram(this.bloomProgram);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      bindTextureUnit(gl, 0, this.emissionTexture);
+      setUniforms(gl, this.bloomProgram, {
+        u_texture: { unit: 0 },
+        u_texel: [1 / this.width, 1 / this.height],
+        u_radius: config.bloomRadius,
+        u_strength: config.bloomStrength * 0.72,
+        u_glowColor: normalizeColor(config.phosphorPalette.glow),
+      });
+      gl.bindVertexArray(this.geometry.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.bloomBFramebuffer);
+      gl.viewport(0, 0, this.bloomWidth, this.bloomHeight);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      bindTextureUnit(gl, 0, this.bloomATexture);
+      setUniforms(gl, this.bloomProgram, {
+        u_texture: { unit: 0 },
+        u_texel: [1 / this.bloomWidth, 1 / this.bloomHeight],
+        u_radius: config.bloomRadius * 1.8,
+        u_strength: config.bloomStrength * 0.82,
+        u_glowColor: normalizeColor(config.phosphorPalette.outer),
+      });
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+
+    renderCompose(config, time) {
+      const gl = this.gl;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, this.width, this.height);
+      gl.useProgram(this.composeProgram);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      bindTextureUnit(gl, 0, this.emissionTexture);
+      bindTextureUnit(gl, 1, this.bloomATexture);
+      bindTextureUnit(gl, 2, this.bloomBTexture);
+      setUniforms(gl, this.composeProgram, {
+        u_emission: { unit: 0 },
+        u_bloomA: { unit: 1 },
+        u_bloomB: { unit: 2 },
+        u_resolution: [this.width, this.height],
+        u_time: time,
+        u_matrixPitch: config.matrixPitch * this.surface.dpr,
+        u_noiseAmount: config.noiseAmount,
+        u_vignetteStrength: config.vignetteStrength,
+        u_diffusionStrength: config.diffusionStrength,
+        u_flickerAmount: config.flickerAmount,
+        u_opacity: config.opacity,
+        u_blackColor: normalizeColor(config.phosphorPalette.black),
+      });
+      gl.bindVertexArray(this.geometry.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+
+    destroy() {
+      const gl = this.gl;
+      [
+        this.sourceTexture,
+        this.emissionTexture,
+        this.bloomATexture,
+        this.bloomBTexture,
+      ].forEach((texture) => texture && gl.deleteTexture(texture));
+      [
+        this.emissionFramebuffer,
+        this.bloomAFramebuffer,
+        this.bloomBFramebuffer,
+      ].forEach((framebuffer) => framebuffer && gl.deleteFramebuffer(framebuffer));
+      [
+        this.matrixProgram,
+        this.bloomProgram,
+        this.composeProgram,
+      ].forEach((program) => program && gl.deleteProgram(program));
+      if (this.geometry?.buffer) gl.deleteBuffer(this.geometry.buffer);
+      if (this.geometry?.vao) gl.deleteVertexArray(this.geometry.vao);
+    }
+  }
+
+  function isVideoElement(source) {
+    return source instanceof HTMLVideoElement;
+  }
+
+  function resolveSourceSize(source) {
+    return {
+      width: Math.max(1, source.videoWidth || source.naturalWidth || source.width || source.displayWidth || 1),
+      height: Math.max(1, source.videoHeight || source.naturalHeight || source.height || source.displayHeight || 1),
+    };
+  }
+
+  function sourceNeedsRealtimeUpload(source, mode) {
+    if (mode === "static") return false;
+    if (mode === "realtime") return true;
+    return isVideoElement(source) || source instanceof HTMLCanvasElement;
+  }
+
+  function isTransientFrameError(error) {
+    return error?.message === "Video source has no drawable frame yet.";
+  }
+
+  class MediaSurface {
+    constructor(canvas, config) {
+      this.canvas = canvas;
+      this.config = config;
+      this.resize = this.resize.bind(this);
+      this.resize();
+      window.addEventListener("resize", this.resize, { passive: true });
+    }
+
+    resize() {
+      const rect = this.canvas.getBoundingClientRect();
+      const cssWidth = Math.max(1, Math.round(rect.width || this.canvas.clientWidth || window.innerWidth));
+      const cssHeight = Math.max(1, Math.round(rect.height || this.canvas.clientHeight || window.innerHeight));
+      const dpr = Math.min(window.devicePixelRatio || 1, this.config.maxDpr);
+      this.dpr = dpr;
+      this.cssWidth = cssWidth;
+      this.cssHeight = cssHeight;
+      this.width = Math.max(1, Math.round(cssWidth * dpr));
+      this.height = Math.max(1, Math.round(cssHeight * dpr));
+      resizeCanvas(this.canvas, this.width, this.height);
+    }
+
+    destroy() {
+      window.removeEventListener("resize", this.resize);
+    }
+  }
+
+  class PhosphorMediaRenderer {
+    constructor(options = {}) {
+      if (!options.mount) throw new Error("PhosphorMediaRenderer requires a mount canvas.");
+      if (!options.source) throw new Error("PhosphorMediaRenderer requires an image, video, canvas, or ImageBitmap source.");
+      this.config = createPhosphorConfig({
+        ...options,
+        target: null,
+        mount: options.mount,
+        backend: "webgl2",
+      });
+      this.source = options.source;
+      this.fit = options.fit || "contain";
+      this.sourceUpdateMode = options.sourceUpdateMode || "auto";
+      this.surface = new MediaSurface(options.mount, this.config);
+      this.pipeline = new WebGLMediaPipeline(this.surface, this.config);
+      this.running = false;
+      this.rafId = 0;
+      this.lastFrameTime = 0;
+      this.hasRenderedStaticFrame = false;
+      this.lastError = null;
+      this.errorRetryTime = 0;
+      this.render = this.render.bind(this);
+    }
+
+    static isSupported() {
+      return WebGLMediaPipeline.isSupported();
+    }
+
+    setSource(source, options = {}) {
+      this.source = source;
+      if (options.fit) this.fit = options.fit;
+      if (options.sourceUpdateMode) this.sourceUpdateMode = options.sourceUpdateMode;
+      this.hasRenderedStaticFrame = false;
+      this.lastError = null;
+      this.errorRetryTime = 0;
+      this.pipeline.invalidate();
+      this.surface.resize();
+      if (!this.running) this.render(performance.now());
+    }
+
+    start() {
+      if (this.running) return;
+      this.running = true;
+      this.lastFrameTime = 0;
+      this.rafId = window.requestAnimationFrame(this.render);
+    }
+
+    stop() {
+      this.running = false;
+      if (this.rafId) window.cancelAnimationFrame(this.rafId);
+      this.rafId = 0;
+    }
+
+    destroy() {
+      this.stop();
+      this.pipeline.destroy();
+      this.surface.destroy();
+    }
+
+    updateConfig(nextConfig = {}) {
+      this.config = createPhosphorConfig({
+        ...this.config,
+        ...nextConfig,
+        phosphorPalette: {
+          ...this.config.phosphorPalette,
+          ...(nextConfig.phosphorPalette || {}),
+        },
+        target: null,
+        mount: this.surface.canvas,
+        backend: "webgl2",
+      });
+      this.surface.config = this.config;
+      this.surface.resize();
+      this.pipeline.invalidate();
+      this.hasRenderedStaticFrame = false;
+    }
+
+    setQuality(quality) {
+      this.config = applyQualityPreset(this.config, quality);
+      this.config.target = null;
+      this.config.mount = this.surface.canvas;
+      this.config.backend = "webgl2";
+      this.surface.config = this.config;
+      this.surface.resize();
+      this.pipeline.invalidate();
+      this.hasRenderedStaticFrame = false;
+    }
+
+    render(time = performance.now()) {
+      const frameInterval = 1000 / Math.max(1, this.config.frameRate);
+      const realtimeSource = sourceNeedsRealtimeUpload(this.source, this.sourceUpdateMode);
+      if (this.lastError && time < this.errorRetryTime) {
+        if (this.running) this.rafId = window.requestAnimationFrame(this.render);
+        return;
+      }
+      const shouldRender = realtimeSource ||
+        !this.hasRenderedStaticFrame ||
+        time - this.lastFrameTime >= frameInterval;
+
+      if (shouldRender) {
+        this.lastFrameTime = time;
+        this.surface.resize();
+        try {
+          this.pipeline.renderMediaSource(this.source, this.surface, this.config, time, { fit: this.fit });
+          this.hasRenderedStaticFrame = true;
+          this.lastError = null;
+        } catch (error) {
+          this.lastError = isTransientFrameError(error) ? null : error;
+          this.errorRetryTime = time + 250;
+        }
+      }
+
+      if (this.running) {
+        this.rafId = window.requestAnimationFrame(this.render);
+      }
+    }
+
+    getState() {
+      return {
+        running: this.running,
+        backend: "webgl2",
+        config: this.config,
+        fit: this.fit,
+        sourceUpdateMode: this.sourceUpdateMode,
+        error: this.lastError ? this.lastError.message : null,
+        source: resolveSourceSize(this.source),
+        trace: this.pipeline.lastTrace,
+        surface: {
+          width: this.surface.width,
+          height: this.surface.height,
+          dpr: this.surface.dpr,
+        },
+      };
+    }
+  }
+
+  window.Phosphor = {
+    ...(window.Phosphor || {}),
+    PhosphorMediaRenderer,
+    PHOSPHOR_DEFAULT_CONFIG,
+    createPhosphorConfig,
+  };
+}());

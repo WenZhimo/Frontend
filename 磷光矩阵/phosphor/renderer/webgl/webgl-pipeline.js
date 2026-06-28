@@ -9,6 +9,7 @@ import {
   resizeTexture,
   setTextureImage,
   setUniforms,
+  updateTextureImage,
 } from "./gl-utils.js";
 import {
   BLOOM_FRAGMENT_SHADER,
@@ -19,6 +20,66 @@ import {
 
 function normalizeColor(color) {
   return [color[0] / 255, color[1] / 255, color[2] / 255];
+}
+
+function isVideoReady(source) {
+  return !(source instanceof HTMLVideoElement) ||
+    (source.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && source.videoWidth > 0 && source.videoHeight > 0);
+}
+
+function shouldReallocateTexture(source) {
+  return source instanceof HTMLVideoElement || source instanceof HTMLImageElement;
+}
+
+function computeFitRects(sourceWidth, sourceHeight, outputWidth, outputHeight, fit) {
+  const sourceAspect = sourceWidth / Math.max(1, sourceHeight);
+  const outputAspect = outputWidth / Math.max(1, outputHeight);
+  const sourceRect = [0, 0, 1, 1];
+  const outputRect = [0, 0, 1, 1];
+
+  if (fit === "stretch") return { sourceRect, outputRect };
+
+  if (fit === "contain") {
+    if (sourceAspect > outputAspect) {
+      const height = outputAspect / sourceAspect;
+      outputRect[1] = (1 - height) / 2;
+      outputRect[3] = height;
+    } else {
+      const width = sourceAspect / outputAspect;
+      outputRect[0] = (1 - width) / 2;
+      outputRect[2] = width;
+    }
+    return { sourceRect, outputRect };
+  }
+
+  if (fit === "fit-width") {
+    const height = sourceAspect / outputAspect;
+    if (height < 1) {
+      sourceRect[1] = (1 - height) / 2;
+      sourceRect[3] = height;
+    }
+    return { sourceRect, outputRect };
+  }
+
+  if (fit === "fit-height") {
+    const width = outputAspect / sourceAspect;
+    if (width < 1) {
+      sourceRect[0] = (1 - width) / 2;
+      sourceRect[2] = width;
+    }
+    return { sourceRect, outputRect };
+  }
+
+  if (sourceAspect > outputAspect) {
+    const width = outputAspect / sourceAspect;
+    sourceRect[0] = (1 - width) / 2;
+    sourceRect[2] = width;
+  } else {
+    const height = sourceAspect / outputAspect;
+    sourceRect[1] = (1 - height) / 2;
+    sourceRect[3] = height;
+  }
+  return { sourceRect, outputRect };
 }
 
 export class WebGLPhosphorPipeline {
@@ -54,7 +115,9 @@ export class WebGLPhosphorPipeline {
     this.lastTrace = null;
     this.lastSourceTime = -Infinity;
     this.lastSourceSize = "";
+    this.sourceTextureSize = "";
     this.sourceFrame = null;
+    this.sourceRect = [0, 0, 1, 1];
     this.init();
     this.resize();
   }
@@ -95,6 +158,7 @@ export class WebGLPhosphorPipeline {
   invalidate() {
     this.lastSourceTime = -Infinity;
     this.lastSourceSize = "";
+    this.sourceTextureSize = "";
   }
 
   render(_ctx, target, surface, config, time) {
@@ -106,11 +170,13 @@ export class WebGLPhosphorPipeline {
     if (!this.sourceFrame || this.lastSourceSize !== sourceSize || time - this.lastSourceTime >= config.sourceFrameInterval) {
       this.sourceFrame = this.sampleSourceFrame(target, surface, config, time);
       setTextureImage(this.gl, this.sourceTexture, this.sourceFrame.canvas);
+      this.sourceTextureSize = `${this.sourceFrame.canvas.width}x${this.sourceFrame.canvas.height}`;
+      this.sourceRect = [0, 0, 1, 1];
       this.lastSourceTime = time;
       this.lastSourceSize = sourceSize;
     }
 
-    this.renderMatrixEmission(config);
+    this.renderMatrixEmission(config, this.sourceRect);
     this.renderBloom(config);
     this.renderCompose(config, time);
 
@@ -135,6 +201,62 @@ export class WebGLPhosphorPipeline {
     return this.lastTrace;
   }
 
+  renderMediaSource(source, surface, config, time, options = {}) {
+    this.surface = surface;
+    this.config = config;
+    if (this.width !== surface.width || this.height !== surface.height) this.resize();
+    if (!isVideoReady(source)) {
+      throw new Error("Video source has no drawable frame yet.");
+    }
+
+    const sourceWidth = Math.max(1, source.videoWidth || source.naturalWidth || source.width || source.displayWidth || 1);
+    const sourceHeight = Math.max(1, source.videoHeight || source.naturalHeight || source.height || source.displayHeight || 1);
+    const textureSize = `${sourceWidth}x${sourceHeight}`;
+    if (this.sourceTextureSize === textureSize && !shouldReallocateTexture(source)) {
+      updateTextureImage(this.gl, this.sourceTexture, source);
+    } else {
+      setTextureImage(this.gl, this.sourceTexture, source);
+      this.sourceTextureSize = textureSize;
+    }
+
+    const fitRects = computeFitRects(
+      sourceWidth,
+      sourceHeight,
+      surface.width,
+      surface.height,
+      options.fit || "contain",
+    );
+    const sourceRect = options.sourceRect || fitRects.sourceRect;
+    const outputRect = options.outputRect || fitRects.outputRect;
+
+    this.renderMatrixEmission(config, sourceRect, outputRect);
+    this.renderBloom(config);
+    this.renderCompose(config, time);
+
+    this.lastTrace = {
+      backend: "webgl2",
+      sourceFrame: {
+        width: sourceWidth,
+        height: sourceHeight,
+        canvas: source,
+      },
+      modules: [
+        "MediaTexture",
+        "MatrixQuantizationPass",
+        "PhosphorEmissionPass",
+        "BloomDownsampleUpsamplePass",
+        "LensDiffusionComposePass",
+      ],
+      uniforms: {
+        matrixPitch: config.matrixPitch,
+        bloomStrength: config.bloomStrength,
+        quality: config.quality,
+        fit: options.fit || "contain",
+      },
+    };
+    return this.lastTrace;
+  }
+
   sampleSourceFrame(target, surface, config, time) {
     const sourceScale = Math.min(1, Math.max(0.25, config.sourceScale || 1));
     if (sourceScale >= 0.99) return this.sourceSampler.sample(target, surface, config, time);
@@ -147,7 +269,7 @@ export class WebGLPhosphorPipeline {
     return this.sourceSampler.sample(target, sourceSurface, config, time);
   }
 
-  renderMatrixEmission(config) {
+  renderMatrixEmission(config, sourceRect = [0, 0, 1, 1], outputRect = [0, 0, 1, 1]) {
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.emissionFramebuffer);
     gl.viewport(0, 0, this.width, this.height);
@@ -158,6 +280,8 @@ export class WebGLPhosphorPipeline {
     setUniforms(gl, this.matrixProgram, {
       u_source: { unit: 0 },
       u_resolution: [this.width, this.height],
+      u_sourceRect: sourceRect,
+      u_outputRect: outputRect,
       u_matrixPitch: config.matrixPitch * this.surface.dpr,
       u_cellFillRatio: config.cellFillRatio,
       u_threshold: config.threshold,
