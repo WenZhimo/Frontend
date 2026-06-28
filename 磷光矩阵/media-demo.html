@@ -323,7 +323,7 @@
       <header class="topbar">
         <div class="title">
           <h1>磷光矩阵本地资源处理</h1>
-          <p class="subtitle">图片、视频和 canvas 直接作为 WebGL 纹理输入</p>
+          <p class="subtitle">图片、视频、SVG、GIF 和 canvas 直接作为 WebGL 纹理输入</p>
         </div>
         <button id="toggleRender" class="primaryButton" type="button">暂停</button>
       </header>
@@ -340,7 +340,7 @@
       <header class="sidebarHeader">
         <div class="title">
           <h2>控制台</h2>
-          <p class="subtitle">拖入本地图片或视频，或切回内置动态 canvas。</p>
+          <p class="subtitle">拖入本地资源，或切回内置动态 canvas 与视频源。</p>
         </div>
       </header>
       <div class="sidebarBody">
@@ -348,13 +348,13 @@
           <h2>本地资源</h2>
           <label id="dropZone" class="dropZone" for="fileInput">
             <strong>选择或拖拽文件</strong>
-            <span>支持 PNG、JPG、WebP、MP4、WebM 等浏览器可解码格式。</span>
+            <span>支持 PNG、JPG、WebP、GIF、SVG、MP4、WebM 等浏览器可解码格式。</span>
           </label>
           <input id="fileInput" class="fileInput" type="file" accept="image/*,.svg,.svgz,video/*">
           <div class="buttonRow">
             <button class="sourceButton" type="button" data-source="canvas" aria-pressed="true">Canvas</button>
-            <button class="sourceButton" type="button" data-source="image" aria-pressed="false">示例图</button>
-            <button class="sourceButton" type="button" data-source="video" aria-pressed="false">示例视频</button>
+            <button class="sourceButton" type="button" data-source="image" aria-pressed="false">照片</button>
+            <button class="sourceButton" type="button" data-source="video" aria-pressed="false">视频</button>
           </div>
           <img id="imageSource" class="previewMedia hidden" alt="示例或本地图片源">
           <video id="videoSource" class="previewMedia hidden" muted loop playsinline controls></video>
@@ -368,8 +368,8 @@
           <label class="control">
             <span class="controlHead"><span>画面适配</span></span>
             <select id="fitMode">
-              <option value="contain" selected>适应画布</option>
-              <option value="cover">覆盖画布</option>
+              <option value="contain" selected>完整显示</option>
+              <option value="cover">覆盖填满</option>
               <option value="fit-width">按宽度填满</option>
               <option value="fit-height">按高度填满</option>
               <option value="stretch">拉伸填满</option>
