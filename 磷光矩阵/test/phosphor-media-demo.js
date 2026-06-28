@@ -1,3 +1,29 @@
+const copy = {
+  labels: {
+    builtInCanvas: "Canvas 源",
+    builtInImage: "示例图像",
+    builtInVideo: "示例视频",
+  },
+  buttons: {
+    pause: "暂停",
+    resume: "继续",
+  },
+  status: {
+    initializing: "WebGL2 初始化中",
+    libraryMissing: "库未加载",
+    unsupported: "WebGL2 不可用",
+  },
+  errors: {
+    imageLoad: "图片无法加载。",
+    videoLoad: "视频无法加载，或浏览器无法解码该视频。",
+    gifDecode: "GIF 解码失败，未读取到可播放帧。",
+    unsupportedFile: "请选择浏览器可解码的图片、SVG、GIF 或视频文件。",
+    libraryMissing: "磷光媒体库未加载，请确认 phosphor/media-renderer.global.js 与本页面在同一项目目录。",
+    unsupportedWebgl: "当前浏览器不支持 WebGL2，媒体 shader 演示无法运行。",
+    textureUpload: "纹理上传失败：",
+  },
+};
+
 const mount = document.getElementById("mediaMount");
 const imageSource = document.getElementById("imageSource");
 const videoSource = document.getElementById("videoSource");
@@ -27,14 +53,15 @@ const sourceButtons = [...document.querySelectorAll("[data-source]")];
 const { PhosphorMediaRenderer } = window.Phosphor || {};
 
 let renderer = null;
-let activeObjectUrl = "";
-let activeImageBitmap = null;
-let activeGifCanvas = null;
-let activeGifImage = null;
-let activeGifAnimation = null;
-let activeSvgCanvas = null;
-let activeImageLabel = "";
+let activeAdapter = null;
+let currentImageAdapter = null;
+let currentVideoAdapter = null;
+let builtInCanvasAdapter = null;
+let builtInImageAdapter = null;
+let builtInVideoAdapter = null;
 let generatedVideoStream = null;
+let isRenderLoopRunning = true;
+let appRafId = 0;
 let frameCount = 0;
 let fpsStart = performance.now();
 
@@ -61,35 +88,6 @@ function showSourcePreview(kind) {
   canvasSource.classList.toggle("hidden", kind !== "canvas");
 }
 
-function revokeObjectUrl() {
-  if (!activeObjectUrl) return;
-  URL.revokeObjectURL(activeObjectUrl);
-  activeObjectUrl = "";
-}
-
-function closeActiveImageBitmap() {
-  if (!activeImageBitmap) return;
-  activeImageBitmap.close();
-  activeImageBitmap = null;
-}
-
-function clearActiveGifSource() {
-  if (activeGifAnimation?.decoder) activeGifAnimation.decoder.close();
-  if (activeGifAnimation?.frames) {
-    activeGifAnimation.frames.forEach((frame) => frame.bitmap?.close?.());
-  }
-  activeGifAnimation = null;
-  activeGifCanvas = null;
-  activeGifImage = null;
-}
-
-function clearActiveImageSource() {
-  closeActiveImageBitmap();
-  clearActiveGifSource();
-  activeSvgCanvas = null;
-  activeImageLabel = "";
-}
-
 function isGifFile(file) {
   return file.type === "image/gif" || /\.gif$/i.test(file.name);
 }
@@ -98,30 +96,12 @@ function isSvgFile(file) {
   return file.type === "image/svg+xml" || /\.svgz?$/i.test(file.name);
 }
 
-function rasterizeSvgImage(image) {
-  const width = image.naturalWidth || 1024;
-  const height = image.naturalHeight || 1024;
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, width, height);
-  ctx.drawImage(image, 0, 0, width, height);
-  return canvas;
+function isImageFile(file) {
+  return file.type.startsWith("image/") || isSvgFile(file);
 }
 
-function drawSvgSource() {
-  if (activeSvgCanvas && imageSource.complete && imageSource.naturalWidth) {
-    drawImageElementToCanvas(imageSource, activeSvgCanvas);
-  }
-  requestAnimationFrame(drawSvgSource);
-}
-
-async function restartImagePreviewFromObjectUrl(url) {
-  imageSource.removeAttribute("src");
-  imageSource.offsetWidth;
-  imageSource.src = url;
-  await waitForImage(imageSource);
+function isVideoFile(file) {
+  return file.type.startsWith("video/");
 }
 
 function waitForImage(image) {
@@ -129,7 +109,7 @@ function waitForImage(image) {
   if (image.complete && image.naturalWidth) return Promise.resolve();
   return new Promise((resolve, reject) => {
     image.addEventListener("load", resolve, { once: true });
-    image.addEventListener("error", () => reject(new Error("图片无法加载。")), { once: true });
+    image.addEventListener("error", () => reject(new Error(copy.errors.imageLoad)), { once: true });
   });
 }
 
@@ -142,7 +122,7 @@ function waitForVideo(video) {
     };
     video.addEventListener("loadeddata", handleReady, { once: true });
     video.addEventListener("canplay", handleReady, { once: true });
-    video.addEventListener("error", () => reject(new Error("视频无法加载或浏览器无法解码。")), { once: true });
+    video.addEventListener("error", () => reject(new Error(copy.errors.videoLoad)), { once: true });
   });
 }
 
@@ -195,7 +175,7 @@ function sizeVideoGenerator() {
   }
 }
 
-function drawCanvasSource(time) {
+function drawBuiltInCanvas(time) {
   sizeCanvasSource();
   const ctx = canvasSource.getContext("2d");
   const w = canvasSource.width;
@@ -225,143 +205,6 @@ function drawCanvasSource(time) {
   ctx.fillStyle = "#79e6a1";
   ctx.font = `${Math.round(h * 0.052)}px Segoe UI, sans-serif`;
   ctx.fillText("direct WebGL texture source", w * 0.085, h * 0.55);
-
-  requestAnimationFrame(drawCanvasSource);
-}
-
-function drawGifSource() {
-  const animation = activeGifAnimation;
-  if (animation?.frames?.length) {
-    updateDecodedGifFrame(animation, performance.now());
-  } else if (animation?.image?.complete && animation.image.naturalWidth) {
-    drawImageElementToCanvas(animation.image, animation.canvas);
-  }
-  requestAnimationFrame(drawGifSource);
-}
-
-function drawImageElementToCanvas(image, canvas) {
-  const width = image.naturalWidth;
-  const height = image.naturalHeight;
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, width, height);
-  ctx.drawImage(image, 0, 0, width, height);
-}
-
-function prepareGifTimeline(frames) {
-  let cursor = 0;
-  frames.forEach((frame) => {
-    frame.startMs = cursor;
-    cursor += frame.durationMs;
-    frame.endMs = cursor;
-  });
-  return Math.max(20, cursor);
-}
-
-function findGifFrameIndex(animation, time) {
-  if (animation.frames.length <= 1) return 0;
-  const totalDurationMs = animation.totalDurationMs || prepareGifTimeline(animation.frames);
-  const elapsed = ((time - animation.startedAt) % totalDurationMs + totalDurationMs) % totalDurationMs;
-  let low = 0;
-  let high = animation.frames.length - 1;
-  while (low < high) {
-    const mid = (low + high) >> 1;
-    if (elapsed < animation.frames[mid].endMs) high = mid;
-    else low = mid + 1;
-  }
-  return low;
-}
-
-async function updateDecodedGifFrame(animation, time, force = false) {
-  if (!animation.frames?.length) return;
-
-  if (!animation.startedAt) {
-    animation.startedAt = time;
-  }
-
-  const frameIndex = findGifFrameIndex(animation, time);
-  if (!force && frameIndex === animation.drawnFrameIndex) return;
-
-  const frame = animation.frames[frameIndex] || animation.frames[0];
-  if (animation.canvas.width !== frame.width || animation.canvas.height !== frame.height) {
-    animation.canvas.width = frame.width;
-    animation.canvas.height = frame.height;
-  }
-
-  const ctx = animation.canvas.getContext("2d");
-  ctx.clearRect(0, 0, animation.canvas.width, animation.canvas.height);
-  ctx.drawImage(frame.bitmap, 0, 0);
-
-  animation.frameIndex = frameIndex;
-  animation.drawnFrameIndex = frameIndex;
-  animation.nextFrameTime = animation.startedAt + frame.endMs;
-}
-
-async function decodeGifFrames(file) {
-  const decoder = new ImageDecoder({
-    data: await file.arrayBuffer(),
-    type: file.type || "image/gif",
-  });
-  const frames = [];
-  const maxFrames = 3000;
-
-  try {
-    await decoder.tracks.ready;
-    for (let index = 0; index < maxFrames; index += 1) {
-      let decoded;
-      try {
-        decoded = await decoder.decode({ frameIndex: index });
-      } catch (error) {
-        break;
-      }
-
-      const image = decoded.image;
-      try {
-        frames.push({
-          bitmap: await createImageBitmap(image),
-          durationMs: Math.max(20, (image.duration || 100000) / 1000),
-          width: image.displayWidth,
-          height: image.displayHeight,
-        });
-      } finally {
-        image.close();
-      }
-    }
-  } finally {
-    decoder.close();
-  }
-
-  return frames;
-}
-
-async function createGifCanvasSource(file) {
-  const canvas = document.createElement("canvas");
-  activeGifCanvas = canvas;
-
-  if ("ImageDecoder" in window) {
-    const frames = await decodeGifFrames(file);
-    if (!frames.length) throw new Error("GIF 鏃犳硶瑙ｇ爜涓哄彲缁樺埗甯с€?");
-    const totalDurationMs = prepareGifTimeline(frames);
-    activeGifAnimation = {
-      canvas,
-      frames,
-      frameIndex: 0,
-      drawnFrameIndex: -1,
-      startedAt: performance.now(),
-      totalDurationMs,
-      nextFrameTime: 0,
-    };
-    await updateDecodedGifFrame(activeGifAnimation, performance.now(), true);
-    return canvas;
-  }
-
-  activeGifImage = imageSource;
-  activeGifAnimation = { canvas, image: activeGifImage };
-  drawImageElementToCanvas(activeGifImage, canvas);
-  return canvas;
 }
 
 function drawGeneratedVideo(time) {
@@ -395,14 +238,280 @@ function drawGeneratedVideo(time) {
   ctx.fillStyle = "#7ee7ad";
   ctx.font = "500 32px Segoe UI, sans-serif";
   ctx.fillText("canvas.captureStream source", 78, h * 0.55);
-  requestAnimationFrame(drawGeneratedVideo);
 }
 
-function ensureGeneratedSources() {
+function drawImageElementToCanvas(image, canvas) {
+  const width = image.naturalWidth;
+  const height = image.naturalHeight;
+  if (!width || !height) return;
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(image, 0, 0, width, height);
+}
+
+function prepareGifTimeline(frames) {
+  let cursor = 0;
+  frames.forEach((frame) => {
+    frame.startMs = cursor;
+    cursor += frame.durationMs;
+    frame.endMs = cursor;
+  });
+  return Math.max(20, cursor);
+}
+
+function findGifFrameIndex(animation, time) {
+  if (animation.frames.length <= 1) return 0;
+  const totalDurationMs = animation.totalDurationMs || prepareGifTimeline(animation.frames);
+  const elapsed = ((time - animation.startedAt) % totalDurationMs + totalDurationMs) % totalDurationMs;
+  let low = 0;
+  let high = animation.frames.length - 1;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (elapsed < animation.frames[mid].endMs) high = mid;
+    else low = mid + 1;
+  }
+  return low;
+}
+
+function updateDecodedGifFrame(animation, time, force = false) {
+  if (!animation.frames?.length) return;
+  const frameIndex = findGifFrameIndex(animation, time);
+  if (!force && frameIndex === animation.drawnFrameIndex) return;
+
+  const frame = animation.frames[frameIndex] || animation.frames[0];
+  if (animation.canvas.width !== frame.width || animation.canvas.height !== frame.height) {
+    animation.canvas.width = frame.width;
+    animation.canvas.height = frame.height;
+  }
+
+  const ctx = animation.canvas.getContext("2d");
+  ctx.clearRect(0, 0, animation.canvas.width, animation.canvas.height);
+  ctx.drawImage(frame.bitmap, 0, 0);
+
+  animation.frameIndex = frameIndex;
+  animation.drawnFrameIndex = frameIndex;
+}
+
+async function decodeGifFrames(file) {
+  const decoder = new ImageDecoder({
+    data: await file.arrayBuffer(),
+    type: file.type || "image/gif",
+  });
+  const frames = [];
+  const maxFrames = 3000;
+
+  try {
+    await decoder.tracks.ready;
+    for (let index = 0; index < maxFrames; index += 1) {
+      let decoded;
+      try {
+        decoded = await decoder.decode({ frameIndex: index });
+      } catch {
+        break;
+      }
+
+      const image = decoded.image;
+      try {
+        frames.push({
+          bitmap: await createImageBitmap(image),
+          durationMs: Math.max(20, (image.duration || 100000) / 1000),
+          width: image.displayWidth,
+          height: image.displayHeight,
+        });
+      } finally {
+        image.close();
+      }
+    }
+  } finally {
+    decoder.close();
+  }
+
+  return frames;
+}
+
+function createObjectUrlAdapterBase(file, objectUrl) {
+  return {
+    kind: "image",
+    label: file.name,
+    rendererSource: null,
+    sourceUpdateMode: "auto",
+    previewKind: "image",
+    tab: "image",
+    update() {},
+    dispose() {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    },
+  };
+}
+
+function createBuiltInCanvasAdapter() {
+  return {
+    kind: "canvas",
+    label: copy.labels.builtInCanvas,
+    rendererSource: canvasSource,
+    sourceUpdateMode: "realtime",
+    previewKind: "canvas",
+    tab: "canvas",
+    update(time) {
+      drawBuiltInCanvas(time);
+    },
+    dispose() {},
+  };
+}
+
+async function createBuiltInImageAdapter() {
   if (!imageSource.src) imageSource.src = createGeneratedImage();
+  await waitForImage(imageSource);
+  return {
+    kind: "image",
+    label: copy.labels.builtInImage,
+    rendererSource: imageSource,
+    sourceUpdateMode: "static",
+    previewKind: "image",
+    tab: "image",
+    update() {},
+    dispose() {},
+  };
+}
+
+async function createBuiltInVideoAdapter() {
+  drawGeneratedVideo(performance.now());
   if (!generatedVideoStream && videoGenerator.captureStream) {
-    generatedVideoStream = videoGenerator.captureStream(30);
+    generatedVideoStream = videoGenerator.captureStream(60);
+  }
+  if (generatedVideoStream && videoSource.srcObject !== generatedVideoStream) {
     videoSource.srcObject = generatedVideoStream;
+    videoSource.removeAttribute("src");
+  }
+  videoSource.loop = true;
+  videoSource.muted = true;
+  await waitForVideo(videoSource);
+  await playVideo(videoSource);
+  return {
+    kind: "video",
+    label: copy.labels.builtInVideo,
+    rendererSource: videoSource,
+    sourceUpdateMode: "auto",
+    previewKind: "video",
+    tab: "video",
+    update(time) {
+      drawGeneratedVideo(time);
+    },
+    dispose() {},
+  };
+}
+
+async function createBitmapAdapter(file, objectUrl) {
+  const adapter = createObjectUrlAdapterBase(file, objectUrl);
+  imageSource.src = objectUrl;
+  await waitForImage(imageSource);
+  const bitmap = await createImageBitmap(file);
+  adapter.rendererSource = bitmap;
+  adapter.sourceUpdateMode = "static";
+  adapter.dispose = () => {
+    bitmap.close();
+    URL.revokeObjectURL(objectUrl);
+  };
+  return adapter;
+}
+
+async function createGifAdapter(file, objectUrl) {
+  const adapter = createObjectUrlAdapterBase(file, objectUrl);
+  const canvas = document.createElement("canvas");
+  imageSource.src = objectUrl;
+  await waitForImage(imageSource);
+  let animation;
+
+  if ("ImageDecoder" in window) {
+    try {
+      const frames = await decodeGifFrames(file);
+      if (!frames.length) throw new Error(copy.errors.gifDecode);
+      animation = {
+        canvas,
+        frames,
+        frameIndex: 0,
+        drawnFrameIndex: -1,
+        startedAt: performance.now(),
+        totalDurationMs: prepareGifTimeline(frames),
+      };
+      updateDecodedGifFrame(animation, animation.startedAt, true);
+    } catch {
+      animation = null;
+    }
+  }
+
+  if (!animation) {
+    animation = { canvas, image: imageSource, frameIndex: 0 };
+    drawImageElementToCanvas(imageSource, canvas);
+  }
+
+  adapter.rendererSource = canvas;
+  adapter.sourceUpdateMode = "realtime";
+  adapter.animation = animation;
+  adapter.update = (time) => {
+    if (animation.frames?.length) updateDecodedGifFrame(animation, time);
+    else if (animation.image?.complete && animation.image.naturalWidth) drawImageElementToCanvas(animation.image, canvas);
+  };
+  adapter.dispose = () => {
+    animation.frames?.forEach((frame) => frame.bitmap?.close?.());
+    URL.revokeObjectURL(objectUrl);
+  };
+  return adapter;
+}
+
+async function createSvgAdapter(file, objectUrl) {
+  const adapter = createObjectUrlAdapterBase(file, objectUrl);
+  const canvas = document.createElement("canvas");
+  imageSource.src = objectUrl;
+  await waitForImage(imageSource);
+  drawImageElementToCanvas(imageSource, canvas);
+  adapter.rendererSource = canvas;
+  adapter.sourceUpdateMode = "realtime";
+  adapter.update = () => {
+    if (imageSource.complete && imageSource.naturalWidth) drawImageElementToCanvas(imageSource, canvas);
+  };
+  adapter.dispose = () => {
+    URL.revokeObjectURL(objectUrl);
+  };
+  return adapter;
+}
+
+async function createVideoAdapter(file, objectUrl) {
+  const adapter = createObjectUrlAdapterBase(file, objectUrl);
+  adapter.kind = "video";
+  adapter.previewKind = "video";
+  adapter.tab = "video";
+  adapter.sourceUpdateMode = "auto";
+  videoSource.pause();
+  videoSource.srcObject = null;
+  videoSource.src = objectUrl;
+  videoSource.loop = true;
+  videoSource.muted = true;
+  videoSource.load();
+  await waitForVideo(videoSource);
+  await playVideo(videoSource);
+  adapter.rendererSource = videoSource;
+  adapter.dispose = () => {
+    videoSource.pause();
+    if (videoSource.src === objectUrl) {
+      videoSource.removeAttribute("src");
+      videoSource.load();
+    }
+    URL.revokeObjectURL(objectUrl);
+  };
+  return adapter;
+}
+
+async function playVideo(video) {
+  try {
+    await video.play();
+  } catch {
+    video.muted = true;
+    await video.play();
   }
 }
 
@@ -427,86 +536,67 @@ function ensureRenderer(source) {
     sourceUpdateMode: "auto",
     ...rendererConfig(),
   });
-  window.PhosphorMediaDemo = {
-    renderer,
-    getState: () => renderer.getState(),
-  };
-  renderer.start();
+  window.PhosphorMediaDemo.renderer = renderer;
   return renderer;
 }
 
-function syncMetrics() {
-  if (!renderer) return;
-  const state = renderer.getState();
-  backendMetric.textContent = state.backend;
-  sourceMetric.textContent = `${state.source.width} x ${state.source.height}`;
-  canvasMetric.textContent = `${state.surface.width} x ${state.surface.height}`;
-  statusText.textContent = `${state.backend} · ${state.config.quality} · ${state.fit}`;
-  if (state.error && state.error !== "Video source has no drawable frame yet.") {
-    setError(`纹理上传失败：${state.error}`);
-  }
-}
-
-async function setSource(kind, source, label, options = {}) {
+function applyActiveSource(adapter) {
+  if (!adapter?.rendererSource) return;
   setError();
-  updateSourceButtons(kind);
-  showSourcePreview(kind);
-  sourceLabel.textContent = label;
+  activeAdapter = adapter;
+  updateSourceButtons(adapter.tab);
+  showSourcePreview(adapter.previewKind);
+  sourceLabel.textContent = adapter.label;
 
-  if (kind === "image") await waitForImage(source);
-  if (kind === "video") {
-    await waitForVideo(source);
-    try {
-      await source.play();
-    } catch {
-      source.muted = true;
-      await source.play();
-    }
-  }
-
-  const activeRenderer = ensureRenderer(source);
-  activeRenderer.setSource(source, {
+  const activeRenderer = ensureRenderer(adapter.rendererSource);
+  activeRenderer.stop();
+  activeRenderer.setSource(adapter.rendererSource, {
     fit: fitMode.value,
-    sourceUpdateMode: options.sourceUpdateMode || (kind === "image" && !(source instanceof HTMLImageElement) ? "static" : "auto"),
+    sourceUpdateMode: adapter.sourceUpdateMode,
   });
-  if (!activeRenderer.getState().running) {
-    activeRenderer.start();
-    toggleRender.textContent = "暂停";
-  }
-  requestAnimationFrame(() => {
-    activeRenderer.render();
-    syncMetrics();
-  });
+  toggleRender.textContent = isRenderLoopRunning ? copy.buttons.pause : copy.buttons.resume;
+  activeRenderer.render(performance.now());
+  syncMetrics();
 }
 
-async function useBuiltInSource(kind) {
+async function selectSourceTab(tab) {
   try {
-    ensureGeneratedSources();
-    if (kind === "canvas") {
-      await setSource("canvas", canvasSource, "Canvas 源");
-    } else if (kind === "image") {
-      if (activeGifCanvas && activeGifAnimation?.frames?.length) {
-        await setSource("image", activeGifCanvas, activeImageLabel || "GIF", { sourceUpdateMode: "realtime" });
-        return;
-      }
-      if (activeImageBitmap) {
-        await setSource("image", activeImageBitmap, activeImageLabel || "Image", { sourceUpdateMode: "static" });
-        return;
-      }
-      if (activeSvgCanvas) {
-        await setSource("image", activeSvgCanvas, activeImageLabel || "SVG", { sourceUpdateMode: "realtime" });
-        return;
-      }
-      if (activeImageLabel && activeObjectUrl && imageSource.src === activeObjectUrl) {
-        await setSource("image", imageSource, activeImageLabel, { sourceUpdateMode: "static" });
-        return;
-      }
-      await setSource("image", imageSource, "示例图像");
-    } else {
-      await setSource("video", videoSource, "示例视频");
+    if (tab === "canvas") {
+      if (!builtInCanvasAdapter) builtInCanvasAdapter = createBuiltInCanvasAdapter();
+      applyActiveSource(builtInCanvasAdapter);
+      return;
     }
+    if (tab === "video") {
+      if (currentVideoAdapter) {
+        applyActiveSource(currentVideoAdapter);
+        return;
+      }
+      if (!builtInVideoAdapter) builtInVideoAdapter = await createBuiltInVideoAdapter();
+      applyActiveSource(builtInVideoAdapter);
+      return;
+    }
+    if (currentImageAdapter) {
+      applyActiveSource(currentImageAdapter);
+      return;
+    }
+    if (!builtInImageAdapter) builtInImageAdapter = await createBuiltInImageAdapter();
+    applyActiveSource(builtInImageAdapter);
   } catch (error) {
     setError(error.message);
+  }
+}
+
+async function createAdapterForFile(file) {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    if (isGifFile(file)) return await createGifAdapter(file, objectUrl);
+    if (isSvgFile(file)) return await createSvgAdapter(file, objectUrl);
+    if (isImageFile(file)) return await createBitmapAdapter(file, objectUrl);
+    if (isVideoFile(file)) return await createVideoAdapter(file, objectUrl);
+    throw new Error(copy.errors.unsupportedFile);
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl);
+    throw error;
   }
 }
 
@@ -514,38 +604,15 @@ async function loadLocalFile(file) {
   if (!file) return;
   try {
     setError();
-    revokeObjectUrl();
-    if (file.type.startsWith("image/") || isSvgFile(file)) {
-      clearActiveImageSource();
-      activeObjectUrl = URL.createObjectURL(file);
-      imageSource.src = activeObjectUrl;
-      activeImageLabel = file.name;
-      await waitForImage(imageSource);
-      if (isGifFile(file)) {
-        const gifCanvas = await createGifCanvasSource(file);
-        await restartImagePreviewFromObjectUrl(activeObjectUrl);
-        const startTime = performance.now();
-        activeGifAnimation.startedAt = startTime;
-        activeGifAnimation.drawnFrameIndex = -1;
-        await updateDecodedGifFrame(activeGifAnimation, startTime, true);
-        await setSource("image", gifCanvas, file.name, { sourceUpdateMode: "realtime" });
-      } else if (isSvgFile(file)) {
-        activeSvgCanvas = rasterizeSvgImage(imageSource);
-        await setSource("image", activeSvgCanvas, file.name, { sourceUpdateMode: "realtime" });
-      } else {
-        activeImageBitmap = await createImageBitmap(file, { imageOrientation: "flipY" });
-        await setSource("image", activeImageBitmap, file.name, { sourceUpdateMode: "static" });
-      }
-    } else if (file.type.startsWith("video/")) {
-      clearActiveImageSource();
-      activeObjectUrl = URL.createObjectURL(file);
-      videoSource.srcObject = null;
-      videoSource.src = activeObjectUrl;
-      videoSource.load();
-      await setSource("video", videoSource, file.name);
-    } else {
-      throw new Error("请选择浏览器可解码的图片或视频文件。");
+    const nextAdapter = await createAdapterForFile(file);
+    if (nextAdapter.tab === "image") {
+      if (currentImageAdapter && currentImageAdapter !== builtInImageAdapter) currentImageAdapter.dispose();
+      currentImageAdapter = nextAdapter;
+    } else if (nextAdapter.tab === "video") {
+      if (currentVideoAdapter && currentVideoAdapter !== builtInVideoAdapter) currentVideoAdapter.dispose();
+      currentVideoAdapter = nextAdapter;
     }
+    applyActiveSource(nextAdapter);
   } catch (error) {
     setError(error.message);
   }
@@ -556,11 +623,27 @@ function updateRendererConfig() {
   if (!renderer) return;
   renderer.updateConfig(rendererConfig());
   renderer.fit = fitMode.value;
-  renderer.render();
+  renderer.render(performance.now());
   syncMetrics();
 }
 
-function tickMetrics(time) {
+function syncMetrics() {
+  if (!renderer) return;
+  const state = renderer.getState();
+  backendMetric.textContent = state.backend;
+  sourceMetric.textContent = `${state.source.width} x ${state.source.height}`;
+  canvasMetric.textContent = `${state.surface.width} x ${state.surface.height}`;
+  statusText.textContent = `${state.backend} / ${state.config.quality} / ${state.fit}`;
+  if (state.error) setError(`${copy.errors.textureUpload}${state.error}`);
+}
+
+function tick(time) {
+  appRafId = requestAnimationFrame(tick);
+  if (!isRenderLoopRunning) return;
+
+  activeAdapter?.update(time);
+  renderer?.render(time);
+
   frameCount += 1;
   if (time - fpsStart >= 500) {
     fpsMetric.textContent = Math.round((frameCount * 1000) / (time - fpsStart));
@@ -568,11 +651,10 @@ function tickMetrics(time) {
     fpsStart = time;
     syncMetrics();
   }
-  requestAnimationFrame(tickMetrics);
 }
 
 sourceButtons.forEach((button) => {
-  button.addEventListener("click", () => useBuiltInSource(button.dataset.source));
+  button.addEventListener("click", () => selectSourceTab(button.dataset.source));
 });
 
 fileInput.addEventListener("change", () => loadLocalFile(fileInput.files?.[0]));
@@ -601,21 +683,15 @@ window.addEventListener("drop", (event) => {
 });
 
 toggleRender.addEventListener("click", () => {
-  if (!renderer) return;
-  if (renderer.getState().running) {
-    renderer.stop();
-    toggleRender.textContent = "继续";
-  } else {
-    renderer.start();
-    toggleRender.textContent = "暂停";
-  }
+  isRenderLoopRunning = !isRenderLoopRunning;
+  toggleRender.textContent = isRenderLoopRunning ? copy.buttons.pause : copy.buttons.resume;
   syncMetrics();
 });
 
 fitMode.addEventListener("change", () => {
   if (!renderer) return;
   renderer.fit = fitMode.value;
-  renderer.render();
+  renderer.render(performance.now());
   syncMetrics();
 });
 
@@ -627,7 +703,7 @@ qualityMode.addEventListener("change", () => {
   bloomControl.value = state.config.bloomStrength;
   diffusionControl.value = state.config.diffusionStrength;
   syncOutputs();
-  renderer.render();
+  renderer.render(performance.now());
   syncMetrics();
 });
 
@@ -637,25 +713,39 @@ qualityMode.addEventListener("change", () => {
 
 window.addEventListener("resize", () => {
   sizeCanvasSource();
-  renderer?.render();
+  renderer?.render(performance.now());
 });
+
+window.PhosphorMediaDemo = {
+  get renderer() {
+    return renderer;
+  },
+  set renderer(value) {
+    renderer = value;
+  },
+  getActiveAdapter: () => activeAdapter,
+  getState: () => {
+    const state = renderer?.getState();
+    return state ? { ...state, running: isRenderLoopRunning } : null;
+  },
+  loadLocalFile,
+  selectSourceTab,
+};
 
 syncOutputs();
 sizeCanvasSource();
 sizeVideoGenerator();
-requestAnimationFrame(drawCanvasSource);
-requestAnimationFrame(drawGifSource);
-requestAnimationFrame(drawSvgSource);
-requestAnimationFrame(drawGeneratedVideo);
-requestAnimationFrame(tickMetrics);
-ensureGeneratedSources();
+drawBuiltInCanvas(performance.now());
+drawGeneratedVideo(performance.now());
+statusText.textContent = copy.status.initializing;
+appRafId = requestAnimationFrame(tick);
 
 if (!PhosphorMediaRenderer) {
-  setError("磷光媒体库未加载，请确认 phosphor/media-renderer.global.js 与本页面在同一项目目录。");
-  statusText.textContent = "库未加载";
+  setError(copy.errors.libraryMissing);
+  statusText.textContent = copy.status.libraryMissing;
 } else if (!PhosphorMediaRenderer.isSupported()) {
-  setError("当前浏览器不支持 WebGL2，媒体 shader 演示无法运行。");
-  statusText.textContent = "WebGL2 不可用";
+  setError(copy.errors.unsupportedWebgl);
+  statusText.textContent = copy.status.unsupported;
 } else {
-  useBuiltInSource("canvas");
+  selectSourceTab("canvas");
 }
