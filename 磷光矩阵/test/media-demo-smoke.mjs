@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const { PNG } = require("pngjs");
 const chromePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-const logoSvgPath = "D:\\盒子\\HTML\\asset\\img\\logo.svg";
+const logoSvgPath = process.env.PHOSPHOR_LOGO_SVG || "";
 
 const pages = [
   { name: "split", file: "media-demo.html" },
@@ -25,15 +25,33 @@ async function waitForDemo(page) {
 }
 
 async function assertCanvasNonBlank(page, label) {
+  const stats = await captureCanvasStats(page);
+  assert.ok(stats.width > 1 && stats.height > 1, `${label}: canvas has size`);
+  assert.ok(stats.lit > 100, `${label}: canvas is nonblank`);
+}
+
+async function captureCanvasStats(page) {
   const buffer = await page.locator("#mediaMount").screenshot();
   const image = PNG.sync.read(buffer);
   let lit = 0;
+  let hash = 2166136261;
   for (let i = 0; i < image.data.length; i += 4) {
-    if (image.data[i] > 8 || image.data[i + 1] > 8 || image.data[i + 2] > 8) lit += 1;
+    const r = image.data[i];
+    const g = image.data[i + 1];
+    const b = image.data[i + 2];
+    if (r > 8 || g > 8 || b > 8) lit += 1;
+    hash ^= r + (g << 8) + (b << 16);
+    hash = Math.imul(hash, 16777619);
   }
-  const stats = { width: image.width, height: image.height, lit };
-  assert.ok(stats.width > 1 && stats.height > 1, `${label}: canvas has size`);
-  assert.ok(stats.lit > 100, `${label}: canvas is nonblank`);
+  return { width: image.width, height: image.height, lit, hash: hash >>> 0 };
+}
+
+async function assertCanvasChanges(page, label, delay = 350) {
+  const before = await captureCanvasStats(page);
+  await page.waitForTimeout(delay);
+  const after = await captureCanvasStats(page);
+  assert.ok(before.lit > 100 && after.lit > 100, `${label}: canvas remains nonblank`);
+  assert.notEqual(before.hash, after.hash, `${label}: canvas changes over time`);
 }
 
 async function loadGeneratedFile(page, factoryName) {
@@ -106,10 +124,6 @@ async function loadGeneratedFile(page, factoryName) {
   }, factoryName);
 }
 
-async function gifFrameIndex(page) {
-  return page.evaluate(() => window.PhosphorMediaDemo.getActiveAdapter()?.animation?.frameIndex ?? -1);
-}
-
 async function smokePage(browser, target) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   const consoleErrors = [];
@@ -124,16 +138,13 @@ async function smokePage(browser, target) {
   await assertCanvasNonBlank(page, `${target.name} png`);
 
   await loadGeneratedFile(page, "gif");
-  await page.waitForTimeout(160);
-  const firstGifFrame = await gifFrameIndex(page);
-  await page.waitForTimeout(260);
-  const secondGifFrame = await gifFrameIndex(page);
-  assert.notEqual(firstGifFrame, secondGifFrame, `${target.name}: gif frame advances`);
+  await page.waitForTimeout(300);
+  await assertCanvasChanges(page, `${target.name}: gif frame advances`, 420);
   await page.click('[data-source="canvas"]');
   await page.waitForTimeout(120);
   await page.click('[data-source="image"]');
-  await page.waitForTimeout(260);
-  assert.notEqual(await gifFrameIndex(page), -1, `${target.name}: gif survives tab switch`);
+  await page.waitForTimeout(200);
+  await assertCanvasChanges(page, `${target.name}: gif survives tab switch`, 420);
 
   await loadGeneratedFile(page, "svg");
   await page.waitForTimeout(700);
@@ -150,7 +161,14 @@ async function smokePage(browser, target) {
 }
 
 async function smokeLogo(browser) {
-  if (!existsSync(logoSvgPath)) return;
+  if (!logoSvgPath) {
+    console.log("Skipping logo SVG smoke: PHOSPHOR_LOGO_SVG is not set.");
+    return;
+  }
+  if (!existsSync(logoSvgPath)) {
+    console.log(`Skipping logo SVG smoke: file does not exist: ${logoSvgPath}`);
+    return;
+  }
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
   await page.goto(pageUrl("media-demo.html"));
   await waitForDemo(page);

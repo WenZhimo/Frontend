@@ -48,6 +48,13 @@ renderer.updateConfig({ matrixPitch: 5, bloomStrength: 1.2 });
 renderer.destroy();
 ```
 
+如果页面需要自己调度 RAF，可以使用 `renderFrame(time?)` 手动渲染单帧。它不会启动内部 RAF，也不会改变 `getState().running`。
+
+```js
+const renderer = new PhosphorMediaRenderer({ source, mount, quality: "high" });
+renderer.renderFrame(performance.now());
+```
+
 如果页面需要直接双击打开，不经过本地服务器，可以使用全局脚本版本：
 
 ```html
@@ -120,25 +127,40 @@ http://127.0.0.1:8766/磷光矩阵/media-demo.html
 修改库源、shader、`media-demo.html` 或 `test/phosphor-media-demo.js` 后，必须重新生成：
 
 ```powershell
-node tools/build-media-demo.mjs
+npm run build:media-demo
 ```
+
+生成脚本会在写入前检查：
+
+- global 文件不含裸 `import` / `export`。
+- global 文件通过 `node --check`。
+- 单 HTML 不再引用外部 `phosphor/` 或 `test/` 脚本。
 
 ## 检查命令
 
-```powershell
-node --check test/phosphor-media-demo.js
-node --input-type=module -e "await import('./phosphor/media-renderer.js'); console.log('modules ok')"
-node tools/build-media-demo.mjs
-node test/media-demo-smoke.mjs
-```
-
-单文件版生成后，应确认不再引用外部 demo 脚本：
+首次运行 smoke test 前安装依赖：
 
 ```powershell
-Select-String -LiteralPath '磷光矩阵媒体处理单文件版.html' -Pattern 'src="phosphor|src="test/' -Quiet
+npm install
+npx playwright install chromium
 ```
 
-期望输出为空或 `False`。
+常用检查：
+
+```powershell
+npm run check
+npm run build:media-demo
+npm run test:media-demo
+```
+
+如果要额外验证某个本地 SVG，可以设置环境变量：
+
+```powershell
+$env:PHOSPHOR_LOGO_SVG = "D:\盒子\HTML\asset\img\logo.svg"
+npm run test:media-demo
+```
+
+未设置 `PHOSPHOR_LOGO_SVG` 时，测试会明确跳过该额外场景。
 
 ## 模块映射
 

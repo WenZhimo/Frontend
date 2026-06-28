@@ -1,0 +1,15 @@
+{
+  "name": "phosphor-matrix-media-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:media-demo": "node tools/build-media-demo.mjs",
+    "test:media-demo": "node test/media-demo-smoke.mjs",
+    "check": "node --check test/phosphor-media-demo.js && node --check tools/build-media-demo.mjs && node --check test/media-demo-smoke.mjs && node --input-type=module -e \"await import('./phosphor/media-renderer.js'); console.log('modules ok')\""
+  },
+  "devDependencies": {
+    "playwright": "^1.61.0",
+    "pngjs": "^7.0.0"
+  }
+}
