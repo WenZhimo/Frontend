@@ -63,6 +63,12 @@ export function setTextureImage(gl, texture, source) {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
 }
 
+export function updateTextureImage(gl, texture, source) {
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, source);
+}
+
 export function createFullscreenGeometry(gl) {
   const vao = gl.createVertexArray();
   const buffer = gl.createBuffer();
@@ -94,6 +100,7 @@ export function setUniforms(gl, program, uniforms) {
     if (typeof value === "number") gl.uniform1f(location, value);
     else if (Array.isArray(value) && value.length === 2) gl.uniform2f(location, value[0], value[1]);
     else if (Array.isArray(value) && value.length === 3) gl.uniform3f(location, value[0], value[1], value[2]);
+    else if (Array.isArray(value) && value.length === 4) gl.uniform4f(location, value[0], value[1], value[2], value[3]);
     else if (Number.isInteger(value?.unit)) gl.uniform1i(location, value.unit);
   });
 }

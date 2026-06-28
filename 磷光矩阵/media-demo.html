@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>磷光矩阵本地资源处理演示</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07090d;
+      --panel: #12151b;
+      --panel-2: #181c23;
+      --ink: #edf4ff;
+      --muted: #9aa8b7;
+      --line: #29313b;
+      --cyan: #75d8ff;
+      --green: #79e6a1;
+      --amber: #ffcf6b;
+      --red: #ff7f7f;
+      --control: #222832;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+      line-height: 1.45;
+    }
+
+    button,
+    input,
+    select { font: inherit; }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--control);
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    button:hover { border-color: var(--cyan); }
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      min-height: 100vh;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      min-width: 0;
+      border-right: 1px solid var(--line);
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        #05070a;
+      background-size: 32px 32px;
+    }
+
+    .topbar,
+    .statusbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(7, 9, 13, 0.9);
+    }
+
+    .statusbar {
+      border-top: 1px solid var(--line);
+      border-bottom: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .title {
+      display: grid;
+      gap: 2px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .canvasWrap {
+      display: grid;
+      min-height: 0;
+      padding: 18px;
+    }
+
+    .renderCanvas {
+      width: 100%;
+      height: 100%;
+      min-height: 420px;
+      border: 1px solid #1f2630;
+      border-radius: var(--radius);
+      background: #010307;
+    }
+
+    .sidebar {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: 100vh;
+      background: var(--panel);
+    }
+
+    .sidebarHeader {
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .sidebarBody {
+      display: grid;
+      gap: 16px;
+      align-content: start;
+      overflow: auto;
+      padding: 18px;
+    }
+
+    .section {
+      display: grid;
+      gap: 12px;
+    }
+
+    .section h2 {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .dropZone {
+      display: grid;
+      gap: 8px;
+      padding: 16px;
+      border: 1px dashed #3c4856;
+      border-radius: var(--radius);
+      background: var(--panel-2);
+      color: var(--muted);
+    }
+
+    .dropZone[data-active="true"] {
+      border-color: var(--cyan);
+      background: #10212a;
+    }
+
+    .fileInput { display: none; }
+
+    .buttonRow {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .sourceButton,
+    .primaryButton {
+      min-height: 36px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .primaryButton {
+      border-color: #34718a;
+      background: #123141;
+      color: #dff8ff;
+    }
+
+    .sourceButton[aria-pressed="true"] {
+      border-color: var(--green);
+      background: #163528;
+      color: #eafff1;
+    }
+
+    .control {
+      display: grid;
+      gap: 7px;
+    }
+
+    .controlHead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .control output {
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--cyan);
+    }
+
+    select {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--control);
+      color: var(--ink);
+      padding: 0 10px;
+    }
+
+    .previewMedia,
+    .sourceCanvas {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #05070a;
+      object-fit: cover;
+    }
+
+    .hidden { display: none; }
+
+    .metricGrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .metric {
+      display: grid;
+      gap: 3px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-2);
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .metric strong {
+      font-size: 13px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .error {
+      color: var(--red);
+      font-size: 13px;
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .stage {
+        min-height: 58vh;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .sidebar {
+        min-height: auto;
+      }
+
+      .renderCanvas {
+        min-height: 360px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .topbar,
+      .statusbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .buttonRow,
+      .metricGrid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="stage" aria-label="磷光矩阵处理输出">
+      <header class="topbar">
+        <div class="title">
+          <h1>磷光矩阵本地资源处理</h1>
+          <p class="subtitle">图片、视频和 canvas 直接作为 WebGL 纹理输入</p>
+        </div>
+        <button id="toggleRender" class="primaryButton" type="button">暂停</button>
+      </header>
+      <div class="canvasWrap">
+        <canvas id="mediaMount" class="renderCanvas" aria-label="磷光矩阵渲染结果"></canvas>
+      </div>
+      <footer class="statusbar">
+        <span id="sourceLabel">Canvas 源</span>
+        <span id="statusText">WebGL2 初始化中</span>
+      </footer>
+    </section>
+
+    <aside class="sidebar" aria-label="资源与渲染参数">
+      <header class="sidebarHeader">
+        <div class="title">
+          <h2>控制台</h2>
+          <p class="subtitle">拖入本地图片或视频，或切回内置动态 canvas。</p>
+        </div>
+      </header>
+      <div class="sidebarBody">
+        <section class="section">
+          <h2>本地资源</h2>
+          <label id="dropZone" class="dropZone" for="fileInput">
+            <strong>选择或拖拽文件</strong>
+            <span>支持 PNG、JPG、WebP、MP4、WebM 等浏览器可解码格式。</span>
+          </label>
+          <input id="fileInput" class="fileInput" type="file" accept="image/*,.svg,.svgz,video/*">
+          <div class="buttonRow">
+            <button class="sourceButton" type="button" data-source="canvas" aria-pressed="true">Canvas</button>
+            <button class="sourceButton" type="button" data-source="image" aria-pressed="false">示例图</button>
+            <button class="sourceButton" type="button" data-source="video" aria-pressed="false">示例视频</button>
+          </div>
+          <img id="imageSource" class="previewMedia hidden" alt="示例或本地图片源">
+          <video id="videoSource" class="previewMedia hidden" muted loop playsinline controls></video>
+          <canvas id="videoGenerator" class="hidden" aria-hidden="true"></canvas>
+          <canvas id="canvasSource" class="sourceCanvas" aria-label="动态 canvas 源"></canvas>
+          <p id="errorText" class="error" role="alert"></p>
+        </section>
+
+        <section class="section">
+          <h2>输入适配</h2>
+          <label class="control">
+            <span class="controlHead"><span>画面适配</span></span>
+            <select id="fitMode">
+              <option value="contain" selected>适应画布</option>
+              <option value="cover">覆盖画布</option>
+              <option value="fit-width">按宽度填满</option>
+              <option value="fit-height">按高度填满</option>
+              <option value="stretch">拉伸填满</option>
+            </select>
+          </label>
+          <label class="control">
+            <span class="controlHead"><span>质量</span></span>
+            <select id="qualityMode">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high" selected>High</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="section">
+          <h2>视觉参数</h2>
+          <label class="control">
+            <span class="controlHead"><span>矩阵间距</span><output id="pitchValue">5</output></span>
+            <input id="pitchControl" type="range" min="3" max="12" value="5" step="1">
+          </label>
+          <label class="control">
+            <span class="controlHead"><span>发光强度</span><output id="bloomValue">1.18</output></span>
+            <input id="bloomControl" type="range" min="0.65" max="1.7" value="1.18" step="0.01">
+          </label>
+          <label class="control">
+            <span class="controlHead"><span>扩散</span><output id="diffusionValue">0.50</output></span>
+            <input id="diffusionControl" type="range" min="0.15" max="0.8" value="0.50" step="0.01">
+          </label>
+          <label class="control">
+            <span class="controlHead"><span>噪声</span><output id="noiseValue">0.026</output></span>
+            <input id="noiseControl" type="range" min="0" max="0.08" value="0.026" step="0.002">
+          </label>
+        </section>
+
+        <section class="section">
+          <h2>运行状态</h2>
+          <div class="metricGrid">
+            <div class="metric"><span>Backend</span><strong id="backendMetric">pending</strong></div>
+            <div class="metric"><span>Source</span><strong id="sourceMetric">pending</strong></div>
+            <div class="metric"><span>Canvas</span><strong id="canvasMetric">pending</strong></div>
+            <div class="metric"><span>FPS</span><strong id="fpsMetric">--</strong></div>
+          </div>
+          <p class="note">这个页面不采样 DOM。资源画面进入 WebGL 纹理后，矩阵、发光、bloom、噪声和暗场合成都在 GPU pass 中完成。</p>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <script src="phosphor/media-renderer.global.js"></script>
+  <script src="test/phosphor-media-demo.js"></script>
+</body>
+</html>
