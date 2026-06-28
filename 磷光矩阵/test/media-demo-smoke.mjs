@@ -30,6 +30,29 @@ async function assertCanvasNonBlank(page, label) {
   assert.ok(stats.lit > 100, `${label}: canvas is nonblank`);
 }
 
+async function assertCanvasTopIsBrighter(page, label) {
+  const buffer = await page.locator("#mediaMount").screenshot();
+  const image = PNG.sync.read(buffer);
+  let top = 0;
+  let bottom = 0;
+  let topCount = 0;
+  let bottomCount = 0;
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const index = (y * image.width + x) * 4;
+      const brightness = image.data[index] + image.data[index + 1] + image.data[index + 2];
+      if (y < image.height * 0.42) {
+        top += brightness;
+        topCount += 1;
+      } else if (y > image.height * 0.58) {
+        bottom += brightness;
+        bottomCount += 1;
+      }
+    }
+  }
+  assert.ok(top / topCount > bottom / bottomCount * 1.35, `${label}: image is not vertically flipped`);
+}
+
 async function captureCanvasStats(page) {
   const buffer = await page.locator("#mediaMount").screenshot();
   const image = PNG.sync.read(buffer);
@@ -70,6 +93,23 @@ async function loadGeneratedFile(page, factoryName) {
         ctx.fillRect(46, 16, 34, 30);
         return new Promise((resolve) => {
           canvas.toBlob((blob) => resolve(new File([blob], "smoke.png", { type: "image/png" })), "image/png");
+        });
+      },
+      orientedPng() {
+        const canvas = document.createElement("canvas");
+        canvas.width = 120;
+        canvas.height = 80;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#03111f";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, 30);
+        ctx.fillStyle = "#79e6a1";
+        ctx.fillRect(18, 6, 84, 18);
+        ctx.fillStyle = "#06101f";
+        ctx.fillRect(0, 50, canvas.width, 30);
+        return new Promise((resolve) => {
+          canvas.toBlob((blob) => resolve(new File([blob], "oriented.png", { type: "image/png" })), "image/png");
         });
       },
       svg() {
@@ -136,6 +176,9 @@ async function smokePage(browser, target) {
   await loadGeneratedFile(page, "png");
   await page.waitForTimeout(600);
   await assertCanvasNonBlank(page, `${target.name} png`);
+  await loadGeneratedFile(page, "orientedPng");
+  await page.waitForTimeout(600);
+  await assertCanvasTopIsBrighter(page, `${target.name} png orientation`);
 
   await loadGeneratedFile(page, "gif");
   await page.waitForTimeout(300);

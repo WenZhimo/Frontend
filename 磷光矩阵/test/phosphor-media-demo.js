@@ -443,7 +443,7 @@ async function createBuiltInVideoAdapter() {
 async function createBitmapAdapter(file, objectUrl) {
   imageSource.src = objectUrl;
   await waitForImage(imageSource);
-  const bitmap = await createImageBitmap(file);
+  const bitmap = await createImageBitmap(file, { imageOrientation: "flipY" });
   return createSourceAdapter({
     id: `bitmap:${file.name}`,
     mediaKind: "image",
