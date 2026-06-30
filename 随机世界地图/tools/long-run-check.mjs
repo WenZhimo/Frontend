@@ -56,6 +56,7 @@ console.log(JSON.stringify({
     riftDiagnostics: measureRiftDiagnostics(world),
     marginDiagnostics: measureMarginDiagnostics(world),
     transformDiagnostics: measureTransformDiagnostics(world),
+    boundaryDiagnostics: measureBoundaryDiagnostics(world.grid),
     geologyRisks: measureGeologyRisks(world),
 }, null, 2));
 
@@ -402,6 +403,61 @@ function measureTransformDiagnostics(world) {
     abyssalPlainFractureSuppression: abyssalCount ? abyssalSuppression / abyssalCount : 0,
     ageBandStraightnessRiskMean: straightRiskCount ? straightRisk / straightRiskCount : 0,
   };
+}
+
+function measureBoundaryDiagnostics(grid) {
+  let active = 0;
+  let densitySum = 0;
+  let noisy = 0;
+  let checker = 0;
+  let islandNoise = 0;
+  let featureOnNoisy = 0;
+  let featureCount = 0;
+  for (let i = 0; i < grid.size; i += 1) {
+    if (grid.activeBoundary[i]) active += 1;
+    densitySum += grid.boundaryDensity[i] ?? 0;
+    if (grid.noisyBoundaryPatch[i]) noisy += 1;
+    checker += grid.plateCheckerboard[i] ?? 0;
+    if (isPlateIslandNoise(grid, i)) islandNoise += 1;
+    const feature = Math.max(grid.mountainBelt[i], grid.trench[i], grid.ridge[i], grid.rift[i], grid.basin[i], grid.islandArc[i]);
+    if (feature > 0.05) {
+      featureCount += 1;
+      if (grid.noisyBoundaryPatch[i]) featureOnNoisy += 1;
+    }
+  }
+  return {
+    plateCheckerboardScore: checker / grid.size,
+    activeBoundaryCoverage: active / grid.size,
+    localBoundaryDensityMean: densitySum / grid.size,
+    noisyBoundaryPatchCoverage: noisy / grid.size,
+    plateIslandNoiseShare: islandNoise / grid.size,
+    featureOnNoisyBoundaryShare: featureCount ? featureOnNoisy / featureCount : 0,
+  };
+}
+
+function isPlateIslandNoise(grid, id) {
+  const x = id % grid.width;
+  const y = Math.floor(id / grid.width);
+  const current = grid.plate[id];
+  let same = 0;
+  let different = 0;
+  visitNeighbor8Ids(grid, x, y, (nid) => {
+    if (grid.plate[nid] === current) same += 1;
+    else different += 1;
+  });
+  return same <= 2 && different >= 5;
+}
+
+function visitNeighbor8Ids(grid, x, y, visit) {
+  for (let dy = -1; dy <= 1; dy += 1) {
+    const ny = y + dy;
+    if (ny < 0 || ny >= grid.height) continue;
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = ((x + dx) % grid.width + grid.width) % grid.width;
+      visit(ny * grid.width + nx);
+    }
+  }
 }
 
 function coverage(field, threshold) {

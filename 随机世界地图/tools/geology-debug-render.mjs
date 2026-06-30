@@ -36,7 +36,12 @@ const layers = {
   basin: colorField("basin", 0, 0.7, [29, 55, 79], [110, 169, 187]),
   finalElevation: colorElevation,
   seaMask: colorSeaMask,
+  plateId: colorPlateId,
   boundaryInfluence: colorField("boundaryInfluence", 0, 1, [18, 28, 38], [242, 191, 73]),
+  boundaryDensity: colorField("boundaryDensity", 0, 1, [24, 26, 30], [224, 63, 54]),
+  boundaryCoherence: colorField("boundaryCoherence", 0, 1, [190, 54, 67], [80, 190, 118]),
+  noisyBoundaryPatch: colorNoisyBoundaryPatch,
+  plateCheckerboard: colorField("plateCheckerboard", 0, 1, [28, 32, 38], [224, 60, 47]),
   boundaryKind: colorBoundaryKind,
   riftStage: colorRiftStage,
   externalSeaMask: colorExternalSeaMask,
@@ -102,6 +107,20 @@ function colorElevation(world, i) {
 
 function colorSeaMask(world, i) {
   return world.grid.elev[i] >= world.seaLevel ? [125, 154, 91] : [31, 91, 137];
+}
+
+function colorPlateId(world, i) {
+  const p = world.grid.plate[i] + 1;
+  return [
+    48 + (p * 73) % 176,
+    48 + (p * 151) % 176,
+    48 + (p * 211) % 176,
+  ];
+}
+
+function colorNoisyBoundaryPatch(world, i) {
+  if (world.grid.noisyBoundaryPatch[i]) return [188, 68, 194];
+  return world.grid.activeBoundary[i] ? [72, 76, 82] : [25, 28, 32];
 }
 
 function colorBoundaryKind(world, i) {

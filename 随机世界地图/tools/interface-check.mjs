@@ -160,6 +160,12 @@ const stats = {
     averageWhere(terrain.activeTransform, (i) => terrain.activeTransform[i] > 0.05),
     averageWhere(world.grid.inactiveBoundaryRelief, (i) => terrain.transformMemory[i] > 0.05 && terrain.activeTransform[i] <= 0.01),
   ),
+  plateCheckerboardScore: average(world.grid.plateCheckerboard),
+  activeBoundaryCoverage: coverage(world.grid.activeBoundary, 0.5),
+  localBoundaryDensityMean: average(world.grid.boundaryDensity),
+  noisyBoundaryPatchCoverage: coverage(world.grid.noisyBoundaryPatch, 0.5),
+  plateIslandNoiseShare: plateIslandNoiseShare(world.grid),
+  featureOnNoisyBoundaryShare: featureOnNoisyBoundaryShare(world.grid),
   ageBandStraightnessNearRidge: ageBandSplit.nearRidge,
   ageBandStraightnessInactive: ageBandSplit.inactive,
   ageBandStraightnessFractureZone: ageBandSplit.fractureZone,
@@ -286,6 +292,51 @@ function histogram(field, buckets) {
 
 function ratio(active, inactive) {
   return Math.abs(active) / Math.max(0.000001, Math.abs(inactive));
+}
+
+function plateIslandNoiseShare(grid) {
+  let count = 0;
+  for (let i = 0; i < grid.size; i += 1) {
+    if (isPlateIslandNoise(grid, i)) count += 1;
+  }
+  return count / grid.size;
+}
+
+function featureOnNoisyBoundaryShare(grid) {
+  let featureCount = 0;
+  let noisyFeature = 0;
+  for (let i = 0; i < grid.size; i += 1) {
+    const feature = Math.max(grid.mountainBelt[i], grid.trench[i], grid.ridge[i], grid.rift[i], grid.basin[i], grid.islandArc[i]);
+    if (feature <= 0.05) continue;
+    featureCount += 1;
+    if (grid.noisyBoundaryPatch[i]) noisyFeature += 1;
+  }
+  return featureCount ? noisyFeature / featureCount : 0;
+}
+
+function isPlateIslandNoise(grid, id) {
+  const x = id % grid.width;
+  const y = Math.floor(id / grid.width);
+  const current = grid.plate[id];
+  let same = 0;
+  let different = 0;
+  visitNeighbor8Ids(grid, x, y, (nid) => {
+    if (grid.plate[nid] === current) same += 1;
+    else different += 1;
+  });
+  return same <= 2 && different >= 5;
+}
+
+function visitNeighbor8Ids(grid, x, y, visit) {
+  for (let dy = -1; dy <= 1; dy += 1) {
+    const ny = y + dy;
+    if (ny < 0 || ny >= grid.height) continue;
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = ((x + dx) % grid.width + grid.width) % grid.width;
+      visit(ny * grid.width + nx);
+    }
+  }
 }
 
 function measureAgeBandStraightnessSplit(grid) {
