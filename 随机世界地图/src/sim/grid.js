@@ -1,0 +1,97 @@
+import { cellsFromReference, referenceCellsFromGridDistance, resolutionScale } from "./scale.js";
+
+export function createGrid(width, height) {
+  const size = width * height;
+  return {
+    width,
+    height,
+    size,
+    elev: new Float32Array(size),
+    baseElev: new Float32Array(size),
+    relief: new Float32Array(size),
+    boundaryRelief: new Float32Array(size),
+    scratch: new Float32Array(size),
+    scratch2: new Float32Array(size),
+    scratch3: new Float32Array(size),
+    crust: new Float32Array(size),
+    crustReference: new Float32Array(size),
+    crustType: new Uint8Array(size),
+    crustThickness: new Float32Array(size),
+    crustAge: new Float32Array(size),
+    ridgeDistance: new Float32Array(size),
+    ageSubsidence: new Float32Array(size),
+    thicknessBuoyancy: new Float32Array(size),
+    sedimentFill: new Float32Array(size),
+    ridgeUplift: new Float32Array(size),
+    trenchDepression: new Float32Array(size),
+    oceanDepthTerms: new Float32Array(size),
+    crustDensity: new Float32Array(size),
+    weakness: new Float32Array(size),
+    orogeny: new Float32Array(size),
+    boundaryInfluence: new Float32Array(size),
+    boundaryDistance: new Float32Array(size),
+    boundaryKind: new Int8Array(size),
+    plate: new Int32Array(size),
+    pvx: new Float32Array(size),
+    pvy: new Float32Array(size),
+    btype: new Int8Array(size),
+    stress: new Float32Array(size),
+    uplift: new Float32Array(size),
+    sediment: new Float32Array(size),
+    tectonicFeature: new Int8Array(size),
+    featureIntensity: new Float32Array(size),
+    mountainBelt: new Float32Array(size),
+    trench: new Float32Array(size),
+    ridge: new Float32Array(size),
+    rift: new Float32Array(size),
+    riftStage: new Uint8Array(size),
+    riftAge: new Float32Array(size),
+    protoOceanCandidate: new Uint8Array(size),
+    inlandWaterCandidate: new Uint8Array(size),
+    externalSeaMask: new Uint8Array(size),
+    oceanConnectivity: new Uint8Array(size),
+    closedBasinId: new Int32Array(size),
+    passiveMargin: new Float32Array(size),
+    continentalShelf: new Float32Array(size),
+    continentalSlope: new Float32Array(size),
+    continentalRise: new Float32Array(size),
+    abyssalPlain: new Float32Array(size),
+    sedimentWedge: new Float32Array(size),
+    marginCoastDistance: new Float32Array(size),
+    marginContinentalDistance: new Float32Array(size),
+    marginOceanDistance: new Float32Array(size),
+    marginExternalSeaDistance: new Float32Array(size),
+    activeTransform: new Float32Array(size),
+    transformMemory: new Float32Array(size),
+    fractureZoneMemory: new Float32Array(size),
+    inactiveBoundaryRelief: new Float32Array(size),
+    oldBoundaryCorrelation: new Float32Array(size),
+    ageBandStraightnessRisk: new Float32Array(size),
+    islandArc: new Float32Array(size),
+    basin: new Float32Array(size),
+    isContinental: new Uint8Array(size),
+    activeBoundary: new Uint8Array(size),
+  };
+}
+
+export { cellsFromReference, referenceCellsFromGridDistance, resolutionScale };
+
+export function physicalRadius(grid, referenceCells) {
+  return cellsFromReference(grid, referenceCells);
+}
+
+export function wrapX(width, x) {
+  return ((x % width) + width) % width;
+}
+
+export function indexOf(grid, x, y) {
+  return y * grid.width + wrapX(grid.width, x);
+}
+
+export function forEachNeighbor4(grid, x, y, visit) {
+  const { width, height } = grid;
+  visit(wrapX(width, x - 1), y, -1, 0);
+  visit(wrapX(width, x + 1), y, 1, 0);
+  if (y > 0) visit(x, y - 1, 0, -1);
+  if (y < height - 1) visit(x, y + 1, 0, 1);
+}

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>随机世界地图生成器 - 地形成因引擎</title>
+    <link rel="stylesheet" href="./src/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="panel">
+        <header class="brand">
+          <p class="eyebrow">Phase 1</p>
+          <h1>地形成因引擎</h1>
+        </header>
+
+        <section class="control-stack" aria-label="世界参数">
+          <label class="field">
+            <span>种子</span>
+            <input id="seedText" type="text" value="龙骨海-纪元7" autocomplete="off">
+          </label>
+
+          <label class="field">
+            <span>初始含水量 <output id="waterLabel">50%</output></span>
+            <input id="waterLevel" type="range" min="5" max="95" value="50" step="1">
+          </label>
+
+          <label class="field">
+            <span>地壳运动烈度 <output id="intensityLabel">1.00x</output></span>
+            <input id="intensity" type="range" min="0" max="5" value="1" step="0.05">
+          </label>
+
+          <label class="field">
+            <span>板块数 <output id="platesLabel">14</output></span>
+            <input id="plateCount" type="range" min="4" max="40" value="14" step="1">
+          </label>
+
+          <label class="field">
+            <span>时间步长</span>
+            <select id="timeScale">
+              <option value="1">1 年</option>
+              <option value="100">100 年</option>
+              <option value="1000" selected>1 千年</option>
+              <option value="10000">1 万年</option>
+              <option value="1000000">1 百万年</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>模拟分辨率</span>
+            <select id="resolution">
+              <option value="256x128">256 x 128 预览</option>
+              <option value="512x256" selected>512 x 256 默认</option>
+              <option value="1024x512">1024 x 512 高质</option>
+            </select>
+          </label>
+
+          <label class="check-field">
+            <input id="showBoundaries" type="checkbox" checked>
+            <span>显示活动板块边界</span>
+          </label>
+
+          <select id="pipelineMode" hidden>
+            <option value="legacy" selected>legacy</option>
+            <option value="geology-v2">geology-v2</option>
+          </select>
+        </section>
+
+        <section class="button-row" aria-label="播放控制">
+          <button id="playPause" type="button">播放</button>
+          <button id="stepOnce" type="button">单步</button>
+          <button id="resetWorld" type="button">重置</button>
+          <button id="randomSeed" type="button">随机种子</button>
+        </section>
+
+        <section class="stats" aria-label="世界状态">
+          <div><span>派生种子</span><strong id="seedUint">-</strong></div>
+          <div><span>当前步数</span><strong id="stepCount">0</strong></div>
+          <div><span>星龄</span><strong id="worldAge">0 年</strong></div>
+          <div><span>海陆比</span><strong id="landSea">-</strong></div>
+          <div><span>海平面</span><strong id="seaLevel">-</strong></div>
+          <div><span>板块漂移</span><strong id="plateDrift">-</strong></div>
+          <div><span>单步耗时</span><strong id="stepMs">-</strong></div>
+        </section>
+
+        <section class="causality">
+          <h2>因果自检</h2>
+          <p id="causalityReport">等待生成。</p>
+        </section>
+      </aside>
+
+      <section class="map-stage" aria-label="地图">
+        <canvas id="mapCanvas" width="1024" height="512"></canvas>
+        <div class="legend" aria-hidden="true">
+          <span class="legend-title">边界</span>
+          <span><i class="conv"></i>汇聚</span>
+          <span><i class="div"></i>离散</span>
+          <span><i class="shear"></i>走滑</span>
+        </div>
+      </section>
+    </main>
+
+    <script src="./src/app.js"></script>
+  </body>
+</html>

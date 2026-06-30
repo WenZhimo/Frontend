@@ -1,0 +1,197 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { createWorld } from "../src/sim/world.js";
+import { stepWorld } from "../src/sim/evolution.js";
+
+const seedText = process.argv[2] ?? "龙骨海-纪元7";
+const steps = Number(process.argv[3] ?? 200);
+const outDir = process.argv[4] ?? "_geology_debug";
+const pipelineMode = process.argv[5] ?? "geology-v2";
+const resolution = process.argv[6] ?? "512x256";
+
+const world = createWorld({
+  seedText,
+  waterLevel: 50,
+  intensity: 1,
+  plateCount: 14,
+  timeScale: 1_000_000,
+  resolution,
+  pipelineMode,
+  showBoundaries: false,
+});
+
+for (let i = 0; i < steps; i += 1) stepWorld(world);
+
+mkdirSync(outDir, { recursive: true });
+const layers = {
+  crustType: colorCrustType,
+  crustThickness: colorField("crustThickness", 0.15, 0.8, [30, 63, 94], [232, 204, 122]),
+  crustAge: colorField("crustAge", 0, 1, [43, 184, 212], [20, 42, 82]),
+  oceanAge: colorOceanAge,
+  ageSubsidence: colorSignedField("ageSubsidence", -0.12, 0.02),
+  sedimentFill: colorField("sedimentFill", 0, 0.08, [20, 43, 69], [224, 211, 154]),
+  oceanDepthTerms: colorSignedField("oceanDepthTerms", -0.18, 0.08),
+  orogeny: colorField("orogeny", 0, 0.18, [30, 38, 42], [216, 169, 112]),
+  sediment: colorField("sediment", 0, 0.22, [27, 52, 71], [221, 206, 157]),
+  basin: colorField("basin", 0, 0.7, [29, 55, 79], [110, 169, 187]),
+  finalElevation: colorElevation,
+  seaMask: colorSeaMask,
+  boundaryInfluence: colorField("boundaryInfluence", 0, 1, [18, 28, 38], [242, 191, 73]),
+  boundaryKind: colorBoundaryKind,
+  riftStage: colorRiftStage,
+  externalSeaMask: colorExternalSeaMask,
+  inlandWaterCandidate: colorInlandWaterCandidate,
+  closedBasinId: colorClosedBasinId,
+  protoOceanCandidate: colorProtoOceanCandidate,
+  passiveMargin: colorField("passiveMargin", 0, 1, [31, 45, 42], [182, 214, 88]),
+  continentalShelf: colorField("continentalShelf", 0, 1, [24, 60, 75], [104, 211, 214]),
+  continentalSlope: colorField("continentalSlope", 0, 1, [28, 41, 79], [119, 92, 190]),
+  continentalRise: colorField("continentalRise", 0, 1, [39, 49, 78], [164, 127, 206]),
+  abyssalPlain: colorField("abyssalPlain", 0, 1, [15, 28, 48], [95, 109, 124]),
+  sedimentWedge: colorField("sedimentWedge", 0, 1, [37, 45, 42], [221, 201, 142]),
+  activeTransform: colorField("activeTransform", 0, 1, [38, 38, 35], [246, 213, 69]),
+  transformMemory: colorField("transformMemory", 0, 1, [42, 35, 31], [226, 126, 47]),
+  fractureZoneMemory: colorField("fractureZoneMemory", 0, 1, [32, 31, 45], [166, 95, 216]),
+  inactiveBoundaryRelief: colorField("inactiveBoundaryRelief", 0, 1, [39, 31, 32], [224, 65, 54]),
+  oldBoundaryCorrelation: colorOldBoundaryCorrelation,
+  ageBandStraightnessRisk: colorField("ageBandStraightnessRisk", 0, 1, [44, 178, 185], [226, 67, 58]),
+};
+
+const outputs = [];
+for (const [name, colorFn] of Object.entries(layers)) {
+  const output = join(outDir, `${name}.ppm`);
+  writePpm(world, output, colorFn);
+  outputs.push(output);
+}
+
+console.log(JSON.stringify({
+  seedText,
+  steps,
+  ageYears: world.ageYears,
+  pipelineMode,
+  resolution,
+  landRatio: world.stats.landRatio,
+  seaRatio: world.stats.seaRatio,
+  seaLevel: world.seaLevel,
+  outputs,
+}, null, 2));
+
+function writePpm(currentWorld, output, colorFn) {
+  const { grid } = currentWorld;
+  const bytes = Buffer.alloc(grid.width * grid.height * 3);
+  for (let i = 0; i < grid.size; i += 1) {
+    const color = colorFn(currentWorld, i);
+    const offset = i * 3;
+    bytes[offset] = color[0];
+    bytes[offset + 1] = color[1];
+    bytes[offset + 2] = color[2];
+  }
+  writeFileSync(output, Buffer.concat([Buffer.from(`P6\n${grid.width} ${grid.height}\n255\n`), bytes]));
+}
+
+function colorCrustType(world, i) {
+  const type = world.grid.crustType[i];
+  if (type === 1) return [111, 151, 83];
+  if (type === 2) return [195, 165, 95];
+  return [42, 103, 146];
+}
+
+function colorElevation(world, i) {
+  return colorForElevation(world.grid.elev[i] - world.seaLevel);
+}
+
+function colorSeaMask(world, i) {
+  return world.grid.elev[i] >= world.seaLevel ? [125, 154, 91] : [31, 91, 137];
+}
+
+function colorBoundaryKind(world, i) {
+  const kind = world.grid.boundaryKind[i];
+  if (kind === 1) return [213, 82, 68];
+  if (kind === 2) return [79, 179, 209];
+  if (kind === 3) return [226, 190, 82];
+  return [28, 38, 48];
+}
+
+function colorRiftStage(world, i) {
+  const stage = world.grid.riftStage[i];
+  if (stage === 1) return [224, 198, 83];
+  if (stage === 2) return [226, 130, 54];
+  if (stage === 3) return [142, 91, 190];
+  if (stage === 4) return [70, 205, 205];
+  if (stage === 5) return [52, 113, 211];
+  return [34, 38, 42];
+}
+
+function colorExternalSeaMask(world, i) {
+  if (world.grid.externalSeaMask[i]) return [39, 101, 172];
+  return world.grid.elev[i] < world.seaLevel ? [45, 54, 69] : [89, 112, 77];
+}
+
+function colorInlandWaterCandidate(world, i) {
+  if (world.grid.inlandWaterCandidate[i]) return [76, 204, 211];
+  return world.grid.elev[i] < world.seaLevel ? [24, 56, 88] : [62, 73, 57];
+}
+
+function colorClosedBasinId(world, i) {
+  const id = world.grid.closedBasinId[i];
+  if (!id) return world.grid.elev[i] < world.seaLevel ? [24, 48, 70] : [45, 52, 47];
+  return [
+    60 + (id * 73) % 150,
+    70 + (id * 131) % 150,
+    80 + (id * 47) % 150,
+  ];
+}
+
+function colorProtoOceanCandidate(world, i) {
+  if (world.grid.protoOceanCandidate[i]) return [65, 226, 214];
+  if (world.grid.riftStage[i] === 5) return [58, 117, 225];
+  if (world.grid.riftStage[i] > 0) return [180, 113, 76];
+  return [34, 38, 42];
+}
+
+function colorOceanAge(world, i) {
+  if (world.grid.crustType[i] !== 0) return [34, 38, 42];
+  const t = Math.max(0, Math.min(1, world.grid.crustAge[i]));
+  return lerpColor([80, 204, 214], [20, 35, 89], t);
+}
+
+function colorOldBoundaryCorrelation(world, i) {
+  const t = Math.max(0, Math.min(1, world.grid.oldBoundaryCorrelation[i]));
+  if (t < 0.5) return lerpColor([26, 31, 36], [230, 232, 217], t * 2);
+  return lerpColor([230, 232, 217], [218, 55, 49], (t - 0.5) * 2);
+}
+
+function colorField(fieldName, min, max, low, high) {
+  return (world, i) => {
+    const t = Math.max(0, Math.min(1, (world.grid[fieldName][i] - min) / (max - min)));
+    return lerpColor(low, high, t);
+  };
+}
+
+function colorSignedField(fieldName, min, max) {
+  return (world, i) => {
+    const value = world.grid[fieldName][i];
+    const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
+    if (t < 0.5) return lerpColor([36, 68, 130], [52, 58, 61], t * 2);
+    return lerpColor([52, 58, 61], [226, 187, 98], (t - 0.5) * 2);
+  };
+}
+
+function colorForElevation(h) {
+  if (h < -0.22) return [7, 35, 65];
+  if (h < -0.08) return lerpColor([11, 53, 94], [31, 105, 143], (h + 0.22) / 0.14);
+  if (h < 0) return lerpColor([39, 116, 145], [86, 157, 164], (h + 0.08) / 0.08);
+  if (h < 0.12) return lerpColor([86, 132, 72], [143, 163, 88], h / 0.12);
+  if (h < 0.32) return lerpColor([136, 123, 77], [126, 91, 62], (h - 0.12) / 0.2);
+  if (h < 0.56) return lerpColor([116, 94, 79], [188, 182, 163], (h - 0.32) / 0.24);
+  return [236, 240, 229];
+}
+
+function lerpColor(a, b, t) {
+  const k = Math.max(0, Math.min(1, t));
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * k),
+    Math.round(a[1] + (b[1] - a[1]) * k),
+    Math.round(a[2] + (b[2] - a[2]) * k),
+  ];
+}
