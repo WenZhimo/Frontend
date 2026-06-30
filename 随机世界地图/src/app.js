@@ -126,6 +126,10 @@
       orogeny: new Float32Array(size),
       boundaryInfluence: new Float32Array(size),
       boundaryDistance: new Float32Array(size),
+      boundaryDensity: new Float32Array(size),
+      boundaryCoherence: new Float32Array(size),
+      noisyBoundaryPatch: new Uint8Array(size),
+      plateCheckerboard: new Float32Array(size),
       boundaryKind: new Int8Array(size),
       plate: new Int32Array(size),
       pvx: new Float32Array(size),
@@ -264,6 +268,10 @@
     const { grid, seedUint32 } = world;
     grid.relief.fill(0);
     grid.boundaryRelief.fill(0);
+    grid.boundaryDensity.fill(0);
+    grid.boundaryCoherence.fill(1);
+    grid.noisyBoundaryPatch.fill(0);
+    grid.plateCheckerboard.fill(0);
     grid.orogeny.fill(0);
     grid.featureIntensity.fill(0);
     grid.mountainBelt.fill(0);
@@ -1087,6 +1095,8 @@
       });
     }
 
+    cleanupPlateCheckerboards(grid);
+
     for (let i = 0; i < size; i += 1) {
       const p = plate[i] < 0 ? 0 : plate[i];
       plate[i] = p;
@@ -1173,9 +1183,64 @@
       if (ny < 0 || ny >= grid.height) continue;
       for (let dx = -1; dx <= 1; dx += 1) {
         if (dx === 0 && dy === 0) continue;
-        visit(wrapX(grid.width, x + dx), ny, dx === 0 || dy === 0 ? 1 : 0.55);
+        visit(wrapX(grid.width, x + dx), ny, dx === 0 || dy === 0 ? 1 : Math.SQRT2);
       }
     }
+  }
+
+  function cleanupPlateCheckerboards(grid) {
+    const { width, height, size, plate } = grid;
+    const next = new Int32Array(plate);
+    let maxPlate = 0;
+    for (let i = 0; i < size; i += 1) if (plate[i] > maxPlate) maxPlate = plate[i];
+    const counts = new Int16Array(maxPlate + 1);
+    const touched = [];
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const id = y * width + x;
+        const current = plate[id];
+        touched.length = 0;
+        let same = 0;
+        let majorityPlate = current;
+        let majorityCount = 0;
+        forEachNeighbor8Local(grid, x, y, (nx, ny) => {
+          const other = plate[ny * width + nx];
+          if (other === current) same += 1;
+          if (counts[other] === 0) touched.push(other);
+          const count = counts[other] + 1;
+          counts[other] = count;
+          if (count > majorityCount) {
+            majorityCount = count;
+            majorityPlate = other;
+          }
+        });
+
+        const checker = isCheckerboardCell(grid, x, y);
+        if ((majorityCount >= 5 && same <= 2) || (checker && majorityCount >= 4 && same <= 3)) {
+          next[id] = majorityPlate;
+        }
+        for (const p of touched) counts[p] = 0;
+      }
+    }
+    plate.set(next);
+  }
+
+  function isCheckerboardCell(grid, x, y) {
+    for (let dy = -1; dy <= 0; dy += 1) {
+      const y0 = y + dy;
+      const y1 = y0 + 1;
+      if (y0 < 0 || y1 >= grid.height) continue;
+      for (let dx = -1; dx <= 0; dx += 1) {
+        const x0 = wrapX(grid.width, x + dx);
+        const x1 = wrapX(grid.width, x + dx + 1);
+        const a = grid.plate[y0 * grid.width + x0];
+        const b = grid.plate[y0 * grid.width + x1];
+        const c = grid.plate[y1 * grid.width + x0];
+        const d = grid.plate[y1 * grid.width + x1];
+        if (a === d && b === c && a !== b) return true;
+      }
+    }
+    return false;
   }
 
   function syncPlateCenterUv(grid, plates, p) {
@@ -1432,7 +1497,7 @@
 
   function updatePlateBoundariesV2(world) {
     const { grid } = world;
-    const { width, height, size, plate, boundaryDistance, boundaryInfluence, weakness, activeBoundary } = grid;
+    const { width, height, size, plate, boundaryDistance, boundaryInfluence, weakness, activeBoundary, boundaryDensity, boundaryCoherence, noisyBoundaryPatch, plateCheckerboard } = grid;
     const radius = physicalRadius(grid, 4);
     const q = new Int32Array(size);
     let head = 0;
@@ -1440,6 +1505,10 @@
     boundaryDistance.fill(9999);
     boundaryInfluence.fill(0);
     activeBoundary.fill(0);
+    boundaryDensity.fill(0);
+    boundaryCoherence.fill(1);
+    noisyBoundaryPatch.fill(0);
+    plateCheckerboard.fill(0);
 
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
@@ -1455,6 +1524,8 @@
         }
       }
     }
+
+    deriveBoundaryCoherence(grid);
 
     while (head < tail) {
       const id = q[head++];
@@ -1476,13 +1547,15 @@
       if (distanceBand <= 0) continue;
       const weakPath = 0.42 + weakness[i] * 0.9;
       const segmented = weakness[i] > 0.36 ? 1 : 0.5;
-      boundaryInfluence[i] = Math.min(1, distanceBand * weakPath * segmented);
+      const coherenceGate = 0.25 + boundaryCoherence[i] * 0.75;
+      const noisyGate = noisyBoundaryPatch[i] ? 0.32 : 1;
+      boundaryInfluence[i] = Math.min(1, distanceBand * weakPath * segmented * coherenceGate * noisyGate);
     }
   }
 
   function classifyBoundaryKindV2(world) {
     const { grid } = world;
-    const { width, height, size, plate, pvx, pvy, btype, boundaryKind, stress, activeBoundary } = grid;
+    const { width, height, size, plate, pvx, pvy, btype, boundaryKind, stress, activeBoundary, boundaryCoherence, noisyBoundaryPatch } = grid;
     btype.fill(BoundaryType.INTERIOR);
     boundaryKind.fill(BoundaryType.INTERIOR);
     stress.fill(0);
@@ -1513,15 +1586,16 @@
 
         if (!touches) continue;
         activeBoundary[id] = 1;
+        const coherenceGate = noisyBoundaryPatch[id] ? 0.22 : 0.45 + boundaryCoherence[id] * 0.55;
         if (convergent > divergent && convergent > shear * 0.55) {
           btype[id] = BoundaryType.CONVERGENT;
-          stress[id] = convergent;
+          stress[id] = convergent * coherenceGate;
         } else if (divergent > convergent && divergent > shear * 0.55) {
           btype[id] = BoundaryType.DIVERGENT;
-          stress[id] = divergent;
+          stress[id] = divergent * coherenceGate;
         } else {
           btype[id] = BoundaryType.TRANSFORM;
-          stress[id] = shear * 0.5;
+          stress[id] = shear * 0.5 * coherenceGate;
         }
         boundaryKind[id] = btype[id];
       }
@@ -1532,6 +1606,60 @@
         boundaryKind[i] = nearestBoundaryKind(grid, i);
       }
     }
+  }
+
+  function deriveBoundaryCoherence(grid) {
+    const { width, height, plate, activeBoundary, boundaryDensity, boundaryCoherence, noisyBoundaryPatch, plateCheckerboard } = grid;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const id = y * width + x;
+        let boundaryCount = 0;
+        let cells = 0;
+        let same = 0;
+        let different = 0;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= height) continue;
+          for (let dx = -1; dx <= 1; dx += 1) {
+            const nx = wrapX(width, x + dx);
+            const nid = ny * width + nx;
+            cells += 1;
+            if (activeBoundary[nid]) boundaryCount += 1;
+            if (nid === id) continue;
+            if (plate[nid] === plate[id]) same += 1;
+            else different += 1;
+          }
+        }
+
+        const density = cells ? boundaryCount / cells : 0;
+        const checker = checkerboardRiskAt(grid, x, y);
+        const islandNoise = same <= 2 && different >= 5 ? 1 : 0;
+        const coherence = Math.max(0, Math.min(1, 1 - Math.max(0, density - 0.42) * 1.35 - checker * 0.75 - islandNoise * 0.55));
+        boundaryDensity[id] = density;
+        plateCheckerboard[id] = checker;
+        boundaryCoherence[id] = coherence;
+        if (density > 0.66 || checker > 0.4 || islandNoise) noisyBoundaryPatch[id] = 1;
+      }
+    }
+  }
+
+  function checkerboardRiskAt(grid, x, y) {
+    let risk = 0;
+    for (let dy = -1; dy <= 0; dy += 1) {
+      const y0 = y + dy;
+      const y1 = y0 + 1;
+      if (y0 < 0 || y1 >= grid.height) continue;
+      for (let dx = -1; dx <= 0; dx += 1) {
+        const x0 = wrapX(grid.width, x + dx);
+        const x1 = wrapX(grid.width, x + dx + 1);
+        const a = grid.plate[y0 * grid.width + x0];
+        const b = grid.plate[y0 * grid.width + x1];
+        const c = grid.plate[y1 * grid.width + x0];
+        const d = grid.plate[y1 * grid.width + x1];
+        if (a === d && b === c && a !== b) risk = 1;
+      }
+    }
+    return risk;
   }
 
   function inspectBoundaryNeighbor(grid, x, y, nx, ny, dx, dy, currentPlate, id, visit) {
@@ -1597,7 +1725,7 @@
   }
 
   function seedFeatureSources(grid) {
-    const { size, crustType, crustThickness, crustAge, boundaryKind, boundaryInfluence, stress, weakness, scratch, scratch2, scratch3 } = grid;
+    const { size, crustType, crustThickness, crustAge, boundaryKind, boundaryInfluence, stress, weakness, boundaryCoherence, noisyBoundaryPatch, scratch, scratch2, scratch3 } = grid;
     const mountain = scratch;
     const trench = scratch2;
     const ridge = scratch3;
@@ -1615,7 +1743,8 @@
       const weak = weakness[i];
       const weakGate = weak > 0.34 ? 1 : weak > 0.22 ? 0.45 : 0.12;
       const broken = weak < 0.3 && ((i * 1103515245 + 12345) & 7) < 3 ? 0.35 : 1;
-      const signal = active * s * weakGate * broken;
+      const coherenceFactor = noisyBoundaryPatch[i] ? 0.12 : 0.35 + (boundaryCoherence[i] ?? 1) * 0.65;
+      const signal = active * s * weakGate * broken * coherenceFactor;
       const continental = crustType[i] === CrustType.CONTINENTAL;
       const transitional = crustType[i] === CrustType.TRANSITIONAL;
       const oceanic = crustType[i] === CrustType.OCEANIC;
@@ -3236,7 +3365,12 @@
     initializeBaseTerrain(world);
     assignPlates(world);
     initializeSeaLevel(world);
-    computeBoundaryStress(world);
+    if (world.params.pipelineMode === PipelineMode.GEOLOGY_V2) {
+      rasterizePlatesV2(world);
+      updatePlateBoundaries(world);
+    } else {
+      computeBoundaryStress(world);
+    }
     updateSeaLevel(world);
     world.stats = analyzeWorld(world);
     return world;
@@ -3599,4 +3733,4 @@
   }
 
 
-  })();
+})();

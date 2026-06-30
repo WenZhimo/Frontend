@@ -958,3 +958,78 @@ inactivePenalty = (transformMemory + fractureZoneMemory + inactiveBoundaryRelief
 ### 14.4 剩余限制
 
 当前 fracture zone 模型仍是栅格记忆场，不是真正的 plate-relative transform segment tracker。它能降低旧边界残影，但还不能完整表达洋中脊分段、转换断层错断几何和 fracture-zone 年龄差条纹。后续如果继续改善边界弯曲与分段，应把 transform segment 生命周期和 ridge offset 一起建模。
+
+## 15. 工程落地补充：板块棋盘格边界伪影
+
+本轮处理的是板块挤压区短暂出现的红蓝棋盘格边界伪影。它不是地质现象，而是 plate rasterization 与 boundary detection 的数值伪影：当 plate 栅格归属出现 A/B/A/B 的交替小块时，`activeBoundary` 会从线状边界变成面状噪声，随后被 convergent/divergent/transform 着色和构造 feature 放大。
+
+### 15.1 修复规则
+
+plate rasterization：
+
+```js
+diagonalCost = Math.SQRT2;
+orthogonalCost = 1;
+```
+
+对角扩张不再比正交扩张更便宜。栅格归属完成后执行一轮局部 majority cleanup：
+
+```js
+if (majorityCount >= 5 && sameCount <= 2) {
+  plate = majorityPlate;
+}
+
+if (is2x2Checkerboard && majorityCount >= 4 && sameCount <= 3) {
+  plate = majorityPlate;
+}
+```
+
+该清理只针对孤立格和棋盘格，不针对真实长条边界。
+
+boundary coherence：
+
+```js
+boundaryDensity = activeBoundary cells in 3x3 / cells;
+plateCheckerboard = local 2x2 A/B/B/A risk;
+boundaryCoherence = 1 - highDensityPenalty - checkerPenalty - islandPenalty;
+noisyBoundaryPatch = boundaryDensity > 0.66 || plateCheckerboard > 0.4 || islandNoise;
+```
+
+feature gating：
+
+```js
+coherenceFactor = noisyBoundaryPatch ? 0.12 : 0.35 + boundaryCoherence * 0.65;
+signal *= coherenceFactor;
+```
+
+这样不是在渲染层隐藏颜色，而是在构造 feature 写入前阻断数值噪声。
+
+### 15.2 新增字段与诊断
+
+新增 grid 字段：
+
+- `boundaryDensity`
+- `boundaryCoherence`
+- `noisyBoundaryPatch`
+- `plateCheckerboard`
+
+新增指标：
+
+- `plateCheckerboardScore`
+- `activeBoundaryCoverage`
+- `localBoundaryDensityMean`
+- `noisyBoundaryPatchCoverage`
+- `plateIslandNoiseShare`
+- `featureOnNoisyBoundaryShare`
+
+新增 debug 图层：
+
+- `plateId`
+- `boundaryDensity`
+- `boundaryCoherence`
+- `noisyBoundaryPatch`
+- `plateCheckerboard`
+
+### 15.3 剩余限制
+
+该方案仍是栅格后处理和局部 coherence 门控，目标是消除棋盘格数值伪影，而不是生成最终自然弯曲的板块边界。真实的弯曲、错断、分段边界还需要后续在 plate center、弱带、旧缝合线和 ridge-transform 几何上建模。

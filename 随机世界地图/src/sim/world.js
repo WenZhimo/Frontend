@@ -2,6 +2,8 @@ import { createGrid } from "./grid.js";
 import { hashSeed } from "./prng.js";
 import { initializeBaseTerrain, initializeSeaLevel, updateSeaLevel } from "./terrain.js";
 import { assignPlates, computeBoundaryStress } from "./tectonics.js";
+import { updatePlateBoundaries } from "./geology/boundaries.js";
+import { rasterizePlatesV2 } from "./geology/plates.js";
 
 export const PipelineMode = {
   LEGACY: "legacy",
@@ -31,7 +33,12 @@ export function createWorld(params) {
   initializeBaseTerrain(world);
   assignPlates(world);
   initializeSeaLevel(world);
-  computeBoundaryStress(world);
+  if (world.params.pipelineMode === PipelineMode.GEOLOGY_V2) {
+    rasterizePlatesV2(world);
+    updatePlateBoundaries(world);
+  } else {
+    computeBoundaryStress(world);
+  }
   updateSeaLevel(world);
   world.stats = analyzeWorld(world);
   return world;

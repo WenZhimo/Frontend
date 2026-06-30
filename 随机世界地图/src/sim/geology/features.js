@@ -42,7 +42,7 @@ function decayActiveFeatures(grid) {
 }
 
 function seedFeatureSources(grid) {
-  const { size, crustType, crustThickness, crustAge, boundaryKind, boundaryInfluence, stress, weakness, scratch, scratch2, scratch3 } = grid;
+  const { size, crustType, crustThickness, crustAge, boundaryKind, boundaryInfluence, stress, weakness, boundaryCoherence, noisyBoundaryPatch, scratch, scratch2, scratch3 } = grid;
   const mountain = scratch;
   const trench = scratch2;
   const ridge = scratch3;
@@ -60,7 +60,8 @@ function seedFeatureSources(grid) {
     const weak = weakness[i];
     const weakGate = weak > 0.34 ? 1 : weak > 0.22 ? 0.45 : 0.12;
     const broken = weak < 0.3 && ((i * 1103515245 + 12345) & 7) < 3 ? 0.35 : 1;
-    const signal = active * s * weakGate * broken;
+    const coherenceFactor = noisyBoundaryPatch[i] ? 0.12 : 0.35 + (boundaryCoherence[i] ?? 1) * 0.65;
+    const signal = active * s * weakGate * broken * coherenceFactor;
     const continental = crustType[i] === CrustType.CONTINENTAL;
     const transitional = crustType[i] === CrustType.TRANSITIONAL;
     const oceanic = crustType[i] === CrustType.OCEANIC;

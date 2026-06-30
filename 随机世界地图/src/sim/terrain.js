@@ -7,6 +7,10 @@ export function initializeBaseTerrain(world) {
   const { grid, seedUint32 } = world;
   grid.relief.fill(0);
   grid.boundaryRelief.fill(0);
+  grid.boundaryDensity.fill(0);
+  grid.boundaryCoherence.fill(1);
+  grid.noisyBoundaryPatch.fill(0);
+  grid.plateCheckerboard.fill(0);
   grid.orogeny.fill(0);
   grid.featureIntensity.fill(0);
   grid.mountainBelt.fill(0);

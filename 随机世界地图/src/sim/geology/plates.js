@@ -57,6 +57,8 @@ export function rasterizePlatesV2(world) {
     });
   }
 
+  cleanupPlateCheckerboards(grid);
+
   for (let i = 0; i < size; i += 1) {
     const p = plate[i] < 0 ? 0 : plate[i];
     plate[i] = p;
@@ -143,9 +145,64 @@ function forEachNeighbor8Local(grid, x, y, visit) {
     if (ny < 0 || ny >= grid.height) continue;
     for (let dx = -1; dx <= 1; dx += 1) {
       if (dx === 0 && dy === 0) continue;
-      visit(wrapX(grid.width, x + dx), ny, dx === 0 || dy === 0 ? 1 : 0.55);
+      visit(wrapX(grid.width, x + dx), ny, dx === 0 || dy === 0 ? 1 : Math.SQRT2);
     }
   }
+}
+
+function cleanupPlateCheckerboards(grid) {
+  const { width, height, size, plate } = grid;
+  const next = new Int32Array(plate);
+  let maxPlate = 0;
+  for (let i = 0; i < size; i += 1) if (plate[i] > maxPlate) maxPlate = plate[i];
+  const counts = new Int16Array(maxPlate + 1);
+  const touched = [];
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const id = y * width + x;
+      const current = plate[id];
+      touched.length = 0;
+      let same = 0;
+      let majorityPlate = current;
+      let majorityCount = 0;
+      forEachNeighbor8Local(grid, x, y, (nx, ny) => {
+        const other = plate[ny * width + nx];
+        if (other === current) same += 1;
+        if (counts[other] === 0) touched.push(other);
+        const count = counts[other] + 1;
+        counts[other] = count;
+        if (count > majorityCount) {
+          majorityCount = count;
+          majorityPlate = other;
+        }
+      });
+
+      const checker = isCheckerboardCell(grid, x, y);
+      if ((majorityCount >= 5 && same <= 2) || (checker && majorityCount >= 4 && same <= 3)) {
+        next[id] = majorityPlate;
+      }
+      for (const p of touched) counts[p] = 0;
+    }
+  }
+  plate.set(next);
+}
+
+function isCheckerboardCell(grid, x, y) {
+  for (let dy = -1; dy <= 0; dy += 1) {
+    const y0 = y + dy;
+    const y1 = y0 + 1;
+    if (y0 < 0 || y1 >= grid.height) continue;
+    for (let dx = -1; dx <= 0; dx += 1) {
+      const x0 = wrapX(grid.width, x + dx);
+      const x1 = wrapX(grid.width, x + dx + 1);
+      const a = grid.plate[y0 * grid.width + x0];
+      const b = grid.plate[y0 * grid.width + x1];
+      const c = grid.plate[y1 * grid.width + x0];
+      const d = grid.plate[y1 * grid.width + x1];
+      if (a === d && b === c && a !== b) return true;
+    }
+  }
+  return false;
 }
 
 function syncPlateCenterUv(grid, plates, p) {

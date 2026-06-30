@@ -40,5 +40,9 @@ for (const file of files) {
   bundled += `// ---- ${file} ----\n${code}\n\n`;
 }
 
-const output = `(function () {\n${bundled.replace(/^/gm, "  ")}})();\n`;
+const indented = bundled
+  .split(/\r?\n/)
+  .map((line) => (line.length > 0 ? `  ${line}` : ""))
+  .join("\n");
+const output = `(function () {\n${indented}})();\n`;
 writeFileSync(join(root, "src/app.js"), output, "utf8");
