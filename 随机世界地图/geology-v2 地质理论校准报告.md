@@ -1183,3 +1183,75 @@ mountainAxis / mountainHeight / orographicBarrier <- naturalized mountain axis +
 ### 17.4 剩余限制
 
 当前 axis 是栅格场，不是显式折线网络。它能显著降低边界直线感和 blockiness，但还不能表达完整的 ridge-transform offset、弧形俯冲带拓扑或多期缝合线重激活。后续可在该层上增加 segment tracker 和 polyline skeleton。
+
+## 18. 工程落地补充：行星地形起伏预算
+
+含水类地行星不应在长时程后自动变成平板。构造、地壳厚度/密度差异、洋壳冷却沉降、山带生命周期会制造高差；侵蚀、沉积、深海平原和被动边缘会削平并重分配高差。geology-v2 需要把二者放进同一个预算诊断，避免单个合理过程叠加出不合理的全球结果。
+
+### 18.1 可编码规则
+
+构造起伏来源：
+
+```js
+tectonicReliefSupply =
+  activeOrogeny * 1.0
+  + oldOrogeny * 0.35
+  + ridge * 0.45
+  + rift * 0.25
+  + trench * 0.25
+  + islandArc * 0.35;
+```
+
+等静力和洋底来源：
+
+```js
+isostaticReliefSupply =
+  abs(thicknessBuoyancy)
+  + abs(ageSubsidence)
+  + abs(oceanDepthTerms);
+```
+
+削平压力：
+
+```js
+erosionFlatteningPressure =
+  sediment * 0.35
+  + basin * 0.25
+  + abyssalPlain * 0.35
+  + sedimentWedge * 0.2
+  + forelandBasin * 0.15;
+```
+
+全局风险：
+
+```js
+hypsometricSpread = p95(elev) - p05(elev);
+landReliefSpread = p90(landElev) - p10(landElev);
+globalElevationStd = std(elev);
+
+flatWorldRisk =
+  globalElevationStd < targetStd
+  && hypsometricSpread < targetSpread
+  && largePlainShare > maxPlainShare;
+```
+
+### 18.2 字段职责
+
+- `planetaryRelief`：局部预算合成结果，用于 debug 和质量诊断。
+- `reliefDeficit`：全局起伏不足风险映射到局部图层。
+- `seaLevelSensitivity`：`abs(elev - seaLevel)` 小于阈值的海陆敏感区。
+- `flatLandMask / largePlainMask`：局部平原候选，不能单独作为坏指标。
+- `drainageGradientPotential`：水文前的陆地坡度与陆地起伏潜力。
+- `orographicReliefPotential`：气候前的雨影屏障潜力。
+
+### 18.3 验证指标
+
+- `hypsometricSpread / landReliefSpread / globalElevationStd` 不应在 739 Myr 塌缩。
+- `largePlainShare` 可以高，但不能和低 spread/std 同时触发 `flatWorldRisk`。
+- `seaLevelSensitivity / coastInstabilityRisk` 不应长期过高，否则海陆后置会对微小海平面变化过敏。
+- `tectonicReliefSupplyMean / isostaticReliefSupplyMean` 应解释起伏来源。
+- `erosionFlatteningPressureMean / sedimentSmoothingPressureMean` 应解释沉积和深海平原的削平压力。
+
+### 18.4 剩余限制
+
+当前版本只诊断，不启用反馈。后续若要自动调节，应分散到已有地质过程，例如降低过度平滑、保留旧造山根、压缩沉积填平收益，而不是直接给高程加随机噪声。撞击坑、热点、冰川、完整河网侵蚀和生物礁仍暂缓。

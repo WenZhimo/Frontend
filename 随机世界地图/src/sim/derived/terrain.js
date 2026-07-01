@@ -1,4 +1,5 @@
 import { forEachNeighbor4, indexOf, physicalRadius, wrapX } from "../grid.js";
+import { getReliefDiagnostics } from "../geology/reliefBudget.js";
 import { deriveOceanConnectivity } from "../geology/rift.js";
 
 export function getTerrainDerived(world) {
@@ -34,6 +35,11 @@ export function getTerrainDerived(world) {
     axisBoundaryDependency: base.axisBoundaryDependency,
     mountainHeightBlockiness: base.mountainHeightBlockiness,
     orographicBarrierContinuity: base.orographicBarrierContinuity,
+    planetaryRelief: base.planetaryRelief,
+    reliefDeficit: base.reliefDeficit,
+    seaLevelSensitivity: base.seaLevelSensitivity,
+    largePlainMask: base.largePlainMask,
+    flatLandMask: base.flatLandMask,
   };
 }
 
@@ -84,6 +90,9 @@ export function getClimateInputs(world) {
     orographicBarrier,
     mountainAxis,
     mountainHeight,
+    hypsometricSpread: base.reliefDiagnostics.hypsometricSpread,
+    landReliefSpread: base.reliefDiagnostics.landReliefSpread,
+    orographicReliefPotential: base.reliefDiagnostics.orographicReliefPotential,
   };
 }
 
@@ -122,6 +131,9 @@ export function getHydrologyInputs(world) {
     erodibility,
     permeability,
     sedimentSink,
+    drainageGradientPotential: base.reliefDiagnostics.drainageGradientPotential,
+    flatLandMask: base.flatLandMask,
+    largePlainMask: base.largePlainMask,
     forelandBasin: new Float32Array(grid.forelandBasin),
     orogenicSedimentSupply: new Float32Array(grid.orogenicSedimentSupply),
     continentalRise: base.continentalRise,
@@ -281,6 +293,12 @@ function buildTerrainBase(world) {
   const axisBoundaryDependency = new Float32Array(grid.axisBoundaryDependency);
   const mountainHeightBlockiness = new Float32Array(grid.mountainHeightBlockiness);
   const orographicBarrierContinuity = new Float32Array(grid.orographicBarrierContinuity);
+  const planetaryRelief = new Float32Array(grid.planetaryRelief);
+  const reliefDeficit = new Float32Array(grid.reliefDeficit);
+  const seaLevelSensitivity = new Float32Array(grid.seaLevelSensitivity);
+  const largePlainMask = new Uint8Array(grid.largePlainMask);
+  const flatLandMask = new Uint8Array(grid.flatLandMask);
+  const reliefDiagnostics = getReliefDiagnostics(world);
 
   return {
     relativeElevation,
@@ -316,6 +334,12 @@ function buildTerrainBase(world) {
     axisBoundaryDependency,
     mountainHeightBlockiness,
     orographicBarrierContinuity,
+    planetaryRelief,
+    reliefDeficit,
+    seaLevelSensitivity,
+    largePlainMask,
+    flatLandMask,
+    reliefDiagnostics,
   };
 }
 

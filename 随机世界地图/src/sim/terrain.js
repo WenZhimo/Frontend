@@ -32,6 +32,15 @@ export function initializeBaseTerrain(world) {
   grid.axisBoundaryDependency.fill(0);
   grid.mountainHeightBlockiness.fill(0);
   grid.orographicBarrierContinuity.fill(0);
+  grid.planetaryRelief.fill(0);
+  grid.tectonicReliefSupply.fill(0);
+  grid.isostaticReliefSupply.fill(0);
+  grid.erosionFlatteningPressure.fill(0);
+  grid.sedimentSmoothingPressure.fill(0);
+  grid.reliefDeficit.fill(0);
+  grid.seaLevelSensitivity.fill(0);
+  grid.largePlainMask.fill(0);
+  grid.flatLandMask.fill(0);
   grid.featureIntensity.fill(0);
   grid.mountainBelt.fill(0);
   grid.trench.fill(0);
