@@ -57,6 +57,7 @@ console.log(JSON.stringify({
     marginDiagnostics: measureMarginDiagnostics(world),
     transformDiagnostics: measureTransformDiagnostics(world),
     orogenyDiagnostics: measureOrogenyDiagnostics(world),
+    axisDiagnostics: measureAxisDiagnostics(world),
     boundaryDiagnostics: measureBoundaryDiagnostics(world.grid),
     geologyRisks: measureGeologyRisks(world),
 }, null, 2));
@@ -452,6 +453,36 @@ function measureOrogenyDiagnostics(world) {
     mountainBoundaryZeroShare: conditionalShare(grid.mountainBelt, (i) => grid.mountainBelt[i] > 0.05, (i) => grid.boundaryDistance[i] === 0),
     oldOrogenyBoundaryShare: conditionalShare(grid.oldOrogeny, (i) => grid.oldOrogeny[i] > 0.05, (i) => grid.boundaryDistance[i] <= 1),
   };
+}
+
+function measureAxisDiagnostics(world) {
+  const { grid } = world;
+  return {
+    axisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.tectonicAxis[i] > 0.05),
+    axisNoisyBoundaryShare: conditionalShare(grid.tectonicAxis, (i) => grid.tectonicAxis[i] > 0.05, (i) => grid.noisyBoundaryPatch[i]),
+    axisSegmentLengthMean: axisSegmentLengthMean(grid),
+    axisCurvatureMean: averageWhere(grid.axisCurvature, (i) => grid.tectonicAxis[i] > 0.05),
+    axisContinuityMean: averageWhere(grid.axisContinuity, (i) => grid.tectonicAxis[i] > 0.05),
+    mountainHeightBlockiness: averageWhere(grid.mountainHeightBlockiness, (i) => grid.mountainHeight[i] > 0.02),
+    orographicBarrierContinuity: averageWhere(grid.orographicBarrierContinuity, (i) => grid.orographicBarrier[i] > 0.02),
+    activeFeatureOnNoisyBoundaryShare: measureBoundaryDiagnostics(grid).featureOnNoisyBoundaryShare,
+    ridgeAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.ridgeAxis[i] > 0.05),
+    trenchAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.trenchAxis[i] > 0.05),
+    riftAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.riftAxis[i] > 0.05),
+  };
+}
+
+function axisSegmentLengthMean(grid) {
+  const counts = new Map();
+  for (let i = 0; i < grid.axisSegmentId.length; i += 1) {
+    const id = grid.axisSegmentId[i];
+    if (!id) continue;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  if (!counts.size) return 0;
+  let total = 0;
+  for (const count of counts.values()) total += count;
+  return total / counts.size;
 }
 
 function isPlateIslandNoise(grid, id) {

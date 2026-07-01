@@ -28,6 +28,12 @@ export function getTerrainDerived(world) {
     activeTransform: base.activeTransform,
     transformMemory: base.transformMemory,
     fractureZoneMemory: base.fractureZoneMemory,
+    tectonicAxis: base.tectonicAxis,
+    axisCurvature: base.axisCurvature,
+    axisContinuity: base.axisContinuity,
+    axisBoundaryDependency: base.axisBoundaryDependency,
+    mountainHeightBlockiness: base.mountainHeightBlockiness,
+    orographicBarrierContinuity: base.orographicBarrierContinuity,
   };
 }
 
@@ -210,6 +216,7 @@ export function getResourceInputs(world) {
     crustThickness,
     orogeny,
     orogenicBelt: maxFields(activeOrogeny, oldOrogeny, orogeny),
+    tectonicAxis: new Float32Array(grid.tectonicAxis),
     activeOrogeny,
     oldOrogeny,
     forelandBasin,
@@ -268,6 +275,12 @@ function buildTerrainBase(world) {
   const fractureZoneMemory = new Float32Array(grid.fractureZoneMemory);
   const forelandBasin = new Float32Array(grid.forelandBasin);
   const orogenicSedimentSupply = new Float32Array(grid.orogenicSedimentSupply);
+  const tectonicAxis = new Float32Array(grid.tectonicAxis);
+  const axisCurvature = new Float32Array(grid.axisCurvature);
+  const axisContinuity = new Float32Array(grid.axisContinuity);
+  const axisBoundaryDependency = new Float32Array(grid.axisBoundaryDependency);
+  const mountainHeightBlockiness = new Float32Array(grid.mountainHeightBlockiness);
+  const orographicBarrierContinuity = new Float32Array(grid.orographicBarrierContinuity);
 
   return {
     relativeElevation,
@@ -297,6 +310,12 @@ function buildTerrainBase(world) {
     activeTransform,
     transformMemory,
     fractureZoneMemory,
+    tectonicAxis,
+    axisCurvature,
+    axisContinuity,
+    axisBoundaryDependency,
+    mountainHeightBlockiness,
+    orographicBarrierContinuity,
   };
 }
 

@@ -37,9 +37,20 @@ const layers = {
   orogenyAge: colorField("orogenyAge", 0, 1, [45, 126, 202], [136, 86, 190]),
   orogenyErosion: colorField("orogenyErosion", 0, 0.01, [36, 36, 32], [231, 204, 84]),
   forelandBasin: colorField("forelandBasin", 0, 1, [28, 43, 43], [83, 206, 164]),
+  tectonicAxis: colorField("tectonicAxis", 0, 1, [24, 28, 30], [235, 238, 225]),
+  mountainAxisSeed: colorField("mountainAxisSeed", 0, 1, [42, 29, 32], [236, 92, 74]),
+  ridgeAxis: colorField("ridgeAxis", 0, 1, [20, 38, 48], [75, 203, 229]),
+  trenchAxis: colorField("trenchAxis", 0, 1, [38, 30, 45], [203, 94, 196]),
+  riftAxis: colorField("riftAxis", 0, 1, [43, 35, 28], [228, 150, 60]),
+  axisSegmentId: colorIntId("axisSegmentId"),
+  axisCurvature: colorField("axisCurvature", 0, 1, [31, 34, 36], [224, 139, 67]),
+  axisContinuity: colorField("axisContinuity", 0, 1, [28, 33, 29], [92, 206, 118]),
+  axisBoundaryDependency: colorField("axisBoundaryDependency", 0, 1, [31, 26, 27], [226, 63, 56]),
   mountainAxis: colorField("mountainAxis", 0, 1, [28, 30, 34], [236, 238, 226]),
   mountainHeight: colorField("mountainHeight", 0, 0.28, [34, 34, 38], [232, 232, 220]),
+  mountainHeightBlockiness: colorField("mountainHeightBlockiness", 0, 1, [22, 35, 39], [236, 62, 158]),
   orographicBarrier: colorField("orographicBarrier", 0, 0.22, [38, 32, 48], [202, 91, 188]),
+  orographicBarrierContinuity: colorField("orographicBarrierContinuity", 0, 1, [26, 32, 28], [86, 206, 112]),
   orogenicSedimentSupply: colorField("orogenicSedimentSupply", 0, 0.05, [42, 37, 30], [229, 182, 78]),
   sediment: colorField("sediment", 0, 0.22, [27, 52, 71], [221, 206, 157]),
   basin: colorField("basin", 0, 0.7, [29, 55, 79], [110, 169, 187]),
@@ -168,6 +179,18 @@ function colorClosedBasinId(world, i) {
     70 + (id * 131) % 150,
     80 + (id * 47) % 150,
   ];
+}
+
+function colorIntId(fieldName) {
+  return (world, i) => {
+    const id = world.grid[fieldName][i];
+    if (!id) return [32, 35, 38];
+    return [
+      48 + (id * 73) % 170,
+      55 + (id * 131) % 165,
+      62 + (id * 47) % 160,
+    ];
+  };
 }
 
 function colorProtoOceanCandidate(world, i) {

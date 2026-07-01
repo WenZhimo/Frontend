@@ -620,3 +620,33 @@ getter 变更：
 - `mountainBelt / activeOrogeny` 代表新山带，不能替代长期山地背景。
 - `oldOrogeny` 可影响资源和缓坡地形，但不应直接生成单像素活动边界山脉。
 - `forelandBasin` 是地质沉积盆地候选，不是完整水文湖泊或河流沉积系统。
+
+## 18. 构造轴线自然化接口补充
+
+本轮新增 naturalized axis 字段，用于把 raw plate boundary 和最终地质 feature 解耦。后续系统应优先读取自然化轴线与山脉接口，而不是直接使用 `activeBoundary` 推断山脉、海岭、海沟或裂谷。
+
+新增字段：
+
+- `tectonicAxis`：综合构造轴线诊断层。
+- `mountainAxisSeed`：山脉/造山轴线种子自然化结果。
+- `ridgeAxis`：洋中脊轴线自然化结果。
+- `trenchAxis`：海沟/俯冲轴线自然化结果。
+- `riftAxis`：裂谷轴线自然化结果。
+- `axisSegmentId`：轴线连通段编号。
+- `axisCurvature`：轴线弯曲程度。
+- `axisContinuity`：轴线连续性。
+- `axisBoundaryDependency`：轴线对 raw active boundary 的依赖度。
+- `mountainHeightBlockiness`：山高字段块状/条纹风险。
+- `orographicBarrierContinuity`：雨影屏障连续性。
+
+getter 变更：
+
+- `getTerrainDerived(world)` 返回 `tectonicAxis / axisCurvature / axisContinuity / axisBoundaryDependency / mountainHeightBlockiness / orographicBarrierContinuity`。
+- `getClimateInputs(world)` 继续返回 `mountainAxis / mountainHeight / orographicBarrier`，但这些字段现在来自自然化轴线。
+- `getResourceInputs(world)` 返回 `tectonicAxis`，可供后续资源分带使用。
+
+接口约束：
+
+- getter 只读，不推进模拟，不写回状态。
+- raw `activeBoundary` 只能作为构造 seed 或诊断来源，不应被后续系统当作最终山脉/海岭/海沟。
+- `axisBoundaryDependency` 和 `axisNoisyBoundaryShare` 应作为长期质量门，防止回归到 Voronoi/棋盘格边界。
