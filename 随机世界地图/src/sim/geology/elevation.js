@@ -15,6 +15,9 @@ export function rebuildGeologyElevationV2(world) {
     crustThickness,
     crustAge,
     orogeny,
+    activeOrogeny,
+    oldOrogeny,
+    orogenyAge,
     sediment,
     ageSubsidence,
     thicknessBuoyancy,
@@ -28,6 +31,7 @@ export function rebuildGeologyElevationV2(world) {
     continentalRise,
     abyssalPlain,
     sedimentWedge,
+    forelandBasin,
     activeTransform,
     transformMemory,
     fractureZoneMemory,
@@ -82,9 +86,14 @@ export function rebuildGeologyElevationV2(world) {
       oceanDepthTerms[i] = ageSubsidence[i] + thicknessBuoyancy[i] + sedimentFill[i] + ridgeUplift[i] + trenchDepression[i];
       crustBase = -0.03 + ageSubsidence[i] + thicknessBuoyancy[i];
     }
-    const longTerm = orogeny[i] * (continental ? 0.16 : 0.045) + sedimentFill[i] - basin[i] * (transitional ? 0.002 : 0.018);
+    const ageReduction = 0.35 + Math.max(0, Math.min(1, orogenyAge?.[i] ?? 0)) * 0.55;
+    const oldOrogenRelief = (oldOrogeny?.[i] ?? 0) * (continental ? 0.075 : transitional ? 0.035 : 0.004) * (1 - ageReduction * 0.62);
+    const rootRelief = orogeny[i] * (continental ? 0.105 : transitional ? 0.032 : 0.004);
+    const forelandSubsidence = (forelandBasin?.[i] ?? 0) * (continental ? 0.026 : transitional ? 0.018 : 0.002);
+    const longTerm = rootRelief + oldOrogenRelief + sedimentFill[i] - basin[i] * (transitional ? 0.002 : 0.018) - forelandSubsidence;
     const activeFeature =
-      mountainBelt[i] * 0.18 -
+      mountainBelt[i] * 0.15 +
+      (activeOrogeny?.[i] ?? 0) * (continental ? 0.055 : transitional ? 0.024 : 0.006) -
       (continental ? trench[i] * 0.105 : -trenchDepression[i]) +
       (continental ? ridge[i] * 0.048 : ridgeUplift[i]) -
       rift[i] * 0.055 +

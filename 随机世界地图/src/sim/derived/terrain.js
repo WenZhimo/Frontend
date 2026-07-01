@@ -23,6 +23,8 @@ export function getTerrainDerived(world) {
     continentalRise: base.continentalRise,
     abyssalPlain: base.abyssalPlain,
     sedimentWedge: base.sedimentWedge,
+    forelandBasin: base.forelandBasin,
+    orogenicSedimentSupply: base.orogenicSedimentSupply,
     activeTransform: base.activeTransform,
     transformMemory: base.transformMemory,
     fractureZoneMemory: base.fractureZoneMemory,
@@ -32,7 +34,18 @@ export function getTerrainDerived(world) {
 export function getClimateInputs(world) {
   const base = buildTerrainBase(world);
   const { grid } = world;
-  const { size, width, height, mountainBelt, orogeny } = grid;
+  const {
+    size,
+    width,
+    height,
+    mountainBelt,
+    activeOrogeny,
+    oldOrogeny,
+    orogeny,
+    mountainAxis: storedMountainAxis,
+    mountainHeight: storedMountainHeight,
+    orographicBarrier: storedOrographicBarrier,
+  } = grid;
   const latitude = new Float32Array(size);
   const oceanDepth = new Float32Array(size);
   const orographicBarrier = new Float32Array(size);
@@ -46,9 +59,9 @@ export function getClimateInputs(world) {
       const rel = base.relativeElevation[id];
       latitude[id] = lat;
       oceanDepth[id] = Math.max(0, -rel);
-      mountainAxis[id] = Math.max(mountainBelt?.[id] ?? 0, orogeny?.[id] ?? 0);
-      mountainHeight[id] = Math.max(0, rel) * (0.45 + Math.min(1, mountainAxis[id] * 2.2));
-      orographicBarrier[id] = Math.max(0, rel) * Math.min(1, base.ruggedness[id] * 5.5 + mountainAxis[id] * 1.4);
+      mountainAxis[id] = Math.max(storedMountainAxis?.[id] ?? 0, mountainBelt?.[id] ?? 0, activeOrogeny?.[id] ?? 0, oldOrogeny?.[id] ?? 0, orogeny?.[id] ?? 0);
+      mountainHeight[id] = Math.max(storedMountainHeight?.[id] ?? 0, Math.max(0, rel) * (0.45 + Math.min(1, mountainAxis[id] * 2.2)));
+      orographicBarrier[id] = Math.max(storedOrographicBarrier?.[id] ?? 0, Math.max(0, rel) * Math.min(1, base.ruggedness[id] * 5.5 + mountainAxis[id] * 1.4));
     }
   }
 
@@ -71,7 +84,7 @@ export function getClimateInputs(world) {
 export function getHydrologyInputs(world) {
   const base = buildTerrainBase(world);
   const { grid } = world;
-  const { size, elev, crustType, sediment, basin } = grid;
+  const { size, elev, crustType, sediment, basin, forelandBasin, orogenicSedimentSupply } = grid;
   const hydroElevation = smoothElevation(grid, elev, physicalRadius(grid, 1));
   const depressionMask = findLocalDepressions(grid, hydroElevation, base.seaMask);
   const oceanConnectivity = new Uint8Array(size);
@@ -89,7 +102,7 @@ export function getHydrologyInputs(world) {
     const type = crustType?.[i] ?? (base.landMask[i] ? 1 : 0);
     erodibility[i] = Math.max(0, Math.min(1, 0.22 + sed * 0.42 + base.slope[i] * 2.2 + (type === 2 ? 0.12 : 0)));
     permeability[i] = Math.max(0, Math.min(1, 0.18 + sed * 0.48 + (type === 0 ? 0.08 : 0) - basinValue * 0.16));
-    sedimentSink[i] = Math.max(0, Math.min(1, basinValue * 0.48 + sed * 0.32 + slopePenalty * (base.landMask[i] ? 0.16 : 0.28)));
+    sedimentSink[i] = Math.max(0, Math.min(1, basinValue * 0.42 + (forelandBasin?.[i] ?? 0) * 0.34 + sed * 0.28 + (orogenicSedimentSupply?.[i] ?? 0) * 0.18 + slopePenalty * (base.landMask[i] ? 0.16 : 0.28)));
   }
 
   return {
@@ -103,6 +116,8 @@ export function getHydrologyInputs(world) {
     erodibility,
     permeability,
     sedimentSink,
+    forelandBasin: new Float32Array(grid.forelandBasin),
+    orogenicSedimentSupply: new Float32Array(grid.orogenicSedimentSupply),
     continentalRise: base.continentalRise,
   };
 }
@@ -110,7 +125,7 @@ export function getHydrologyInputs(world) {
 export function getBiosphereInputs(world) {
   const base = buildTerrainBase(world);
   const { grid } = world;
-  const { size, elev, crustType, sediment, boundaryInfluence, ridge, trench, rift, islandArc, mountainBelt } = grid;
+  const { size, elev, crustType, sediment, boundaryInfluence, ridge, trench, rift, islandArc, mountainBelt, activeOrogeny, oldOrogeny, forelandBasin, orogenicSedimentSupply } = grid;
   const biomeBaseElevation = smoothElevation(grid, elev, physicalRadius(grid, 1));
   const soilParentMaterial = new Int8Array(size);
   const soilDepthPotential = new Float32Array(size);
@@ -127,7 +142,7 @@ export function getBiosphereInputs(world) {
     const type = crustType?.[i] ?? (base.landMask[i] ? 1 : 0);
     const sed = sediment?.[i] ?? 0;
     soilParentMaterial[i] = type;
-    soilDepthPotential[i] = Math.max(0, Math.min(1, sed * 0.58 + (1 - Math.min(1, base.slope[i] * 5.5)) * 0.3 + Math.max(0, base.relativeElevation[i]) * 0.06));
+    soilDepthPotential[i] = Math.max(0, Math.min(1, sed * 0.52 + (orogenicSedimentSupply?.[i] ?? 0) * 0.24 + (forelandBasin?.[i] ?? 0) * 0.18 + (1 - Math.min(1, base.slope[i] * 5.5)) * 0.3 + Math.max(0, base.relativeElevation[i]) * 0.06));
     waterAvailability[i] = 0;
     groundwaterPotential[i] = Math.max(0, Math.min(1, sed * 0.45 + (base.shallowSeaMask[i] ? 0.18 : 0) - base.slope[i] * 1.1));
     floodplainPotential[i] = Math.max(0, Math.min(1, (1 - Math.min(1, base.slope[i] * 7)) * sed * (base.landMask[i] ? 1 : 0)));
@@ -141,6 +156,8 @@ export function getBiosphereInputs(world) {
       trench?.[i] ?? 0,
       rift?.[i] ?? 0,
       mountainBelt?.[i] ?? 0,
+      activeOrogeny?.[i] ?? 0,
+      (oldOrogeny?.[i] ?? 0) * 0.35,
     );
     const landId = base.landmassId[i];
     connectivityToLandmass[i] = landId ? Math.min(1, (componentSizes.get(landId) ?? 0) / (grid.size * 0.18)) : 0;
@@ -167,7 +184,7 @@ export function getBiosphereInputs(world) {
 export function getResourceInputs(world) {
   const base = buildTerrainBase(world);
   const { grid } = world;
-  const { size, crustType, crustAge, crustThickness, orogeny, islandArc, riftStage, sediment, basin, ridge, weakness, boundaryInfluence } = grid;
+  const { size, crustType, crustAge, crustThickness, orogeny, activeOrogeny, oldOrogeny, forelandBasin, islandArc, riftStage, sediment, basin, ridge, weakness, boundaryInfluence } = grid;
   const volcanicArc = new Float32Array(size);
   const passiveMargin = new Float32Array(grid.passiveMargin);
   const sedimentaryBasin = new Float32Array(size);
@@ -180,8 +197,8 @@ export function getResourceInputs(world) {
     const type = crustType?.[i] ?? (base.landMask[i] ? 1 : 0);
     const riftValue = grid.rift?.[i] ?? 0;
     volcanicArc[i] = islandArc?.[i] ?? 0;
-    sedimentaryBasin[i] = Math.max(0, Math.min(1, (basin?.[i] ?? 0) * 0.62 + (sediment?.[i] ?? 0) * 0.48));
-    metamorphicBelt[i] = orogeny?.[i] ?? 0;
+    sedimentaryBasin[i] = Math.max(0, Math.min(1, (basin?.[i] ?? 0) * 0.52 + (forelandBasin?.[i] ?? 0) * 0.38 + (sediment?.[i] ?? 0) * 0.42));
+    metamorphicBelt[i] = Math.max(orogeny?.[i] ?? 0, oldOrogeny?.[i] ?? 0);
     igneousProvince[i] = Math.max(ridge?.[i] ?? 0, islandArc?.[i] ?? 0, riftValue * 0.65);
     hydrothermalPotential[i] = Math.max(0, Math.min(1, (ridge?.[i] ?? 0) * 0.42 + volcanicArc[i] * 0.45 + riftValue * 0.18 + (weakness?.[i] ?? 0) * (boundaryInfluence?.[i] ?? 0) * 0.22));
     mineralProvince[i] = 0;
@@ -192,6 +209,10 @@ export function getResourceInputs(world) {
     crustAge,
     crustThickness,
     orogeny,
+    orogenicBelt: maxFields(activeOrogeny, oldOrogeny, orogeny),
+    activeOrogeny,
+    oldOrogeny,
+    forelandBasin,
     volcanicArc,
     riftStage,
     passiveMargin,
@@ -245,6 +266,8 @@ function buildTerrainBase(world) {
   const activeTransform = new Float32Array(grid.activeTransform);
   const transformMemory = new Float32Array(grid.transformMemory);
   const fractureZoneMemory = new Float32Array(grid.fractureZoneMemory);
+  const forelandBasin = new Float32Array(grid.forelandBasin);
+  const orogenicSedimentSupply = new Float32Array(grid.orogenicSedimentSupply);
 
   return {
     relativeElevation,
@@ -269,10 +292,23 @@ function buildTerrainBase(world) {
     continentalRise,
     abyssalPlain,
     sedimentWedge,
+    forelandBasin,
+    orogenicSedimentSupply,
     activeTransform,
     transformMemory,
     fractureZoneMemory,
   };
+}
+
+function maxFields(...fields) {
+  const size = fields.find(Boolean)?.length ?? 0;
+  const output = new Float32Array(size);
+  for (let i = 0; i < size; i += 1) {
+    let value = 0;
+    for (const field of fields) if (field?.[i] > value) value = field[i];
+    output[i] = value;
+  }
+  return output;
 }
 
 function measureTerrainShape(grid, field) {

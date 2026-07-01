@@ -12,6 +12,15 @@ export function initializeBaseTerrain(world) {
   grid.noisyBoundaryPatch.fill(0);
   grid.plateCheckerboard.fill(0);
   grid.orogeny.fill(0);
+  grid.activeOrogeny.fill(0);
+  grid.oldOrogeny.fill(0);
+  grid.orogenyAge.fill(0);
+  grid.orogenyErosion.fill(0);
+  grid.forelandBasin.fill(0);
+  grid.mountainAxis.fill(0);
+  grid.mountainHeight.fill(0);
+  grid.orographicBarrier.fill(0);
+  grid.orogenicSedimentSupply.fill(0);
   grid.featureIntensity.fill(0);
   grid.mountainBelt.fill(0);
   grid.trench.fill(0);

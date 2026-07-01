@@ -6,6 +6,7 @@ import { updateCrustProperties } from "./crust.js";
 import { rebuildGeologyElevation } from "./elevation.js";
 import { buildTectonicFeatures } from "./features.js";
 import { updatePassiveMargins } from "./margins.js";
+import { rebuildMountainInterfaceFields, updateOrogenicLifecycle } from "./orogeny.js";
 import { advectCrust } from "./plates.js";
 import { deriveOceanConnectivity, updateRiftStages } from "./rift.js";
 import { suppressInactiveFractureRelief, updateTransformMemory } from "./transforms.js";
@@ -17,6 +18,7 @@ export function runGeologyV2Step(world) {
   updateCrustProperties(world);
   updateTransformMemory(world);
   buildTectonicFeatures(world);
+  updateOrogenicLifecycle(world);
   rebuildGeologyElevation(world);
   if (!world.geologyV2SeaInitialized) {
     initializeSeaLevel(world);
@@ -26,10 +28,12 @@ export function runGeologyV2Step(world) {
   rebuildGeologyElevation(world);
   applyGeologyV2SurfaceAging(world);
   rebuildGeologyElevation(world);
+  rebuildMountainInterfaceFields(world);
   updateSeaLevel(world);
   deriveOceanConnectivity(world);
   updatePassiveMargins(world);
   rebuildGeologyElevation(world);
+  rebuildMountainInterfaceFields(world);
   suppressInactiveFractureRelief(world);
   updateSeaLevel(world);
   deriveOceanConnectivity(world);
@@ -37,11 +41,12 @@ export function runGeologyV2Step(world) {
   suppressInactiveFractureRelief(world);
   updateSeaLevel(world);
   deriveOceanConnectivity(world);
+  rebuildMountainInterfaceFields(world);
 }
 
 function applyGeologyV2SurfaceAging(world) {
   const { grid } = world;
-  const { size, crustType, crustAge, crustThickness, orogeny, sediment, mountainBelt, trench, ridge, rift, islandArc, basin, boundaryInfluence, isContinental } = grid;
+  const { size, crustType, crustAge, crustThickness, orogeny, oldOrogeny, orogenyErosion, sediment, mountainBelt, trench, ridge, rift, islandArc, basin, boundaryInfluence, isContinental } = grid;
   const dt = world.timeScaleFactor;
   for (let i = 0; i < size; i += 1) {
     const inactive = 1 - Math.min(1, boundaryInfluence[i]);
@@ -50,8 +55,10 @@ function applyGeologyV2SurfaceAging(world) {
     const erosion = (isContinental[i] ? 0.0018 : transitional ? 0.0024 : 0.0032) * dt * (0.25 + inactive);
     const lostOrogeny = Math.min(orogeny[i], orogeny[i] * erosion);
     orogeny[i] -= lostOrogeny;
+    oldOrogeny[i] = Math.max(oldOrogeny[i], orogeny[i] * inactive * inactive * 0.55);
+    orogenyErosion[i] = Math.max(orogenyErosion[i], lostOrogeny);
     const lowOrPassive = inactive * (transitional ? 1.45 : oceanic && crustAge[i] > 0.45 ? 0.75 : 0.35);
-    sediment[i] = Math.min(1, sediment[i] + lostOrogeny * 0.45 + lowOrPassive * Math.max(0, 0.58 - crustThickness[i]) * 0.0022 * dt);
+    sediment[i] = Math.min(1, sediment[i] + lostOrogeny * 0.22 + lowOrPassive * Math.max(0, 0.58 - crustThickness[i]) * 0.0022 * dt);
     mountainBelt[i] *= Math.max(0, 1 - 0.009 * dt * inactive);
     trench[i] *= Math.max(0, 1 - 0.018 * dt);
     ridge[i] *= Math.max(0, 1 - 0.014 * dt);
@@ -67,7 +74,7 @@ function applyGeologyV2SurfaceAging(world) {
 }
 
 function broadenLongTermMemory(grid) {
-  const { width, height, orogeny, sediment, basin, boundaryInfluence, crustType, scratch, scratch2, scratch3 } = grid;
+  const { width, height, orogeny, oldOrogeny, sediment, basin, boundaryInfluence, crustType, scratch, scratch2, scratch3 } = grid;
   const radius = physicalRadius(grid, 2);
   scratch.set(orogeny);
   scratch2.set(sediment);
@@ -115,6 +122,7 @@ function broadenLongTermMemory(grid) {
       const sedMix = Math.min(0.36, 0.12 + inactive * 0.18);
       const basinMix = Math.min(0.32, 0.1 + inactive * 0.16);
       orogeny[id] = scratch[id] * (1 - oroMix) + oroSmooth * oroMix;
+      oldOrogeny[id] = Math.max(oldOrogeny[id], orogeny[id] * inactive * inactive * 0.58);
       sediment[id] = Math.min(1, scratch2[id] * (1 - sedMix) + sedSmooth * sedMix);
       basin[id] = Math.min(1, scratch3[id] * (1 - basinMix) + basinSmooth * basinMix);
     }

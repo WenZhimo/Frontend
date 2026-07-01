@@ -27,13 +27,15 @@ export function createMapRenderer(canvas) {
     if (world.params.showBoundaries !== false) {
       for (let i = 0; i < grid.size; i += 1) {
         if (btype[i] === BoundaryType.INTERIOR || !activeBoundary[i]) continue;
+        const overlayStrength = boundaryOverlayStrength(grid, i);
+        if (overlayStrength <= 0) continue;
         const offset = i * 4;
         if (btype[i] === BoundaryType.CONVERGENT) {
-          blendPixel(data, offset, [231, 86, 66], 0.55);
+          blendPixel(data, offset, [231, 86, 66], 0.55 * overlayStrength);
         } else if (btype[i] === BoundaryType.DIVERGENT) {
-          blendPixel(data, offset, [77, 195, 215], 0.5);
+          blendPixel(data, offset, [77, 195, 215], 0.5 * overlayStrength);
         } else {
-          blendPixel(data, offset, [236, 196, 83], 0.46);
+          blendPixel(data, offset, [236, 196, 83], 0.46 * overlayStrength);
         }
       }
     }
@@ -42,6 +44,17 @@ export function createMapRenderer(canvas) {
   }
 
   return { render };
+}
+
+function boundaryOverlayStrength(grid, id) {
+  const checker = grid.plateCheckerboard?.[id] ?? 0;
+  if (checker > 0.35) return 0;
+  const noisy = grid.noisyBoundaryPatch?.[id] ?? 0;
+  const density = grid.boundaryDensity?.[id] ?? 0;
+  const coherence = grid.boundaryCoherence?.[id] ?? 1;
+  if (noisy && density > 0.36) return 0;
+  if (density > 0.58 && coherence < 0.78) return 0;
+  return Math.max(0.35, Math.min(1, 0.45 + coherence * 0.55));
 }
 
 function blendPixel(data, offset, color, alpha) {

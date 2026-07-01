@@ -1,0 +1,236 @@
+import { physicalRadius, wrapX } from "../grid.js";
+import { BoundaryType } from "../tectonics.js";
+import { CrustType } from "./crust.js";
+
+export function updateOrogenicLifecycle(world) {
+  updateActiveOrogeny(world);
+  erodeAndAgeOrogens(world);
+  if (world.step % 4 === 0) {
+    broadenOldOrogeny(world.grid);
+    updateForelandBasins(world.grid);
+  }
+  rebuildMountainInterfaceFields(world);
+}
+
+function updateActiveOrogeny(world) {
+  const { grid } = world;
+  const {
+    size,
+    crustType,
+    crustThickness,
+    boundaryKind,
+    boundaryInfluence,
+    boundaryCoherence,
+    noisyBoundaryPatch,
+    stress,
+    activeOrogeny,
+    oldOrogeny,
+    orogeny,
+    orogenyAge,
+    mountainBelt,
+    islandArc,
+    trench,
+  } = grid;
+  const dt = world.timeScaleFactor;
+  const activeDecay = Math.pow(0.5, dt / 18);
+
+  for (let i = 0; i < size; i += 1) {
+    activeOrogeny[i] *= activeDecay;
+    if (boundaryKind[i] !== BoundaryType.CONVERGENT) continue;
+
+    const active = Math.min(1, boundaryInfluence[i]);
+    const s = Math.min(2.5, stress[i]);
+    if (active <= 0.025 || s <= 0.02) continue;
+
+    const continental = crustType[i] === CrustType.CONTINENTAL;
+    const transitional = crustType[i] === CrustType.TRANSITIONAL;
+    const oceanic = crustType[i] === CrustType.OCEANIC;
+    const coherent = noisyBoundaryPatch[i] ? 0.08 : 0.38 + (boundaryCoherence[i] ?? 1) * 0.62;
+    const thick = Math.max(0, crustThickness[i] - 0.42);
+    const collisionPower = continental ? active * s * coherent * (0.85 + thick * 1.35) : 0;
+    const arcPower = transitional || oceanic ? active * s * coherent * (0.22 + (trench[i] + islandArc[i]) * 0.62) : 0;
+    const power = Math.min(1, collisionPower * 0.92 + arcPower * 0.46);
+    if (power <= 0.0001) continue;
+
+    activeOrogeny[i] = Math.max(activeOrogeny[i], power);
+    mountainBelt[i] = Math.min(1, mountainBelt[i] + power * (continental ? 0.065 : 0.024) * dt);
+    const rootGain = power * (continental ? 0.034 : transitional ? 0.011 : 0.0028) * dt;
+    orogeny[i] = Math.min(1, orogeny[i] + rootGain);
+    orogenyAge[i] = Math.max(0, orogenyAge[i] * (1 - Math.min(0.65, power * 0.18 * dt)));
+  }
+}
+
+function erodeAndAgeOrogens(world) {
+  const { grid } = world;
+  const {
+    size,
+    crustType,
+    elev,
+    boundaryInfluence,
+    activeOrogeny,
+    oldOrogeny,
+    orogeny,
+    orogenyAge,
+    orogenyErosion,
+    orogenicSedimentSupply,
+    sediment,
+    basin,
+    passiveMargin,
+    continentalRise,
+    forelandBasin,
+    mountainBelt,
+  } = grid;
+  const dt = world.timeScaleFactor;
+  const ageGain = 1 / 260;
+  const activeDecay = Math.pow(0.5, dt / 18);
+  const oldDecay = Math.pow(0.5, dt / 460);
+
+  for (let i = 0; i < size; i += 1) {
+    const active = Math.min(1, boundaryInfluence[i]);
+    const inactive = 1 - active;
+    const continentalFamily = crustType[i] === CrustType.CONTINENTAL || crustType[i] === CrustType.TRANSITIONAL;
+    orogenyAge[i] = Math.min(1, orogenyAge[i] + ageGain * dt * (0.35 + inactive * 0.95));
+    const inactiveRoot = orogeny[i] * inactive * inactive * (continentalFamily ? 1.35 : 0.42);
+    oldOrogeny[i] = Math.max(oldOrogeny[i] * oldDecay, inactiveRoot);
+
+    const ageFactor = smoothstep(0.08, 0.8, orogenyAge[i]);
+    const heightProxy = Math.max(0, elev[i]);
+    const erosion =
+      (activeOrogeny[i] * 0.0022 + oldOrogeny[i] * 0.001 + orogeny[i] * 0.00055) *
+      dt *
+      (0.55 + inactive * 0.8 + ageFactor * 0.45 + heightProxy * 1.6);
+    const eroded = Math.min(orogeny[i] + oldOrogeny[i] * 0.45, erosion);
+
+    orogeny[i] = Math.max(0, orogeny[i] - eroded * 0.5);
+    oldOrogeny[i] = Math.max(0, oldOrogeny[i] - eroded * 0.18);
+    mountainBelt[i] *= activeDecay;
+    if (!continentalFamily) oldOrogeny[i] *= Math.max(0, 1 - 0.028 * dt);
+
+    orogenyErosion[i] = eroded;
+    orogenicSedimentSupply[i] = Math.max(0, orogenicSedimentSupply[i] * 0.9 + eroded * 2.8);
+    const localSink = Math.max(
+      forelandBasin[i] * 1.9,
+      basin[i] * 1.15,
+      passiveMargin[i] * 0.95,
+      continentalRise[i] * 1.05,
+    );
+    sediment[i] = Math.min(1, sediment[i] + eroded * (0.16 + localSink * 0.22));
+    basin[i] = Math.min(1, basin[i] + forelandBasin[i] * eroded * 0.28);
+  }
+}
+
+function broadenOldOrogeny(grid) {
+  const { width, height, oldOrogeny, orogeny, orogenyAge, weakness, crustType, boundaryInfluence, scratch, scratch2, scratch3 } = grid;
+  const radius = Math.max(2, physicalRadius(grid, 5));
+  scratch.set(oldOrogeny);
+  scratch2.set(orogenyAge);
+  scratch3.set(orogeny);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const id = y * width + x;
+      const inactive = 1 - Math.min(1, boundaryInfluence[id]);
+      const sourceMemory = Math.max(scratch[id], scratch3[id] * inactive * 0.85);
+      if (sourceMemory < 0.0035) continue;
+      const rootMemory = sourceMemory + Math.max(0, scratch2[id] - 0.35) * sourceMemory * 0.45;
+      const bend = Math.round((weakness[id] - 0.5) * radius * 0.9);
+      let total = rootMemory * 3.5;
+      let ageTotal = scratch2[id] * 3.5;
+      let weight = 3.5;
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const dist = Math.hypot(dx, dy);
+          if (dist < 0.01 || dist > radius + 0.01) continue;
+          const nx = wrapX(width, x + dx + bend);
+          const nid = ny * width + nx;
+          if (crustType[nid] === CrustType.OCEANIC) continue;
+          const falloff = (1 - dist / (radius + 0.5)) * (0.55 + weakness[nid] * 0.65);
+          if (falloff <= 0) continue;
+          const neighborInactive = 1 - Math.min(1, boundaryInfluence[nid]);
+          const neighborSource = Math.max(scratch[nid], scratch3[nid] * neighborInactive * 0.85);
+          const neighborMemory = neighborSource + Math.max(0, scratch2[nid] - 0.35) * neighborSource * 0.45;
+          total += neighborMemory * falloff;
+          ageTotal += scratch2[nid] * falloff;
+          weight += falloff;
+        }
+      }
+      const smooth = total / weight;
+      const ageSmooth = ageTotal / weight;
+      const segment = segmentMask(x, y, width, weakness[id]);
+      const mix = Math.min(0.42, 0.1 + inactive * 0.26);
+      oldOrogeny[id] = Math.min(1, Math.max(sourceMemory, scratch[id] * (1 - mix) + smooth * mix) * segment);
+      orogenyAge[id] = Math.max(scratch2[id], ageSmooth * 0.98);
+    }
+  }
+}
+
+function updateForelandBasins(grid) {
+  const { width, height, activeOrogeny, oldOrogeny, forelandBasin, crustType, elev, ridge, trench, basin, sediment, scratch } = grid;
+  const radius = Math.max(1, physicalRadius(grid, 5));
+  scratch.fill(0);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const id = y * width + x;
+      const source = Math.max(activeOrogeny[id], oldOrogeny[id] * 0.55);
+      if (source < 0.04) continue;
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const dist = Math.hypot(dx, dy);
+          if (dist < 1 || dist > radius + 0.01) continue;
+          const nx = wrapX(width, x + dx);
+          const nid = ny * width + nx;
+          const continentalFamily = crustType[nid] === CrustType.CONTINENTAL || crustType[nid] === CrustType.TRANSITIONAL;
+          if (!continentalFamily) continue;
+          const lowRelief = Math.max(0, 1 - Math.max(0, elev[nid]) * 5.5);
+          const activeMarginPenalty = Math.max(ridge[nid], trench[nid]) > 0.08 ? 0.25 : 1;
+          const falloff = Math.max(0, 1 - dist / (radius + 0.5));
+          const value = source * falloff * lowRelief * activeMarginPenalty * 0.32;
+          if (value > scratch[nid]) scratch[nid] = value;
+        }
+      }
+    }
+  }
+
+  for (let i = 0; i < forelandBasin.length; i += 1) {
+    forelandBasin[i] = Math.min(1, forelandBasin[i] * 0.992 + scratch[i]);
+    basin[i] = Math.min(1, basin[i] + forelandBasin[i] * 0.0025);
+    sediment[i] = Math.min(1, sediment[i] + forelandBasin[i] * 0.0018);
+  }
+}
+
+export function rebuildMountainInterfaceFields(world) {
+  const { grid, seaLevel } = world;
+  const { size, elev, mountainBelt, activeOrogeny, oldOrogeny, orogeny, mountainAxis, mountainHeight, orographicBarrier } = grid;
+  for (let i = 0; i < size; i += 1) {
+    const axis = Math.max(mountainBelt[i], activeOrogeny[i] * 0.9, oldOrogeny[i] * 0.65, orogeny[i] * 0.5);
+    const rel = Math.max(0, elev[i] - seaLevel);
+    mountainAxis[i] = axis;
+    mountainHeight[i] = rel * (0.5 + Math.min(1, axis * 2.1));
+    orographicBarrier[i] = rel * Math.min(1, axis * 1.7 + mountainBelt[i] * 1.2);
+  }
+}
+
+function segmentMask(x, y, width, weakness) {
+  const sx = Math.floor((x + width * 0.17) / 11);
+  const sy = Math.floor((y + 7) / 7);
+  const noise = hash2(sx, sy);
+  const keep = weakness > 0.54 ? 0.9 : weakness > 0.38 ? 0.78 : 0.66;
+  return noise <= keep ? 1 : 0.82;
+}
+
+function hash2(x, y) {
+  let n = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
+  n = (n ^ (n >>> 13)) >>> 0;
+  n = Math.imul(n, 1274126177) >>> 0;
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+}
+
+function smoothstep(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
