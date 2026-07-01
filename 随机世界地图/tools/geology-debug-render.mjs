@@ -51,6 +51,15 @@ const layers = {
   mountainHeightBlockiness: colorField("mountainHeightBlockiness", 0, 1, [22, 35, 39], [236, 62, 158]),
   orographicBarrier: colorField("orographicBarrier", 0, 0.22, [38, 32, 48], [202, 91, 188]),
   orographicBarrierContinuity: colorField("orographicBarrierContinuity", 0, 1, [26, 32, 28], [86, 206, 112]),
+  planetaryRelief: colorField("planetaryRelief", 0, 0.28, [22, 24, 26], [238, 240, 232]),
+  reliefDeficit: colorField("reliefDeficit", 0, 1, [28, 24, 25], [226, 58, 52]),
+  flatLandMask: colorMask("flatLandMask", [222, 205, 72]),
+  largePlainMask: colorMask("largePlainMask", [226, 132, 53]),
+  seaLevelSensitivity: colorField("seaLevelSensitivity", 0, 1, [20, 29, 34], [72, 213, 220]),
+  tectonicReliefSupply: colorField("tectonicReliefSupply", 0, 0.55, [36, 24, 26], [236, 82, 68]),
+  isostaticReliefSupply: colorField("isostaticReliefSupply", 0, 0.18, [22, 31, 45], [105, 188, 232]),
+  erosionFlatteningPressure: colorField("erosionFlatteningPressure", 0, 0.65, [28, 38, 30], [197, 178, 96]),
+  sedimentSmoothingPressure: colorField("sedimentSmoothingPressure", 0, 0.45, [28, 41, 37], [106, 202, 137]),
   orogenicSedimentSupply: colorField("orogenicSedimentSupply", 0, 0.05, [42, 37, 30], [229, 182, 78]),
   sediment: colorField("sediment", 0, 0.22, [27, 52, 71], [221, 206, 157]),
   basin: colorField("basin", 0, 0.7, [29, 55, 79], [110, 169, 187]),
@@ -198,6 +207,10 @@ function colorProtoOceanCandidate(world, i) {
   if (world.grid.riftStage[i] === 5) return [58, 117, 225];
   if (world.grid.riftStage[i] > 0) return [180, 113, 76];
   return [34, 38, 42];
+}
+
+function colorMask(fieldName, high) {
+  return (world, i) => (world.grid[fieldName][i] ? high : [31, 34, 36]);
 }
 
 function colorOceanAge(world, i) {

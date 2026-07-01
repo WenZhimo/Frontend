@@ -650,3 +650,33 @@ getter 变更：
 - getter 只读，不推进模拟，不写回状态。
 - raw `activeBoundary` 只能作为构造 seed 或诊断来源，不应被后续系统当作最终山脉/海岭/海沟。
 - `axisBoundaryDependency` 和 `axisNoisyBoundaryShare` 应作为长期质量门，防止回归到 Voronoi/棋盘格边界。
+
+## 19. 行星地形起伏预算接口补充
+
+本轮新增 planetary relief budget 诊断层。它是 geology-v2 的质量约束和 debug 解释层，不是完整水文、气候或随机起伏系统；海陆仍由 `elev >= seaLevel` 派生。
+
+新增字段：
+
+- `planetaryRelief`
+- `tectonicReliefSupply`
+- `isostaticReliefSupply`
+- `erosionFlatteningPressure`
+- `sedimentSmoothingPressure`
+- `reliefDeficit`
+- `seaLevelSensitivity`
+- `flatLandMask`
+- `largePlainMask`
+
+getter 变更：
+
+- `getTerrainDerived(world)` 返回 `planetaryRelief / reliefDeficit / seaLevelSensitivity / flatLandMask / largePlainMask`。
+- `getClimateInputs(world)` 返回标量 `hypsometricSpread / landReliefSpread / orographicReliefPotential`，供后续气候系统判断雨影和全球起伏质量。
+- `getHydrologyInputs(world)` 返回标量 `drainageGradientPotential`，并返回 `flatLandMask / largePlainMask`，供后续河网和低坡平原逻辑使用。
+- `getResourceInputs(world)` 暂不直接读取起伏预算；资源分带仍优先读取构造、造山、裂谷和沉积字段。
+
+接口约束：
+
+- getter 只读；budget 写入只发生在 geology-v2 pipeline 末尾。
+- `flatLandMask / largePlainMask` 是候选诊断，不等于“错误地形”。
+- `reliefDeficit` 初版只诊断，不自动修改 `elev` 或 `seaLevel`。
+- 后续反馈必须调节已有地质过程，不应直接加入随机噪声。

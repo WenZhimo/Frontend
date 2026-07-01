@@ -9,6 +9,7 @@ import { buildTectonicFeatures } from "./features.js";
 import { updatePassiveMargins } from "./margins.js";
 import { rebuildMountainInterfaceFields, updateOrogenicLifecycle } from "./orogeny.js";
 import { advectCrust } from "./plates.js";
+import { updateReliefBudgetDiagnostics } from "./reliefBudget.js";
 import { deriveOceanConnectivity, updateRiftStages } from "./rift.js";
 import { suppressInactiveFractureRelief, updateTransformMemory } from "./transforms.js";
 
@@ -45,6 +46,7 @@ export function runGeologyV2Step(world) {
   deriveOceanConnectivity(world);
   rebuildMountainInterfaceFields(world);
   updateSurfaceContinuityDiagnostics(world.grid);
+  updateReliefBudgetDiagnostics(world);
 }
 
 function applyGeologyV2SurfaceAging(world) {

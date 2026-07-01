@@ -58,6 +58,7 @@ console.log(JSON.stringify({
     transformDiagnostics: measureTransformDiagnostics(world),
     orogenyDiagnostics: measureOrogenyDiagnostics(world),
     axisDiagnostics: measureAxisDiagnostics(world),
+    reliefDiagnostics: measureReliefDiagnostics(world),
     boundaryDiagnostics: measureBoundaryDiagnostics(world.grid),
     geologyRisks: measureGeologyRisks(world),
 }, null, 2));
@@ -469,6 +470,33 @@ function measureAxisDiagnostics(world) {
     ridgeAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.ridgeAxis[i] > 0.05),
     trenchAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.trenchAxis[i] > 0.05),
     riftAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.riftAxis[i] > 0.05),
+  };
+}
+
+function measureReliefDiagnostics(world) {
+  const { grid } = world;
+  const diagnostics = world.reliefDiagnostics ?? {};
+  return {
+    globalElevationStd: diagnostics.globalElevationStd ?? 0,
+    landElevationStd: diagnostics.landElevationStd ?? 0,
+    oceanElevationStd: diagnostics.oceanElevationStd ?? 0,
+    hypsometricSpread: diagnostics.hypsometricSpread ?? 0,
+    landReliefSpread: diagnostics.landReliefSpread ?? 0,
+    oceanReliefSpread: diagnostics.oceanReliefSpread ?? 0,
+    flatLandShare: diagnostics.flatLandShare ?? share(grid.flatLandMask),
+    largePlainShare: diagnostics.largePlainShare ?? share(grid.largePlainMask),
+    seaLevelSensitivity: diagnostics.seaLevelSensitivity ?? average(grid.seaLevelSensitivity),
+    coastInstabilityRisk: diagnostics.coastInstabilityRisk ?? 0,
+    reliefDeficit: diagnostics.reliefDeficit ?? average(grid.reliefDeficit),
+    normalizedReliefDeficit: diagnostics.normalizedReliefDeficit ?? 0,
+    flatWorldRisk: Boolean(diagnostics.flatWorldRisk),
+    tectonicReliefSupplyMean: diagnostics.tectonicReliefSupplyMean ?? average(grid.tectonicReliefSupply),
+    isostaticReliefSupplyMean: diagnostics.isostaticReliefSupplyMean ?? average(grid.isostaticReliefSupply),
+    erosionFlatteningPressureMean: diagnostics.erosionFlatteningPressureMean ?? average(grid.erosionFlatteningPressure),
+    sedimentSmoothingPressureMean: diagnostics.sedimentSmoothingPressureMean ?? average(grid.sedimentSmoothingPressure),
+    drainageGradientPotential: diagnostics.drainageGradientPotential ?? 0,
+    orographicReliefPotential: diagnostics.orographicReliefPotential ?? 0,
+    planetaryReliefMean: average(grid.planetaryRelief),
   };
 }
 

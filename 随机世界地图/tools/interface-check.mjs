@@ -62,6 +62,11 @@ const requiredFields = {
     "axisBoundaryDependency",
     "mountainHeightBlockiness",
     "orographicBarrierContinuity",
+    "planetaryRelief",
+    "reliefDeficit",
+    "seaLevelSensitivity",
+    "largePlainMask",
+    "flatLandMask",
   ],
   climate: [
     "latitude",
@@ -76,6 +81,9 @@ const requiredFields = {
     "orographicBarrier",
     "mountainAxis",
     "mountainHeight",
+    "hypsometricSpread",
+    "landReliefSpread",
+    "orographicReliefPotential",
   ],
   hydrology: [
     "hydroElevation",
@@ -88,6 +96,9 @@ const requiredFields = {
     "erodibility",
     "permeability",
     "sedimentSink",
+    "drainageGradientPotential",
+    "flatLandMask",
+    "largePlainMask",
     "forelandBasin",
     "orogenicSedimentSupply",
     "continentalRise",
@@ -131,6 +142,12 @@ const requiredFields = {
     "tectonicAxis",
   ],
 };
+const scalarFields = new Set([
+  "climate.hypsometricSpread",
+  "climate.landReliefSpread",
+  "climate.orographicReliefPotential",
+  "hydrology.drainageGradientPotential",
+]);
 
 const validation = validateOutputs(outputs, requiredFields, world.grid.size);
 const terrain = outputs.terrain;
@@ -192,6 +209,7 @@ const stats = {
   axisContinuityMean: averageWhere(world.grid.axisContinuity, (i) => world.grid.tectonicAxis[i] > 0.05),
   mountainHeightBlockiness: averageWhere(world.grid.mountainHeightBlockiness, (i) => world.grid.mountainHeight[i] > 0.02),
   orographicBarrierContinuity: averageWhere(world.grid.orographicBarrierContinuity, (i) => world.grid.orographicBarrier[i] > 0.02),
+  ...reliefStats(world, outputs),
   activeFeatureOnNoisyBoundaryShare: featureOnNoisyBoundaryShare(world.grid),
   ridgeAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.ridgeAxis[i] > 0.05),
   trenchAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.trenchAxis[i] > 0.05),
@@ -244,22 +262,50 @@ function validateOutputs(outputs, fields, size) {
     fieldTypes[group] = {};
     for (const name of names) {
       const field = value[name];
-      if (!field) {
+      if (field === undefined || field === null) {
         errors.push(`${group}.${name} is missing`);
         continue;
       }
       if (field.length !== size) {
-        errors.push(`${group}.${name} length ${field.length} !== grid.size ${size}`);
+        if (!scalarFields.has(`${group}.${name}`)) errors.push(`${group}.${name} length ${field.length} !== grid.size ${size}`);
       }
       if (!ArrayBuffer.isView(field)) {
-        errors.push(`${group}.${name} is not a typed array`);
-        fieldTypes[group][name] = typeof field;
+        if (scalarFields.has(`${group}.${name}`) && typeof field === "number" && Number.isFinite(field)) {
+          fieldTypes[group][name] = "number";
+        } else {
+          errors.push(`${group}.${name} is not a typed array`);
+          fieldTypes[group][name] = typeof field;
+        }
       } else {
         fieldTypes[group][name] = field.constructor.name;
       }
     }
   }
   return { errors, fieldTypes };
+}
+
+function reliefStats(world, outputs) {
+  const diagnostics = world.reliefDiagnostics ?? {};
+  return {
+    globalElevationStd: diagnostics.globalElevationStd ?? 0,
+    landElevationStd: diagnostics.landElevationStd ?? 0,
+    oceanElevationStd: diagnostics.oceanElevationStd ?? 0,
+    hypsometricSpread: diagnostics.hypsometricSpread ?? 0,
+    landReliefSpread: diagnostics.landReliefSpread ?? 0,
+    oceanReliefSpread: diagnostics.oceanReliefSpread ?? 0,
+    flatLandShare: diagnostics.flatLandShare ?? share(outputs.terrain.flatLandMask),
+    largePlainShare: diagnostics.largePlainShare ?? share(outputs.terrain.largePlainMask),
+    seaLevelSensitivity: diagnostics.seaLevelSensitivity ?? average(outputs.terrain.seaLevelSensitivity),
+    coastInstabilityRisk: diagnostics.coastInstabilityRisk ?? 0,
+    reliefDeficit: diagnostics.reliefDeficit ?? average(outputs.terrain.reliefDeficit),
+    tectonicReliefSupplyMean: diagnostics.tectonicReliefSupplyMean ?? average(world.grid.tectonicReliefSupply),
+    isostaticReliefSupplyMean: diagnostics.isostaticReliefSupplyMean ?? average(world.grid.isostaticReliefSupply),
+    erosionFlatteningPressureMean: diagnostics.erosionFlatteningPressureMean ?? average(world.grid.erosionFlatteningPressure),
+    sedimentSmoothingPressureMean: diagnostics.sedimentSmoothingPressureMean ?? average(world.grid.sedimentSmoothingPressure),
+    drainageGradientPotential: diagnostics.drainageGradientPotential ?? outputs.hydrology.drainageGradientPotential ?? 0,
+    orographicReliefPotential: diagnostics.orographicReliefPotential ?? outputs.climate.orographicReliefPotential ?? 0,
+    flatWorldRisk: Boolean(diagnostics.flatWorldRisk),
+  };
 }
 
 function share(mask) {
