@@ -22,13 +22,10 @@ body {
   margin: 0;
   height: 100%;
   min-height: 100%;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-}
-
-body {
-  overflow: hidden;
 }
 
 button,
@@ -43,6 +40,8 @@ select {
   height: 100vh;
   height: 100dvh;
   min-height: 100vh;
+  max-height: 100vh;
+  max-height: 100dvh;
   min-width: 0;
   overflow: hidden;
 }
@@ -51,10 +50,8 @@ select {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  height: 100vh;
-  height: 100dvh;
-  max-height: 100vh;
-  max-height: 100dvh;
+  height: 100%;
+  max-height: 100%;
   min-height: 0;
   padding: 24px;
   background:
@@ -62,10 +59,31 @@ select {
     var(--panel);
   border-right: 1px solid var(--line);
   box-shadow: 18px 0 50px var(--shadow);
+  contain: layout paint;
   overflow-x: hidden;
-  overflow-y: scroll;
+  overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  scrollbar-color: rgba(208, 238, 103, 0.55) rgba(0, 0, 0, 0.18);
+  scrollbar-width: thin;
+}
+
+.panel::-webkit-scrollbar {
+  width: 10px;
+}
+
+.panel::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.panel::-webkit-scrollbar-thumb {
+  background: rgba(208, 238, 103, 0.48);
+  border: 2px solid var(--panel);
+  border-radius: 999px;
+}
+
+.panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(208, 238, 103, 0.7);
 }
 
 .brand {
