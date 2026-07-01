@@ -22,6 +22,8 @@ function updateActiveOrogeny(world) {
     boundaryInfluence,
     boundaryCoherence,
     noisyBoundaryPatch,
+    mountainAxisSeed,
+    trenchAxis,
     stress,
     activeOrogeny,
     oldOrogeny,
@@ -38,7 +40,8 @@ function updateActiveOrogeny(world) {
     activeOrogeny[i] *= activeDecay;
     if (boundaryKind[i] !== BoundaryType.CONVERGENT) continue;
 
-    const active = Math.min(1, boundaryInfluence[i]);
+    const axis = Math.max(mountainAxisSeed[i], trenchAxis[i] * 0.42);
+    const active = Math.max(Math.min(1, boundaryInfluence[i]) * 0.28, axis);
     const s = Math.min(2.5, stress[i]);
     if (active <= 0.025 || s <= 0.02) continue;
 
@@ -205,14 +208,27 @@ function updateForelandBasins(grid) {
 
 export function rebuildMountainInterfaceFields(world) {
   const { grid, seaLevel } = world;
-  const { size, elev, mountainBelt, activeOrogeny, oldOrogeny, orogeny, mountainAxis, mountainHeight, orographicBarrier } = grid;
+  const { size, elev, mountainBelt, activeOrogeny, oldOrogeny, orogeny, mountainAxisSeed, tectonicAxis, mountainAxis, mountainHeight, orographicBarrier, scratch, scratch3, crustType } = grid;
   for (let i = 0; i < size; i += 1) {
-    const axis = Math.max(mountainBelt[i], activeOrogeny[i] * 0.9, oldOrogeny[i] * 0.65, orogeny[i] * 0.5);
-    const rel = Math.max(0, elev[i] - seaLevel);
-    mountainAxis[i] = axis;
-    mountainHeight[i] = rel * (0.5 + Math.min(1, axis * 2.1));
-    orographicBarrier[i] = rel * Math.min(1, axis * 1.7 + mountainBelt[i] * 1.2);
+    const continentalFamily = crustType[i] === CrustType.CONTINENTAL || crustType[i] === CrustType.TRANSITIONAL;
+    const naturalAxis = Math.max(mountainAxisSeed[i], tectonicAxis[i] * 0.35);
+    const activeMemory = Math.max(mountainBelt[i] * 0.36, activeOrogeny[i] * 0.42);
+    const oldMemory = Math.max(oldOrogeny[i] * 0.08, orogeny[i] * 0.06);
+    scratch[i] = continentalFamily
+      ? Math.max(naturalAxis, activeMemory, oldMemory)
+      : Math.max(naturalAxis * 0.16, activeMemory * 0.12);
   }
+  smoothAxisField(grid, scratch, mountainAxis);
+
+  for (let i = 0; i < size; i += 1) {
+    const rel = Math.max(0, elev[i] - seaLevel);
+    const axis = mountainAxis[i];
+    const mountainSignal = Math.min(1, axis * 2.4 + mountainBelt[i] * 0.42 + activeOrogeny[i] * 0.35 + oldOrogeny[i] * 0.18);
+    scratch3[i] = rel * mountainSignal;
+    scratch[i] = rel * Math.min(1, axis * 1.65 + mountainBelt[i] * 0.42 + oldOrogeny[i] * 0.14);
+  }
+  smoothMountainHeightField(grid, scratch3, mountainHeight);
+  smoothBarrierField(grid, scratch, orographicBarrier);
 }
 
 function segmentMask(x, y, width, weakness) {
@@ -228,6 +244,90 @@ function hash2(x, y) {
   n = (n ^ (n >>> 13)) >>> 0;
   n = Math.imul(n, 1274126177) >>> 0;
   return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+}
+
+function smoothAxisField(grid, source, target) {
+  const { width, height, scratch2 } = grid;
+  scratch2.set(source);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const id = y * width + x;
+      let total = scratch2[id] * 2.2;
+      let weight = 2.2;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = wrapX(width, x + dx);
+          const nid = ny * width + nx;
+          const w = dx === 0 || dy === 0 ? 0.72 : 0.38;
+          total += scratch2[nid] * w;
+          weight += w;
+        }
+      }
+      target[id] = Math.min(1, total / weight);
+    }
+  }
+}
+
+function smoothMountainHeightField(grid, source, target) {
+  const { width, height, mountainAxis, scratch2 } = grid;
+  scratch2.set(source);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const id = y * width + x;
+      if (scratch2[id] <= 0.0001 && mountainAxis[id] <= 0.025) {
+        target[id] = 0;
+        continue;
+      }
+      let total = scratch2[id] * 2.8;
+      let weight = 2.8;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = wrapX(width, x + dx);
+          const nid = ny * width + nx;
+          const axisWeight = 0.3 + Math.min(1, Math.max(mountainAxis[id], mountainAxis[nid]) * 1.4);
+          const w = (dx === 0 || dy === 0 ? 0.68 : 0.36) * axisWeight;
+          total += scratch2[nid] * w;
+          weight += w;
+        }
+      }
+      target[id] = total / weight;
+    }
+  }
+}
+
+function smoothBarrierField(grid, source, target) {
+  const { width, height, mountainAxis, scratch2 } = grid;
+  scratch2.set(source);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const id = y * width + x;
+      if (source[id] <= 0.0001 && mountainAxis[id] <= 0.03) {
+        target[id] = 0;
+        continue;
+      }
+      let total = source[id] * 2.4;
+      let weight = 2.4;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = wrapX(width, x + dx);
+          const nid = ny * width + nx;
+          const w = (dx === 0 || dy === 0 ? 0.8 : 0.45) * (0.35 + Math.min(1, mountainAxis[nid] * 1.2));
+          total += scratch2[nid] * w;
+          weight += w;
+        }
+      }
+      target[id] = total / weight;
+    }
+  }
 }
 
 function smoothstep(edge0, edge1, x) {

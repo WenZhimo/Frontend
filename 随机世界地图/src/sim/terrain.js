@@ -21,6 +21,17 @@ export function initializeBaseTerrain(world) {
   grid.mountainHeight.fill(0);
   grid.orographicBarrier.fill(0);
   grid.orogenicSedimentSupply.fill(0);
+  grid.tectonicAxis.fill(0);
+  grid.mountainAxisSeed.fill(0);
+  grid.ridgeAxis.fill(0);
+  grid.trenchAxis.fill(0);
+  grid.riftAxis.fill(0);
+  grid.axisSegmentId.fill(0);
+  grid.axisCurvature.fill(0);
+  grid.axisContinuity.fill(0);
+  grid.axisBoundaryDependency.fill(0);
+  grid.mountainHeightBlockiness.fill(0);
+  grid.orographicBarrierContinuity.fill(0);
   grid.featureIntensity.fill(0);
   grid.mountainBelt.fill(0);
   grid.trench.fill(0);

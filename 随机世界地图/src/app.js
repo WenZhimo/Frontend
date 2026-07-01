@@ -133,6 +133,17 @@
       mountainHeight: new Float32Array(size),
       orographicBarrier: new Float32Array(size),
       orogenicSedimentSupply: new Float32Array(size),
+      tectonicAxis: new Float32Array(size),
+      mountainAxisSeed: new Float32Array(size),
+      ridgeAxis: new Float32Array(size),
+      trenchAxis: new Float32Array(size),
+      riftAxis: new Float32Array(size),
+      axisSegmentId: new Int32Array(size),
+      axisCurvature: new Float32Array(size),
+      axisContinuity: new Float32Array(size),
+      axisBoundaryDependency: new Float32Array(size),
+      mountainHeightBlockiness: new Float32Array(size),
+      orographicBarrierContinuity: new Float32Array(size),
       boundaryInfluence: new Float32Array(size),
       boundaryDistance: new Float32Array(size),
       boundaryDensity: new Float32Array(size),
@@ -291,6 +302,17 @@
     grid.mountainHeight.fill(0);
     grid.orographicBarrier.fill(0);
     grid.orogenicSedimentSupply.fill(0);
+    grid.tectonicAxis.fill(0);
+    grid.mountainAxisSeed.fill(0);
+    grid.ridgeAxis.fill(0);
+    grid.trenchAxis.fill(0);
+    grid.riftAxis.fill(0);
+    grid.axisSegmentId.fill(0);
+    grid.axisCurvature.fill(0);
+    grid.axisContinuity.fill(0);
+    grid.axisBoundaryDependency.fill(0);
+    grid.mountainHeightBlockiness.fill(0);
+    grid.orographicBarrierContinuity.fill(0);
     grid.featureIntensity.fill(0);
     grid.mountainBelt.fill(0);
     grid.trench.fill(0);
@@ -1724,6 +1746,260 @@
   }
 
 
+  // ---- src/sim/geology/axes.js ----
+
+  function updateTectonicAxes(world) {
+    const { grid } = world;
+    decayAxes(grid);
+    const seeds = buildAxisSeeds(grid);
+    naturalizeAxis(grid, seeds.mountain, grid.mountainAxisSeed, 5, 0.62, { continentalBias: true });
+    naturalizeAxis(grid, seeds.ridge, grid.ridgeAxis, 4, 0.7, { oceanicBias: true });
+    naturalizeAxis(grid, seeds.trench, grid.trenchAxis, 3, 0.68, { oceanicBias: true, arcBend: true });
+    naturalizeAxis(grid, seeds.rift, grid.riftAxis, 5, 0.58, { continentalBias: true, segmented: true });
+    rebuildCombinedAxis(grid);
+    measureAxisDiagnostics(grid);
+  }
+
+  function updateSurfaceContinuityDiagnostics(grid) {
+    measureFieldBlockiness(grid, grid.mountainHeight, grid.mountainHeightBlockiness);
+    measureFieldContinuity(grid, grid.orographicBarrier, grid.orographicBarrierContinuity);
+  }
+
+  function decayAxes(grid) {
+    const { size, tectonicAxis, mountainAxisSeed, ridgeAxis, trenchAxis, riftAxis, axisBoundaryDependency } = grid;
+    for (let i = 0; i < size; i += 1) {
+      tectonicAxis[i] *= 0.9;
+      mountainAxisSeed[i] *= 0.88;
+      ridgeAxis[i] *= 0.82;
+      trenchAxis[i] *= 0.84;
+      riftAxis[i] *= 0.9;
+      axisBoundaryDependency[i] *= 0.88;
+    }
+  }
+
+  function buildAxisSeeds(grid) {
+    const {
+      size,
+      crustType,
+      crustThickness,
+      crustAge,
+      boundaryKind,
+      boundaryInfluence,
+      boundaryCoherence,
+      noisyBoundaryPatch,
+      plateCheckerboard,
+      stress,
+      weakness,
+      oldOrogeny,
+      transformMemory,
+      fractureZoneMemory,
+      scratch,
+      scratch2,
+      scratch3,
+    } = grid;
+    const mountain = scratch;
+    const ridge = scratch2;
+    const trench = scratch3;
+    const rift = new Float32Array(size);
+    mountain.fill(0);
+    ridge.fill(0);
+    trench.fill(0);
+
+    for (let i = 0; i < size; i += 1) {
+      const active = Math.min(1, boundaryInfluence[i]);
+      const s = Math.min(2.5, stress[i]);
+      if (active <= 0.012 || s <= 0.008) continue;
+      const coherence = Math.max(0, Math.min(1, boundaryCoherence[i] ?? 1));
+      const noisyGate = noisyBoundaryPatch[i] ? 0.06 : 1;
+      const checkerGate = Math.max(0, 1 - (plateCheckerboard[i] ?? 0) * 2.4);
+      const memoryPull = 0.55 + Math.min(0.45, oldOrogeny[i] * 0.8 + transformMemory[i] * 0.2 + fractureZoneMemory[i] * 0.12);
+      const seedPower = active * s * (0.2 + coherence * 0.8) * noisyGate * checkerGate * memoryPull;
+      if (seedPower <= 0.0001) continue;
+
+      const continental = crustType[i] === CrustType.CONTINENTAL;
+      const transitional = crustType[i] === CrustType.TRANSITIONAL;
+      const oceanic = crustType[i] === CrustType.OCEANIC;
+      if (boundaryKind[i] === BoundaryType.CONVERGENT) {
+        if (continental || transitional) mountain[i] = Math.max(mountain[i], seedPower * (0.7 + crustThickness[i] * 0.55));
+        if (oceanic || transitional) trench[i] = Math.max(trench[i], seedPower * (0.65 + crustAge[i] * 0.5));
+      } else if (boundaryKind[i] === BoundaryType.DIVERGENT) {
+        if (oceanic) ridge[i] = Math.max(ridge[i], seedPower * (0.8 + Math.max(0, 0.35 - crustAge[i]) * 0.7));
+        else rift[i] = Math.max(rift[i], seedPower * (0.65 + weakness[i] * 0.55));
+      }
+    }
+    return { mountain, ridge, trench, rift };
+  }
+
+  function naturalizeAxis(grid, source, target, referenceRadius, gain, options = {}) {
+    const { width, height, size, weakness, oldOrogeny, riftStage, transformMemory, fractureZoneMemory, crustType, noisyBoundaryPatch, plateCheckerboard } = grid;
+    const radius = Math.max(1, Math.min(physicalRadius(grid, referenceRadius), physicalRadius(grid, 8)));
+    const seedSource = new Float32Array(source);
+    const spread = new Float32Array(size);
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const id = y * width + x;
+        const seed = seedSource[id];
+        if (seed <= 0.0001) continue;
+        const pull = weakness[id] - 0.5 + oldOrogeny[id] * 0.18 + (riftStage[id] > 0 ? 0.12 : 0) + transformMemory[id] * 0.08 - fractureZoneMemory[id] * 0.04;
+        const bendX = Math.round(pull * radius * 1.15 + (hash2(Math.floor(x / 13), Math.floor(y / 9)) - 0.5) * radius * 0.8);
+        const bendY = Math.round((hash2(Math.floor((x + 5) / 17), Math.floor((y + 3) / 11)) - 0.5) * radius * 0.7);
+        const segment = segmentMask(x, y, weakness[id], options.segmented);
+        const arcShift = options.arcBend ? Math.max(1, Math.round(radius * 0.55)) : 0;
+
+        for (let dy = -radius; dy <= radius; dy += 1) {
+          const ny = y + dy + bendY + arcShift;
+          if (ny < 0 || ny >= height) continue;
+          for (let dx = -radius; dx <= radius; dx += 1) {
+            const dist = Math.hypot(dx, dy);
+            if (dist > radius + 0.01) continue;
+            const nx = wrapX(width, x + dx + bendX);
+            const nid = ny * width + nx;
+            if (noisyBoundaryPatch[nid] && dist <= 1.5) continue;
+            if ((plateCheckerboard[nid] ?? 0) > 0.32) continue;
+            if (options.continentalBias && crustType[nid] === CrustType.OCEANIC && dist > radius * 0.45) continue;
+            if (options.oceanicBias && crustType[nid] === CrustType.CONTINENTAL && dist > radius * 0.55) continue;
+            const weakWeight = 0.55 + weakness[nid] * 0.65 + oldOrogeny[nid] * 0.25;
+            const falloff = Math.max(0, 1 - dist / (radius + 0.65));
+            const addition = seed * gain * falloff * weakWeight * segment;
+            if (addition > spread[nid]) spread[nid] = addition;
+          }
+        }
+      }
+    }
+
+    for (let i = 0; i < size; i += 1) {
+      if (spread[i] > 0) target[i] = Math.min(1, Math.max(target[i], spread[i]));
+    }
+  }
+
+  function rebuildCombinedAxis(grid) {
+    const { size, tectonicAxis, mountainAxisSeed, ridgeAxis, trenchAxis, riftAxis } = grid;
+    for (let i = 0; i < size; i += 1) {
+      tectonicAxis[i] = Math.max(mountainAxisSeed[i], ridgeAxis[i] * 0.9, trenchAxis[i] * 0.95, riftAxis[i] * 0.82);
+    }
+  }
+
+  function measureAxisDiagnostics(grid) {
+    const { width, height, tectonicAxis, axisCurvature, axisContinuity, axisBoundaryDependency, axisSegmentId, boundaryInfluence, activeBoundary, scratch } = grid;
+    scratch.fill(0);
+    let nextSegment = 1;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const id = y * width + x;
+        const v = tectonicAxis[id];
+        if (v <= 0.035) {
+          axisCurvature[id] = 0;
+          axisContinuity[id] = 0;
+          axisBoundaryDependency[id] = 0;
+          axisSegmentId[id] = 0;
+          continue;
+        }
+
+        const left = tectonicAxis[y * width + wrapX(width, x - 1)];
+        const right = tectonicAxis[y * width + wrapX(width, x + 1)];
+        const up = tectonicAxis[Math.max(0, y - 1) * width + x];
+        const down = tectonicAxis[Math.min(height - 1, y + 1) * width + x];
+        const dx = Math.abs(left - right);
+        const dy = Math.abs(up - down);
+        const localMax = Math.max(left, right, up, down);
+        axisCurvature[id] = Math.min(1, Math.abs(dx - dy) * 4 + Math.min(dx + dy, 1) * 0.25);
+        axisContinuity[id] = Math.min(1, (localMax + v) * 0.5);
+        axisBoundaryDependency[id] = Math.min(1, v * 0.45 + boundaryInfluence[id] * 0.45 + (activeBoundary[id] ? 0.1 : 0));
+      }
+    }
+
+    for (let i = 0; i < axisSegmentId.length; i += 1) axisSegmentId[i] = 0;
+    const queue = new Int32Array(axisSegmentId.length);
+    for (let start = 0; start < axisSegmentId.length; start += 1) {
+      if (tectonicAxis[start] <= 0.06 || axisSegmentId[start]) continue;
+      const segmentId = nextSegment++;
+      let head = 0;
+      let tail = 0;
+      axisSegmentId[start] = segmentId;
+      queue[tail++] = start;
+      while (head < tail) {
+        const id = queue[head++];
+        const x = id % width;
+        const y = Math.floor(id / width);
+        visitNeighbor4(grid, x, y, (nid) => {
+          if (tectonicAxis[nid] <= 0.06 || axisSegmentId[nid]) return;
+          axisSegmentId[nid] = segmentId;
+          queue[tail++] = nid;
+        });
+      }
+    }
+  }
+
+  function measureFieldBlockiness(grid, field, output) {
+    const { width, height } = grid;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const id = y * width + x;
+        const v = field[id];
+        if (v <= 0.0001) {
+          output[id] = 0;
+          continue;
+        }
+        const left = field[y * width + wrapX(width, x - 1)];
+        const right = field[y * width + wrapX(width, x + 1)];
+        const up = field[Math.max(0, y - 1) * width + x];
+        const down = field[Math.min(height - 1, y + 1) * width + x];
+        const cardinal = Math.abs(left - right) + Math.abs(up - down);
+        const diagonal = Math.abs(sample(grid, field, x - 1, y - 1) - sample(grid, field, x + 1, y + 1))
+          + Math.abs(sample(grid, field, x + 1, y - 1) - sample(grid, field, x - 1, y + 1));
+        output[id] = Math.min(1, Math.abs(cardinal - diagonal) * 2.8);
+      }
+    }
+  }
+
+  function measureFieldContinuity(grid, field, output) {
+    const { width, height } = grid;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const id = y * width + x;
+        const v = field[id];
+        if (v <= 0.0001) {
+          output[id] = 0;
+          continue;
+        }
+        let neighbors = 0;
+        visitNeighbor4(grid, x, y, (nid) => {
+          if (field[nid] > v * 0.35) neighbors += 1;
+        });
+        output[id] = neighbors / 4;
+      }
+    }
+  }
+
+  function segmentMask(x, y, weakness, forceSegmented) {
+    const coarse = hash2(Math.floor((x + 3) / 19), Math.floor((y + 5) / 13));
+    const fine = hash2(Math.floor((x + 11) / 7), Math.floor((y + 2) / 7));
+    const keep = forceSegmented ? 0.62 + weakness * 0.28 : 0.76 + weakness * 0.2;
+    return coarse * 0.7 + fine * 0.3 <= keep ? 1 : 0.72;
+  }
+
+  function hash2(x, y) {
+    let n = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
+    n = (n ^ (n >>> 13)) >>> 0;
+    n = Math.imul(n, 1274126177) >>> 0;
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+  }
+
+  function visitNeighbor4(grid, x, y, visit) {
+    visit(y * grid.width + wrapX(grid.width, x - 1));
+    visit(y * grid.width + wrapX(grid.width, x + 1));
+    if (y > 0) visit((y - 1) * grid.width + x);
+    if (y < grid.height - 1) visit((y + 1) * grid.width + x);
+  }
+
+  function sample(grid, field, x, y) {
+    const sy = Math.max(0, Math.min(grid.height - 1, y));
+    return field[sy * grid.width + wrapX(grid.width, x)];
+  }
+
+
   // ---- src/sim/geology/features.js ----
 
   const TectonicFeature = {
@@ -1744,6 +2020,7 @@
     const { grid } = world;
     decayActiveFeatures(grid);
     const sources = seedFeatureSources(grid);
+    blendAxisSources(grid, sources);
     diffuseFeature(grid, sources.mountain, grid.mountainBelt, 6, 0.18, { continentalOnly: true, minWeakness: 0.28 });
     diffuseFeature(grid, sources.trench, grid.trench, 2, 0.24, { oceanicBias: true, minWeakness: 0.2 });
     diffuseFeature(grid, sources.ridge, grid.ridge, 4, 0.2, { oceanicBias: true, minWeakness: 0.32 });
@@ -1821,6 +2098,18 @@
     return { mountain, trench, ridge, rift, arc, basin };
   }
 
+  function blendAxisSources(grid, sources) {
+    const { size, mountainAxisSeed, ridgeAxis, trenchAxis, riftAxis } = grid;
+    for (let i = 0; i < size; i += 1) {
+      sources.mountain[i] = Math.max(sources.mountain[i] * 0.25, mountainAxisSeed[i] * 0.95);
+      sources.ridge[i] = Math.max(sources.ridge[i] * 0.25, ridgeAxis[i] * 0.92);
+      sources.trench[i] = Math.max(sources.trench[i] * 0.25, trenchAxis[i] * 0.9);
+      sources.rift[i] = Math.max(sources.rift[i] * 0.25, riftAxis[i] * 0.9);
+      sources.arc[i] = Math.max(sources.arc[i] * 0.45, trenchAxis[i] * 0.36);
+      sources.basin[i] = Math.max(sources.basin[i], riftAxis[i] * 0.18, mountainAxisSeed[i] * 0.08);
+    }
+  }
+
   function diffuseFeature(grid, source, target, referenceRadius, gain, options = {}) {
     const { width, height, size, crustType, weakness } = grid;
     const radius = Math.max(1, Math.min(physicalRadius(grid, referenceRadius), physicalRadius(grid, 8)));
@@ -1844,7 +2133,7 @@
             if (options.oceanicBias && crustType[nid] !== CrustType.OCEANIC && dist > radius * 0.45) continue;
             const weak = weakness[nid];
             if (weak < (options.minWeakness ?? 0) && dist > 1.5) continue;
-            if (options.segmented && weak < 0.38 && ((nid * 2654435761) & 15) < 5) continue;
+            if (options.segmented && weak < 0.38 && segmentMask(nx, ny, weak) < 0.8) continue;
             const falloff = Math.max(0, 1 - dist / (radius + 0.5));
             const weakWeight = 0.45 + weak * 0.9;
             const addition = seed * gain * falloff * weakWeight;
@@ -1856,6 +2145,20 @@
     for (let i = 0; i < size; i += 1) {
       if (spread[i] > 0) target[i] = Math.min(1, target[i] + spread[i]);
     }
+  }
+
+  function segmentMask(x, y, weakness) {
+    const sx = Math.floor((x + 5) / 11);
+    const sy = Math.floor((y + 3) / 9);
+    const n = hash2(sx, sy);
+    return n < 0.58 + weakness * 0.28 ? 1 : 0.65;
+  }
+
+  function hash2(x, y) {
+    let n = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
+    n = (n ^ (n >>> 13)) >>> 0;
+    n = Math.imul(n, 1274126177) >>> 0;
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
   }
 
   function updateDominantFeature(grid) {
@@ -1897,6 +2200,8 @@
       boundaryInfluence,
       boundaryCoherence,
       noisyBoundaryPatch,
+      mountainAxisSeed,
+      trenchAxis,
       stress,
       activeOrogeny,
       oldOrogeny,
@@ -1913,7 +2218,8 @@
       activeOrogeny[i] *= activeDecay;
       if (boundaryKind[i] !== BoundaryType.CONVERGENT) continue;
 
-      const active = Math.min(1, boundaryInfluence[i]);
+      const axis = Math.max(mountainAxisSeed[i], trenchAxis[i] * 0.42);
+      const active = Math.max(Math.min(1, boundaryInfluence[i]) * 0.28, axis);
       const s = Math.min(2.5, stress[i]);
       if (active <= 0.025 || s <= 0.02) continue;
 
@@ -2080,14 +2386,27 @@
 
   function rebuildMountainInterfaceFields(world) {
     const { grid, seaLevel } = world;
-    const { size, elev, mountainBelt, activeOrogeny, oldOrogeny, orogeny, mountainAxis, mountainHeight, orographicBarrier } = grid;
+    const { size, elev, mountainBelt, activeOrogeny, oldOrogeny, orogeny, mountainAxisSeed, tectonicAxis, mountainAxis, mountainHeight, orographicBarrier, scratch, scratch3, crustType } = grid;
     for (let i = 0; i < size; i += 1) {
-      const axis = Math.max(mountainBelt[i], activeOrogeny[i] * 0.9, oldOrogeny[i] * 0.65, orogeny[i] * 0.5);
-      const rel = Math.max(0, elev[i] - seaLevel);
-      mountainAxis[i] = axis;
-      mountainHeight[i] = rel * (0.5 + Math.min(1, axis * 2.1));
-      orographicBarrier[i] = rel * Math.min(1, axis * 1.7 + mountainBelt[i] * 1.2);
+      const continentalFamily = crustType[i] === CrustType.CONTINENTAL || crustType[i] === CrustType.TRANSITIONAL;
+      const naturalAxis = Math.max(mountainAxisSeed[i], tectonicAxis[i] * 0.35);
+      const activeMemory = Math.max(mountainBelt[i] * 0.36, activeOrogeny[i] * 0.42);
+      const oldMemory = Math.max(oldOrogeny[i] * 0.08, orogeny[i] * 0.06);
+      scratch[i] = continentalFamily
+        ? Math.max(naturalAxis, activeMemory, oldMemory)
+        : Math.max(naturalAxis * 0.16, activeMemory * 0.12);
     }
+    smoothAxisField(grid, scratch, mountainAxis);
+
+    for (let i = 0; i < size; i += 1) {
+      const rel = Math.max(0, elev[i] - seaLevel);
+      const axis = mountainAxis[i];
+      const mountainSignal = Math.min(1, axis * 2.4 + mountainBelt[i] * 0.42 + activeOrogeny[i] * 0.35 + oldOrogeny[i] * 0.18);
+      scratch3[i] = rel * mountainSignal;
+      scratch[i] = rel * Math.min(1, axis * 1.65 + mountainBelt[i] * 0.42 + oldOrogeny[i] * 0.14);
+    }
+    smoothMountainHeightField(grid, scratch3, mountainHeight);
+    smoothBarrierField(grid, scratch, orographicBarrier);
   }
 
   function segmentMask(x, y, width, weakness) {
@@ -2103,6 +2422,90 @@
     n = (n ^ (n >>> 13)) >>> 0;
     n = Math.imul(n, 1274126177) >>> 0;
     return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+  }
+
+  function smoothAxisField(grid, source, target) {
+    const { width, height, scratch2 } = grid;
+    scratch2.set(source);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const id = y * width + x;
+        let total = scratch2[id] * 2.2;
+        let weight = 2.2;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= height) continue;
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = wrapX(width, x + dx);
+            const nid = ny * width + nx;
+            const w = dx === 0 || dy === 0 ? 0.72 : 0.38;
+            total += scratch2[nid] * w;
+            weight += w;
+          }
+        }
+        target[id] = Math.min(1, total / weight);
+      }
+    }
+  }
+
+  function smoothMountainHeightField(grid, source, target) {
+    const { width, height, mountainAxis, scratch2 } = grid;
+    scratch2.set(source);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const id = y * width + x;
+        if (scratch2[id] <= 0.0001 && mountainAxis[id] <= 0.025) {
+          target[id] = 0;
+          continue;
+        }
+        let total = scratch2[id] * 2.8;
+        let weight = 2.8;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= height) continue;
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = wrapX(width, x + dx);
+            const nid = ny * width + nx;
+            const axisWeight = 0.3 + Math.min(1, Math.max(mountainAxis[id], mountainAxis[nid]) * 1.4);
+            const w = (dx === 0 || dy === 0 ? 0.68 : 0.36) * axisWeight;
+            total += scratch2[nid] * w;
+            weight += w;
+          }
+        }
+        target[id] = total / weight;
+      }
+    }
+  }
+
+  function smoothBarrierField(grid, source, target) {
+    const { width, height, mountainAxis, scratch2 } = grid;
+    scratch2.set(source);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const id = y * width + x;
+        if (source[id] <= 0.0001 && mountainAxis[id] <= 0.03) {
+          target[id] = 0;
+          continue;
+        }
+        let total = source[id] * 2.4;
+        let weight = 2.4;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= height) continue;
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = wrapX(width, x + dx);
+            const nid = ny * width + nx;
+            const w = (dx === 0 || dy === 0 ? 0.8 : 0.45) * (0.35 + Math.min(1, mountainAxis[nid] * 1.2));
+            total += scratch2[nid] * w;
+            weight += w;
+          }
+        }
+        target[id] = total / weight;
+      }
+    }
   }
 
   function smoothstep(edge0, edge1, x) {
@@ -2886,6 +3289,7 @@
     updatePlateBoundaries(world);
     updateCrustProperties(world);
     updateTransformMemory(world);
+    updateTectonicAxes(world);
     buildTectonicFeatures(world);
     updateOrogenicLifecycle(world);
     rebuildGeologyElevation(world);
@@ -2911,6 +3315,7 @@
     updateSeaLevel(world);
     deriveOceanConnectivity(world);
     rebuildMountainInterfaceFields(world);
+    updateSurfaceContinuityDiagnostics(world.grid);
   }
 
   function applyGeologyV2SurfaceAging(world) {
@@ -3135,6 +3540,12 @@
       activeTransform: base.activeTransform,
       transformMemory: base.transformMemory,
       fractureZoneMemory: base.fractureZoneMemory,
+      tectonicAxis: base.tectonicAxis,
+      axisCurvature: base.axisCurvature,
+      axisContinuity: base.axisContinuity,
+      axisBoundaryDependency: base.axisBoundaryDependency,
+      mountainHeightBlockiness: base.mountainHeightBlockiness,
+      orographicBarrierContinuity: base.orographicBarrierContinuity,
     };
   }
 
@@ -3317,6 +3728,7 @@
       crustThickness,
       orogeny,
       orogenicBelt: maxFields(activeOrogeny, oldOrogeny, orogeny),
+      tectonicAxis: new Float32Array(grid.tectonicAxis),
       activeOrogeny,
       oldOrogeny,
       forelandBasin,
@@ -3375,6 +3787,12 @@
     const fractureZoneMemory = new Float32Array(grid.fractureZoneMemory);
     const forelandBasin = new Float32Array(grid.forelandBasin);
     const orogenicSedimentSupply = new Float32Array(grid.orogenicSedimentSupply);
+    const tectonicAxis = new Float32Array(grid.tectonicAxis);
+    const axisCurvature = new Float32Array(grid.axisCurvature);
+    const axisContinuity = new Float32Array(grid.axisContinuity);
+    const axisBoundaryDependency = new Float32Array(grid.axisBoundaryDependency);
+    const mountainHeightBlockiness = new Float32Array(grid.mountainHeightBlockiness);
+    const orographicBarrierContinuity = new Float32Array(grid.orographicBarrierContinuity);
 
     return {
       relativeElevation,
@@ -3404,6 +3822,12 @@
       activeTransform,
       transformMemory,
       fractureZoneMemory,
+      tectonicAxis,
+      axisCurvature,
+      axisContinuity,
+      axisBoundaryDependency,
+      mountainHeightBlockiness,
+      orographicBarrierContinuity,
     };
   }
 

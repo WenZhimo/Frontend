@@ -20,6 +20,7 @@ export function buildTectonicFeaturesV2(world) {
   const { grid } = world;
   decayActiveFeatures(grid);
   const sources = seedFeatureSources(grid);
+  blendAxisSources(grid, sources);
   diffuseFeature(grid, sources.mountain, grid.mountainBelt, 6, 0.18, { continentalOnly: true, minWeakness: 0.28 });
   diffuseFeature(grid, sources.trench, grid.trench, 2, 0.24, { oceanicBias: true, minWeakness: 0.2 });
   diffuseFeature(grid, sources.ridge, grid.ridge, 4, 0.2, { oceanicBias: true, minWeakness: 0.32 });
@@ -97,6 +98,18 @@ function seedFeatureSources(grid) {
   return { mountain, trench, ridge, rift, arc, basin };
 }
 
+function blendAxisSources(grid, sources) {
+  const { size, mountainAxisSeed, ridgeAxis, trenchAxis, riftAxis } = grid;
+  for (let i = 0; i < size; i += 1) {
+    sources.mountain[i] = Math.max(sources.mountain[i] * 0.25, mountainAxisSeed[i] * 0.95);
+    sources.ridge[i] = Math.max(sources.ridge[i] * 0.25, ridgeAxis[i] * 0.92);
+    sources.trench[i] = Math.max(sources.trench[i] * 0.25, trenchAxis[i] * 0.9);
+    sources.rift[i] = Math.max(sources.rift[i] * 0.25, riftAxis[i] * 0.9);
+    sources.arc[i] = Math.max(sources.arc[i] * 0.45, trenchAxis[i] * 0.36);
+    sources.basin[i] = Math.max(sources.basin[i], riftAxis[i] * 0.18, mountainAxisSeed[i] * 0.08);
+  }
+}
+
 function diffuseFeature(grid, source, target, referenceRadius, gain, options = {}) {
   const { width, height, size, crustType, weakness } = grid;
   const radius = Math.max(1, Math.min(physicalRadius(grid, referenceRadius), physicalRadius(grid, 8)));
@@ -120,7 +133,7 @@ function diffuseFeature(grid, source, target, referenceRadius, gain, options = {
           if (options.oceanicBias && crustType[nid] !== CrustType.OCEANIC && dist > radius * 0.45) continue;
           const weak = weakness[nid];
           if (weak < (options.minWeakness ?? 0) && dist > 1.5) continue;
-          if (options.segmented && weak < 0.38 && ((nid * 2654435761) & 15) < 5) continue;
+          if (options.segmented && weak < 0.38 && segmentMask(nx, ny, weak) < 0.8) continue;
           const falloff = Math.max(0, 1 - dist / (radius + 0.5));
           const weakWeight = 0.45 + weak * 0.9;
           const addition = seed * gain * falloff * weakWeight;
@@ -132,6 +145,20 @@ function diffuseFeature(grid, source, target, referenceRadius, gain, options = {
   for (let i = 0; i < size; i += 1) {
     if (spread[i] > 0) target[i] = Math.min(1, target[i] + spread[i]);
   }
+}
+
+function segmentMask(x, y, weakness) {
+  const sx = Math.floor((x + 5) / 11);
+  const sy = Math.floor((y + 3) / 9);
+  const n = hash2(sx, sy);
+  return n < 0.58 + weakness * 0.28 ? 1 : 0.65;
+}
+
+function hash2(x, y) {
+  let n = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
+  n = (n ^ (n >>> 13)) >>> 0;
+  n = Math.imul(n, 1274126177) >>> 0;
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
 }
 
 function updateDominantFeature(grid) {

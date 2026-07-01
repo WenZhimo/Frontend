@@ -56,6 +56,12 @@ const requiredFields = {
     "activeTransform",
     "transformMemory",
     "fractureZoneMemory",
+    "tectonicAxis",
+    "axisCurvature",
+    "axisContinuity",
+    "axisBoundaryDependency",
+    "mountainHeightBlockiness",
+    "orographicBarrierContinuity",
   ],
   climate: [
     "latitude",
@@ -122,6 +128,7 @@ const requiredFields = {
     "activeTransform",
     "transformMemory",
     "fractureZoneMemory",
+    "tectonicAxis",
   ],
 };
 
@@ -178,6 +185,17 @@ const stats = {
   ageBandStraightnessInactive: ageBandSplit.inactive,
   ageBandStraightnessFractureZone: ageBandSplit.fractureZone,
   abyssalPlainFractureSuppression: averageWhere(world.grid.oldBoundaryCorrelation, (i) => terrain.fractureZoneMemory[i] > 0.05 && terrain.abyssalPlain[i] > 0.05),
+  axisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.tectonicAxis[i] > 0.05),
+  axisNoisyBoundaryShare: conditionalShare(world.grid.tectonicAxis, (i) => world.grid.tectonicAxis[i] > 0.05, (i) => world.grid.noisyBoundaryPatch[i]),
+  axisSegmentLengthMean: axisSegmentLengthMean(world.grid),
+  axisCurvatureMean: averageWhere(world.grid.axisCurvature, (i) => world.grid.tectonicAxis[i] > 0.05),
+  axisContinuityMean: averageWhere(world.grid.axisContinuity, (i) => world.grid.tectonicAxis[i] > 0.05),
+  mountainHeightBlockiness: averageWhere(world.grid.mountainHeightBlockiness, (i) => world.grid.mountainHeight[i] > 0.02),
+  orographicBarrierContinuity: averageWhere(world.grid.orographicBarrierContinuity, (i) => world.grid.orographicBarrier[i] > 0.02),
+  activeFeatureOnNoisyBoundaryShare: featureOnNoisyBoundaryShare(world.grid),
+  ridgeAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.ridgeAxis[i] > 0.05),
+  trenchAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.trenchAxis[i] > 0.05),
+  riftAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.riftAxis[i] > 0.05),
   averageSlope: average(terrain.slope),
   averageRuggedness: average(terrain.ruggedness),
   orographicBarrierCoverage: coverage(climate.orographicBarrier, 0.02),
@@ -329,6 +347,19 @@ function widthProxy(field, threshold) {
     }
   }
   return edge ? covered / edge : 0;
+}
+
+function axisSegmentLengthMean(grid) {
+  const counts = new Map();
+  for (let i = 0; i < grid.axisSegmentId.length; i += 1) {
+    const id = grid.axisSegmentId[i];
+    if (!id) continue;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  if (!counts.size) return 0;
+  let total = 0;
+  for (const count of counts.values()) total += count;
+  return total / counts.size;
 }
 
 function mountainAxisCurvature(grid) {

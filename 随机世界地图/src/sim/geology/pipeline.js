@@ -1,5 +1,6 @@
 import { initializeSeaLevel, updateSeaLevel } from "../terrain.js";
 import { physicalRadius, wrapX } from "../grid.js";
+import { updateSurfaceContinuityDiagnostics, updateTectonicAxes } from "./axes.js";
 import { updatePlateBoundaries } from "./boundaries.js";
 import { CrustType } from "./crust.js";
 import { updateCrustProperties } from "./crust.js";
@@ -17,6 +18,7 @@ export function runGeologyV2Step(world) {
   updatePlateBoundaries(world);
   updateCrustProperties(world);
   updateTransformMemory(world);
+  updateTectonicAxes(world);
   buildTectonicFeatures(world);
   updateOrogenicLifecycle(world);
   rebuildGeologyElevation(world);
@@ -42,6 +44,7 @@ export function runGeologyV2Step(world) {
   updateSeaLevel(world);
   deriveOceanConnectivity(world);
   rebuildMountainInterfaceFields(world);
+  updateSurfaceContinuityDiagnostics(world.grid);
 }
 
 function applyGeologyV2SurfaceAging(world) {

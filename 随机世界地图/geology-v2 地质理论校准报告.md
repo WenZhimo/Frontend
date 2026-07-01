@@ -1117,3 +1117,69 @@ forelandBasin += nearby(activeOrogeny, oldOrogeny)
 ### 16.4 剩余限制
 
 当前实现仍是栅格场生命周期，不是完整连续造山带骨架模型。`segmentMask` 和 weakness 偏转可以减少直线感，但不能替代后续的边界分段、旧缝合线追踪和气候驱动侵蚀。沉积搬运也仍是局部 sink 规则；进入水文后应由河网、坡度、降水和盆地连通性决定更真实的输沙路径。
+
+## 17. 工程落地补充：构造轴线自然化
+
+真实山脉、海岭、海沟和裂谷通常受活动边界控制，但它们不会逐像素等同于 Voronoi 板块边界。边界会沿弱带、旧缝合线、裂谷带和 transform/fracture memory 偏转，并表现为有宽度、有断续、有弯曲的构造带。本轮把 raw boundary 降级为 seed，把最终 feature 写入改为读取 naturalized axis。
+
+### 17.1 可编码规则
+
+seed 生成：
+
+```js
+seedPower =
+  boundaryInfluence
+  * boundaryCoherence
+  * stress
+  * noisyBoundaryGate
+  * checkerboardGate;
+```
+
+axis 自然化：
+
+```js
+bend =
+  (weakness - 0.5)
+  + oldOrogeny * suturePull
+  + riftStage * riftPull
+  + transformMemory * shearPull
+  - fractureZoneMemory * oceanicReliefPenalty;
+
+axis = localDiffuse(seed, bend, radius);
+axis *= twoDimensionalSegmentMask(x, y, weakness);
+axis = suppress(noisyBoundaryPatch, plateCheckerboard);
+```
+
+feature 写入：
+
+```js
+mountainBelt <- mountainAxisSeed;
+ridge <- ridgeAxis;
+trench <- trenchAxis;
+rift <- riftAxis;
+mountainAxis / mountainHeight / orographicBarrier <- naturalized mountain axis + final elevation;
+```
+
+### 17.2 字段职责
+
+- `tectonicAxis`：综合构造轴线，用于诊断和资源系统。
+- `mountainAxisSeed`：造山/山脉轴线，进入 `mountainBelt / activeOrogeny / mountainAxis`。
+- `ridgeAxis`：洋中脊轴线，进入 ridge feature。
+- `trenchAxis`：俯冲/海沟轴线，进入 trench 和 islandArc。
+- `riftAxis`：大陆裂谷/过渡裂谷轴线，进入 rift 和 basin。
+- `axisBoundaryDependency`：防止 axis 退化成 raw boundary 的质量指标。
+- `mountainHeightBlockiness / orographicBarrierContinuity`：气候接口视觉与结构质量指标。
+
+### 17.3 验证指标
+
+- `axisBoundaryDependency` 不应接近 1。
+- `axisNoisyBoundaryShare` 应低，noisy boundary 不应生成强轴线。
+- `axisSegmentLengthMean` 应避免无限长直线。
+- `axisCurvatureMean` 应显示适度弯曲。
+- `mountainHeightBlockiness` 应低。
+- `orographicBarrierContinuity` 应高，但不能来自硬直边界。
+- `ridgeAxisBoundaryDependency / trenchAxisBoundaryDependency / riftAxisBoundaryDependency` 可高于旧山带，但不应等于 raw boundary。
+
+### 17.4 剩余限制
+
+当前 axis 是栅格场，不是显式折线网络。它能显著降低边界直线感和 blockiness，但还不能表达完整的 ridge-transform offset、弧形俯冲带拓扑或多期缝合线重激活。后续可在该层上增加 segment tracker 和 polyline skeleton。

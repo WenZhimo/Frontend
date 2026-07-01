@@ -14,6 +14,7 @@ const files = [
   "src/sim/geology/plates.js",
   "src/sim/geology/crust.js",
   "src/sim/geology/boundaries.js",
+  "src/sim/geology/axes.js",
   "src/sim/geology/features.js",
   "src/sim/geology/orogeny.js",
   "src/sim/geology/rift.js",
