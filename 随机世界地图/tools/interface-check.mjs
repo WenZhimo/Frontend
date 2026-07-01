@@ -51,6 +51,8 @@ const requiredFields = {
     "continentalRise",
     "abyssalPlain",
     "sedimentWedge",
+    "forelandBasin",
+    "orogenicSedimentSupply",
     "activeTransform",
     "transformMemory",
     "fractureZoneMemory",
@@ -80,6 +82,8 @@ const requiredFields = {
     "erodibility",
     "permeability",
     "sedimentSink",
+    "forelandBasin",
+    "orogenicSedimentSupply",
     "continentalRise",
   ],
   biosphere: [
@@ -103,6 +107,10 @@ const requiredFields = {
     "crustAge",
     "crustThickness",
     "orogeny",
+    "orogenicBelt",
+    "activeOrogeny",
+    "oldOrogeny",
+    "forelandBasin",
     "volcanicArc",
     "riftStage",
     "passiveMargin",
@@ -173,6 +181,17 @@ const stats = {
   averageSlope: average(terrain.slope),
   averageRuggedness: average(terrain.ruggedness),
   orographicBarrierCoverage: coverage(climate.orographicBarrier, 0.02),
+  activeOrogenyCoverage: coverage(world.grid.activeOrogeny, 0.05),
+  oldOrogenyCoverage: coverage(world.grid.oldOrogeny, 0.05),
+  oldOrogenyWidth: widthProxy(world.grid.oldOrogeny, 0.05),
+  orogenyAgeMean: averageWhere(world.grid.orogenyAge, (i) => world.grid.oldOrogeny[i] > 0.03 || world.grid.activeOrogeny[i] > 0.03),
+  orogenyErosionMean: average(world.grid.orogenyErosion),
+  orogenicSedimentBudget: ratio(average(world.grid.orogenicSedimentSupply), average(world.grid.sediment)),
+  forelandBasinCoverage: coverage(world.grid.forelandBasin, 0.05),
+  newVsOldMountainReliefRatio: ratio(averageWhere(world.grid.mountainHeight, (i) => world.grid.activeOrogeny[i] > 0.05), averageWhere(world.grid.mountainHeight, (i) => world.grid.oldOrogeny[i] > 0.05 && world.grid.activeOrogeny[i] <= 0.02)),
+  mountainAxisCurvature: mountainAxisCurvature(world.grid),
+  mountainBoundaryZeroShare: conditionalShare(world.grid.mountainBelt, (i) => world.grid.mountainBelt[i] > 0.05, (i) => world.grid.boundaryDistance[i] === 0),
+  oldOrogenyBoundaryShare: conditionalShare(world.grid.oldOrogeny, (i) => world.grid.oldOrogeny[i] > 0.05, (i) => world.grid.boundaryDistance[i] <= 1),
   sedimentSinkCoverage: coverage(hydrology.sedimentSink, 0.18),
   soilDepthPotentialMean: average(biosphere.soilDepthPotential),
   coastalWetlandPotentialShare: coverage(biosphere.coastalWetlandPotential, 0.05),
@@ -292,6 +311,49 @@ function histogram(field, buckets) {
 
 function ratio(active, inactive) {
   return Math.abs(active) / Math.max(0.000001, Math.abs(inactive));
+}
+
+function widthProxy(field, threshold) {
+  let covered = 0;
+  let edge = 0;
+  for (let y = 0; y < world.grid.height; y += 1) {
+    for (let x = 0; x < world.grid.width; x += 1) {
+      const id = y * world.grid.width + x;
+      if (field[id] <= threshold) continue;
+      covered += 1;
+      let nearEmpty = false;
+      visitNeighbor8Ids(world.grid, x, y, (nid) => {
+        if (field[nid] <= threshold) nearEmpty = true;
+      });
+      if (nearEmpty) edge += 1;
+    }
+  }
+  return edge ? covered / edge : 0;
+}
+
+function mountainAxisCurvature(grid) {
+  let total = 0;
+  let bent = 0;
+  for (let y = 1; y < grid.height - 1; y += 1) {
+    for (let x = 0; x < grid.width; x += 1) {
+      const id = y * grid.width + x;
+      if (grid.mountainAxis[id] <= 0.05) continue;
+      total += 1;
+      const horizontal = axisAt(grid, x - 1, y) + axisAt(grid, x + 1, y);
+      const vertical = axisAt(grid, x, y - 1) + axisAt(grid, x, y + 1);
+      const diagA = axisAt(grid, x - 1, y - 1) + axisAt(grid, x + 1, y + 1);
+      const diagB = axisAt(grid, x + 1, y - 1) + axisAt(grid, x - 1, y + 1);
+      const aligned = Math.max(horizontal, vertical, diagA, diagB);
+      const connected = horizontal + vertical + diagA + diagB;
+      if (connected > aligned + 0.05) bent += 1;
+    }
+  }
+  return total ? bent / total : 0;
+}
+
+function axisAt(grid, x, y) {
+  if (y < 0 || y >= grid.height) return 0;
+  return grid.mountainAxis[y * grid.width + ((x % grid.width) + grid.width) % grid.width];
 }
 
 function plateIslandNoiseShare(grid) {

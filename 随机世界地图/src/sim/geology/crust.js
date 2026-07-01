@@ -81,7 +81,7 @@ export function updateCrustPropertiesV2(world) {
     } else if (kind === BoundaryType.CONVERGENT) {
       if (type === CrustType.CONTINENTAL) {
         crustThickness[i] = Math.min(1.35, crustThickness[i] + active * s * 0.00055 * step);
-        orogeny[i] = Math.min(1, orogeny[i] + active * s * 0.0035 * dt);
+        orogeny[i] = Math.min(1, orogeny[i] + active * s * 0.0012 * dt);
       } else if (type === CrustType.TRANSITIONAL) {
         crustThickness[i] = Math.min(0.82, crustThickness[i] + active * s * 0.00018 * step);
         sediment[i] = Math.min(1, sediment[i] + boundaryPower * 0.0014 * dt);

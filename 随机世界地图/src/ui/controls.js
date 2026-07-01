@@ -7,7 +7,7 @@ export function readParams(elements) {
     timeScale: Number(elements.timeScale.value),
     resolution: elements.resolution.value,
     showBoundaries: elements.showBoundaries.checked,
-    pipelineMode: elements.pipelineMode?.value ?? "legacy",
+    pipelineMode: elements.pipelineMode?.value ?? "geology-v2",
   };
 }
 

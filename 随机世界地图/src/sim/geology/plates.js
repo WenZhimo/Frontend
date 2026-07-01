@@ -72,7 +72,24 @@ export function advectCrustByPlateMotion(world) {
   const interval = 4;
   if (world.step > 0 && world.step % interval !== 0) return;
 
-  const { width, height, size, pvx, pvy, crustType, crustThickness, crustAge, orogeny, sediment, scratch, scratch2, scratch3 } = grid;
+  const {
+    width,
+    height,
+    size,
+    pvx,
+    pvy,
+    crustType,
+    crustThickness,
+    crustAge,
+    orogeny,
+    oldOrogeny,
+    orogenyAge,
+    forelandBasin,
+    sediment,
+    scratch,
+    scratch2,
+    scratch3,
+  } = grid;
   const drift = 0.1 * world.timeScaleFactor * Math.max(0, world.params.intensity) * resolutionScale(grid) * interval;
   if (drift <= 0) return;
 
@@ -80,6 +97,9 @@ export function advectCrustByPlateMotion(world) {
   scratch2.set(crustAge);
   scratch3.set(orogeny);
   const sedimentSource = new Float32Array(sediment);
+  const oldOrogenySource = new Float32Array(oldOrogeny);
+  const orogenyAgeSource = new Float32Array(orogenyAge);
+  const forelandSource = new Float32Array(forelandBasin);
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -90,6 +110,9 @@ export function advectCrustByPlateMotion(world) {
       crustThickness[id] = sampleBilinear(grid, scratch, sx, sy);
       if (previousType !== CrustType.OCEANIC) crustAge[id] = sampleBilinear(grid, scratch2, sx, sy);
       orogeny[id] = sampleBilinear(grid, scratch3, sx, sy) * 0.992;
+      oldOrogeny[id] = sampleBilinear(grid, oldOrogenySource, sx, sy) * 0.996;
+      orogenyAge[id] = sampleBilinear(grid, orogenyAgeSource, sx, sy);
+      forelandBasin[id] = sampleBilinear(grid, forelandSource, sx, sy) * 0.998;
       sediment[id] = sampleBilinear(grid, sedimentSource, sx, sy) * 0.998;
       crustType[id] = classifyCrustType(crustThickness[id], crustAge[id], crustType[id]);
     }

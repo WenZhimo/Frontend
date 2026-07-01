@@ -56,6 +56,7 @@ console.log(JSON.stringify({
     riftDiagnostics: measureRiftDiagnostics(world),
     marginDiagnostics: measureMarginDiagnostics(world),
     transformDiagnostics: measureTransformDiagnostics(world),
+    orogenyDiagnostics: measureOrogenyDiagnostics(world),
     boundaryDiagnostics: measureBoundaryDiagnostics(world.grid),
     geologyRisks: measureGeologyRisks(world),
 }, null, 2));
@@ -435,6 +436,24 @@ function measureBoundaryDiagnostics(grid) {
   };
 }
 
+function measureOrogenyDiagnostics(world) {
+  const { grid } = world;
+  return {
+    activeOrogenyCoverage: coverage(grid.activeOrogeny, 0.05),
+    oldOrogenyCoverage: coverage(grid.oldOrogeny, 0.05),
+    oldOrogenyWidth: widthProxy(grid, grid.oldOrogeny, 0.05),
+    orogenyAgeMean: averageWhere(grid.orogenyAge, (i) => grid.oldOrogeny[i] > 0.03 || grid.activeOrogeny[i] > 0.03),
+    orogenyErosionMean: average(grid.orogenyErosion),
+    orogenicSedimentBudget: average(grid.orogenicSedimentSupply) / Math.max(0.000001, average(grid.sediment)),
+    forelandBasinCoverage: coverage(grid.forelandBasin, 0.05),
+    newVsOldMountainReliefRatio: averageWhere(grid.mountainHeight, (i) => grid.activeOrogeny[i] > 0.05) / Math.max(0.000001, averageWhere(grid.mountainHeight, (i) => grid.oldOrogeny[i] > 0.05 && grid.activeOrogeny[i] <= 0.02)),
+    mountainAxisCurvature: measureMountainAxisCurvature(grid),
+    orographicBarrierCoverage: coverage(grid.orographicBarrier, 0.02),
+    mountainBoundaryZeroShare: conditionalShare(grid.mountainBelt, (i) => grid.mountainBelt[i] > 0.05, (i) => grid.boundaryDistance[i] === 0),
+    oldOrogenyBoundaryShare: conditionalShare(grid.oldOrogeny, (i) => grid.oldOrogeny[i] > 0.05, (i) => grid.boundaryDistance[i] <= 1),
+  };
+}
+
 function isPlateIslandNoise(grid, id) {
   const x = id % grid.width;
   const y = Math.floor(id / grid.width);
@@ -470,6 +489,71 @@ function average(field) {
   let sum = 0;
   for (let i = 0; i < field.length; i += 1) sum += field[i];
   return sum / field.length;
+}
+
+function averageWhere(field, include) {
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < field.length; i += 1) {
+    if (!include(i)) continue;
+    sum += field[i];
+    count += 1;
+  }
+  return count ? sum / count : 0;
+}
+
+function conditionalShare(field, include, predicate) {
+  let total = 0;
+  let matched = 0;
+  for (let i = 0; i < field.length; i += 1) {
+    if (!include(i)) continue;
+    total += 1;
+    if (predicate(i)) matched += 1;
+  }
+  return total ? matched / total : 0;
+}
+
+function widthProxy(grid, field, threshold) {
+  let covered = 0;
+  let edge = 0;
+  for (let y = 0; y < grid.height; y += 1) {
+    for (let x = 0; x < grid.width; x += 1) {
+      const id = y * grid.width + x;
+      if (field[id] <= threshold) continue;
+      covered += 1;
+      let nearEmpty = false;
+      visitNeighbor8Ids(grid, x, y, (nid) => {
+        if (field[nid] <= threshold) nearEmpty = true;
+      });
+      if (nearEmpty) edge += 1;
+    }
+  }
+  return edge ? covered / edge : 0;
+}
+
+function measureMountainAxisCurvature(grid) {
+  let total = 0;
+  let bent = 0;
+  for (let y = 1; y < grid.height - 1; y += 1) {
+    for (let x = 0; x < grid.width; x += 1) {
+      const id = y * grid.width + x;
+      if (grid.mountainAxis[id] <= 0.05) continue;
+      total += 1;
+      const horizontal = axisAt(grid, x - 1, y) + axisAt(grid, x + 1, y);
+      const vertical = axisAt(grid, x, y - 1) + axisAt(grid, x, y + 1);
+      const diagA = axisAt(grid, x - 1, y - 1) + axisAt(grid, x + 1, y + 1);
+      const diagB = axisAt(grid, x + 1, y - 1) + axisAt(grid, x - 1, y + 1);
+      const aligned = Math.max(horizontal, vertical, diagA, diagB);
+      const connected = horizontal + vertical + diagA + diagB;
+      if (connected > aligned + 0.05) bent += 1;
+    }
+  }
+  return total ? bent / total : 0;
+}
+
+function axisAt(grid, x, y) {
+  if (y < 0 || y >= grid.height) return 0;
+  return grid.mountainAxis[y * grid.width + wrapX(grid.width, x)];
 }
 
 function measureCoastDistance(grid, seaLevel) {

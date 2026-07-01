@@ -1033,3 +1033,87 @@ signal *= coherenceFactor;
 ### 15.3 剩余限制
 
 该方案仍是栅格后处理和局部 coherence 门控，目标是消除棋盘格数值伪影，而不是生成最终自然弯曲的板块边界。真实的弯曲、错断、分段边界还需要后续在 plate center、弱带、旧缝合线和 ridge-transform 几何上建模。
+## 16. 工程落地补充：造山带生命周期
+
+本轮实现把“新山带”和“旧造山带”拆成两个时间尺度。地质依据是：活动汇聚边界可形成清晰高山、岛弧或碰撞造山；一旦构造活动减弱，山带会在数千万到数亿年尺度上侵蚀、展宽、断续化，并把物质输送到前陆盆地、被动边缘和低地沉积汇。
+
+### 16.1 可编码规则
+
+活动造山：
+
+```js
+collisionPower = convergent * boundaryInfluence * stress * continentalFactor * coherence;
+arcPower = convergent * boundaryInfluence * stress * subductionFactor * coherence;
+activeOrogeny = max(activeOrogeny, collisionPower + arcPower);
+mountainBelt += activeOrogeny * activeMountainGain;
+orogeny += activeOrogeny * longTermRootGain;
+orogenyAge = mix(orogenyAge, 0, activeOrogeny);
+```
+
+旧山带：
+
+```js
+inactive = 1 - boundaryInfluence;
+oldOrogeny = max(oldOrogeny * oldDecay, orogeny * inactive * inactive);
+oldOrogeny = broadenAlongWeakness(oldOrogeny, weakness) * segmentMask;
+oldRelief = oldOrogeny * oldHeight * ageReduction(orogenyAge);
+```
+
+侵蚀和沉积：
+
+```js
+erosion = (activeOrogeny + oldOrogeny + orogeny)
+  * (baseErosion + inactive + slopeOrHeightProxy);
+orogeny -= erosion;
+orogenyErosion = erosion;
+orogenicSedimentSupply = persistence + erosion * supplyGain;
+sediment += erosion * sinkWeight(forelandBasin, basin, passiveMargin, continentalRise);
+```
+
+前陆盆地：
+
+```js
+forelandBasin += nearby(activeOrogeny, oldOrogeny)
+  * continentalOrTransitional
+  * lowRelief
+  * notActiveRidgeOrTrench;
+```
+
+### 16.2 字段职责
+
+- `mountainBelt`：活动山带视觉特征，较清晰、较短寿。
+- `activeOrogeny`：活动汇聚造山强度，解释新山带成因。
+- `orogeny`：长期造山根和壳厚/构造记忆。
+- `oldOrogeny`：旧山带残余，低缓、宽、断续。
+- `orogenyAge`：旧山带降高和侵蚀阶段控制。
+- `orogenyErosion / orogenicSedimentSupply`：沉积预算入口。
+- `forelandBasin`：造山前缘沉降和沉积汇。
+- `mountainAxis / mountainHeight / orographicBarrier`：气候、水文读取接口。
+
+### 16.3 视觉与验证指标
+
+期望视觉：
+
+- 200 Myr 新山带仍能追溯到 active convergent boundary。
+- 739 Myr 旧山带更低、更宽、更断续，不像单像素板块边界。
+- 前陆盆地出现在山带前缘低地，而不是随机色块或深坑。
+- 山脉屏障字段能解释气候雨影和河源潜力。
+
+诊断指标：
+
+- `activeOrogenyCoverage`
+- `oldOrogenyCoverage`
+- `oldOrogenyWidth`
+- `orogenyAgeMean`
+- `orogenyErosionMean`
+- `orogenicSedimentBudget`
+- `forelandBasinCoverage`
+- `newVsOldMountainReliefRatio`
+- `mountainAxisCurvature`
+- `orographicBarrierCoverage`
+- `mountainBoundaryZeroShare`
+- `oldOrogenyBoundaryShare`
+
+### 16.4 剩余限制
+
+当前实现仍是栅格场生命周期，不是完整连续造山带骨架模型。`segmentMask` 和 weakness 偏转可以减少直线感，但不能替代后续的边界分段、旧缝合线追踪和气候驱动侵蚀。沉积搬运也仍是局部 sink 规则；进入水文后应由河网、坡度、降水和盆地连通性决定更真实的输沙路径。

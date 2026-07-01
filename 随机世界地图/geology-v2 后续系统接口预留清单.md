@@ -592,3 +592,31 @@ getter 变更：
 - old fracture zone 可以保留 `weakness`、少量 `crustAge` 差异和低幅纹理。
 - old fracture zone 不应保留强高程线、规则深浅带、长期海底山脊或沟槽。
 - active ridge/trench/islandArc/mountainBelt 不应被旧边界衰减规则抹掉。
+## 17. 造山带生命周期接口补充
+
+本轮新增造山带生命周期字段，目标是让后续气候、水文、生物圈和资源系统读取稳定的地形解释层，而不是直接把活动板块边界当作长期山脉。
+
+新增/增强字段：
+
+- `activeOrogeny`：活动汇聚造山强度，主要用于新山带和活动构造扰动。
+- `oldOrogeny`：旧造山根，低缓、宽、断续，可作为资源和长期地形背景。
+- `orogenyAge`：造山年龄归一化记忆，用于区分新旧山带。
+- `orogenyErosion`：本步侵蚀释放量。
+- `orogenicSedimentSupply`：造山物源，可供水文沉积 sink 使用。
+- `forelandBasin`：造山前缘盆地候选，兼具沉积汇和低缓地形解释。
+- `mountainAxis / mountainHeight / orographicBarrier`：气候和水文读取的山脉接口字段。
+
+getter 变更：
+
+- `getTerrainDerived(world)` 返回 `forelandBasin / orogenicSedimentSupply`。
+- `getClimateInputs(world)` 返回并优先使用网格中的 `orographicBarrier / mountainAxis / mountainHeight`。
+- `getHydrologyInputs(world)` 返回 `forelandBasin / orogenicSedimentSupply`，并把二者纳入 `sedimentSink`。
+- `getBiosphereInputs(world)` 用 `orogenicSedimentSupply / forelandBasin / activeOrogeny / oldOrogeny` 修正土壤潜力和扰动。
+- `getResourceInputs(world)` 返回 `orogenicBelt / activeOrogeny / oldOrogeny / forelandBasin`，`metamorphicBelt` 读取长期造山根。
+
+接口约束：
+
+- getter 只读，不推进模拟，不写回 `world`。
+- `mountainBelt / activeOrogeny` 代表新山带，不能替代长期山地背景。
+- `oldOrogeny` 可影响资源和缓坡地形，但不应直接生成单像素活动边界山脉。
+- `forelandBasin` 是地质沉积盆地候选，不是完整水文湖泊或河流沉积系统。
