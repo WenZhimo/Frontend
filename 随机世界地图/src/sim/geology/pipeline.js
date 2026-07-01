@@ -11,6 +11,7 @@ import { rebuildMountainInterfaceFields, updateOrogenicLifecycle } from "./oroge
 import { advectCrust } from "./plates.js";
 import { updateReliefBudgetDiagnostics } from "./reliefBudget.js";
 import { deriveOceanConnectivity, updateRiftStages } from "./rift.js";
+import { updateGeologicSeaLevel } from "./seaLevel.js";
 import { suppressInactiveFractureRelief, updateTransformMemory } from "./transforms.js";
 
 export function runGeologyV2Step(world) {
@@ -33,16 +34,19 @@ export function runGeologyV2Step(world) {
   rebuildGeologyElevation(world);
   rebuildMountainInterfaceFields(world);
   updateSeaLevel(world);
+  updateGeologicSeaLevel(world);
   deriveOceanConnectivity(world);
   updatePassiveMargins(world);
   rebuildGeologyElevation(world);
   rebuildMountainInterfaceFields(world);
   suppressInactiveFractureRelief(world);
   updateSeaLevel(world);
+  updateGeologicSeaLevel(world);
   deriveOceanConnectivity(world);
   updatePassiveMargins(world);
   suppressInactiveFractureRelief(world);
   updateSeaLevel(world);
+  updateGeologicSeaLevel(world);
   deriveOceanConnectivity(world);
   rebuildMountainInterfaceFields(world);
   updateSurfaceContinuityDiagnostics(world.grid);

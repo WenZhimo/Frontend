@@ -153,6 +153,12 @@
       seaLevelSensitivity: new Float32Array(size),
       largePlainMask: new Uint8Array(size),
       flatLandMask: new Uint8Array(size),
+      ridgeVolumeSignal: new Float32Array(size),
+      oldOceanCapacitySignal: new Float32Array(size),
+      sedimentDisplacementSignal: new Float32Array(size),
+      trenchCapacitySignal: new Float32Array(size),
+      coastalSensitivity: new Float32Array(size),
+      isYoungOcean: new Uint8Array(size),
       boundaryInfluence: new Float32Array(size),
       boundaryDistance: new Float32Array(size),
       boundaryDensity: new Float32Array(size),
@@ -331,6 +337,12 @@
     grid.seaLevelSensitivity.fill(0);
     grid.largePlainMask.fill(0);
     grid.flatLandMask.fill(0);
+    grid.ridgeVolumeSignal.fill(0);
+    grid.oldOceanCapacitySignal.fill(0);
+    grid.sedimentDisplacementSignal.fill(0);
+    grid.trenchCapacitySignal.fill(0);
+    grid.coastalSensitivity.fill(0);
+    grid.isYoungOcean.fill(0);
     grid.featureIntensity.fill(0);
     grid.mountainBelt.fill(0);
     grid.trench.fill(0);
@@ -370,6 +382,12 @@
     grid.basin.fill(0);
     world.continentNoise = createValueNoise3D(mixSeed(seedUint32, 0x51f15eed));
     world.textureNoise = createValueNoise3D(mixSeed(seedUint32, 0xa24baed1));
+    world.geologicSeaLevelOffset = 0;
+    world.baseSeaLevel = 0;
+    world.geologicSeaLevelTargetOffset = 0;
+    world.geologicSeaLevelPreviousOffset = 0;
+    world.geologicSeaLevelStep = -1;
+    world.geologicSeaLevelDiagnostics = null;
     initializeCrust(world);
     grid.crustReference.set(grid.crust);
     initializeCrustState(grid);
@@ -3524,6 +3542,302 @@
   }
 
 
+  // ---- src/sim/geology/seaLevel.js ----
+
+  const BASELINES = {
+    ridge: 0.08,
+    ridgeScale: 0.12,
+    young: 0.18,
+    youngScale: 0.2,
+    old: 0.16,
+    oldScale: 0.18,
+    sediment: 0.1,
+    sedimentScale: 0.16,
+    trench: 0.04,
+    trenchScale: 0.08,
+  };
+
+  const WEIGHTS = {
+    ridge: 0.34,
+    young: 0.28,
+    sediment: 0.14,
+    old: 0.34,
+    trench: 0.1,
+  };
+
+  function updateGeologicSeaLevel(world) {
+    world.baseSeaLevel = world.seaLevel;
+    const previousOffset = world.geologicSeaLevelOffset ?? 0;
+    const sameStep = world.geologicSeaLevelStep === world.step;
+    const diagnostics = computeGeologicSeaLevelSignals(world, world.baseSeaLevel);
+
+    let offset = previousOffset;
+    let change = world.geologicSeaLevelDiagnostics?.seaLevelChangeRate ?? 0;
+    if (!sameStep) {
+      let maxStep = diagnostics.maxOffsetStep;
+      if (diagnostics.coastalFlipRisk > 0.18) maxStep *= 0.5;
+      offset = moveToward(previousOffset, diagnostics.targetGeologicSeaLevelOffset, maxStep);
+      offset = clamp(offset, -diagnostics.maxOffset, diagnostics.maxOffset);
+      change = offset - previousOffset;
+      world.geologicSeaLevelPreviousOffset = previousOffset;
+      world.geologicSeaLevelOffset = offset;
+      world.geologicSeaLevelTargetOffset = diagnostics.targetGeologicSeaLevelOffset;
+      world.geologicSeaLevelStep = world.step;
+    }
+
+    world.seaLevel = world.baseSeaLevel + offset;
+    writeGeologicSeaLevelFields(world, world.seaLevel);
+    const landAfter = shareLand(world.grid, world.seaLevel);
+    world.geologicSeaLevelDiagnostics = {
+      ...diagnostics,
+      baseSeaLevel: world.baseSeaLevel,
+      seaLevel: world.seaLevel,
+      geologicSeaLevelOffset: offset,
+      targetGeologicSeaLevelOffset: diagnostics.targetGeologicSeaLevelOffset,
+      seaLevelChangeRate: change,
+      coastalSensitivityMean: average(world.grid.coastalSensitivity),
+      landShareAfterGeologicOffset: landAfter,
+      geologicSeaLevelLandShareDelta: landAfter - diagnostics.landShareBeforeGeologicOffset,
+    };
+    return world.geologicSeaLevelDiagnostics;
+  }
+
+  function getGeologicSeaLevelDiagnostics(world) {
+    return world.geologicSeaLevelDiagnostics ?? {
+      baseSeaLevel: world.baseSeaLevel ?? world.seaLevel ?? 0,
+      seaLevel: world.seaLevel ?? 0,
+      geologicSeaLevelOffset: world.geologicSeaLevelOffset ?? 0,
+      targetGeologicSeaLevelOffset: world.geologicSeaLevelTargetOffset ?? 0,
+      seaLevelChangeRate: 0,
+      youngOceanShare: 0,
+      oldOceanShare: 0,
+      ridgeVolumeSignalMean: 0,
+      oldOceanCapacitySignalMean: 0,
+      sedimentDisplacementSignalMean: 0,
+      trenchCapacitySignalMean: 0,
+      ridgeVolumeNormalized: 0,
+      youngOceanNormalized: 0,
+      oldOceanCapacityNormalized: 0,
+      sedimentDisplacementNormalized: 0,
+      trenchCapacityNormalized: 0,
+      capacityBalance: 0,
+      oceanBasinCapacitySignalMean: 0,
+      coastalFlipRisk: 0,
+      coastalSensitivityMean: 0,
+      seaLevelCouplingStrength: 0,
+      landShareBeforeGeologicOffset: 0,
+      landShareAfterGeologicOffset: 0,
+      geologicSeaLevelLandShareDelta: 0,
+    };
+  }
+
+  function computeGeologicSeaLevelSignals(world, baseSeaLevel) {
+    const { grid } = world;
+    let oceanicCount = 0;
+    let youngOceanCount = 0;
+    let oldOceanCount = 0;
+    let ridgeSum = 0;
+    let oldCapacitySum = 0;
+    let sedimentSum = 0;
+    let trenchSum = 0;
+
+    for (let i = 0; i < grid.size; i += 1) {
+      const oceanic = grid.crustType[i] === CrustType.OCEANIC;
+      const age = grid.crustAge[i];
+      const youngOcean = oceanic && age < 0.18;
+      const oldOcean = oceanic && age > 0.62;
+      const depth = Math.max(0, baseSeaLevel - grid.elev[i]);
+      const ridgeSignal = oceanic ? clamp01(
+        grid.ridgeUplift[i] * 0.45 +
+        grid.ridge[i] * 0.3 +
+        grid.ridgeAxis[i] * 0.25 +
+        Math.max(0, 1 - age / 0.18) * 0.35
+      ) : 0;
+      const oldCapacity = oldOcean ? clamp01(
+        depth * 2.1 +
+        Math.max(0, -grid.ageSubsidence[i]) * 2.4 +
+        Math.max(0, -grid.oceanDepthTerms[i]) * 1.1
+      ) : 0;
+      const sedimentDisplacement = clamp01(
+        grid.sedimentFill[i] * 0.45 +
+        grid.sedimentWedge[i] * 0.35 +
+        grid.continentalRise[i] * 0.15 +
+        grid.continentalShelf[i] * 0.1 +
+        grid.sediment[i] * 0.15
+      );
+      const trenchCapacity = oceanic ? clamp01(
+        Math.max(0, -grid.trenchDepression[i]) * 4.5 +
+        grid.trench[i] * 0.35 +
+        grid.trenchAxis[i] * 0.1
+      ) : 0;
+
+      grid.isYoungOcean[i] = youngOcean ? 1 : 0;
+      grid.ridgeVolumeSignal[i] = ridgeSignal;
+      grid.oldOceanCapacitySignal[i] = oldCapacity;
+      grid.sedimentDisplacementSignal[i] = sedimentDisplacement;
+      grid.trenchCapacitySignal[i] = trenchCapacity;
+
+      if (oceanic) {
+        oceanicCount += 1;
+        if (youngOcean) youngOceanCount += 1;
+        if (oldOcean) oldOceanCount += 1;
+        ridgeSum += ridgeSignal;
+        oldCapacitySum += oldCapacity;
+        trenchSum += trenchCapacity;
+      }
+      if (grid.elev[i] < baseSeaLevel || grid.continentalShelf[i] > 0.01 || grid.sedimentWedge[i] > 0.01) {
+        sedimentSum += sedimentDisplacement;
+      }
+    }
+
+    const invOceanic = oceanicCount ? 1 / oceanicCount : 0;
+    const youngOceanShare = youngOceanCount * invOceanic;
+    const oldOceanShare = oldOceanCount * invOceanic;
+    const ridgeMean = ridgeSum * invOceanic;
+    const oldCapacityMean = oldCapacitySum * invOceanic;
+    const trenchMean = trenchSum * invOceanic;
+    const sedimentMean = sedimentSum / grid.size;
+    const ridgeN = normalizeCentered(ridgeMean, BASELINES.ridge, BASELINES.ridgeScale);
+    const youngN = normalizeCentered(youngOceanShare, BASELINES.young, BASELINES.youngScale);
+    const oldN = normalizeCentered(oldCapacityMean, BASELINES.old, BASELINES.oldScale);
+    const sedimentN = normalizeCentered(sedimentMean, BASELINES.sediment, BASELINES.sedimentScale);
+    const trenchN = normalizeCentered(trenchMean, BASELINES.trench, BASELINES.trenchScale);
+    const capacityBalance =
+      ridgeN * WEIGHTS.ridge +
+      youngN * WEIGHTS.young +
+      sedimentN * WEIGHTS.sediment -
+      oldN * WEIGHTS.old -
+      trenchN * WEIGHTS.trench;
+    const maxOffset = 0.032;
+    const seaLevelCouplingStrength = world.params.pipelineMode === "geology-v2" ? 0.38 : 0;
+    const targetOffset = clamp(capacityBalance * maxOffset * seaLevelCouplingStrength, -maxOffset, maxOffset);
+    const dt = world.timeScaleFactor ?? 1;
+    const maxOffsetStep = 0.0016 * clamp(dt, 0.25, 4);
+    const previousOffset = world.geologicSeaLevelOffset ?? 0;
+    const estimatedChange = clamp(targetOffset - previousOffset, -maxOffsetStep, maxOffsetStep);
+
+    writeCoastalSensitivity(world, baseSeaLevel + previousOffset);
+
+    return {
+      targetGeologicSeaLevelOffset: targetOffset,
+      youngOceanShare,
+      oldOceanShare,
+      ridgeVolumeSignalMean: ridgeMean,
+      oldOceanCapacitySignalMean: oldCapacityMean,
+      sedimentDisplacementSignalMean: sedimentMean,
+      trenchCapacitySignalMean: trenchMean,
+      ridgeVolumeNormalized: ridgeN,
+      youngOceanNormalized: youngN,
+      oldOceanCapacityNormalized: oldN,
+      sedimentDisplacementNormalized: sedimentN,
+      trenchCapacityNormalized: trenchN,
+      capacityBalance,
+      oceanBasinCapacitySignalMean: capacityBalance,
+      coastalFlipRisk: coastalFlipRisk(grid, baseSeaLevel + previousOffset, estimatedChange),
+      seaLevelCouplingStrength,
+      landShareBeforeGeologicOffset: shareLand(grid, baseSeaLevel),
+      maxOffset,
+      maxOffsetStep,
+      baselines: BASELINES,
+    };
+  }
+
+  function writeGeologicSeaLevelFields(world, seaLevel) {
+    writeCoastalSensitivity(world, seaLevel);
+  }
+
+  function writeCoastalSensitivity(world, seaLevel) {
+    const { grid } = world;
+    for (let i = 0; i < grid.size; i += 1) {
+      const relative = grid.elev[i] - seaLevel;
+      const nearSeaLevel = 1 - clamp01(Math.abs(relative) / 0.02);
+      const lowSlope = 1 - clamp01(localSlope(grid, i) / 0.018);
+      const lowRelief = 1 - clamp01(localRelief4(grid, i) / 0.055);
+      const shelfFactor = clamp01(
+        grid.continentalShelf[i] * 0.45 +
+        grid.passiveMargin[i] * 0.25 +
+        grid.sedimentWedge[i] * 0.15 +
+        grid.basin[i] * 0.1
+      );
+      grid.coastalSensitivity[i] = clamp01(
+        nearSeaLevel * 0.45 +
+        lowSlope * 0.2 +
+        lowRelief * 0.15 +
+        shelfFactor * 0.2
+      );
+    }
+  }
+
+  function coastalFlipRisk(grid, seaLevel, change) {
+    const baseBand = 0.018;
+    let sum = 0;
+    for (let i = 0; i < grid.size; i += 1) {
+      const potential = clamp01((Math.abs(change) * 8 + baseBand - Math.abs(grid.elev[i] - seaLevel)) / baseBand);
+      sum += grid.coastalSensitivity[i] * potential;
+    }
+    return sum / grid.size;
+  }
+
+  function localSlope(grid, id) {
+    const x = id % grid.width;
+    const y = Math.floor(id / grid.width);
+    const left = grid.elev[y * grid.width + wrap(grid.width, x - 1)];
+    const right = grid.elev[y * grid.width + wrap(grid.width, x + 1)];
+    const up = grid.elev[Math.max(0, y - 1) * grid.width + x];
+    const down = grid.elev[Math.min(grid.height - 1, y + 1) * grid.width + x];
+    return Math.hypot((right - left) * 0.5, (down - up) * 0.5);
+  }
+
+  function localRelief4(grid, id) {
+    const x = id % grid.width;
+    const y = Math.floor(id / grid.width);
+    let min = grid.elev[id];
+    let max = grid.elev[id];
+    const visit = (nx, ny) => {
+      const value = grid.elev[ny * grid.width + wrap(grid.width, nx)];
+      if (value < min) min = value;
+      if (value > max) max = value;
+    };
+    visit(x - 1, y);
+    visit(x + 1, y);
+    visit(x, Math.max(0, y - 1));
+    visit(x, Math.min(grid.height - 1, y + 1));
+    return max - min;
+  }
+
+  function shareLand(grid, seaLevel) {
+    let land = 0;
+    for (let i = 0; i < grid.size; i += 1) if (grid.elev[i] >= seaLevel) land += 1;
+    return land / grid.size;
+  }
+
+  function average(field) {
+    let sum = 0;
+    for (let i = 0; i < field.length; i += 1) sum += field[i];
+    return sum / field.length;
+  }
+
+  function normalizeCentered(value, baseline, scale) {
+    return clamp((value - baseline) / Math.max(1e-6, scale), -1, 1);
+  }
+
+  function moveToward(current, target, maxStep) {
+    return current + clamp(target - current, -maxStep, maxStep);
+  }
+
+  function wrap(width, x) {
+    return ((x % width) + width) % width;
+  }
+
+  function clamp01(value) {
+    return clamp(value, 0, 1);
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+
   // ---- src/sim/geology/pipeline.js ----
 
   function runGeologyV2Step(world) {
@@ -3546,16 +3860,19 @@
     rebuildGeologyElevation(world);
     rebuildMountainInterfaceFields(world);
     updateSeaLevel(world);
+    updateGeologicSeaLevel(world);
     deriveOceanConnectivity(world);
     updatePassiveMargins(world);
     rebuildGeologyElevation(world);
     rebuildMountainInterfaceFields(world);
     suppressInactiveFractureRelief(world);
     updateSeaLevel(world);
+    updateGeologicSeaLevel(world);
     deriveOceanConnectivity(world);
     updatePassiveMargins(world);
     suppressInactiveFractureRelief(world);
     updateSeaLevel(world);
+    updateGeologicSeaLevel(world);
     deriveOceanConnectivity(world);
     rebuildMountainInterfaceFields(world);
     updateSurfaceContinuityDiagnostics(world.grid);
@@ -3795,6 +4112,13 @@
       seaLevelSensitivity: base.seaLevelSensitivity,
       largePlainMask: base.largePlainMask,
       flatLandMask: base.flatLandMask,
+      baseSeaLevel: base.geologicSeaLevelDiagnostics.baseSeaLevel,
+      geologicSeaLevelOffset: base.geologicSeaLevelDiagnostics.geologicSeaLevelOffset,
+      coastalSensitivity: base.coastalSensitivity,
+      ridgeVolumeSignal: base.ridgeVolumeSignal,
+      oldOceanCapacitySignal: base.oldOceanCapacitySignal,
+      sedimentDisplacementSignal: base.sedimentDisplacementSignal,
+      trenchCapacitySignal: base.trenchCapacitySignal,
     };
   }
 
@@ -3848,6 +4172,10 @@
       hypsometricSpread: base.reliefDiagnostics.hypsometricSpread,
       landReliefSpread: base.reliefDiagnostics.landReliefSpread,
       orographicReliefPotential: base.reliefDiagnostics.orographicReliefPotential,
+      seaLevel: world.seaLevel,
+      baseSeaLevel: base.geologicSeaLevelDiagnostics.baseSeaLevel,
+      geologicSeaLevelOffset: base.geologicSeaLevelDiagnostics.geologicSeaLevelOffset,
+      coastalSensitivity: base.coastalSensitivity,
     };
   }
 
@@ -3889,6 +4217,10 @@
       drainageGradientPotential: base.reliefDiagnostics.drainageGradientPotential,
       flatLandMask: base.flatLandMask,
       largePlainMask: base.largePlainMask,
+      seaLevel: world.seaLevel,
+      baseSeaLevel: base.geologicSeaLevelDiagnostics.baseSeaLevel,
+      geologicSeaLevelOffset: base.geologicSeaLevelDiagnostics.geologicSeaLevelOffset,
+      coastalSensitivity: base.coastalSensitivity,
       forelandBasin: new Float32Array(grid.forelandBasin),
       orogenicSedimentSupply: new Float32Array(grid.orogenicSedimentSupply),
       continentalRise: base.continentalRise,
@@ -4054,6 +4386,12 @@
     const largePlainMask = new Uint8Array(grid.largePlainMask);
     const flatLandMask = new Uint8Array(grid.flatLandMask);
     const reliefDiagnostics = getReliefDiagnostics(world);
+    const geologicSeaLevelDiagnostics = getGeologicSeaLevelDiagnostics(world);
+    const coastalSensitivity = new Float32Array(grid.coastalSensitivity);
+    const ridgeVolumeSignal = new Float32Array(grid.ridgeVolumeSignal);
+    const oldOceanCapacitySignal = new Float32Array(grid.oldOceanCapacitySignal);
+    const sedimentDisplacementSignal = new Float32Array(grid.sedimentDisplacementSignal);
+    const trenchCapacitySignal = new Float32Array(grid.trenchCapacitySignal);
 
     return {
       relativeElevation,
@@ -4095,6 +4433,12 @@
       largePlainMask,
       flatLandMask,
       reliefDiagnostics,
+      geologicSeaLevelDiagnostics,
+      coastalSensitivity,
+      ridgeVolumeSignal,
+      oldOceanCapacitySignal,
+      sedimentDisplacementSignal,
+      trenchCapacitySignal,
     };
   }
 

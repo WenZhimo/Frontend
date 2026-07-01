@@ -47,6 +47,7 @@ for (const resolution of resolutions) {
     transformDiagnostics: measureTransformDiagnostics(world),
     orogenyDiagnostics: measureOrogenyDiagnostics(world),
     axisDiagnostics: measureAxisDiagnostics(world),
+    geologicSeaLevelDiagnostics: measureGeologicSeaLevelDiagnostics(world),
     reliefDiagnostics: measureReliefDiagnostics(world),
     boundaryDiagnostics: measureBoundaryDiagnostics(world.grid),
     geologyRisks: measureGeologyRisks(world),
@@ -560,6 +561,37 @@ function measureReliefDiagnostics(world) {
     drainageGradientPotential: diagnostics.drainageGradientPotential ?? 0,
     orographicReliefPotential: diagnostics.orographicReliefPotential ?? 0,
     planetaryReliefMean: average(grid.planetaryRelief),
+  };
+}
+
+function measureGeologicSeaLevelDiagnostics(world) {
+  const { grid } = world;
+  const diagnostics = world.geologicSeaLevelDiagnostics ?? {};
+  return {
+    baseSeaLevel: diagnostics.baseSeaLevel ?? world.baseSeaLevel ?? world.seaLevel ?? 0,
+    seaLevel: diagnostics.seaLevel ?? world.seaLevel ?? 0,
+    geologicSeaLevelOffset: diagnostics.geologicSeaLevelOffset ?? world.geologicSeaLevelOffset ?? 0,
+    targetGeologicSeaLevelOffset: diagnostics.targetGeologicSeaLevelOffset ?? 0,
+    seaLevelChangeRate: diagnostics.seaLevelChangeRate ?? 0,
+    youngOceanShare: diagnostics.youngOceanShare ?? share(grid.isYoungOcean),
+    oldOceanShare: diagnostics.oldOceanShare ?? conditionalShare(grid.crustType, (i) => grid.crustType[i] === 0, (i) => grid.crustAge[i] > 0.62),
+    ridgeVolumeSignalMean: diagnostics.ridgeVolumeSignalMean ?? average(grid.ridgeVolumeSignal),
+    oldOceanCapacitySignalMean: diagnostics.oldOceanCapacitySignalMean ?? average(grid.oldOceanCapacitySignal),
+    sedimentDisplacementSignalMean: diagnostics.sedimentDisplacementSignalMean ?? average(grid.sedimentDisplacementSignal),
+    trenchCapacitySignalMean: diagnostics.trenchCapacitySignalMean ?? average(grid.trenchCapacitySignal),
+    ridgeVolumeNormalized: diagnostics.ridgeVolumeNormalized ?? 0,
+    youngOceanNormalized: diagnostics.youngOceanNormalized ?? 0,
+    oldOceanCapacityNormalized: diagnostics.oldOceanCapacityNormalized ?? 0,
+    sedimentDisplacementNormalized: diagnostics.sedimentDisplacementNormalized ?? 0,
+    trenchCapacityNormalized: diagnostics.trenchCapacityNormalized ?? 0,
+    capacityBalance: diagnostics.capacityBalance ?? 0,
+    oceanBasinCapacitySignalMean: diagnostics.oceanBasinCapacitySignalMean ?? diagnostics.capacityBalance ?? 0,
+    coastalFlipRisk: diagnostics.coastalFlipRisk ?? 0,
+    coastalSensitivityMean: diagnostics.coastalSensitivityMean ?? average(grid.coastalSensitivity),
+    seaLevelCouplingStrength: diagnostics.seaLevelCouplingStrength ?? 0,
+    landShareBeforeGeologicOffset: diagnostics.landShareBeforeGeologicOffset ?? 0,
+    landShareAfterGeologicOffset: diagnostics.landShareAfterGeologicOffset ?? 0,
+    geologicSeaLevelLandShareDelta: diagnostics.geologicSeaLevelLandShareDelta ?? 0,
   };
 }
 

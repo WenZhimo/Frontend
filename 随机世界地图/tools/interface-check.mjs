@@ -67,6 +67,13 @@ const requiredFields = {
     "seaLevelSensitivity",
     "largePlainMask",
     "flatLandMask",
+    "baseSeaLevel",
+    "geologicSeaLevelOffset",
+    "coastalSensitivity",
+    "ridgeVolumeSignal",
+    "oldOceanCapacitySignal",
+    "sedimentDisplacementSignal",
+    "trenchCapacitySignal",
   ],
   climate: [
     "latitude",
@@ -84,6 +91,10 @@ const requiredFields = {
     "hypsometricSpread",
     "landReliefSpread",
     "orographicReliefPotential",
+    "seaLevel",
+    "baseSeaLevel",
+    "geologicSeaLevelOffset",
+    "coastalSensitivity",
   ],
   hydrology: [
     "hydroElevation",
@@ -99,6 +110,10 @@ const requiredFields = {
     "drainageGradientPotential",
     "flatLandMask",
     "largePlainMask",
+    "seaLevel",
+    "baseSeaLevel",
+    "geologicSeaLevelOffset",
+    "coastalSensitivity",
     "forelandBasin",
     "orogenicSedimentSupply",
     "continentalRise",
@@ -146,7 +161,15 @@ const scalarFields = new Set([
   "climate.hypsometricSpread",
   "climate.landReliefSpread",
   "climate.orographicReliefPotential",
+  "climate.seaLevel",
+  "climate.baseSeaLevel",
+  "climate.geologicSeaLevelOffset",
+  "terrain.baseSeaLevel",
+  "terrain.geologicSeaLevelOffset",
   "hydrology.drainageGradientPotential",
+  "hydrology.seaLevel",
+  "hydrology.baseSeaLevel",
+  "hydrology.geologicSeaLevelOffset",
 ]);
 
 const validation = validateOutputs(outputs, requiredFields, world.grid.size);
@@ -209,6 +232,7 @@ const stats = {
   axisContinuityMean: averageWhere(world.grid.axisContinuity, (i) => world.grid.tectonicAxis[i] > 0.05),
   mountainHeightBlockiness: averageWhere(world.grid.mountainHeightBlockiness, (i) => world.grid.mountainHeight[i] > 0.02),
   orographicBarrierContinuity: averageWhere(world.grid.orographicBarrierContinuity, (i) => world.grid.orographicBarrier[i] > 0.02),
+  ...geologicSeaLevelStats(world),
   ...reliefStats(world, outputs),
   activeFeatureOnNoisyBoundaryShare: featureOnNoisyBoundaryShare(world.grid),
   ridgeAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.ridgeAxis[i] > 0.05),
@@ -305,6 +329,36 @@ function reliefStats(world, outputs) {
     drainageGradientPotential: diagnostics.drainageGradientPotential ?? outputs.hydrology.drainageGradientPotential ?? 0,
     orographicReliefPotential: diagnostics.orographicReliefPotential ?? outputs.climate.orographicReliefPotential ?? 0,
     flatWorldRisk: Boolean(diagnostics.flatWorldRisk),
+  };
+}
+
+function geologicSeaLevelStats(world) {
+  const diagnostics = world.geologicSeaLevelDiagnostics ?? {};
+  return {
+    baseSeaLevel: diagnostics.baseSeaLevel ?? world.baseSeaLevel ?? world.seaLevel ?? 0,
+    finalSeaLevel: diagnostics.seaLevel ?? world.seaLevel ?? 0,
+    geologicSeaLevelOffset: diagnostics.geologicSeaLevelOffset ?? world.geologicSeaLevelOffset ?? 0,
+    targetGeologicSeaLevelOffset: diagnostics.targetGeologicSeaLevelOffset ?? 0,
+    seaLevelChangeRate: diagnostics.seaLevelChangeRate ?? 0,
+    youngOceanShare: diagnostics.youngOceanShare ?? share(world.grid.isYoungOcean),
+    oldOceanShare: diagnostics.oldOceanShare ?? conditionalShare(world.grid.crustType, (i) => world.grid.crustType[i] === 0, (i) => world.grid.crustAge[i] > 0.62),
+    ridgeVolumeSignalMean: diagnostics.ridgeVolumeSignalMean ?? average(world.grid.ridgeVolumeSignal),
+    ridgeVolumeNormalized: diagnostics.ridgeVolumeNormalized ?? 0,
+    youngOceanNormalized: diagnostics.youngOceanNormalized ?? 0,
+    oldOceanCapacityNormalized: diagnostics.oldOceanCapacityNormalized ?? 0,
+    sedimentDisplacementNormalized: diagnostics.sedimentDisplacementNormalized ?? 0,
+    trenchCapacityNormalized: diagnostics.trenchCapacityNormalized ?? 0,
+    capacityBalance: diagnostics.capacityBalance ?? 0,
+    oceanBasinCapacitySignalMean: diagnostics.oceanBasinCapacitySignalMean ?? diagnostics.capacityBalance ?? 0,
+    oldOceanCapacitySignalMean: diagnostics.oldOceanCapacitySignalMean ?? average(world.grid.oldOceanCapacitySignal),
+    sedimentDisplacementSignalMean: diagnostics.sedimentDisplacementSignalMean ?? average(world.grid.sedimentDisplacementSignal),
+    trenchCapacitySignalMean: diagnostics.trenchCapacitySignalMean ?? average(world.grid.trenchCapacitySignal),
+    coastalFlipRisk: diagnostics.coastalFlipRisk ?? 0,
+    coastalSensitivityMean: diagnostics.coastalSensitivityMean ?? average(world.grid.coastalSensitivity),
+    seaLevelCouplingStrength: diagnostics.seaLevelCouplingStrength ?? 0,
+    landShareBeforeGeologicOffset: diagnostics.landShareBeforeGeologicOffset ?? 0,
+    landShareAfterGeologicOffset: diagnostics.landShareAfterGeologicOffset ?? shareWhere(world.grid.elev, (i) => world.grid.elev[i] >= world.seaLevel),
+    geologicSeaLevelLandShareDelta: diagnostics.geologicSeaLevelLandShareDelta ?? 0,
   };
 }
 
