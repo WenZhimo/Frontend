@@ -1,6 +1,7 @@
 import { forEachNeighbor4, indexOf, physicalRadius, wrapX } from "../grid.js";
 import { getReliefDiagnostics } from "../geology/reliefBudget.js";
 import { deriveOceanConnectivity } from "../geology/rift.js";
+import { getGeologicSeaLevelDiagnostics } from "../geology/seaLevel.js";
 
 export function getTerrainDerived(world) {
   const base = buildTerrainBase(world);
@@ -40,6 +41,13 @@ export function getTerrainDerived(world) {
     seaLevelSensitivity: base.seaLevelSensitivity,
     largePlainMask: base.largePlainMask,
     flatLandMask: base.flatLandMask,
+    baseSeaLevel: base.geologicSeaLevelDiagnostics.baseSeaLevel,
+    geologicSeaLevelOffset: base.geologicSeaLevelDiagnostics.geologicSeaLevelOffset,
+    coastalSensitivity: base.coastalSensitivity,
+    ridgeVolumeSignal: base.ridgeVolumeSignal,
+    oldOceanCapacitySignal: base.oldOceanCapacitySignal,
+    sedimentDisplacementSignal: base.sedimentDisplacementSignal,
+    trenchCapacitySignal: base.trenchCapacitySignal,
   };
 }
 
@@ -93,6 +101,10 @@ export function getClimateInputs(world) {
     hypsometricSpread: base.reliefDiagnostics.hypsometricSpread,
     landReliefSpread: base.reliefDiagnostics.landReliefSpread,
     orographicReliefPotential: base.reliefDiagnostics.orographicReliefPotential,
+    seaLevel: world.seaLevel,
+    baseSeaLevel: base.geologicSeaLevelDiagnostics.baseSeaLevel,
+    geologicSeaLevelOffset: base.geologicSeaLevelDiagnostics.geologicSeaLevelOffset,
+    coastalSensitivity: base.coastalSensitivity,
   };
 }
 
@@ -134,6 +146,10 @@ export function getHydrologyInputs(world) {
     drainageGradientPotential: base.reliefDiagnostics.drainageGradientPotential,
     flatLandMask: base.flatLandMask,
     largePlainMask: base.largePlainMask,
+    seaLevel: world.seaLevel,
+    baseSeaLevel: base.geologicSeaLevelDiagnostics.baseSeaLevel,
+    geologicSeaLevelOffset: base.geologicSeaLevelDiagnostics.geologicSeaLevelOffset,
+    coastalSensitivity: base.coastalSensitivity,
     forelandBasin: new Float32Array(grid.forelandBasin),
     orogenicSedimentSupply: new Float32Array(grid.orogenicSedimentSupply),
     continentalRise: base.continentalRise,
@@ -299,6 +315,12 @@ function buildTerrainBase(world) {
   const largePlainMask = new Uint8Array(grid.largePlainMask);
   const flatLandMask = new Uint8Array(grid.flatLandMask);
   const reliefDiagnostics = getReliefDiagnostics(world);
+  const geologicSeaLevelDiagnostics = getGeologicSeaLevelDiagnostics(world);
+  const coastalSensitivity = new Float32Array(grid.coastalSensitivity);
+  const ridgeVolumeSignal = new Float32Array(grid.ridgeVolumeSignal);
+  const oldOceanCapacitySignal = new Float32Array(grid.oldOceanCapacitySignal);
+  const sedimentDisplacementSignal = new Float32Array(grid.sedimentDisplacementSignal);
+  const trenchCapacitySignal = new Float32Array(grid.trenchCapacitySignal);
 
   return {
     relativeElevation,
@@ -340,6 +362,12 @@ function buildTerrainBase(world) {
     largePlainMask,
     flatLandMask,
     reliefDiagnostics,
+    geologicSeaLevelDiagnostics,
+    coastalSensitivity,
+    ridgeVolumeSignal,
+    oldOceanCapacitySignal,
+    sedimentDisplacementSignal,
+    trenchCapacitySignal,
   };
 }
 

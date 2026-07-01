@@ -41,6 +41,12 @@ export function initializeBaseTerrain(world) {
   grid.seaLevelSensitivity.fill(0);
   grid.largePlainMask.fill(0);
   grid.flatLandMask.fill(0);
+  grid.ridgeVolumeSignal.fill(0);
+  grid.oldOceanCapacitySignal.fill(0);
+  grid.sedimentDisplacementSignal.fill(0);
+  grid.trenchCapacitySignal.fill(0);
+  grid.coastalSensitivity.fill(0);
+  grid.isYoungOcean.fill(0);
   grid.featureIntensity.fill(0);
   grid.mountainBelt.fill(0);
   grid.trench.fill(0);
@@ -80,6 +86,12 @@ export function initializeBaseTerrain(world) {
   grid.basin.fill(0);
   world.continentNoise = createValueNoise3D(mixSeed(seedUint32, 0x51f15eed));
   world.textureNoise = createValueNoise3D(mixSeed(seedUint32, 0xa24baed1));
+  world.geologicSeaLevelOffset = 0;
+  world.baseSeaLevel = 0;
+  world.geologicSeaLevelTargetOffset = 0;
+  world.geologicSeaLevelPreviousOffset = 0;
+  world.geologicSeaLevelStep = -1;
+  world.geologicSeaLevelDiagnostics = null;
   initializeCrust(world);
   grid.crustReference.set(grid.crust);
   initializeCrustState(grid);

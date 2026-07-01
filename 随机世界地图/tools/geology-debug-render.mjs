@@ -60,6 +60,11 @@ const layers = {
   isostaticReliefSupply: colorField("isostaticReliefSupply", 0, 0.18, [22, 31, 45], [105, 188, 232]),
   erosionFlatteningPressure: colorField("erosionFlatteningPressure", 0, 0.65, [28, 38, 30], [197, 178, 96]),
   sedimentSmoothingPressure: colorField("sedimentSmoothingPressure", 0, 0.45, [28, 41, 37], [106, 202, 137]),
+  ridgeVolumeSignal: colorField("ridgeVolumeSignal", 0, 0.45, [16, 43, 48], [86, 232, 225]),
+  oldOceanCapacitySignal: colorField("oldOceanCapacitySignal", 0, 0.22, [30, 28, 58], [139, 119, 224]),
+  sedimentDisplacementSignal: colorField("sedimentDisplacementSignal", 0, 0.22, [48, 38, 24], [238, 212, 128]),
+  trenchCapacitySignal: colorField("trenchCapacitySignal", 0, 0.18, [42, 28, 51], [199, 91, 211]),
+  coastalSensitivity: colorField("coastalSensitivity", 0, 1, [31, 32, 34], [232, 72, 66]),
   orogenicSedimentSupply: colorField("orogenicSedimentSupply", 0, 0.05, [42, 37, 30], [229, 182, 78]),
   sediment: colorField("sediment", 0, 0.22, [27, 52, 71], [221, 206, 157]),
   basin: colorField("basin", 0, 0.7, [29, 55, 79], [110, 169, 187]),
@@ -98,6 +103,8 @@ for (const [name, colorFn] of Object.entries(layers)) {
   outputs.push(output);
 }
 
+const geologicSeaLevelDiagnostics = world.geologicSeaLevelDiagnostics ?? {};
+
 console.log(JSON.stringify({
   seedText,
   steps,
@@ -106,7 +113,11 @@ console.log(JSON.stringify({
   resolution,
   landRatio: world.stats.landRatio,
   seaRatio: world.stats.seaRatio,
+  baseSeaLevel: geologicSeaLevelDiagnostics.baseSeaLevel ?? world.baseSeaLevel ?? world.seaLevel,
   seaLevel: world.seaLevel,
+  geologicSeaLevelOffset: geologicSeaLevelDiagnostics.geologicSeaLevelOffset ?? world.geologicSeaLevelOffset ?? 0,
+  targetGeologicSeaLevelOffset: geologicSeaLevelDiagnostics.targetGeologicSeaLevelOffset ?? world.geologicSeaLevelTargetOffset ?? 0,
+  capacityBalance: geologicSeaLevelDiagnostics.capacityBalance ?? 0,
   outputs,
 }, null, 2));
 
