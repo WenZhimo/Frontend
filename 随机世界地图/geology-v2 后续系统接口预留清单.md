@@ -680,3 +680,66 @@ getter 变更：
 - `flatLandMask / largePlainMask` 是候选诊断，不等于“错误地形”。
 - `reliefDeficit` 初版只诊断，不自动修改 `elev` 或 `seaLevel`。
 - 后续反馈必须调节已有地质过程，不应直接加入随机噪声。
+
+## 20. 全球相对海平面与洋盆容量接口补充
+
+本轮新增 geology-v2 地质海平面耦合接口。最终海陆仍由 `elev >= seaLevel` 派生，但 `seaLevel` 现在拆成：
+
+```js
+seaLevel = baseSeaLevel + geologicSeaLevelOffset;
+```
+
+字段职责：
+
+- `baseSeaLevel`：基础 waterLevel / 总水量切线，不含地质偏移。
+- `geologicSeaLevelOffset`：由全球洋盆容量平衡推导出的单一 global scalar。
+- `seaLevel`：最终全局海平面，所有海陆、水体连通、陆架、被动陆缘和渲染逻辑统一读取它。
+- `geologicSeaLevelDiagnostics`：只读诊断对象，记录子信号、归一化值、容量平衡、变化率和陆海敏感性。
+
+新增 grid 诊断字段：
+
+- `ridgeVolumeSignal`
+- `oldOceanCapacitySignal`
+- `sedimentDisplacementSignal`
+- `trenchCapacitySignal`
+- `coastalSensitivity`
+- `isYoungOcean`
+
+接口层变更：
+
+- `getTerrainDerived(world)` 返回 `baseSeaLevel / geologicSeaLevelOffset / coastalSensitivity / ridgeVolumeSignal / oldOceanCapacitySignal / sedimentDisplacementSignal / trenchCapacitySignal`。
+- `getClimateInputs(world)` 返回 `seaLevel / baseSeaLevel / geologicSeaLevelOffset / coastalSensitivity`，供未来气候或冰量模块读取，但当前不实现气候 offset。
+- `getHydrologyInputs(world)` 返回 `seaLevel / baseSeaLevel / geologicSeaLevelOffset / coastalSensitivity`，并继续返回 `externalSeaMask / oceanConnectivity / inlandWaterCandidate / closedBasinId`。
+- `getResourceInputs(world)` 不直接依赖地质海平面偏移；资源系统仍优先读取构造、裂谷、造山和沉积字段。
+
+诊断约束：
+
+- `geologicSeaLevelOffset` 是 global scalar，不是 field。
+- 不新增 `geologicSeaLevelOffsetField`。
+- `youngOceanShare` 是由 `isYoungOcean` 和 oceanic cells 统计得到的 global scalar，不是 field。
+- `oceanBasinCapacitySignalMean / capacityBalance` 是组合诊断值，不维护独立 `oceanBasinCapacitySignal` grid field。
+- getter 只读，不推进 offset，不写回 `world`，不重新派生 `seaMask`。
+
+诊断指标新增：
+
+- `baseSeaLevel / finalSeaLevel / geologicSeaLevelOffset / targetGeologicSeaLevelOffset / seaLevelChangeRate`
+- `youngOceanShare / oldOceanShare`
+- `ridgeVolumeSignalMean / oldOceanCapacitySignalMean / sedimentDisplacementSignalMean / trenchCapacitySignalMean`
+- `ridgeVolumeNormalized / youngOceanNormalized / oldOceanCapacityNormalized / sedimentDisplacementNormalized / trenchCapacityNormalized`
+- `capacityBalance / oceanBasinCapacitySignalMean`
+- `coastalSensitivityMean / coastalFlipRisk / seaLevelCouplingStrength`
+- `landShareBeforeGeologicOffset / landShareAfterGeologicOffset / geologicSeaLevelLandShareDelta`
+
+debug 图层新增：
+
+- `ridgeVolumeSignal`
+- `oldOceanCapacitySignal`
+- `sedimentDisplacementSignal`
+- `trenchCapacitySignal`
+- `coastalSensitivity`
+
+接口约束：
+
+- 海陆后置不变，不直接绘制海岸线。
+- `inlandWaterCandidate` 仍只是低于最终 `seaLevel` 但未连通外海的候选状态，不是完整湖泊系统。
+- 本轮不是完整气候、冰盖、水文循环或风暴潮模型；未来若引入 `climateOffset / iceOffset`，应在全局 offset 层组合，而不是引入 per-cell sea level。

@@ -1255,3 +1255,151 @@ flatWorldRisk =
 ### 18.4 剩余限制
 
 当前版本只诊断，不启用反馈。后续若要自动调节，应分散到已有地质过程，例如降低过度平滑、保留旧造山根、压缩沉积填平收益，而不是直接给高程加随机噪声。撞击坑、热点、冰川、完整河网侵蚀和生物礁仍暂缓。
+
+## 19. 工程落地补充：全球相对海平面与洋盆容量耦合
+
+geology-v2 的海陆后置原则保持不变：最终海陆仍由 `elev >= seaLevel` 派生。新增的是对 `seaLevel` 的解释层：
+
+```js
+seaLevel = baseSeaLevel + geologicSeaLevelOffset;
+```
+
+`baseSeaLevel` 是基础 waterLevel / 总水量切线；`geologicSeaLevelOffset` 是全球洋盆容量变化导致的相对海平面偏移。该 offset 必须是 global scalar，不能是逐格字段，也不能生成 `geologicSeaLevelOffsetField`。所有下游的 sea mask、海洋连通、被动陆缘、大陆架、海岸和渲染只读取最终 `world.seaLevel`。
+
+### 19.1 容量信号
+
+年轻洋壳与洋中脊体积：
+
+```js
+isYoungOcean = oceanic && crustAge < youngAgeThreshold;
+
+ridgeVolumeSignal =
+  oceanic * clamp01(
+    ridgeUplift * 0.45
+    + ridge * 0.30
+    + ridgeAxis * 0.25
+    + max(0, 1 - crustAge / youngAgeThreshold) * 0.35
+  );
+```
+
+含义：年轻、热、低密度、浅的洋壳和活跃洋中脊会减少洋盆可用容量，使相对海平面升高。`youngOceanShare` 是 global scalar，由 `isYoungOcean` 在 oceanic cells 中统计得到，不是 field。
+
+老洋壳深洋盆容量：
+
+```js
+oldOceanCapacitySignal =
+  oldOceanic * clamp01(
+    depth * depthWeight
+    + max(0, -ageSubsidence) * ageWeight
+    + max(0, -oceanDepthTerms) * oceanDepthWeight
+  );
+```
+
+含义：老洋壳冷却、增密、下沉，深洋盆容量增加，使相对海平面降低。
+
+沉积容量排挤：
+
+```js
+sedimentDisplacementSignal =
+  clamp01(
+    sedimentFill * 0.45
+    + sedimentWedge * 0.35
+    + continentalRise * 0.15
+    + continentalShelf * 0.10
+    + sediment * 0.15
+  );
+```
+
+含义：沉积填平陆架、陆隆、边缘海和盆地，局部变浅，并小幅减少全球水体可用空间。它权重应低于 ridge / old ocean capacity，避免无限填海。
+
+海沟容量：
+
+```js
+trenchCapacitySignal =
+  oceanic * clamp01(
+    max(0, -trenchDepression) * trenchWeight
+    + trench * trenchFeatureWeight
+    + trenchAxis * trenchAxisWeight
+  );
+```
+
+含义：海沟增加局部深水容量，但面积小，不应主导全球海平面。
+
+### 19.2 归一化与 offset 推进
+
+子信号先做 centered normalization，再合成诊断值：
+
+```js
+capacityBalance =
+  ridgeN * ridgeWeight
+  + youngN * youngWeight
+  + sedimentN * sedimentWeight
+  - oldN * oldWeight
+  - trenchN * trenchWeight;
+
+targetGeologicSeaLevelOffset =
+  clamp(capacityBalance * maxOffset * seaLevelCouplingStrength, -maxOffset, maxOffset);
+
+geologicSeaLevelOffset =
+  moveToward(previousOffset, targetGeologicSeaLevelOffset, maxOffsetStep);
+```
+
+`capacityBalance > 0` 表示洋盆偏浅或被沉积排挤，海平面倾向升高；`capacityBalance < 0` 表示老洋盆和海沟容量占优，海平面倾向降低。`oceanBasinCapacitySignalMean` 可以作为 `capacityBalance` 的诊断别名，但不要维护独立 `oceanBasinCapacitySignal` grid field。
+
+同一个 `world.step` 内如果多次调用海平面更新，只允许推进一次 offset；后续调用只重新应用当前 offset 并刷新诊断。这样可兼容 geology-v2 pipeline 中多次 `updateSeaLevel -> deriveOceanConnectivity` 的结构。
+
+### 19.3 coastalSensitivity 与风险控制
+
+`coastalSensitivity` 是静态地貌敏感性诊断，供当前 `coastalFlipRisk` 和未来 climate/hydrology 读取：
+
+```js
+coastalSensitivity =
+  nearSeaLevel * 0.45
+  + lowSlope * 0.20
+  + lowRelief * 0.15
+  + shelfFactor * 0.20;
+```
+
+其中 `shelfFactor` 来自 `continentalShelf / passiveMargin / sedimentWedge / basin`。`coastalFlipRisk` 只用于限制单步海平面变化，不直接绘制水体，也不改变海陆后置原则。
+
+### 19.4 字段与诊断
+
+world 字段：
+
+- `baseSeaLevel`
+- `geologicSeaLevelOffset`
+- `geologicSeaLevelTargetOffset`
+- `geologicSeaLevelPreviousOffset`
+- `geologicSeaLevelStep`
+- `geologicSeaLevelDiagnostics`
+
+grid 诊断字段：
+
+- `ridgeVolumeSignal`
+- `oldOceanCapacitySignal`
+- `sedimentDisplacementSignal`
+- `trenchCapacitySignal`
+- `coastalSensitivity`
+- `isYoungOcean`
+
+诊断指标：
+
+- `baseSeaLevel / seaLevel / geologicSeaLevelOffset / targetGeologicSeaLevelOffset / seaLevelChangeRate`
+- `youngOceanShare / oldOceanShare`
+- `ridgeVolumeSignalMean / oldOceanCapacitySignalMean / sedimentDisplacementSignalMean / trenchCapacitySignalMean`
+- `ridgeVolumeNormalized / youngOceanNormalized / oldOceanCapacityNormalized / sedimentDisplacementNormalized / trenchCapacityNormalized`
+- `capacityBalance / oceanBasinCapacitySignalMean`
+- `coastalSensitivityMean / coastalFlipRisk / seaLevelCouplingStrength`
+- `landShareBeforeGeologicOffset / landShareAfterGeologicOffset / geologicSeaLevelLandShareDelta`
+
+debug 图层：
+
+- `ridgeVolumeSignal`
+- `oldOceanCapacitySignal`
+- `sedimentDisplacementSignal`
+- `trenchCapacitySignal`
+- `coastalSensitivity`
+
+### 19.5 剩余限制
+
+本轮不是完整水文、气候、冰量、风暴潮或局部湖面模型。`inlandWaterCandidate` 仍只是低于最终 `seaLevel` 但未连通外海的候选闭合盆地，不应被当成完成态湖泊。未来如引入 `climateOffset / iceOffset`，应与 `geologicSeaLevelOffset` 在全局海平面层组合，而不是引入 per-cell sea level。
