@@ -2,25 +2,34 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
+import { parseCsv, parseOptions } from "./lib/cli.mjs";
+import { loadWorldSnapshot } from "./lib/snapshot-cache.mjs";
 
-const seedText = process.argv[2] ?? "龙骨海-纪元7";
-const steps = Number(process.argv[3] ?? 200);
-const outDir = process.argv[4] ?? "_geology_debug";
-const pipelineMode = process.argv[5] ?? "geology-v2";
-const resolution = process.argv[6] ?? "512x256";
+const { positional, options } = parseOptions(process.argv.slice(2));
+const fromSnapshot = typeof options["from-snapshot"] === "string" ? options["from-snapshot"] : null;
+const seedText = fromSnapshot ? null : positional[0] ?? "龙骨海-纪元7";
+const steps = fromSnapshot ? 0 : Number(positional[1] ?? 200);
+const outDir = fromSnapshot ? positional[0] ?? "_geology_debug" : positional[2] ?? "_geology_debug";
+const pipelineMode = fromSnapshot ? null : positional[3] ?? "geology-v2";
+const resolution = fromSnapshot ? null : positional[4] ?? "512x256";
+const requestedLayers = new Set(parseCsv(options.layers, []));
 
-const world = createWorld({
-  seedText,
-  waterLevel: 50,
-  intensity: 1,
-  plateCount: 14,
-  timeScale: 1_000_000,
-  resolution,
-  pipelineMode,
-  showBoundaries: false,
-});
+const world = fromSnapshot
+  ? loadWorldSnapshot(fromSnapshot)
+  : createWorld({
+      seedText,
+      waterLevel: 50,
+      intensity: 1,
+      plateCount: 14,
+      timeScale: 1_000_000,
+      resolution,
+      pipelineMode,
+      showBoundaries: false,
+    });
 
-for (let i = 0; i < steps; i += 1) stepWorld(world);
+if (!fromSnapshot) {
+  for (let i = 0; i < steps; i += 1) stepWorld(world);
+}
 
 mkdirSync(outDir, { recursive: true });
 const layers = {
@@ -107,6 +116,7 @@ const layers = {
 
 const outputs = [];
 for (const [name, colorFn] of Object.entries(layers)) {
+  if (requestedLayers.size && !requestedLayers.has(name)) continue;
   const output = join(outDir, `${name}.ppm`);
   writePpm(world, output, colorFn);
   outputs.push(output);
@@ -116,11 +126,13 @@ const geologicSeaLevelDiagnostics = world.geologicSeaLevelDiagnostics ?? {};
 const sedimentBudgetDiagnostics = world.sedimentBudgetDiagnostics ?? {};
 
 console.log(JSON.stringify({
-  seedText,
-  steps,
+  seedText: seedText ?? world.snapshotMeta?.seedText ?? world.params?.seedText,
+  steps: world.step,
   ageYears: world.ageYears,
-  pipelineMode,
-  resolution,
+  pipelineMode: pipelineMode ?? world.snapshotMeta?.pipelineMode ?? world.params?.pipelineMode,
+  resolution: resolution ?? world.snapshotMeta?.resolution ?? world.params?.resolution,
+  fromSnapshot,
+  requestedLayers: [...requestedLayers],
   landRatio: world.stats.landRatio,
   seaRatio: world.stats.seaRatio,
   baseSeaLevel: geologicSeaLevelDiagnostics.baseSeaLevel ?? world.baseSeaLevel ?? world.seaLevel,
@@ -130,7 +142,7 @@ console.log(JSON.stringify({
   capacityBalance: geologicSeaLevelDiagnostics.capacityBalance ?? 0,
   sedimentBudgetDiagnostics,
   outputs,
-}, null, 2));
+}, null, 0));
 
 function writePpm(currentWorld, output, colorFn) {
   const { grid } = currentWorld;
