@@ -803,6 +803,8 @@ function measureSedimentBudgetDiagnostics(world) {
     sedimentCompactionMean: d.sedimentCompactionMean ?? average(world.grid.sedimentCompaction),
     sedimentLoadSubsidenceMean: d.sedimentLoadSubsidenceMean ?? average(world.grid.sedimentLoadSubsidence),
     sedimentBudgetError: d.sedimentBudgetError ?? average(world.grid.sedimentBudgetError),
+    sedimentResidualDissipation: d.sedimentResidualDissipation ?? 0,
+    sedimentResidualFlux: d.sedimentResidualFlux ?? 0,
     sedimentMassBefore: d.sedimentMassBefore ?? 0,
     sedimentMassAfter: d.sedimentMassAfter ?? sumField(world.grid.sediment),
     sedimentMassDelta: d.sedimentMassDelta ?? 0,
