@@ -757,7 +757,7 @@ debug 图层新增：
 - `sedimentCompaction`：沉积压实诊断。
 - `sedimentLoadSubsidence`：沉积负载沉降弱项。
 - `depositionRate / erosionRate`：本步速率诊断。
-- `sedimentBudgetError`：产沙、沉积、压实和残余耗散的预算误差。
+- `sedimentBudgetError`：本步产沙、沉积、残余耗散和剩余通量的运输闭合误差；压实作为存量变化由 `sedimentCompactionMean / sedimentMassDelta` 单独诊断。
 
 新增 world 诊断：
 
@@ -768,7 +768,7 @@ debug 图层新增：
 
 - `erosionSourceMean / erosionSourceTotal`
 - `depositionTotal / sedimentFluxMean / sedimentSinkMean / sedimentCapacityMean`
-- `sedimentCompactionMean / sedimentLoadSubsidenceMean / sedimentBudgetError`
+- `sedimentCompactionMean / sedimentLoadSubsidenceMean / sedimentBudgetError / sedimentResidualDissipation / sedimentResidualFlux`
 - `sedimentMassBefore / sedimentMassAfter / sedimentMassDelta`
 - `mountainErosionShare / passiveMarginDepositionShare / basinDepositionShare / trenchForearcDepositionShare / inlandBasinDepositionShare`
 - `sedimentOverfillShare / sedimentPatchiness / sedimentStraightnessRisk / sedimentSeaFillRisk`
@@ -799,3 +799,32 @@ debug 图层新增：
 - `sedimentSink` 是沉积汇诊断，不是完整水文 sink。
 - `sedimentLoadSubsidence` 可以影响高程，但幅度必须保持弱项，不能抹掉 active ridge / trench / islandArc / mountainBelt。
 - `sedimentBudgetError`、`sedimentOverfillShare`、`sedimentStraightnessRisk` 和 `sedimentSeaFillRisk` 应进入 long-run / resolution / interface 检查。
+
+## 22. 分层场测脚本接口补充
+
+新增测试侧公共模块，不改变正式模拟接口：
+
+- `tools/lib/world-runner.mjs`：`createCheckWorld` 与 `runToCheckpoints`，用于一次模拟采样多个 checkpoint。
+- `tools/lib/metrics-summary.mjs`：`compactMetrics` 与 `assessArtifactRisk`，用于 compact 输出和早停判断。
+- `tools/lib/snapshot-cache.mjs`：保存 / 读取测试快照，key 包含 seed、pipelineMode、resolution、step 和 git commit。
+- `tools/lib/cli.mjs`：统一解析 `--checkpoints / --layers / --snapshot-dir / --out` 等参数。
+
+新增命令：
+
+```powershell
+node .\tools\scenario-check.mjs '龙骨海-纪元7' geology-v2 512x256 --checkpoints 20,200,739
+node .\tools\artifact-scan.mjs --mode geology-v2 --resolution 256x128 --steps 300 --seeds 30 --sample-every 5
+node .\tools\perf-profile.mjs '龙骨海-纪元7' geology-v2 256x128 --steps 100
+```
+
+debug-render 新增参数：
+
+```powershell
+node .\tools\geology-debug-render.mjs _debug_fast --from-snapshot <snapshot-file> --layers sediment,sedimentSink,sedimentCapacity,basin,finalElevation
+```
+
+兼容性约束：
+
+- 旧 `geology-debug-render.mjs seed steps outDir mode resolution` 参数顺序保持可用。
+- 旧 `interface-check / long-run-check / resolution-check` 不降低输出和检查可信度。
+- 快照只作为测试产物，不参与正式 world 初始化或演化。

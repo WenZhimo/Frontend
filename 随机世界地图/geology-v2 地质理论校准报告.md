@@ -1442,7 +1442,7 @@ sedimentCapacity =
 - 使用有限 8 邻域局部坡向搬运，x 方向 wrap，y 方向不 wrap。
 - 邻域权重由下坡、盆地、前陆盆地、被动陆缘、陆架、陆隆、闭合盆地候选和深海平原吸引共同决定。
 - 使用 deterministic jitter / weakness / axisCurvature 打散规则路径，保持同一种子可复现。
-- 残余通量显式计入 `sedimentResidualDissipation`，不无声丢失。
+- 残余通量显式拆分为 `sedimentResidualDissipation` 与 `sedimentResidualFlux`，不无声丢失；`sedimentBudgetError` 只衡量当前步运输闭合，存量压实通过 `sedimentCompactionMean / sedimentMassDelta` 单独诊断。
 
 压实与递减收益：
 
@@ -1457,11 +1457,11 @@ sedimentFill = fillMax * (1 - exp(-sediment * fillScale));
 
 新增字段：`erosionSource / sedimentFlux / sedimentSink / sedimentCapacity / sedimentCompaction / sedimentLoadSubsidence / depositionRate / erosionRate / sedimentBudgetError`。
 
-新增诊断：`erosionSourceTotal / depositionTotal / sedimentBudgetError / sedimentMassDelta / mountainErosionShare / passiveMarginDepositionShare / basinDepositionShare / trenchForearcDepositionShare / inlandBasinDepositionShare / sedimentOverfillShare / sedimentPatchiness / sedimentStraightnessRisk / sedimentSeaFillRisk / sedimentShelfConcentration / sedimentAbyssalConcentration`。
+新增诊断：`erosionSourceTotal / depositionTotal / sedimentBudgetError / sedimentResidualDissipation / sedimentResidualFlux / sedimentMassDelta / mountainErosionShare / passiveMarginDepositionShare / basinDepositionShare / trenchForearcDepositionShare / inlandBasinDepositionShare / sedimentOverfillShare / sedimentPatchiness / sedimentStraightnessRisk / sedimentSeaFillRisk / sedimentShelfConcentration / sedimentAbyssalConcentration`。
 
 ### 20.3 验收关注
 
-- `sedimentBudgetError` 不应长期接近 1。
+- `sedimentBudgetError` 不应长期接近 1；它表示产沙、沉积、残余耗散和剩余通量的本步运输闭合误差，不直接把历史存量压实算作当前步产沙损失。
 - `sedimentOverfillShare` 不应在 739 Myr 全图饱和。
 - `sedimentSeaFillRisk` 不应显著偏高，避免大面积规则浅海被直接填成矩形或扇形陆地。
 - `sedimentStraightnessRisk` 应帮助定位旧边界/网格/贴图式色带风险。

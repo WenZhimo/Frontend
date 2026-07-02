@@ -228,6 +228,8 @@ const stats = {
   sedimentCompactionMean: sedimentBudget.sedimentCompactionMean ?? average(terrain.sedimentCompaction),
   sedimentLoadSubsidenceMean: sedimentBudget.sedimentLoadSubsidenceMean ?? average(terrain.sedimentLoadSubsidence),
   sedimentBudgetError: sedimentBudget.sedimentBudgetError ?? average(terrain.sedimentBudgetError),
+  sedimentResidualDissipation: sedimentBudget.sedimentResidualDissipation ?? 0,
+  sedimentResidualFlux: sedimentBudget.sedimentResidualFlux ?? 0,
   sedimentMassBefore: sedimentBudget.sedimentMassBefore ?? 0,
   sedimentMassAfter: sedimentBudget.sedimentMassAfter ?? sum(world.grid.sediment),
   sedimentMassDelta: sedimentBudget.sedimentMassDelta ?? 0,

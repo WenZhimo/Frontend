@@ -75,6 +75,11 @@ export function initializeBaseTerrain(world) {
   grid.oldBoundaryCorrelation.fill(0);
   grid.ageBandStraightnessRisk.fill(0);
   grid.ridgeDistance.fill(0);
+  grid.isostaticBase.fill(0);
+  grid.crustBuoyancy.fill(0);
+  grid.densitySubsidence.fill(0);
+  grid.lithosphereCooling.fill(0);
+  grid.isostaticResidual.fill(0);
   grid.ageSubsidence.fill(0);
   grid.thicknessBuoyancy.fill(0);
   grid.sedimentFill.fill(0);
