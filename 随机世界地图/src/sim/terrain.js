@@ -78,6 +78,15 @@ export function initializeBaseTerrain(world) {
   grid.ageSubsidence.fill(0);
   grid.thicknessBuoyancy.fill(0);
   grid.sedimentFill.fill(0);
+  grid.erosionSource.fill(0);
+  grid.sedimentFlux.fill(0);
+  grid.sedimentSink.fill(0);
+  grid.sedimentCapacity.fill(0);
+  grid.sedimentCompaction.fill(0);
+  grid.sedimentLoadSubsidence.fill(0);
+  grid.depositionRate.fill(0);
+  grid.erosionRate.fill(0);
+  grid.sedimentBudgetError.fill(0);
   grid.ridgeUplift.fill(0);
   grid.trenchDepression.fill(0);
   grid.oceanDepthTerms.fill(0);
@@ -92,6 +101,8 @@ export function initializeBaseTerrain(world) {
   world.geologicSeaLevelPreviousOffset = 0;
   world.geologicSeaLevelStep = -1;
   world.geologicSeaLevelDiagnostics = null;
+  world.sedimentBudgetStep = -1;
+  world.sedimentBudgetDiagnostics = null;
   initializeCrust(world);
   grid.crustReference.set(grid.crust);
   initializeCrustState(grid);

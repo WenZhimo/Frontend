@@ -23,6 +23,7 @@ const files = [
   "src/sim/geology/elevation.js",
   "src/sim/geology/reliefBudget.js",
   "src/sim/geology/seaLevel.js",
+  "src/sim/geology/sediment.js",
   "src/sim/geology/pipeline.js",
   "src/sim/derived/terrain.js",
   "src/sim/world.js",

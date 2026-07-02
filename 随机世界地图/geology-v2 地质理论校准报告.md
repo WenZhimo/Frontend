@@ -1403,3 +1403,70 @@ debug 图层：
 ### 19.5 剩余限制
 
 本轮不是完整水文、气候、冰量、风暴潮或局部湖面模型。`inlandWaterCandidate` 仍只是低于最终 `seaLevel` 但未连通外海的候选闭合盆地，不应被当成完成态湖泊。未来如引入 `climateOffset / iceOffset`，应与 `geologicSeaLevelOffset` 在全局海平面层组合，而不是引入 per-cell sea level。
+
+## 20. 工程落地补充：沉积预算闭环初版
+
+本轮已把报告中的“沉积物预算与搬运规则”落到 geology-v2 初版实现。核心变化是：`sediment` 不再主要由局部平流或背景老化直接累积解释，而是通过 `erosionSource -> sedimentFlux -> sedimentSink -> sedimentCapacity -> compaction/load subsidence -> diagnostics` 闭环解释。
+
+### 20.1 已实现规则
+
+产沙源：
+
+```js
+erosionSource = land * (
+  activeOrogeny
+  + mountainBelt
+  + oldOrogeny
+  + orogeny
+  + mountainAxis
+  + orographicBarrier
+  + slopeRelief
+  + riftShoulder
+) * activeConstructiveDamping;
+```
+
+沉积容量：
+
+```js
+sedimentCapacity =
+  shelfCapacity
+  + basinCapacity
+  + trenchForearcCapacity
+  + deepOceanCapacity
+  + nearOrBelowSeaCapacity
+  - activeRidgeOrMountainPenalty;
+```
+
+搬运方式：
+
+- 使用有限 8 邻域局部坡向搬运，x 方向 wrap，y 方向不 wrap。
+- 邻域权重由下坡、盆地、前陆盆地、被动陆缘、陆架、陆隆、闭合盆地候选和深海平原吸引共同决定。
+- 使用 deterministic jitter / weakness / axisCurvature 打散规则路径，保持同一种子可复现。
+- 残余通量显式计入 `sedimentResidualDissipation`，不无声丢失。
+
+压实与递减收益：
+
+```js
+sediment = min(maxSedimentByEnvironment, sediment + effectiveDeposit);
+sedimentCompaction = sediment * sediment * compactionRate;
+sedimentLoadSubsidence = sediment * loadWeight * crustTypeFactor;
+sedimentFill = fillMax * (1 - exp(-sediment * fillScale));
+```
+
+### 20.2 已实现字段与诊断
+
+新增字段：`erosionSource / sedimentFlux / sedimentSink / sedimentCapacity / sedimentCompaction / sedimentLoadSubsidence / depositionRate / erosionRate / sedimentBudgetError`。
+
+新增诊断：`erosionSourceTotal / depositionTotal / sedimentBudgetError / sedimentMassDelta / mountainErosionShare / passiveMarginDepositionShare / basinDepositionShare / trenchForearcDepositionShare / inlandBasinDepositionShare / sedimentOverfillShare / sedimentPatchiness / sedimentStraightnessRisk / sedimentSeaFillRisk / sedimentShelfConcentration / sedimentAbyssalConcentration`。
+
+### 20.3 验收关注
+
+- `sedimentBudgetError` 不应长期接近 1。
+- `sedimentOverfillShare` 不应在 739 Myr 全图饱和。
+- `sedimentSeaFillRisk` 不应显著偏高，避免大面积规则浅海被直接填成矩形或扇形陆地。
+- `sedimentStraightnessRisk` 应帮助定位旧边界/网格/贴图式色带风险。
+- `sedimentLoadSubsidence` 必须保持弱项，只解释厚沉积负载，不能抹掉活动构造地貌。
+
+### 20.4 剩余限制
+
+当前版本不是完整河网侵蚀，也没有真实降水、径流、三角洲、风暴搬运或生物碳酸盐平台。后续 hydrology 阶段可以读取本轮字段，但不应把 `sedimentSink` 当作完成态河流沉积系统。

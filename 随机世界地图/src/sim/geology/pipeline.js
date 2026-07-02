@@ -12,6 +12,7 @@ import { advectCrust } from "./plates.js";
 import { updateReliefBudgetDiagnostics } from "./reliefBudget.js";
 import { deriveOceanConnectivity, updateRiftStages } from "./rift.js";
 import { updateGeologicSeaLevel } from "./seaLevel.js";
+import { updateSedimentBudget } from "./sediment.js";
 import { suppressInactiveFractureRelief, updateTransformMemory } from "./transforms.js";
 
 export function runGeologyV2Step(world) {
@@ -23,6 +24,7 @@ export function runGeologyV2Step(world) {
   updateTectonicAxes(world);
   buildTectonicFeatures(world);
   updateOrogenicLifecycle(world);
+  updateSedimentBudget(world);
   rebuildGeologyElevation(world);
   if (!world.geologyV2SeaInitialized) {
     initializeSeaLevel(world);
@@ -67,7 +69,7 @@ function applyGeologyV2SurfaceAging(world) {
     oldOrogeny[i] = Math.max(oldOrogeny[i], orogeny[i] * inactive * inactive * 0.55);
     orogenyErosion[i] = Math.max(orogenyErosion[i], lostOrogeny);
     const lowOrPassive = inactive * (transitional ? 1.45 : oceanic && crustAge[i] > 0.45 ? 0.75 : 0.35);
-    sediment[i] = Math.min(1, sediment[i] + lostOrogeny * 0.22 + lowOrPassive * Math.max(0, 0.58 - crustThickness[i]) * 0.0022 * dt);
+    sediment[i] = Math.min(1, sediment[i] + lostOrogeny * 0.055 + lowOrPassive * Math.max(0, 0.58 - crustThickness[i]) * 0.00055 * dt);
     mountainBelt[i] *= Math.max(0, 1 - 0.009 * dt * inactive);
     trench[i] *= Math.max(0, 1 - 0.018 * dt);
     ridge[i] *= Math.max(0, 1 - 0.014 * dt);

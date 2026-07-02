@@ -51,6 +51,15 @@ const requiredFields = {
     "continentalRise",
     "abyssalPlain",
     "sedimentWedge",
+    "erosionSource",
+    "sedimentFlux",
+    "sedimentSink",
+    "sedimentCapacity",
+    "sedimentCompaction",
+    "sedimentLoadSubsidence",
+    "sedimentBudgetError",
+    "depositionRate",
+    "erosionRate",
     "forelandBasin",
     "orogenicSedimentSupply",
     "activeTransform",
@@ -107,6 +116,9 @@ const requiredFields = {
     "erodibility",
     "permeability",
     "sedimentSink",
+    "sediment",
+    "sedimentCapacity",
+    "basin",
     "drainageGradientPotential",
     "flatLandMask",
     "largePlainMask",
@@ -146,6 +158,9 @@ const requiredFields = {
     "volcanicArc",
     "riftStage",
     "passiveMargin",
+    "sediment",
+    "sedimentSink",
+    "basin",
     "sedimentaryBasin",
     "metamorphicBelt",
     "igneousProvince",
@@ -178,6 +193,7 @@ const hydrology = outputs.hydrology;
 const climate = outputs.climate;
 const biosphere = outputs.biosphere;
 const ageBandSplit = measureAgeBandStraightnessSplit(world.grid);
+const sedimentBudget = terrain.sedimentBudgetDiagnostics ?? {};
 
 const stats = {
   landRatio: share(terrain.landMask),
@@ -203,6 +219,29 @@ const stats = {
   abyssalPlainCoverage: coverage(terrain.abyssalPlain, 0.05),
   abyssalPlainFlatness: averageWhere(terrain.ruggedness, (i) => terrain.abyssalPlain[i] > 0.05),
   sedimentWedgeCoverage: coverage(terrain.sedimentWedge, 0.05),
+  erosionSourceMean: sedimentBudget.erosionSourceMean ?? average(terrain.erosionSource),
+  erosionSourceTotal: sedimentBudget.erosionSourceTotal ?? sum(terrain.erosionSource),
+  depositionTotal: sedimentBudget.depositionTotal ?? sum(terrain.sedimentSink),
+  sedimentFluxMean: sedimentBudget.sedimentFluxMean ?? average(terrain.sedimentFlux),
+  sedimentSinkMean: sedimentBudget.sedimentSinkMean ?? average(terrain.sedimentSink),
+  sedimentCapacityMean: sedimentBudget.sedimentCapacityMean ?? average(terrain.sedimentCapacity),
+  sedimentCompactionMean: sedimentBudget.sedimentCompactionMean ?? average(terrain.sedimentCompaction),
+  sedimentLoadSubsidenceMean: sedimentBudget.sedimentLoadSubsidenceMean ?? average(terrain.sedimentLoadSubsidence),
+  sedimentBudgetError: sedimentBudget.sedimentBudgetError ?? average(terrain.sedimentBudgetError),
+  sedimentMassBefore: sedimentBudget.sedimentMassBefore ?? 0,
+  sedimentMassAfter: sedimentBudget.sedimentMassAfter ?? sum(world.grid.sediment),
+  sedimentMassDelta: sedimentBudget.sedimentMassDelta ?? 0,
+  mountainErosionShare: sedimentBudget.mountainErosionShare ?? 0,
+  passiveMarginDepositionShare: sedimentBudget.passiveMarginDepositionShare ?? 0,
+  basinDepositionShare: sedimentBudget.basinDepositionShare ?? 0,
+  trenchForearcDepositionShare: sedimentBudget.trenchForearcDepositionShare ?? 0,
+  inlandBasinDepositionShare: sedimentBudget.inlandBasinDepositionShare ?? 0,
+  sedimentOverfillShare: sedimentBudget.sedimentOverfillShare ?? 0,
+  sedimentPatchiness: sedimentBudget.sedimentPatchiness ?? 0,
+  sedimentStraightnessRisk: sedimentBudget.sedimentStraightnessRisk ?? 0,
+  sedimentSeaFillRisk: sedimentBudget.sedimentSeaFillRisk ?? 0,
+  sedimentShelfConcentration: sedimentBudget.sedimentShelfConcentration ?? 0,
+  sedimentAbyssalConcentration: sedimentBudget.sedimentAbyssalConcentration ?? 0,
   closedBasinMisclassifiedAsMarginShare: conditionalShare(terrain.inlandWaterCandidate, (i) => terrain.inlandWaterCandidate[i], (i) => terrain.passiveMargin[i] > 0.05),
   activeBoundaryMisclassifiedAsPassiveMarginShare: conditionalShare(terrain.passiveMargin, (i) => terrain.passiveMargin[i] > 0.05, (i) => world.grid.boundaryInfluence[i] > 0.35 || world.grid.ridge[i] > 0.2 || world.grid.trench[i] > 0.2),
   activeTransformCoverage: coverage(terrain.activeTransform, 0.05),
@@ -388,6 +427,12 @@ function average(field) {
   let sum = 0;
   for (let i = 0; i < field.length; i += 1) sum += field[i];
   return sum / field.length;
+}
+
+function sum(field) {
+  let total = 0;
+  for (let i = 0; i < field.length; i += 1) total += field[i];
+  return total;
 }
 
 function averageWhere(field, include) {

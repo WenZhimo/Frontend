@@ -44,6 +44,7 @@ for (const resolution of resolutions) {
     oceanAgeDiagnostics: measureOceanAgeDiagnostics(world),
     riftDiagnostics: measureRiftDiagnostics(world),
     marginDiagnostics: measureMarginDiagnostics(world),
+    sedimentBudgetDiagnostics: measureSedimentBudgetDiagnostics(world),
     transformDiagnostics: measureTransformDiagnostics(world),
     orogenyDiagnostics: measureOrogenyDiagnostics(world),
     axisDiagnostics: measureAxisDiagnostics(world),
@@ -186,6 +187,12 @@ function measureCrustStats(grid) {
     crustAge: measureFieldStats(grid.crustAge, grid.size),
     orogeny: measureFieldStats(grid.orogeny, grid.size),
     sediment: measureFieldStats(grid.sediment, grid.size),
+    erosionSource: measureFieldStats(grid.erosionSource, grid.size),
+    sedimentFlux: measureFieldStats(grid.sedimentFlux, grid.size),
+    sedimentSink: measureFieldStats(grid.sedimentSink, grid.size),
+    sedimentCapacity: measureFieldStats(grid.sedimentCapacity, grid.size),
+    sedimentCompaction: measureFieldStats(grid.sedimentCompaction, grid.size),
+    sedimentLoadSubsidence: measureFieldStats(grid.sedimentLoadSubsidence, grid.size),
     basin: measureFieldStats(grid.basin, grid.size),
   };
   for (let i = 0; i < grid.size; i += 1) {
@@ -778,7 +785,45 @@ function measureGeologyRisks(world) {
     oldBoundarySeafloorSignal: measureOldBoundarySeafloorSignal(grid, seaLevel),
     inlandBasinRisk: measureInlandBasinRisk(grid, seaLevel),
     longStraightFeatureSignal: measureLongStraightFeatureSignal(grid),
+    sedimentStraightnessRisk: world.sedimentBudgetDiagnostics?.sedimentStraightnessRisk ?? 0,
+    sedimentSeaFillRisk: world.sedimentBudgetDiagnostics?.sedimentSeaFillRisk ?? 0,
+    sedimentOverfillShare: world.sedimentBudgetDiagnostics?.sedimentOverfillShare ?? 0,
   };
+}
+
+function measureSedimentBudgetDiagnostics(world) {
+  const d = world.sedimentBudgetDiagnostics ?? {};
+  return {
+    erosionSourceMean: d.erosionSourceMean ?? average(world.grid.erosionSource),
+    erosionSourceTotal: d.erosionSourceTotal ?? sumField(world.grid.erosionSource),
+    depositionTotal: d.depositionTotal ?? sumField(world.grid.sedimentSink),
+    sedimentFluxMean: d.sedimentFluxMean ?? average(world.grid.sedimentFlux),
+    sedimentSinkMean: d.sedimentSinkMean ?? average(world.grid.sedimentSink),
+    sedimentCapacityMean: d.sedimentCapacityMean ?? average(world.grid.sedimentCapacity),
+    sedimentCompactionMean: d.sedimentCompactionMean ?? average(world.grid.sedimentCompaction),
+    sedimentLoadSubsidenceMean: d.sedimentLoadSubsidenceMean ?? average(world.grid.sedimentLoadSubsidence),
+    sedimentBudgetError: d.sedimentBudgetError ?? average(world.grid.sedimentBudgetError),
+    sedimentMassBefore: d.sedimentMassBefore ?? 0,
+    sedimentMassAfter: d.sedimentMassAfter ?? sumField(world.grid.sediment),
+    sedimentMassDelta: d.sedimentMassDelta ?? 0,
+    mountainErosionShare: d.mountainErosionShare ?? 0,
+    passiveMarginDepositionShare: d.passiveMarginDepositionShare ?? 0,
+    basinDepositionShare: d.basinDepositionShare ?? 0,
+    trenchForearcDepositionShare: d.trenchForearcDepositionShare ?? 0,
+    inlandBasinDepositionShare: d.inlandBasinDepositionShare ?? 0,
+    sedimentOverfillShare: d.sedimentOverfillShare ?? 0,
+    sedimentPatchiness: d.sedimentPatchiness ?? 0,
+    sedimentStraightnessRisk: d.sedimentStraightnessRisk ?? 0,
+    sedimentSeaFillRisk: d.sedimentSeaFillRisk ?? 0,
+    sedimentShelfConcentration: d.sedimentShelfConcentration ?? 0,
+    sedimentAbyssalConcentration: d.sedimentAbyssalConcentration ?? 0,
+  };
+}
+
+function sumField(field) {
+  let total = 0;
+  for (let i = 0; i < field.length; i += 1) total += field[i];
+  return total;
 }
 
 function measureCoastBoundaryShare(grid, seaLevel) {
