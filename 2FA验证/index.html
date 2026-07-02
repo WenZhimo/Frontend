@@ -1,0 +1,1598 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>2FA Protocol Lab</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f12;
+      --panel: #111820;
+      --panel-2: #151f29;
+      --ink: #e9f2ef;
+      --muted: #92a6a0;
+      --line: #263741;
+      --accent: #65e4b8;
+      --accent-2: #ffce5c;
+      --bad: #ff6f7c;
+      --good: #7ef28f;
+      --blue: #7ab8ff;
+      --code: #071014;
+      --shadow: 0 18px 60px rgba(0, 0, 0, .35);
+      --radius: 8px;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        linear-gradient(90deg, rgba(101, 228, 184, .035) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(101, 228, 184, .025) 1px, transparent 1px),
+        radial-gradient(circle at 24% 8%, rgba(101, 228, 184, .12), transparent 34rem),
+        radial-gradient(circle at 90% 4%, rgba(255, 206, 92, .10), transparent 28rem),
+        var(--bg);
+      background-size: 28px 28px, 28px 28px, auto, auto, auto;
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    button, input, select, textarea {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #17222c;
+      color: var(--ink);
+      padding: .68rem .9rem;
+      cursor: pointer;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+
+    button:hover { transform: translateY(-1px); border-color: #426171; background: #1c2b36; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    button.primary {
+      color: #03130e;
+      background: var(--accent);
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+    button.warn { border-color: rgba(255, 111, 124, .55); color: #ffd6da; }
+    button.ghost { background: transparent; }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #0d151b;
+      color: var(--ink);
+      padding: .68rem .75rem;
+    }
+
+    textarea {
+      min-height: 7rem;
+      resize: vertical;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: .88rem;
+    }
+
+    label {
+      display: grid;
+      gap: .38rem;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(10, 15, 18, .82);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topbar {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 1rem clamp(1rem, 3vw, 2rem);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      gap: .85rem;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 2.45rem;
+      height: 2.45rem;
+      border: 1px solid rgba(101, 228, 184, .45);
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      color: var(--accent);
+      background: linear-gradient(135deg, rgba(101, 228, 184, .16), rgba(255, 206, 92, .08));
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-weight: 800;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.1rem, 2vw, 1.65rem);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-top: .25rem;
+      font-size: .9rem;
+    }
+
+    .status-strip {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: .5rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: .42rem .62rem;
+      background: rgba(17, 24, 32, .72);
+      color: var(--muted);
+      white-space: nowrap;
+      font-size: .82rem;
+    }
+    .pill.good { color: var(--good); border-color: rgba(126, 242, 143, .35); }
+    .pill.bad { color: var(--bad); border-color: rgba(255, 111, 124, .38); }
+    .pill.info { color: var(--blue); border-color: rgba(122, 184, 255, .35); }
+
+    main {
+      max-width: 1480px;
+      width: 100%;
+      margin: 0 auto;
+      padding: clamp(1rem, 3vw, 2rem);
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr) 360px;
+      gap: 1rem;
+      align-items: start;
+    }
+
+    nav, aside, section.card {
+      background: rgba(17, 24, 32, .88);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+    }
+
+    nav, aside {
+      position: sticky;
+      top: 5.7rem;
+      max-height: calc(100vh - 7rem);
+      overflow: auto;
+    }
+
+    nav {
+      padding: .65rem;
+    }
+
+    .nav-btn {
+      width: 100%;
+      text-align: left;
+      display: grid;
+      gap: .2rem;
+      margin-bottom: .45rem;
+      background: transparent;
+      border-color: transparent;
+      padding: .8rem .8rem;
+    }
+    .nav-btn strong { font-size: .98rem; }
+    .nav-btn span { color: var(--muted); font-size: .78rem; }
+    .nav-btn.active {
+      background: #1b2a34;
+      border-color: rgba(101, 228, 184, .4);
+      color: var(--accent);
+    }
+
+    .workbench {
+      display: grid;
+      gap: 1rem;
+      min-width: 0;
+    }
+
+    section.card {
+      padding: clamp(1rem, 2vw, 1.35rem);
+      display: none;
+      overflow: hidden;
+    }
+    section.card.active { display: grid; gap: 1rem; }
+
+    .section-head {
+      display: grid;
+      gap: .45rem;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 1rem;
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: clamp(1.25rem, 2vw, 1.8rem);
+      letter-spacing: 0;
+    }
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: .85rem;
+    }
+    .col-3 { grid-column: span 3; }
+    .col-4 { grid-column: span 4; }
+    .col-5 { grid-column: span 5; }
+    .col-6 { grid-column: span 6; }
+    .col-7 { grid-column: span 7; }
+    .col-8 { grid-column: span 8; }
+    .col-12 { grid-column: 1 / -1; }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(21, 31, 41, .72);
+      padding: 1rem;
+      min-width: 0;
+    }
+
+    .panel h3 {
+      margin: 0 0 .85rem;
+      font-size: 1rem;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .6rem;
+      align-items: center;
+    }
+
+    .big-code {
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: clamp(2.2rem, 8vw, 5.4rem);
+      line-height: .95;
+      letter-spacing: .05em;
+      color: var(--accent);
+      padding: .8rem 0 .4rem;
+      overflow-wrap: anywhere;
+    }
+
+    .meter {
+      height: .6rem;
+      background: #0b1217;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .meter > span {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width .25s linear;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: minmax(8rem, 34%) minmax(0, 1fr);
+      gap: .45rem .85rem;
+      align-items: baseline;
+      font-size: .9rem;
+    }
+    .kv dt {
+      margin: 0;
+      color: var(--muted);
+    }
+    .kv dd {
+      margin: 0;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-family: "Cascadia Code", Consolas, monospace;
+    }
+
+    pre, code {
+      font-family: "Cascadia Code", Consolas, monospace;
+    }
+    pre {
+      margin: 0;
+      background: var(--code);
+      border: 1px solid #1f333c;
+      border-radius: 10px;
+      padding: .9rem;
+      overflow: auto;
+      max-height: 24rem;
+      color: #d9fff3;
+      font-size: .82rem;
+      line-height: 1.45;
+    }
+
+    .copy-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: .6rem;
+      align-items: end;
+    }
+
+    aside {
+      padding: 1rem;
+      display: grid;
+      gap: 1rem;
+    }
+    .inspector-head {
+      display: flex;
+      justify-content: space-between;
+      gap: .75rem;
+      align-items: start;
+    }
+    .inspector-head h2 {
+      margin: 0;
+      font-size: 1.08rem;
+    }
+    .steps {
+      counter-reset: step;
+      display: grid;
+      gap: .55rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .steps li {
+      counter-increment: step;
+      display: grid;
+      grid-template-columns: 1.8rem 1fr;
+      gap: .6rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .steps li::before {
+      content: counter(step);
+      width: 1.6rem;
+      height: 1.6rem;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      background: #1b2a34;
+      color: var(--accent);
+      font-weight: 700;
+      font-size: .82rem;
+    }
+
+    .toast {
+      position: fixed;
+      right: 1rem;
+      bottom: 1rem;
+      z-index: 50;
+      display: grid;
+      gap: .5rem;
+      max-width: min(420px, calc(100vw - 2rem));
+    }
+    .toast-item {
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      background: #111820;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: .75rem .9rem;
+      box-shadow: var(--shadow);
+    }
+    .toast-item.bad { border-left-color: var(--bad); }
+    .toast-item.good { border-left-color: var(--good); }
+
+    .note {
+      border: 1px solid rgba(255, 206, 92, .35);
+      background: rgba(255, 206, 92, .08);
+      color: #ffe8ad;
+      border-radius: 10px;
+      padding: .85rem;
+      line-height: 1.5;
+    }
+    .ok {
+      color: var(--good);
+    }
+    .fail {
+      color: var(--bad);
+    }
+    .muted {
+      color: var(--muted);
+    }
+    .small {
+      font-size: .84rem;
+    }
+
+    @media (max-width: 1180px) {
+      main {
+        grid-template-columns: 220px minmax(0, 1fr);
+      }
+      aside {
+        grid-column: 1 / -1;
+        position: static;
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .topbar {
+        grid-template-columns: 1fr;
+      }
+      .status-strip {
+        justify-content: flex-start;
+      }
+      main {
+        grid-template-columns: 1fr;
+      }
+      nav {
+        position: static;
+        max-height: none;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .nav-btn {
+        margin: 0;
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .col-3, .col-4, .col-5, .col-6, .col-7, .col-8, .col-12 {
+        grid-column: 1;
+      }
+      .copy-row {
+        grid-template-columns: 1fr;
+      }
+      .kv {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="topbar">
+        <div class="brand">
+          <div class="mark" aria-hidden="true">2F</div>
+          <div>
+            <h1>2FA Protocol Lab</h1>
+            <div class="subtitle">纯前端 TOTP / HOTP / WebAuthn / Passkey 教学实验室</div>
+          </div>
+        </div>
+        <div class="status-strip" aria-label="运行环境状态">
+          <span id="secure-status" class="pill">检测安全上下文</span>
+          <span id="webauthn-status" class="pill">检测 WebAuthn</span>
+          <span id="storage-status" class="pill">本地存储</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <nav aria-label="模块导航">
+        <button class="nav-btn active" data-target="totp"><strong>TOTP</strong><span>RFC 6238 时间验证码</span></button>
+        <button class="nav-btn" data-target="hotp"><strong>HOTP</strong><span>RFC 4226 计数器验证码</span></button>
+        <button class="nav-btn" data-target="otpauth"><strong>otpauth URI</strong><span>Authenticator 导入格式</span></button>
+        <button class="nav-btn" data-target="webauthn"><strong>WebAuthn</strong><span>注册、验证与断言</span></button>
+        <button class="nav-btn" data-target="passkey"><strong>Passkey</strong><span>Discoverable Credential</span></button>
+        <button class="nav-btn" data-target="tests"><strong>RFC Tests</strong><span>向量校验与浏览器能力</span></button>
+      </nav>
+
+      <div class="workbench">
+        <section id="totp" class="card active" aria-labelledby="totp-title">
+          <div class="section-head">
+            <h2 id="totp-title">TOTP：时间窗口里的 HOTP</h2>
+            <p>把 Unix 时间除以周期得到 counter，再用 HMAC + 动态截断生成验证码。这里会展示当前时间步、HMAC、offset 和截断值。</p>
+          </div>
+          <div class="grid">
+            <div class="panel col-7">
+              <h3>当前验证码</h3>
+              <div id="totp-code" class="big-code">------</div>
+              <div class="meter" aria-label="当前周期剩余进度"><span id="totp-meter"></span></div>
+              <dl class="kv" style="margin-top: .9rem">
+                <dt>剩余秒数</dt><dd id="totp-left">-</dd>
+                <dt>Time Counter</dt><dd id="totp-counter">-</dd>
+                <dt>动态截断 Offset</dt><dd id="totp-offset">-</dd>
+                <dt>31-bit Binary Code</dt><dd id="totp-binary">-</dd>
+              </dl>
+            </div>
+            <div class="panel col-5">
+              <h3>参数</h3>
+              <div class="grid">
+                <label class="col-12">Base32 Secret
+                  <input id="totp-secret" autocomplete="off" spellcheck="false">
+                </label>
+                <label class="col-4">算法
+                  <select id="totp-algo">
+                    <option>SHA-1</option>
+                    <option>SHA-256</option>
+                    <option>SHA-512</option>
+                  </select>
+                </label>
+                <label class="col-4">位数
+                  <select id="totp-digits">
+                    <option>6</option>
+                    <option>8</option>
+                  </select>
+                </label>
+                <label class="col-4">周期
+                  <input id="totp-period" type="number" min="5" step="5" value="30">
+                </label>
+                <div class="actions col-12">
+                  <button id="totp-random" class="primary">生成 Secret</button>
+                  <button id="totp-copy">复制验证码</button>
+                  <button id="totp-save" class="ghost">保存参数</button>
+                </div>
+              </div>
+            </div>
+            <div class="panel col-12">
+              <h3>HMAC 与截断</h3>
+              <pre id="totp-debug">等待计算...</pre>
+            </div>
+          </div>
+        </section>
+
+        <section id="hotp" class="card" aria-labelledby="hotp-title">
+          <div class="section-head">
+            <h2 id="hotp-title">HOTP：由计数器驱动的一次性密码</h2>
+            <p>HOTP 使用共享 secret 和 8 字节 counter 做 HMAC。每次使用后 counter 应递增；服务端负责同步并防重放。</p>
+          </div>
+          <div class="grid">
+            <div class="panel col-7">
+              <h3>生成结果</h3>
+              <div id="hotp-code" class="big-code">------</div>
+              <dl class="kv">
+                <dt>Counter</dt><dd id="hotp-counter-view">-</dd>
+                <dt>Offset</dt><dd id="hotp-offset">-</dd>
+                <dt>31-bit Binary Code</dt><dd id="hotp-binary">-</dd>
+              </dl>
+            </div>
+            <div class="panel col-5">
+              <h3>参数</h3>
+              <div class="grid">
+                <label class="col-12">Base32 Secret
+                  <input id="hotp-secret" autocomplete="off" spellcheck="false">
+                </label>
+                <label class="col-4">Counter
+                  <input id="hotp-counter" type="number" min="0" step="1" value="0">
+                </label>
+                <label class="col-4">算法
+                  <select id="hotp-algo">
+                    <option>SHA-1</option>
+                    <option>SHA-256</option>
+                    <option>SHA-512</option>
+                  </select>
+                </label>
+                <label class="col-4">位数
+                  <select id="hotp-digits">
+                    <option>6</option>
+                    <option>8</option>
+                  </select>
+                </label>
+                <div class="actions col-12">
+                  <button id="hotp-generate" class="primary">生成 HOTP</button>
+                  <button id="hotp-next">生成并递增</button>
+                  <button id="hotp-reset" class="ghost">重置 Counter</button>
+                  <button id="hotp-random" class="ghost">生成 Secret</button>
+                </div>
+              </div>
+            </div>
+            <div class="panel col-12">
+              <h3>HMAC 与截断</h3>
+              <pre id="hotp-debug">等待生成...</pre>
+            </div>
+          </div>
+        </section>
+
+        <section id="otpauth" class="card" aria-labelledby="otpauth-title">
+          <div class="section-head">
+            <h2 id="otpauth-title">otpauth URI：验证器 App 的导入格式</h2>
+            <p>Google Authenticator、1Password、Bitwarden 等工具通常用这个 URI 表示 TOTP/HOTP 参数。这里可以生成和反向解析。</p>
+          </div>
+          <div class="grid">
+            <div class="panel col-6">
+              <h3>生成 URI</h3>
+              <div class="grid">
+                <label class="col-4">类型
+                  <select id="otp-type">
+                    <option value="totp">TOTP</option>
+                    <option value="hotp">HOTP</option>
+                  </select>
+                </label>
+                <label class="col-4">Issuer
+                  <input id="otp-issuer" value="Protocol Lab">
+                </label>
+                <label class="col-4">Account
+                  <input id="otp-account" value="demo@example.com">
+                </label>
+                <label class="col-12">Secret
+                  <input id="otp-secret" autocomplete="off" spellcheck="false">
+                </label>
+                <label class="col-3">算法
+                  <select id="otp-algo">
+                    <option>SHA1</option>
+                    <option>SHA256</option>
+                    <option>SHA512</option>
+                  </select>
+                </label>
+                <label class="col-3">位数
+                  <select id="otp-digits">
+                    <option>6</option>
+                    <option>8</option>
+                  </select>
+                </label>
+                <label class="col-3">周期
+                  <input id="otp-period" type="number" min="5" step="5" value="30">
+                </label>
+                <label class="col-3">Counter
+                  <input id="otp-counter" type="number" min="0" step="1" value="0">
+                </label>
+                <div class="actions col-12">
+                  <button id="otp-build" class="primary">生成 URI</button>
+                  <button id="otp-use-totp">使用 TOTP 参数</button>
+                  <button id="otp-use-hotp">使用 HOTP 参数</button>
+                </div>
+              </div>
+            </div>
+            <div class="panel col-6">
+              <h3>解析 URI</h3>
+              <label>otpauth URI
+                <textarea id="otp-uri" spellcheck="false"></textarea>
+              </label>
+              <div class="actions" style="margin-top: .75rem">
+                <button id="otp-parse" class="primary">解析</button>
+                <button id="otp-copy">复制 URI</button>
+              </div>
+            </div>
+            <div class="panel col-12">
+              <h3>解析结果</h3>
+              <pre id="otp-result">等待生成或解析...</pre>
+            </div>
+          </div>
+        </section>
+
+        <section id="webauthn" class="card" aria-labelledby="webauthn-title">
+          <div class="section-head">
+            <h2 id="webauthn-title">WebAuthn：浏览器、认证器与 Relying Party</h2>
+            <p>前端可以发起注册和验证，但生产系统的 challenge、状态保存、签名验证和防重放应由服务端完成。本页面只做教学模拟。</p>
+          </div>
+          <div class="note">WebAuthn 通常要求 HTTPS 或 localhost。直接双击打开文件时，多数浏览器会拒绝创建凭证。</div>
+          <div class="grid">
+            <div class="panel col-6">
+              <h3>注册 create()</h3>
+              <div class="grid">
+                <label class="col-6">RP Name
+                  <input id="wa-rp-name" value="2FA Protocol Lab">
+                </label>
+                <label class="col-6">User Name
+                  <input id="wa-user-name" value="demo@example.com">
+                </label>
+                <label class="col-4">Resident Key
+                  <select id="wa-resident">
+                    <option value="preferred">preferred</option>
+                    <option value="required">required</option>
+                    <option value="discouraged">discouraged</option>
+                  </select>
+                </label>
+                <label class="col-4">User Verification
+                  <select id="wa-uv">
+                    <option value="preferred">preferred</option>
+                    <option value="required">required</option>
+                    <option value="discouraged">discouraged</option>
+                  </select>
+                </label>
+                <label class="col-4">Attestation
+                  <select id="wa-attestation">
+                    <option value="none">none</option>
+                    <option value="direct">direct</option>
+                    <option value="indirect">indirect</option>
+                    <option value="enterprise">enterprise</option>
+                  </select>
+                </label>
+                <label class="col-6">算法
+                  <select id="wa-alg">
+                    <option value="-7">ES256 (-7)</option>
+                    <option value="-257">RS256 (-257)</option>
+                  </select>
+                </label>
+                <label class="col-6">Timeout ms
+                  <input id="wa-timeout" type="number" value="60000" min="1000" step="1000">
+                </label>
+                <div class="actions col-12">
+                  <button id="wa-register" class="primary">注册凭证</button>
+                  <button id="wa-show-create">只展示 create 参数</button>
+                </div>
+              </div>
+            </div>
+            <div class="panel col-6">
+              <h3>验证 get()</h3>
+              <div class="grid">
+                <label class="col-6">Allow Credential
+                  <select id="wa-allow">
+                    <option value="known">使用已保存 credential</option>
+                    <option value="empty">空列表 / Passkey 发现式</option>
+                  </select>
+                </label>
+                <label class="col-6">User Verification
+                  <select id="wa-get-uv">
+                    <option value="preferred">preferred</option>
+                    <option value="required">required</option>
+                    <option value="discouraged">discouraged</option>
+                  </select>
+                </label>
+                <div class="actions col-12">
+                  <button id="wa-auth" class="primary">验证凭证</button>
+                  <button id="wa-show-get">只展示 get 参数</button>
+                  <button id="wa-clear" class="warn">清空 WebAuthn 数据</button>
+                </div>
+              </div>
+              <dl class="kv" style="margin-top: 1rem">
+                <dt>Credential ID</dt><dd id="wa-cred-id">未注册</dd>
+                <dt>Sign Count</dt><dd id="wa-sign-count">-</dd>
+              </dl>
+            </div>
+            <div class="panel col-12">
+              <h3>WebAuthn Inspector</h3>
+              <pre id="wa-result">等待操作...</pre>
+            </div>
+          </div>
+        </section>
+
+        <section id="passkey" class="card" aria-labelledby="passkey-title">
+          <div class="section-head">
+            <h2 id="passkey-title">Passkey：基于 WebAuthn 的可发现凭证</h2>
+            <p>Passkey 不是网页能读取的“密码”。它通常是同步或平台管理的私钥凭证，网页只能请求浏览器/系统创建或使用它。</p>
+          </div>
+          <div class="grid">
+            <div class="panel col-6">
+              <h3>能力检测</h3>
+              <dl class="kv">
+                <dt>PublicKeyCredential</dt><dd id="pkc-support">检测中</dd>
+                <dt>平台认证器</dt><dd id="platform-support">检测中</dd>
+                <dt>条件式 UI</dt><dd id="conditional-support">检测中</dd>
+                <dt>安全上下文</dt><dd id="passkey-secure">检测中</dd>
+              </dl>
+              <div class="actions" style="margin-top: 1rem">
+                <button id="passkey-check" class="primary">重新检测</button>
+              </div>
+            </div>
+            <div class="panel col-6">
+              <h3>Passkey 注册建议参数</h3>
+              <pre id="passkey-options"></pre>
+            </div>
+            <div class="panel col-12">
+              <h3>教学提示</h3>
+              <pre id="passkey-notes"></pre>
+            </div>
+          </div>
+        </section>
+
+        <section id="tests" class="card" aria-labelledby="tests-title">
+          <div class="section-head">
+            <h2 id="tests-title">RFC 测试向量与运行环境检查</h2>
+            <p>用 RFC 4226 和 RFC 6238 的官方测试向量验证核心算法。WebAuthn 部分以浏览器运行能力和错误路径为主。</p>
+          </div>
+          <div class="grid">
+            <div class="panel col-12">
+              <div class="actions">
+                <button id="run-tests" class="primary">运行全部测试</button>
+                <button id="clear-store" class="warn">清空所有本地演示数据</button>
+              </div>
+            </div>
+            <div class="panel col-12">
+              <h3>测试结果</h3>
+              <pre id="test-output">尚未运行。</pre>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <aside aria-label="协议步骤和原始数据">
+        <div class="inspector-head">
+          <div>
+            <h2 id="inspector-title">TOTP 步骤</h2>
+            <div class="muted small">随当前模块更新</div>
+          </div>
+          <button id="copy-inspector" class="ghost">复制</button>
+        </div>
+        <ol id="steps" class="steps"></ol>
+        <div>
+          <h2 style="font-size: 1rem">Raw Inspector</h2>
+          <pre id="raw-inspector">选择模块或执行操作后显示结构化数据。</pre>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
+
+  <script>
+    const STORE_KEY = "twofa-protocol-lab-v1";
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+    const state = {
+      active: "totp",
+      lastRaw: {},
+      totpTimer: null,
+      store: loadStore()
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const $$ = (selector) => [...document.querySelectorAll(selector)];
+
+    const steps = {
+      totp: [
+        "把 Base32 secret 解码成共享密钥字节。",
+        "计算 floor(unixTime / period) 得到 8 字节 counter。",
+        "用 HMAC(secret, counter) 生成摘要。",
+        "读取摘要最后 4 bit 作为 offset，截取 4 字节并清掉最高位。",
+        "对 10^digits 取模，左侧补零得到验证码。"
+      ],
+      hotp: [
+        "把 Base32 secret 解码成共享密钥字节。",
+        "把 counter 写成 8 字节大端整数。",
+        "用 HMAC(secret, counterBytes) 生成摘要。",
+        "执行 RFC 4226 动态截断。",
+        "服务端验证成功后递增 counter，避免同一 OTP 重放。"
+      ],
+      otpauth: [
+        "把类型写入 otpauth://totp 或 otpauth://hotp。",
+        "label 通常使用 issuer:account 并做 URL 编码。",
+        "secret、issuer、algorithm、digits、period/counter 写入 query。",
+        "Authenticator App 扫码后按这些参数生成 TOTP/HOTP。",
+        "URI 暴露 secret，演示时不要放真实账号。"
+      ],
+      webauthn: [
+        "Relying Party 生成 challenge，并把创建/验证选项交给浏览器。",
+        "浏览器检查 origin、RP ID、安全上下文和用户手势。",
+        "认证器创建或使用私钥，网页无法读取私钥。",
+        "浏览器返回 clientDataJSON、authenticatorData、签名或 attestationObject。",
+        "生产服务端验证 challenge、origin、RP ID hash、签名和 signCount。"
+      ],
+      passkey: [
+        "Passkey 是 WebAuthn discoverable credential 的常见产品形态。",
+        "residentKey preferred/required 让认证器保存可发现凭证。",
+        "userVerification preferred/required 请求系统 PIN、生物识别或设备解锁。",
+        "登录时 allowCredentials 可为空，让浏览器显示可用 Passkey。",
+        "同步和私钥保护由系统、浏览器或密码管理器处理。"
+      ],
+      tests: [
+        "运行 HOTP RFC 4226 counter 0-9 测试向量。",
+        "运行 TOTP RFC 6238 SHA-1/SHA-256/SHA-512 测试向量。",
+        "验证 Base32、otpauth URI 和浏览器能力。",
+        "失败时查看实际值和期望值，定位算法或环境问题。"
+      ]
+    };
+
+    function loadStore() {
+      try {
+        return JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveStore() {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state.store));
+      updateStatus();
+    }
+
+    function toast(message, type = "") {
+      const item = document.createElement("div");
+      item.className = `toast-item ${type}`;
+      item.textContent = message;
+      $("toast").appendChild(item);
+      setTimeout(() => item.remove(), 4200);
+    }
+
+    function setRaw(title, data) {
+      state.lastRaw = data;
+      $("raw-inspector").textContent = JSON.stringify(data, null, 2);
+      $("inspector-title").textContent = `${title} 步骤`;
+    }
+
+    function switchModule(id) {
+      state.active = id;
+      $$(".nav-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.target === id));
+      $$("section.card").forEach((section) => section.classList.toggle("active", section.id === id));
+      $("steps").innerHTML = steps[id].map((step) => `<li>${escapeHtml(step)}</li>`).join("");
+      $("inspector-title").textContent = `${moduleTitle(id)} 步骤`;
+      if (id === "passkey") checkPasskey();
+    }
+
+    function moduleTitle(id) {
+      return { totp: "TOTP", hotp: "HOTP", otpauth: "otpauth URI", webauthn: "WebAuthn", passkey: "Passkey", tests: "RFC Tests" }[id] || id;
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+    }
+
+    function bytesToHex(bytes) {
+      return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function hexToBytes(hex) {
+      const clean = hex.replace(/[^a-fA-F0-9]/g, "");
+      const out = new Uint8Array(clean.length / 2);
+      for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+      return out;
+    }
+
+    function bytesToBase64Url(bytes) {
+      const bin = [...new Uint8Array(bytes)].map((b) => String.fromCharCode(b)).join("");
+      return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    }
+
+    function base64UrlToBytes(value) {
+      const b64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+      return Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+    }
+
+    function randomBytes(length) {
+      const out = new Uint8Array(length);
+      crypto.getRandomValues(out);
+      return out;
+    }
+
+    const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+    function base32Encode(bytes) {
+      let bits = 0;
+      let value = 0;
+      let output = "";
+      for (const byte of bytes) {
+        value = (value << 8) | byte;
+        bits += 8;
+        while (bits >= 5) {
+          output += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+          bits -= 5;
+        }
+      }
+      if (bits > 0) output += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+      return output;
+    }
+
+    function base32Decode(input) {
+      const clean = input.toUpperCase().replace(/=+$/g, "").replace(/[\s-]/g, "");
+      let bits = 0;
+      let value = 0;
+      const out = [];
+      for (const ch of clean) {
+        const idx = BASE32_ALPHABET.indexOf(ch);
+        if (idx === -1) throw new Error(`Base32 包含非法字符: ${ch}`);
+        value = (value << 5) | idx;
+        bits += 5;
+        if (bits >= 8) {
+          out.push((value >>> (bits - 8)) & 255);
+          bits -= 8;
+        }
+      }
+      return new Uint8Array(out);
+    }
+
+    function counterToBytes(counter) {
+      const out = new ArrayBuffer(8);
+      const view = new DataView(out);
+      const big = BigInt(counter);
+      view.setUint32(0, Number((big >> 32n) & 0xffffffffn));
+      view.setUint32(4, Number(big & 0xffffffffn));
+      return new Uint8Array(out);
+    }
+
+    async function hmac(algo, keyBytes, messageBytes) {
+      const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: algo }, false, ["sign"]);
+      return new Uint8Array(await crypto.subtle.sign("HMAC", key, messageBytes));
+    }
+
+    async function hotp(secretBase32, counter, digits = 6, algo = "SHA-1") {
+      const key = base32Decode(secretBase32);
+      const counterBytes = counterToBytes(counter);
+      const digest = await hmac(algo, key, counterBytes);
+      const offset = digest[digest.length - 1] & 0x0f;
+      const binary =
+        ((digest[offset] & 0x7f) << 24) |
+        ((digest[offset + 1] & 0xff) << 16) |
+        ((digest[offset + 2] & 0xff) << 8) |
+        (digest[offset + 3] & 0xff);
+      const mod = 10 ** Number(digits);
+      return {
+        code: String(binary % mod).padStart(Number(digits), "0"),
+        keyHex: bytesToHex(key),
+        counter,
+        counterHex: bytesToHex(counterBytes),
+        digestHex: bytesToHex(digest),
+        offset,
+        binary,
+        digits: Number(digits),
+        algorithm: algo
+      };
+    }
+
+    async function totp(secretBase32, period, digits, algo, time = Date.now()) {
+      const unix = Math.floor(time / 1000);
+      const counter = Math.floor(unix / Number(period));
+      return { ...(await hotp(secretBase32, counter, digits, algo)), unix, period: Number(period), remaining: Number(period) - (unix % Number(period)) };
+    }
+
+    function normalizeAlgo(value) {
+      return value.replace("SHA1", "SHA-1").replace("SHA256", "SHA-256").replace("SHA512", "SHA-512");
+    }
+
+    function initDefaults() {
+      const defaultSecret = state.store.totpSecret || base32Encode(randomBytes(20));
+      $("totp-secret").value = defaultSecret;
+      $("hotp-secret").value = state.store.hotpSecret || defaultSecret;
+      $("otp-secret").value = state.store.otpSecret || defaultSecret;
+      $("hotp-counter").value = state.store.hotpCounter ?? 0;
+      $("totp-algo").value = state.store.totpAlgo || "SHA-1";
+      $("totp-digits").value = state.store.totpDigits || "6";
+      $("totp-period").value = state.store.totpPeriod || 30;
+      updateCredentialView();
+    }
+
+    async function refreshTotp() {
+      try {
+        const result = await totp($("totp-secret").value, $("totp-period").value, $("totp-digits").value, $("totp-algo").value);
+        $("totp-code").textContent = result.code;
+        $("totp-left").textContent = `${result.remaining}s`;
+        $("totp-counter").textContent = result.counter;
+        $("totp-offset").textContent = result.offset;
+        $("totp-binary").textContent = result.binary;
+        $("totp-meter").style.width = `${(result.remaining / result.period) * 100}%`;
+        $("totp-debug").textContent = JSON.stringify(result, null, 2);
+        setRaw("TOTP", result);
+      } catch (error) {
+        $("totp-code").textContent = "ERROR";
+        $("totp-debug").textContent = error.message;
+      }
+    }
+
+    async function generateHotp(increment = false) {
+      try {
+        const counter = Number($("hotp-counter").value);
+        const result = await hotp($("hotp-secret").value, counter, $("hotp-digits").value, $("hotp-algo").value);
+        $("hotp-code").textContent = result.code;
+        $("hotp-counter-view").textContent = counter;
+        $("hotp-offset").textContent = result.offset;
+        $("hotp-binary").textContent = result.binary;
+        $("hotp-debug").textContent = JSON.stringify(result, null, 2);
+        if (increment) $("hotp-counter").value = counter + 1;
+        state.store.hotpCounter = Number($("hotp-counter").value);
+        state.store.hotpSecret = $("hotp-secret").value;
+        saveStore();
+        setRaw("HOTP", result);
+      } catch (error) {
+        $("hotp-debug").textContent = error.message;
+      }
+    }
+
+    function buildOtpAuth() {
+      const type = $("otp-type").value;
+      const issuer = $("otp-issuer").value;
+      const account = $("otp-account").value;
+      const secret = $("otp-secret").value.replace(/\s/g, "");
+      const label = encodeURIComponent(`${issuer}:${account}`);
+      const params = new URLSearchParams({
+        secret,
+        issuer,
+        algorithm: $("otp-algo").value,
+        digits: $("otp-digits").value
+      });
+      if (type === "totp") params.set("period", $("otp-period").value);
+      else params.set("counter", $("otp-counter").value);
+      const uri = `otpauth://${type}/${label}?${params.toString()}`;
+      $("otp-uri").value = uri;
+      const parsed = parseOtpAuth(uri);
+      $("otp-result").textContent = JSON.stringify({ uri, parsed }, null, 2);
+      setRaw("otpauth URI", { uri, parsed });
+    }
+
+    function parseOtpAuth(uri) {
+      const url = new URL(uri);
+      if (url.protocol !== "otpauth:") throw new Error("URI 必须以 otpauth:// 开头");
+      const type = url.hostname;
+      const label = decodeURIComponent(url.pathname.replace(/^\//, ""));
+      const params = Object.fromEntries(url.searchParams.entries());
+      return { type, label, issuerFromLabel: label.includes(":") ? label.split(":")[0] : "", accountFromLabel: label.includes(":") ? label.split(":").slice(1).join(":") : label, params };
+    }
+
+    function copy(text) {
+      navigator.clipboard?.writeText(text).then(() => toast("已复制", "good")).catch(() => toast("浏览器拒绝复制，请手动复制", "bad"));
+    }
+
+    function currentRpId() {
+      if (location.hostname && location.hostname !== "") return location.hostname;
+      return undefined;
+    }
+
+    function buildCreateOptions() {
+      const challenge = randomBytes(32);
+      const userId = randomBytes(16);
+      const rp = { name: $("wa-rp-name").value };
+      const rpId = currentRpId();
+      if (rpId) rp.id = rpId;
+      const options = {
+        publicKey: {
+          challenge,
+          rp,
+          user: {
+            id: userId,
+            name: $("wa-user-name").value,
+            displayName: $("wa-user-name").value
+          },
+          pubKeyCredParams: [{ type: "public-key", alg: Number($("wa-alg").value) }],
+          timeout: Number($("wa-timeout").value),
+          attestation: $("wa-attestation").value,
+          authenticatorSelection: {
+            residentKey: $("wa-resident").value,
+            userVerification: $("wa-uv").value
+          },
+          excludeCredentials: state.store.credentialId ? [{
+            type: "public-key",
+            id: base64UrlToBytes(state.store.credentialId)
+          }] : []
+        }
+      };
+      return { options, debug: serializeCredentialOptions(options.publicKey, { challenge, userId }) };
+    }
+
+    function buildGetOptions() {
+      const challenge = randomBytes(32);
+      const allow = $("wa-allow").value === "known" && state.store.credentialId ? [{
+        type: "public-key",
+        id: base64UrlToBytes(state.store.credentialId),
+        transports: ["internal", "usb", "nfc", "ble", "hybrid"]
+      }] : [];
+      const publicKey = {
+        challenge,
+        timeout: Number($("wa-timeout").value),
+        userVerification: $("wa-get-uv").value,
+        allowCredentials: allow
+      };
+      const rpId = currentRpId();
+      if (rpId) publicKey.rpId = rpId;
+      return { options: { publicKey }, debug: serializeCredentialOptions(publicKey, { challenge }) };
+    }
+
+    function serializeCredentialOptions(publicKey, extra = {}) {
+      return JSON.parse(JSON.stringify(publicKey, (key, value) => {
+        if (value instanceof Uint8Array) return { bytes: value.length, base64url: bytesToBase64Url(value), hex: bytesToHex(value) };
+        if (value instanceof ArrayBuffer) return { bytes: value.byteLength, base64url: bytesToBase64Url(value), hex: bytesToHex(value) };
+        return value;
+      }));
+    }
+
+    async function registerCredential() {
+      try {
+        ensureWebAuthnReady();
+        const { options, debug } = buildCreateOptions();
+        $("wa-result").textContent = JSON.stringify({ request: debug }, null, 2);
+        const credential = await navigator.credentials.create(options);
+        const parsed = parseAttestationCredential(credential);
+        state.store.credentialId = parsed.id;
+        state.store.credentialRawId = parsed.rawId;
+        state.store.lastCreate = parsed;
+        saveStore();
+        updateCredentialView();
+        $("wa-result").textContent = JSON.stringify({ request: debug, response: parsed }, null, 2);
+        setRaw("WebAuthn", { createRequest: debug, createResponse: parsed });
+        toast("WebAuthn 凭证已创建", "good");
+      } catch (error) {
+        handleWebAuthnError(error, "注册失败");
+      }
+    }
+
+    async function authenticateCredential() {
+      try {
+        ensureWebAuthnReady();
+        const { options, debug } = buildGetOptions();
+        if ($("wa-allow").value === "known" && !state.store.credentialId) throw new Error("还没有保存的 credential，请先注册或选择空列表 Passkey 发现式。");
+        $("wa-result").textContent = JSON.stringify({ request: debug }, null, 2);
+        const assertion = await navigator.credentials.get(options);
+        const parsed = parseAssertionCredential(assertion);
+        state.store.lastGet = parsed;
+        state.store.signCount = parsed.authenticatorData.signCount;
+        saveStore();
+        updateCredentialView();
+        $("wa-result").textContent = JSON.stringify({ request: debug, response: parsed, localSimulation: "已解析 clientDataJSON/authenticatorData；生产环境还需服务端用公钥验证 signature。" }, null, 2);
+        setRaw("WebAuthn", { getRequest: debug, getResponse: parsed });
+        toast("WebAuthn 断言已返回", "good");
+      } catch (error) {
+        handleWebAuthnError(error, "验证失败");
+      }
+    }
+
+    function ensureWebAuthnReady() {
+      if (!window.PublicKeyCredential || !navigator.credentials) throw new Error("当前浏览器不支持 WebAuthn / PublicKeyCredential。");
+      if (!window.isSecureContext) throw new Error("WebAuthn 需要 HTTPS 或 localhost 安全上下文。");
+    }
+
+    function handleWebAuthnError(error, prefix) {
+      const message = `${prefix}: ${error.name || "Error"} - ${error.message || error}`;
+      $("wa-result").textContent = message;
+      setRaw("WebAuthn", { error: { name: error.name, message: error.message, hint: webAuthnHint(error) } });
+      toast(message, "bad");
+    }
+
+    function webAuthnHint(error) {
+      if (error.name === "NotAllowedError") return "用户取消、超时、没有可用认证器，或浏览器阻止了请求。";
+      if (error.name === "SecurityError") return "通常是 HTTPS/localhost、RP ID 或 origin 不匹配。";
+      if (error.name === "InvalidStateError") return "认证器可能已经注册过这个 credential。";
+      if (error.name === "NotSupportedError") return "参数组合、算法或认证器类型不受支持。";
+      return "查看浏览器控制台和运行环境限制。";
+    }
+
+    function parseClientDataJSON(buffer) {
+      const text = dec.decode(buffer);
+      try {
+        return { json: JSON.parse(text), raw: text, hex: bytesToHex(buffer) };
+      } catch {
+        return { raw: text, hex: bytesToHex(buffer) };
+      }
+    }
+
+    function parseAuthenticatorData(buffer) {
+      const bytes = new Uint8Array(buffer);
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const flags = bytes[32];
+      const signCount = view.getUint32(33, false);
+      const parsed = {
+        rpIdHash: bytesToHex(bytes.slice(0, 32)),
+        flagsByte: `0x${flags.toString(16).padStart(2, "0")}`,
+        flags: {
+          userPresent: Boolean(flags & 0x01),
+          userVerified: Boolean(flags & 0x04),
+          backupEligible: Boolean(flags & 0x08),
+          backupState: Boolean(flags & 0x10),
+          attestedCredentialData: Boolean(flags & 0x40),
+          extensionData: Boolean(flags & 0x80)
+        },
+        signCount
+      };
+      if (parsed.flags.attestedCredentialData && bytes.length > 55) {
+        const aaguid = bytes.slice(37, 53);
+        const credentialIdLength = view.getUint16(53, false);
+        const credentialId = bytes.slice(55, 55 + credentialIdLength);
+        parsed.attestedCredentialData = {
+          aaguid: bytesToHex(aaguid),
+          credentialIdLength,
+          credentialId: bytesToBase64Url(credentialId),
+          credentialPublicKeyCborHex: bytesToHex(bytes.slice(55 + credentialIdLength))
+        };
+      }
+      return parsed;
+    }
+
+    function parseAttestationCredential(credential) {
+      const response = credential.response;
+      const attestationBytes = new Uint8Array(response.attestationObject);
+      let attestationDecoded = null;
+      try {
+        attestationDecoded = decodeCbor(attestationBytes);
+      } catch (error) {
+        attestationDecoded = { parseError: error.message };
+      }
+      const authDataBytes = attestationDecoded?.authData instanceof Uint8Array ? attestationDecoded.authData : null;
+      return {
+        type: credential.type,
+        id: credential.id,
+        rawId: bytesToBase64Url(credential.rawId),
+        clientDataJSON: parseClientDataJSON(response.clientDataJSON),
+        attestationObject: {
+          byteLength: response.attestationObject.byteLength,
+          hexPreview: bytesToHex(attestationBytes.slice(0, 160)),
+          decoded: sanitizeCbor(attestationDecoded),
+          authenticatorData: authDataBytes ? parseAuthenticatorData(authDataBytes) : null
+        },
+        transports: typeof response.getTransports === "function" ? response.getTransports() : []
+      };
+    }
+
+    function parseAssertionCredential(assertion) {
+      const response = assertion.response;
+      return {
+        type: assertion.type,
+        id: assertion.id,
+        rawId: bytesToBase64Url(assertion.rawId),
+        authenticatorAttachment: assertion.authenticatorAttachment || null,
+        clientDataJSON: parseClientDataJSON(response.clientDataJSON),
+        authenticatorData: parseAuthenticatorData(response.authenticatorData),
+        signature: {
+          byteLength: response.signature.byteLength,
+          base64url: bytesToBase64Url(response.signature),
+          hex: bytesToHex(response.signature)
+        },
+        userHandle: response.userHandle ? bytesToBase64Url(response.userHandle) : null
+      };
+    }
+
+    function decodeCbor(bytes) {
+      let offset = 0;
+      function readLength(additional) {
+        if (additional < 24) return additional;
+        if (additional === 24) return bytes[offset++];
+        if (additional === 25) return (bytes[offset++] << 8) | bytes[offset++];
+        if (additional === 26) return ((bytes[offset++] << 24) | (bytes[offset++] << 16) | (bytes[offset++] << 8) | bytes[offset++]) >>> 0;
+        throw new Error("CBOR length too large for demo parser");
+      }
+      function readItem() {
+        const initial = bytes[offset++];
+        const major = initial >> 5;
+        const additional = initial & 31;
+        const length = readLength(additional);
+        if (major === 0) return length;
+        if (major === 1) return -1 - length;
+        if (major === 2) return bytes.slice(offset, offset += length);
+        if (major === 3) return dec.decode(bytes.slice(offset, offset += length));
+        if (major === 4) return Array.from({ length }, () => readItem());
+        if (major === 5) {
+          const obj = {};
+          for (let i = 0; i < length; i++) obj[readItem()] = readItem();
+          return obj;
+        }
+        if (major === 7) {
+          if (additional === 20) return false;
+          if (additional === 21) return true;
+          if (additional === 22) return null;
+        }
+        throw new Error(`Unsupported CBOR major type ${major}`);
+      }
+      return readItem();
+    }
+
+    function sanitizeCbor(value) {
+      if (value instanceof Uint8Array) return { bytes: value.length, hexPreview: bytesToHex(value.slice(0, 120)), base64urlPreview: bytesToBase64Url(value.slice(0, 90)) };
+      if (Array.isArray(value)) return value.map(sanitizeCbor);
+      if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, val]) => [key, sanitizeCbor(val)]));
+      return value;
+    }
+
+    function updateCredentialView() {
+      $("wa-cred-id").textContent = state.store.credentialId || "未注册";
+      $("wa-sign-count").textContent = state.store.signCount ?? "-";
+    }
+
+    async function checkPasskey() {
+      const hasPkc = Boolean(window.PublicKeyCredential);
+      $("pkc-support").innerHTML = hasPkc ? `<span class="ok">支持</span>` : `<span class="fail">不支持</span>`;
+      $("passkey-secure").innerHTML = window.isSecureContext ? `<span class="ok">安全上下文</span>` : `<span class="fail">需要 HTTPS 或 localhost</span>`;
+      if (!hasPkc) {
+        $("platform-support").innerHTML = `<span class="fail">不可检测</span>`;
+        $("conditional-support").innerHTML = `<span class="fail">不可检测</span>`;
+      } else {
+        try {
+          const platform = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+          $("platform-support").innerHTML = platform ? `<span class="ok">可用</span>` : `<span class="fail">不可用或被系统禁用</span>`;
+        } catch (error) {
+          $("platform-support").textContent = error.message;
+        }
+        try {
+          const conditional = typeof PublicKeyCredential.isConditionalMediationAvailable === "function"
+            ? await PublicKeyCredential.isConditionalMediationAvailable()
+            : false;
+          $("conditional-support").innerHTML = conditional ? `<span class="ok">支持</span>` : `<span class="fail">不支持</span>`;
+        } catch (error) {
+          $("conditional-support").textContent = error.message;
+        }
+      }
+      const options = {
+        authenticatorSelection: {
+          residentKey: "preferred",
+          userVerification: "preferred"
+        },
+        hints: ["client-device", "hybrid"],
+        note: "Passkey 的私钥不会交给网页；网页只拿到公钥凭证和签名结果。"
+      };
+      $("passkey-options").textContent = JSON.stringify(options, null, 2);
+      $("passkey-notes").textContent = [
+        "1. 注册时 residentKey=preferred/required 更接近 Passkey 场景。",
+        "2. 登录时 allowCredentials 为空时，浏览器可以让用户从可发现凭证中选择。",
+        "3. userVerification=required 会要求设备解锁、PIN 或生物识别。",
+        "4. 同步 Passkey 是否可用取决于系统账号、浏览器和密码管理器。",
+        "5. 本页面只展示本地数据结构，不拥有也不能导出私钥。"
+      ].join("\\n");
+      setRaw("Passkey", options);
+    }
+
+    function updateStatus() {
+      $("secure-status").textContent = window.isSecureContext ? "安全上下文可用" : "非安全上下文";
+      $("secure-status").className = `pill ${window.isSecureContext ? "good" : "bad"}`;
+      $("webauthn-status").textContent = window.PublicKeyCredential ? "WebAuthn API 可用" : "WebAuthn 不可用";
+      $("webauthn-status").className = `pill ${window.PublicKeyCredential ? "good" : "bad"}`;
+      try {
+        localStorage.setItem("__twofa_test", "1");
+        localStorage.removeItem("__twofa_test");
+        $("storage-status").textContent = "localStorage 可用";
+        $("storage-status").className = "pill good";
+      } catch {
+        $("storage-status").textContent = "localStorage 不可用";
+        $("storage-status").className = "pill bad";
+      }
+    }
+
+    async function runTests() {
+      const lines = [];
+      let pass = 0;
+      let fail = 0;
+      function record(ok, name, detail = "") {
+        if (ok) pass++; else fail++;
+        lines.push(`${ok ? "PASS" : "FAIL"} ${name}${detail ? " - " + detail : ""}`);
+      }
+      try {
+        const hotpSecret = base32Encode(enc.encode("12345678901234567890"));
+        const hotpExpected = ["755224", "287082", "359152", "969429", "338314", "254676", "287922", "162583", "399871", "520489"];
+        for (let i = 0; i < hotpExpected.length; i++) {
+          const result = await hotp(hotpSecret, i, 6, "SHA-1");
+          record(result.code === hotpExpected[i], `RFC4226 HOTP counter=${i}`, `got ${result.code}, expected ${hotpExpected[i]}`);
+        }
+        const seedSha1 = base32Encode(enc.encode("12345678901234567890"));
+        const seedSha256 = base32Encode(enc.encode("12345678901234567890123456789012"));
+        const seedSha512 = base32Encode(enc.encode("1234567890123456789012345678901234567890123456789012345678901234"));
+        const vectors = [
+          [59, "94287082", "46119246", "90693936"],
+          [1111111109, "07081804", "68084774", "25091201"],
+          [1111111111, "14050471", "67062674", "99943326"],
+          [1234567890, "89005924", "91819424", "93441116"],
+          [2000000000, "69279037", "90698825", "38618901"],
+          [20000000000, "65353130", "77737706", "47863826"]
+        ];
+        for (const [time, sha1, sha256, sha512] of vectors) {
+          record((await totp(seedSha1, 30, 8, "SHA-1", time * 1000)).code === sha1, `RFC6238 TOTP SHA-1 t=${time}`);
+          record((await totp(seedSha256, 30, 8, "SHA-256", time * 1000)).code === sha256, `RFC6238 TOTP SHA-256 t=${time}`);
+          record((await totp(seedSha512, 30, 8, "SHA-512", time * 1000)).code === sha512, `RFC6238 TOTP SHA-512 t=${time}`);
+        }
+        const secret = base32Encode(randomBytes(20));
+        const uri = `otpauth://totp/${encodeURIComponent("Issuer:account+demo@example.com")}?secret=${secret}&issuer=${encodeURIComponent("Issuer")}&algorithm=SHA1&digits=6&period=30`;
+        const parsed = parseOtpAuth(uri);
+        record(parsed.type === "totp" && parsed.params.secret === secret && parsed.params.period === "30", "otpauth URI parse");
+        record(Boolean(window.crypto?.subtle), "Web Crypto API available");
+        record(Boolean(window.PublicKeyCredential), "WebAuthn API available", window.PublicKeyCredential ? "" : "当前浏览器不支持或页面环境不满足");
+        record(Boolean(window.isSecureContext), "Secure context", window.isSecureContext ? "" : "WebAuthn 需要 HTTPS 或 localhost");
+      } catch (error) {
+        record(false, "测试运行异常", error.message);
+      }
+      $("test-output").textContent = `${lines.join("\\n")}\\n\\nSummary: ${pass} passed, ${fail} failed`;
+      setRaw("RFC Tests", { pass, fail, lines });
+      toast(`测试完成：${pass} passed, ${fail} failed`, fail ? "bad" : "good");
+    }
+
+    function bindEvents() {
+      $$(".nav-btn").forEach((btn) => btn.addEventListener("click", () => switchModule(btn.dataset.target)));
+      ["totp-secret", "totp-algo", "totp-digits", "totp-period"].forEach((id) => $(id).addEventListener("input", refreshTotp));
+      $("totp-random").addEventListener("click", () => {
+        $("totp-secret").value = base32Encode(randomBytes(20));
+        refreshTotp();
+      });
+      $("totp-copy").addEventListener("click", () => copy($("totp-code").textContent));
+      $("totp-save").addEventListener("click", () => {
+        Object.assign(state.store, {
+          totpSecret: $("totp-secret").value,
+          totpAlgo: $("totp-algo").value,
+          totpDigits: $("totp-digits").value,
+          totpPeriod: $("totp-period").value
+        });
+        saveStore();
+        toast("TOTP 参数已保存", "good");
+      });
+      $("hotp-generate").addEventListener("click", () => generateHotp(false));
+      $("hotp-next").addEventListener("click", () => generateHotp(true));
+      $("hotp-reset").addEventListener("click", () => {
+        $("hotp-counter").value = 0;
+        generateHotp(false);
+      });
+      $("hotp-random").addEventListener("click", () => {
+        $("hotp-secret").value = base32Encode(randomBytes(20));
+        generateHotp(false);
+      });
+      $("otp-build").addEventListener("click", buildOtpAuth);
+      $("otp-parse").addEventListener("click", () => {
+        try {
+          const parsed = parseOtpAuth($("otp-uri").value.trim());
+          $("otp-result").textContent = JSON.stringify(parsed, null, 2);
+          setRaw("otpauth URI", parsed);
+        } catch (error) {
+          $("otp-result").textContent = error.message;
+        }
+      });
+      $("otp-copy").addEventListener("click", () => copy($("otp-uri").value));
+      $("otp-use-totp").addEventListener("click", () => {
+        $("otp-type").value = "totp";
+        $("otp-secret").value = $("totp-secret").value;
+        $("otp-algo").value = $("totp-algo").value.replace(/-/g, "");
+        $("otp-digits").value = $("totp-digits").value;
+        $("otp-period").value = $("totp-period").value;
+        buildOtpAuth();
+      });
+      $("otp-use-hotp").addEventListener("click", () => {
+        $("otp-type").value = "hotp";
+        $("otp-secret").value = $("hotp-secret").value;
+        $("otp-algo").value = $("hotp-algo").value.replace(/-/g, "");
+        $("otp-digits").value = $("hotp-digits").value;
+        $("otp-counter").value = $("hotp-counter").value;
+        buildOtpAuth();
+      });
+      $("wa-register").addEventListener("click", registerCredential);
+      $("wa-auth").addEventListener("click", authenticateCredential);
+      $("wa-show-create").addEventListener("click", () => {
+        const { debug } = buildCreateOptions();
+        $("wa-result").textContent = JSON.stringify(debug, null, 2);
+        setRaw("WebAuthn", { createRequest: debug });
+      });
+      $("wa-show-get").addEventListener("click", () => {
+        const { debug } = buildGetOptions();
+        $("wa-result").textContent = JSON.stringify(debug, null, 2);
+        setRaw("WebAuthn", { getRequest: debug });
+      });
+      $("wa-clear").addEventListener("click", () => {
+        delete state.store.credentialId;
+        delete state.store.credentialRawId;
+        delete state.store.lastCreate;
+        delete state.store.lastGet;
+        delete state.store.signCount;
+        saveStore();
+        updateCredentialView();
+        $("wa-result").textContent = "WebAuthn 本地演示数据已清空。";
+      });
+      $("passkey-check").addEventListener("click", checkPasskey);
+      $("run-tests").addEventListener("click", runTests);
+      $("clear-store").addEventListener("click", () => {
+        localStorage.removeItem(STORE_KEY);
+        state.store = {};
+        initDefaults();
+        refreshTotp();
+        $("test-output").textContent = "本地演示数据已清空。";
+        toast("本地演示数据已清空", "good");
+      });
+      $("copy-inspector").addEventListener("click", () => copy($("raw-inspector").textContent));
+    }
+
+    function startTotpTimer() {
+      clearInterval(state.totpTimer);
+      refreshTotp();
+      state.totpTimer = setInterval(refreshTotp, 1000);
+    }
+
+    function boot() {
+      updateStatus();
+      initDefaults();
+      bindEvents();
+      switchModule("totp");
+      startTotpTimer();
+      generateHotp(false);
+      buildOtpAuth();
+      checkPasskey();
+    }
+
+    boot();
+  </script>
+</body>
+</html>
