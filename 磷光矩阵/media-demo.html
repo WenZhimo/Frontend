@@ -180,7 +180,8 @@
     }
 
     .sourceButton,
-    .primaryButton {
+    .primaryButton,
+    .exportButton {
       min-height: 36px;
       padding: 8px 10px;
       font-size: 13px;
@@ -191,6 +192,18 @@
       border-color: #34718a;
       background: #123141;
       color: #dff8ff;
+    }
+
+    .exportButton {
+      border-color: #365b4a;
+      background: #142b22;
+      color: #eafff1;
+    }
+
+    .exportButton[aria-pressed="true"] {
+      border-color: var(--amber);
+      background: #3b2c12;
+      color: #fff6da;
     }
 
     .sourceButton[aria-pressed="true"] {
@@ -403,6 +416,34 @@
             <span class="controlHead"><span>噪声</span><output id="noiseValue">0.026</output></span>
             <input id="noiseControl" type="range" min="0" max="0.08" value="0.026" step="0.002">
           </label>
+        </section>
+
+        <section class="section">
+          <h2>导出</h2>
+          <label class="control">
+            <span class="controlHead"><span>当前帧格式</span></span>
+            <select id="frameFormat">
+              <option value="png">PNG（保留透明度）</option>
+              <option value="jpeg">JPEG</option>
+              <option value="webp" selected>WebP</option>
+            </select>
+          </label>
+          <label class="control">
+            <span class="controlHead"><span>图片质量</span><output id="frameQualityValue">0.92</output></span>
+            <input id="frameQuality" type="range" min="0.5" max="1" value="0.92" step="0.01">
+          </label>
+          <button id="downloadFrame" class="exportButton" type="button">下载当前帧</button>
+          <label class="control">
+            <span class="controlHead"><span>WebM 帧率</span></span>
+            <select id="recordFps">
+              <option value="24">24 FPS</option>
+              <option value="30" selected>30 FPS</option>
+              <option value="60">60 FPS</option>
+            </select>
+          </label>
+          <button id="toggleRecording" class="exportButton" type="button" aria-pressed="false">开始录制 WebM</button>
+          <p id="exportStatus" class="note" role="status">导出就绪：图片可下载当前帧，动态源可录制 WebM。</p>
+          <p class="note">视频、GIF 和动态 SVG 默认导出为 WebM；如需 MP4 或 GIF，可用 FFmpeg、剪辑软件或格式转换工具继续转换。</p>
         </section>
 
         <section class="section">

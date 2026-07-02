@@ -169,6 +169,38 @@ export class PhosphorMediaRenderer {
     }
   }
 
+  getOutputCanvas() {
+    return this.surface.canvas;
+  }
+
+  captureFrame(options = {}) {
+    const {
+      type = "image/png",
+      quality,
+      time = performance.now(),
+      render = true,
+    } = options;
+    if (render) this.renderFrame(time);
+    const canvas = this.getOutputCanvas();
+    if (!canvas.toBlob) {
+      throw new Error("Canvas toBlob is not supported in this browser.");
+    }
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error(`Failed to capture frame as ${type}.`));
+      }, type, quality);
+    });
+  }
+
+  captureStream(fps = this.config.frameRate) {
+    const canvas = this.getOutputCanvas();
+    if (!canvas.captureStream) {
+      throw new Error("Canvas captureStream is not supported in this browser.");
+    }
+    return canvas.captureStream(Math.max(1, fps));
+  }
+
   render(time = performance.now()) {
     this.renderFrame(time);
     if (this.running) {

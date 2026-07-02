@@ -55,6 +55,21 @@ const renderer = new PhosphorMediaRenderer({ source, mount, quality: "high" });
 renderer.renderFrame(performance.now());
 ```
 
+导出处理后的画面时，可以通过媒体渲染器读取最终输出 canvas，并捕获当前帧或录制 canvas 流：
+
+```js
+const canvas = renderer.getOutputCanvas();
+const frameBlob = await renderer.captureFrame({
+  type: "image/webp",
+  quality: 0.92,
+});
+const stream = renderer.captureStream(30);
+```
+
+- `getOutputCanvas()` 返回最终 WebGL 渲染画布。
+- `captureFrame(options)` 返回当前滤镜结果的图片 `Blob`，常用格式是 `image/png`、`image/jpeg`、`image/webp`。
+- `captureStream(fps)` 返回输出画布的 `MediaStream`，可交给 `MediaRecorder` 录制 WebM。
+
 如果页面需要直接双击打开，不经过本地服务器，可以使用全局脚本版本：
 
 ```html
@@ -115,6 +130,8 @@ http://127.0.0.1:8766/磷光矩阵/media-demo.html
 - SVG 通过 `<img>` 预览，并持续栅格化到 canvas 后交给 WebGL，支持动画 SVG 与透明度。
 - 切换内置动态 canvas、示例图像和示例视频。
 - 调整质量、矩阵间距、bloom、扩散、暗部噪声和画面适配模式。
+- 将当前滤镜帧导出为 PNG、JPEG 或 WebP。
+- 将 GIF、视频、动态 SVG 或 canvas 的滤镜结果录制导出为 WebM。
 - 查看 backend、输入尺寸、输出画布尺寸和估算 FPS。
 
 ## 生成产物
@@ -179,3 +196,6 @@ npm run test:media-demo
 - 普通网页不能直接读取浏览器合成后的视口 framebuffer，所以 DOM 覆盖层仍需要源重建。
 - 媒体模式更适合视频、图片、GIF、SVG、canvas、本地素材处理，因为输入可以直接进入 GPU 纹理。
 - `contain`、`cover`、`fit-width`、`fit-height` 都保持原始比例；只有 `stretch` 会改变比例。
+- 静态图片可以导出为 PNG、JPEG 或 WebP；如果浏览器不支持所选图片 MIME，可能回退到浏览器实际生成的格式。
+- SVG 会导出为滤镜处理后的栅格画面，不会还原为可编辑 SVG。
+- GIF 和视频默认录制为 WebM；如需 MP4、MOV 或 GIF，可使用 FFmpeg、剪辑软件或格式转换工具继续转换。

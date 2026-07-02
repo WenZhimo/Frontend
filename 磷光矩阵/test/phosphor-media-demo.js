@@ -7,12 +7,21 @@ const copy = {
   buttons: {
     pause: "暂停",
     resume: "继续",
+    downloadFrame: "下载当前帧",
+    startRecording: "开始录制 WebM",
+    stopRecording: "停止并下载",
   },
   status: {
     initializing: "WebGL2 初始化中",
     libraryMissing: "库未加载",
     unsupported: "WebGL2 不可用",
     destroyed: "演示已停止",
+    exportIdle: "导出就绪：图片可下载当前帧，动态源可录制 WebM。",
+    frameCaptured: "当前帧已导出。",
+    recording: "正在录制滤镜画面…",
+    recordingStarted: "正在录制 WebM，停止后自动下载。",
+    recordingSaved: "WebM 已生成并下载。",
+    recordingAutoPlayed: "录制需要动态刷新，已自动继续播放。",
   },
   errors: {
     imageLoad: "图片无法加载。",
@@ -22,8 +31,25 @@ const copy = {
     libraryMissing: "磷光媒体库未加载，请确认 phosphor/media-renderer.global.js 与本页面在同一项目目录。",
     unsupportedWebgl: "当前浏览器不支持 WebGL2，媒体 shader 演示无法运行。",
     textureUpload: "纹理上传失败：",
+    captureFrameUnsupported: "当前浏览器不支持导出当前帧。",
+    captureFrameFailed: "当前帧导出失败，请稍后再试。",
+    captureStreamUnsupported: "当前浏览器不支持录制画布流，可尝试使用 Chrome / Edge。",
+    mediaRecorderUnsupported: "当前浏览器不支持录制 WebM，可尝试使用 Chrome / Edge。",
+    recordingFailed: "WebM 录制失败，请换用更低帧率或重新选择资源。",
   },
 };
+
+const exportFormats = {
+  png: { mimeType: "image/png", extension: "png", label: "PNG" },
+  jpeg: { mimeType: "image/jpeg", extension: "jpg", label: "JPEG" },
+  webp: { mimeType: "image/webp", extension: "webp", label: "WebP" },
+};
+
+const webmMimeCandidates = [
+  "video/webm;codecs=vp8",
+  "video/webm;codecs=vp9",
+  "video/webm",
+];
 
 const mount = document.getElementById("mediaMount");
 const imageSource = document.getElementById("imageSource");
@@ -46,6 +72,13 @@ const noiseValue = document.getElementById("noiseValue");
 const sourceLabel = document.getElementById("sourceLabel");
 const statusText = document.getElementById("statusText");
 const errorText = document.getElementById("errorText");
+const frameFormat = document.getElementById("frameFormat");
+const frameQuality = document.getElementById("frameQuality");
+const frameQualityValue = document.getElementById("frameQualityValue");
+const downloadFrame = document.getElementById("downloadFrame");
+const recordFps = document.getElementById("recordFps");
+const toggleRecording = document.getElementById("toggleRecording");
+const exportStatus = document.getElementById("exportStatus");
 const backendMetric = document.getElementById("backendMetric");
 const sourceMetric = document.getElementById("sourceMetric");
 const canvasMetric = document.getElementById("canvasMetric");
@@ -59,6 +92,11 @@ let isDemoPlaying = true;
 let appRafId = 0;
 let frameCount = 0;
 let fpsStart = performance.now();
+let exportController = null;
+
+function setExportStatus(message = copy.status.exportIdle) {
+  if (exportStatus) exportStatus.textContent = message;
+}
 
 function setError(message = "") {
   errorText.textContent = message;
@@ -69,7 +107,229 @@ function syncOutputs() {
   bloomValue.textContent = Number(bloomControl.value).toFixed(2);
   diffusionValue.textContent = Number(diffusionControl.value).toFixed(2);
   noiseValue.textContent = Number(noiseControl.value).toFixed(3);
+  if (frameQualityValue && frameQuality) frameQualityValue.textContent = Number(frameQuality.value).toFixed(2);
 }
+
+function sanitizeFilePart(value = "phosphor") {
+  return String(value)
+    .trim()
+    .replace(/\.[^.]+$/, "")
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 80) || "phosphor";
+}
+
+function timestampPart(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    "-",
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds()),
+  ].join("");
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = "none";
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function resolveFrameFormat() {
+  return exportFormats[frameFormat?.value] || exportFormats.png;
+}
+
+function resolveWebmMimeType() {
+  if (!("MediaRecorder" in window)) return "";
+  return webmMimeCandidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+function createExportController() {
+  let recorder = null;
+  let stream = null;
+  let chunks = [];
+  let state = "idle";
+
+  function setState(nextState, message) {
+    state = nextState;
+    if (toggleRecording) {
+      toggleRecording.textContent = state === "recording" ? copy.buttons.stopRecording : copy.buttons.startRecording;
+      toggleRecording.setAttribute("aria-pressed", String(state === "recording"));
+    }
+    if (message) setExportStatus(message);
+  }
+
+  function ensureRendererReady() {
+    if (!renderer) throw new Error(copy.errors.libraryMissing);
+    return renderer;
+  }
+
+  function clearRecorder() {
+    stream?.getTracks?.().forEach((track) => track.stop());
+    recorder = null;
+    stream = null;
+    chunks = [];
+  }
+
+  function userFacingExportError(error, fallback) {
+    const knownMessages = new Set(Object.values(copy.errors));
+    return knownMessages.has(error?.message) ? error.message : fallback;
+  }
+
+  function outputName(extension) {
+    const sourceName = sourceRegistry.active?.label || "phosphor";
+    return `${sanitizeFilePart(sourceName)}-filtered-${timestampPart()}.${extension}`;
+  }
+
+  async function downloadCurrentFrame() {
+    const activeRenderer = ensureRendererReady();
+    const outputCanvas = activeRenderer.getOutputCanvas?.();
+    if (!outputCanvas?.toBlob || !activeRenderer.captureFrame) {
+      throw new Error(copy.errors.captureFrameUnsupported);
+    }
+    const format = resolveFrameFormat();
+    setState("capturingFrame");
+    try {
+      const quality = format.mimeType === "image/png" || !frameQuality ? undefined : Number(frameQuality.value);
+      const blob = await activeRenderer.captureFrame({
+        type: format.mimeType,
+        quality,
+        time: performance.now(),
+      });
+      const actualFormat = Object.values(exportFormats).find((item) => item.mimeType === blob.type) || format;
+      downloadBlob(blob, outputName(actualFormat.extension));
+      setState("idle", copy.status.frameCaptured);
+      return blob;
+    } catch (error) {
+      const message = userFacingExportError(error, copy.errors.captureFrameFailed);
+      setState("error", message);
+      throw new Error(message);
+    }
+  }
+
+  function startRecording() {
+    if (state === "recording") return;
+    if (state === "finalizing") throw new Error(copy.status.recording);
+    const activeRenderer = ensureRendererReady();
+    const outputCanvas = activeRenderer.getOutputCanvas?.();
+    if (!outputCanvas?.captureStream || !activeRenderer.captureStream) throw new Error(copy.errors.captureStreamUnsupported);
+    if (!("MediaRecorder" in window)) throw new Error(copy.errors.mediaRecorderUnsupported);
+    const mimeType = resolveWebmMimeType();
+    if (!mimeType) throw new Error(copy.errors.mediaRecorderUnsupported);
+    if (!isDemoPlaying) {
+      isDemoPlaying = true;
+      toggleRender.textContent = copy.buttons.pause;
+      setExportStatus(copy.status.recordingAutoPlayed);
+    }
+
+    chunks = [];
+    const fps = Number(recordFps.value) || 30;
+    stream = activeRenderer.captureStream(fps);
+    recorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: qualityMode.value === "high" ? 10_000_000 : qualityMode.value === "medium" ? 6_000_000 : 3_000_000,
+    });
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data?.size) chunks.push(event.data);
+    });
+    recorder.addEventListener("error", () => {
+      setState("error", copy.errors.recordingFailed);
+    });
+    recorder.start(250);
+    setState("recording", copy.status.recordingStarted);
+  }
+
+  function stopRecording(options = {}) {
+    const { download = true } = options;
+    if (!recorder || state !== "recording") return Promise.resolve(null);
+    const currentRecorder = recorder;
+    const currentChunks = chunks;
+    const currentStream = stream;
+    setState(download ? "finalizing" : "idle", download ? copy.status.recording : undefined);
+    return new Promise((resolve, reject) => {
+      let finalized = false;
+      const finalize = () => {
+        if (finalized) return;
+        finalized = true;
+        try {
+          const type = currentRecorder.mimeType || "video/webm";
+          const blob = new Blob(currentChunks, { type });
+          clearRecorder();
+          if (download) {
+            if (!blob.size) throw new Error(copy.errors.recordingFailed);
+            downloadBlob(blob, outputName("webm"));
+            setState("idle", copy.status.recordingSaved);
+            resolve(blob);
+          } else {
+            setState("idle");
+            resolve(null);
+          }
+        } catch (error) {
+          clearRecorder();
+          const message = userFacingExportError(error, copy.errors.recordingFailed);
+          setState("error", message);
+          reject(new Error(message));
+        }
+      };
+      const waitForDataThenFinalize = (startedAt = performance.now()) => {
+        if (currentChunks.length || performance.now() - startedAt > 1600) {
+          finalize();
+          return;
+        }
+        window.setTimeout(() => waitForDataThenFinalize(startedAt), 80);
+      };
+      currentRecorder.addEventListener("dataavailable", (event) => {
+        if (event.data?.size) currentChunks.push(event.data);
+      });
+      currentRecorder.addEventListener("stop", () => {
+        waitForDataThenFinalize();
+      }, { once: true });
+      currentStream?.getVideoTracks?.().forEach((track) => track.requestFrame?.());
+      currentRecorder.requestData?.();
+      currentRecorder.stop();
+    });
+  }
+
+  async function toggleRecordingState() {
+    if (state === "recording") return stopRecording();
+    startRecording();
+    return null;
+  }
+
+  function dispose() {
+    if (recorder && state === "recording") {
+      stopRecording({ download: false }).catch(() => clearRecorder());
+      return;
+    }
+    clearRecorder();
+    setState("idle");
+  }
+
+  return {
+    downloadCurrentFrame,
+    startRecording,
+    stopRecording,
+    toggleRecording: toggleRecordingState,
+    dispose,
+    getState: () => ({
+      state,
+      mimeType: recorder?.mimeType || resolveWebmMimeType(),
+      chunks: chunks.length,
+    }),
+  };
+}
+
+exportController = createExportController();
 
 function updateSourceButtons(tab) {
   sourceButtons.forEach((button) => {
@@ -597,6 +857,7 @@ function renderDemoFrame(time = performance.now()) {
 function applyActiveSource(adapter) {
   if (!adapter?.rendererSource) return;
   setError();
+  setExportStatus();
   sourceRegistry.setActive(adapter);
   updateSourceButtons(adapter.tab);
   showSourcePreview(adapter.previewKind);
@@ -705,6 +966,7 @@ function destroyDemo() {
   isDemoPlaying = false;
   if (appRafId) cancelAnimationFrame(appRafId);
   appRafId = 0;
+  exportController?.dispose();
   renderer?.destroy();
   renderer = null;
   sourceRegistry.dispose();
@@ -748,6 +1010,26 @@ toggleRender.addEventListener("click", () => {
   syncMetrics();
 });
 
+downloadFrame?.addEventListener("click", async () => {
+  try {
+    await exportController.downloadCurrentFrame();
+  } catch (error) {
+    setError(error.message || copy.errors.captureFrameFailed);
+  }
+});
+
+toggleRecording?.addEventListener("click", async () => {
+  try {
+    await exportController.toggleRecording();
+  } catch (error) {
+    setExportStatus(error.message || copy.errors.recordingFailed);
+    setError(error.message || copy.errors.recordingFailed);
+  }
+});
+
+frameFormat?.addEventListener("change", () => setExportStatus());
+frameQuality?.addEventListener("input", syncOutputs);
+
 fitMode.addEventListener("change", () => {
   if (!renderer) return;
   renderer.fit = fitMode.value;
@@ -788,14 +1070,22 @@ window.PhosphorMediaDemo = {
         tab: sourceRegistry.active.tab,
         label: sourceRegistry.active.label,
       } : null,
+      export: exportController.getState(),
     } : null;
   },
   loadLocalFile,
   selectSourceTab,
+  downloadCurrentFrame: (format) => {
+    if (format && exportFormats[format] && frameFormat) frameFormat.value = format;
+    return exportController.downloadCurrentFrame();
+  },
+  startRecording: () => exportController.startRecording(),
+  stopRecording: () => exportController.stopRecording(),
   destroy: destroyDemo,
 };
 
 syncOutputs();
+setExportStatus();
 sizeCanvasSource();
 sizeVideoGenerator();
 drawBuiltInCanvas(performance.now());
