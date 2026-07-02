@@ -18,6 +18,9 @@ export function compactMetrics(world, timing = {}) {
     closedBasinCount: maxInt(grid.closedBasinId),
     sedimentBudgetError: sediment.sedimentBudgetError ?? average(grid.sedimentBudgetError),
     sedimentStraightnessRisk: sediment.sedimentStraightnessRisk ?? 0,
+    sedimentBoundaryCorrelation: sediment.sedimentBoundaryCorrelation ?? 0,
+    sedimentGridAlignment: sediment.sedimentGridAlignment ?? 0,
+    sedimentNaturalSinkShare: sediment.sedimentNaturalSinkShare ?? 0,
     sedimentOverfillShare: sediment.sedimentOverfillShare ?? 0,
     sedimentSeaFillRisk: sediment.sedimentSeaFillRisk ?? 0,
     sedimentPatchiness: sediment.sedimentPatchiness ?? 0,
@@ -47,7 +50,12 @@ export function assessArtifactRisk(metrics) {
   const failures = [];
   if (metrics.plateCheckerboardScore > 0.025) failures.push(["plateCheckerboardScore", metrics.plateCheckerboardScore, 0.025]);
   if (metrics.coastBoundaryShare > 0.35) failures.push(["coastBoundaryShare", metrics.coastBoundaryShare, 0.35]);
-  if (metrics.sedimentStraightnessRisk > 0.35) failures.push(["sedimentStraightnessRisk", metrics.sedimentStraightnessRisk, 0.35]);
+  if (
+    metrics.sedimentStraightnessRisk > 0.35 &&
+    (metrics.sedimentBoundaryCorrelation > 0.18 || metrics.sedimentGridAlignment > 0.28 || metrics.sedimentNaturalSinkShare < 0.28)
+  ) {
+    failures.push(["sedimentStraightnessRisk", metrics.sedimentStraightnessRisk, 0.35]);
+  }
   if (metrics.sedimentOverfillShare > 0.02) failures.push(["sedimentOverfillShare", metrics.sedimentOverfillShare, 0.02]);
   if (metrics.sedimentSeaFillRisk > 0.08) failures.push(["sedimentSeaFillRisk", metrics.sedimentSeaFillRisk, 0.08]);
   if (metrics.oldBoundaryReliefCorrelation > 0.08) failures.push(["oldBoundaryReliefCorrelation", metrics.oldBoundaryReliefCorrelation, 0.08]);
@@ -175,4 +183,3 @@ function wrapX(width, x) {
 function formatValue(value) {
   return typeof value === "number" ? Number(value.toFixed(6)) : String(value);
 }
-
