@@ -77,6 +77,36 @@ async function assertCanvasChanges(page, label, delay = 350) {
   assert.notEqual(before.hash, after.hash, `${label}: canvas changes over time`);
 }
 
+async function assertFrameExport(page, label) {
+  const result = await page.evaluate(async () => {
+    const blob = await window.PhosphorMediaDemo.downloadCurrentFrame("webp");
+    return {
+      size: blob.size,
+      type: blob.type,
+      state: window.PhosphorMediaDemo.getState().export.state,
+    };
+  });
+  assert.ok(result.size > 1000, `${label}: frame export has bytes`);
+  assert.ok(["image/webp", "image/png"].includes(result.type), `${label}: frame export uses a browser image MIME`);
+  assert.equal(result.state, "idle", `${label}: frame export returns to idle`);
+}
+
+async function assertWebmRecording(page, label) {
+  const result = await page.evaluate(async () => {
+    window.PhosphorMediaDemo.startRecording();
+    await new Promise((resolve) => setTimeout(resolve, 2200));
+    const blob = await window.PhosphorMediaDemo.stopRecording();
+    return {
+      size: blob?.size || 0,
+      type: blob?.type || "",
+      state: window.PhosphorMediaDemo.getState().export.state,
+    };
+  });
+  assert.ok(result.size > 1000, `${label}: WebM recording has bytes`);
+  assert.ok(result.type.startsWith("video/webm"), `${label}: WebM recording uses video/webm`);
+  assert.equal(result.state, "idle", `${label}: recording returns to idle`);
+}
+
 async function loadGeneratedFile(page, factoryName) {
   await page.evaluate(async (name) => {
     const factories = {
@@ -176,6 +206,7 @@ async function smokePage(browser, target) {
   await loadGeneratedFile(page, "png");
   await page.waitForTimeout(600);
   await assertCanvasNonBlank(page, `${target.name} png`);
+  await assertFrameExport(page, `${target.name} png export`);
   await loadGeneratedFile(page, "orientedPng");
   await page.waitForTimeout(600);
   await assertCanvasTopIsBrighter(page, `${target.name} png orientation`);
@@ -183,6 +214,7 @@ async function smokePage(browser, target) {
   await loadGeneratedFile(page, "gif");
   await page.waitForTimeout(300);
   await assertCanvasChanges(page, `${target.name}: gif frame advances`, 420);
+  await assertWebmRecording(page, `${target.name}: gif recording`);
   await page.click('[data-source="canvas"]');
   await page.waitForTimeout(120);
   await page.click('[data-source="image"]');
