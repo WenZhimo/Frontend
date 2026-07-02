@@ -30,6 +30,15 @@ const layers = {
   oceanAge: colorOceanAge,
   ageSubsidence: colorSignedField("ageSubsidence", -0.12, 0.02),
   sedimentFill: colorField("sedimentFill", 0, 0.08, [20, 43, 69], [224, 211, 154]),
+  erosionSource: colorField("erosionSource", 0, 0.003, [54, 32, 22], [239, 126, 42]),
+  sedimentFlux: colorField("sedimentFlux", 0, 0.006, [18, 37, 65], [75, 222, 224]),
+  sedimentSink: colorField("sedimentSink", 0, 0.004, [24, 53, 37], [224, 221, 82]),
+  sedimentCapacity: colorField("sedimentCapacity", 0, 1, [42, 29, 58], [237, 142, 211]),
+  sedimentCompaction: colorField("sedimentCompaction", 0, 0.006, [34, 34, 37], [238, 238, 232]),
+  sedimentLoadSubsidence: colorField("sedimentLoadSubsidence", 0, 0.02, [23, 36, 72], [206, 68, 163]),
+  sedimentBudgetError: colorField("sedimentBudgetError", 0, 1, [20, 20, 20], [224, 54, 48]),
+  depositionRate: colorField("depositionRate", 0, 0.003, [28, 58, 41], [226, 209, 70]),
+  erosionRate: colorField("erosionRate", 0, 0.002, [54, 36, 24], [223, 66, 60]),
   oceanDepthTerms: colorSignedField("oceanDepthTerms", -0.18, 0.08),
   orogeny: colorField("orogeny", 0, 0.18, [30, 38, 42], [216, 169, 112]),
   activeOrogeny: colorField("activeOrogeny", 0, 1, [32, 30, 34], [236, 86, 76]),
@@ -104,6 +113,7 @@ for (const [name, colorFn] of Object.entries(layers)) {
 }
 
 const geologicSeaLevelDiagnostics = world.geologicSeaLevelDiagnostics ?? {};
+const sedimentBudgetDiagnostics = world.sedimentBudgetDiagnostics ?? {};
 
 console.log(JSON.stringify({
   seedText,
@@ -118,6 +128,7 @@ console.log(JSON.stringify({
   geologicSeaLevelOffset: geologicSeaLevelDiagnostics.geologicSeaLevelOffset ?? world.geologicSeaLevelOffset ?? 0,
   targetGeologicSeaLevelOffset: geologicSeaLevelDiagnostics.targetGeologicSeaLevelOffset ?? world.geologicSeaLevelTargetOffset ?? 0,
   capacityBalance: geologicSeaLevelDiagnostics.capacityBalance ?? 0,
+  sedimentBudgetDiagnostics,
   outputs,
 }, null, 2));
 

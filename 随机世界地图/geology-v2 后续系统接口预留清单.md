@@ -743,3 +743,59 @@ debug 图层新增：
 - 海陆后置不变，不直接绘制海岸线。
 - `inlandWaterCandidate` 仍只是低于最终 `seaLevel` 但未连通外海的候选状态，不是完整湖泊系统。
 - 本轮不是完整气候、冰盖、水文循环或风暴潮模型；未来若引入 `climateOffset / iceOffset`，应在全局 offset 层组合，而不是引入 per-cell sea level。
+
+## 21. 沉积物预算与搬运闭环接口补充
+
+本轮新增 geology-v2 初版沉积预算闭环。它是地质状态更新，不是水文河网，也不直接改变海陆派生原则。
+
+新增 grid 字段：
+
+- `erosionSource`：山地、旧造山带、高坡度陆地和裂谷肩部的产沙源。
+- `sedimentFlux`：有限局部搬运通量。
+- `sedimentSink`：实际沉积汇。
+- `sedimentCapacity`：盆地、陆缘、陆架、陆隆、闭合盆地候选和海沟前缘等地貌容量。
+- `sedimentCompaction`：沉积压实诊断。
+- `sedimentLoadSubsidence`：沉积负载沉降弱项。
+- `depositionRate / erosionRate`：本步速率诊断。
+- `sedimentBudgetError`：产沙、沉积、压实和残余耗散的预算误差。
+
+新增 world 诊断：
+
+- `world.sedimentBudgetStep`
+- `world.sedimentBudgetDiagnostics`
+
+`sedimentBudgetDiagnostics` 包含：
+
+- `erosionSourceMean / erosionSourceTotal`
+- `depositionTotal / sedimentFluxMean / sedimentSinkMean / sedimentCapacityMean`
+- `sedimentCompactionMean / sedimentLoadSubsidenceMean / sedimentBudgetError`
+- `sedimentMassBefore / sedimentMassAfter / sedimentMassDelta`
+- `mountainErosionShare / passiveMarginDepositionShare / basinDepositionShare / trenchForearcDepositionShare / inlandBasinDepositionShare`
+- `sedimentOverfillShare / sedimentPatchiness / sedimentStraightnessRisk / sedimentSeaFillRisk`
+- `sedimentShelfConcentration / sedimentAbyssalConcentration`
+
+getter 变更：
+
+- `getTerrainDerived(world)` 返回 `erosionSource / sedimentFlux / sedimentSink / sedimentCapacity / sedimentCompaction / sedimentLoadSubsidence / sedimentBudgetError / depositionRate / erosionRate`，并返回只读 `sedimentBudgetDiagnostics`。
+- `getHydrologyInputs(world)` 返回 `sediment / sedimentSink / sedimentCapacity / basin`。这些是后续水文可读输入，不代表本轮已实现完整河流或湖泊系统。
+- `getResourceInputs(world)` 返回 `sediment / sedimentSink / basin`，供沉积盆地、资源分带和弱带解释使用。
+
+debug 图层新增：
+
+- `erosionSource`
+- `sedimentFlux`
+- `sedimentSink`
+- `sedimentCapacity`
+- `sedimentCompaction`
+- `sedimentLoadSubsidence`
+- `sedimentBudgetError`
+- `depositionRate`
+- `erosionRate`
+
+接口约束：
+
+- getter 只读，不推进 `updateSedimentBudget`，不写回状态。
+- `sediment` 是地质状态，不是水体 mask。
+- `sedimentSink` 是沉积汇诊断，不是完整水文 sink。
+- `sedimentLoadSubsidence` 可以影响高程，但幅度必须保持弱项，不能抹掉 active ridge / trench / islandArc / mountainBelt。
+- `sedimentBudgetError`、`sedimentOverfillShare`、`sedimentStraightnessRisk` 和 `sedimentSeaFillRisk` 应进入 long-run / resolution / interface 检查。
