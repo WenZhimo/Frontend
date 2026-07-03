@@ -1,4 +1,4 @@
-import { forEachNeighbor4ById, sampleGridWrapped, xyOf } from "../grid.js";
+import { forEachNeighbor4ById, indexOf, sampleGridWrapped, xyOf } from "../grid.js";
 import { CrustType } from "./crust.js";
 
 const BASELINES = {
@@ -239,8 +239,10 @@ function localSlope(grid, id) {
   const { x, y } = xyOf(grid, id);
   const left = sampleGridWrapped(grid, grid.elev, x - 1, y);
   const right = sampleGridWrapped(grid, grid.elev, x + 1, y);
-  const up = sampleGridWrapped(grid, grid.elev, x, Math.max(0, y - 1));
-  const down = sampleGridWrapped(grid, grid.elev, x, Math.min(grid.height - 1, y + 1));
+  const upId = indexOf(grid, x, y - 1);
+  const downId = indexOf(grid, x, y + 1);
+  const up = upId >= 0 ? grid.elev[upId] : grid.elev[id];
+  const down = downId >= 0 ? grid.elev[downId] : grid.elev[id];
   return Math.hypot((right - left) * 0.5, (down - up) * 0.5);
 }
 
