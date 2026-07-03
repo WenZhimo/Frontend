@@ -1,5 +1,4 @@
-import { forEachNeighbor4, wrapX } from "../grid.js";
-import { topologyForGrid } from "../topology.js";
+import { forEachGridCell, forEachNeighbor4ById, forEachNeighbor8ById, wrapX } from "../grid.js";
 import { CrustType } from "./crust.js";
 
 const TRANSPORT_PASSES = 4;
@@ -464,31 +463,30 @@ function localSlope(grid, field, x, y) {
 }
 
 function localRelief(grid, field, x, y) {
-  const center = field[y * grid.width + x];
+  const id = y * grid.width + x;
+  const center = field[id];
   let maxDelta = 0;
-  forEachNeighbor4(grid, x, y, (nx, ny) => {
-    maxDelta = Math.max(maxDelta, Math.abs(center - field[ny * grid.width + nx]));
+  forEachNeighbor4ById(grid, id, (nid) => {
+    maxDelta = Math.max(maxDelta, Math.abs(center - field[nid]));
   });
   return maxDelta;
 }
 
 function visitNeighbor8(grid, x, y, visit) {
-  const topology = topologyForGrid(grid);
-  const id = topology.index(x, y);
+  const id = y < 0 || y >= grid.height ? -1 : y * grid.width + wrapX(grid.width, x);
   if (id < 0) return;
-  topology.forEachNeighbor8(id, (nid, dx, dy) => {
+  forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
     visit(nid, dx !== 0 && dy !== 0);
   });
 }
 
 function measurePatchiness(grid, field) {
   let total = 0;
-  for (let y = 0; y < grid.height; y += 1) {
-    for (let x = 0; x < grid.width; x += 1) {
-      const id = y * grid.width + x;
-      total += localRelief(grid, field, x, y);
-    }
-  }
+  forEachGridCell(grid, (id) => {
+    const x = id % grid.width;
+    const y = Math.floor(id / grid.width);
+    total += localRelief(grid, field, x, y);
+  });
   return total / grid.size;
 }
 
