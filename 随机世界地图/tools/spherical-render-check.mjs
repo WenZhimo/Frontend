@@ -6,6 +6,7 @@ import {
   renderSphericalField,
 } from "../src/render/sphericalProjectionRenderer.js";
 import { SphericalBoundaryType } from "../src/sim/sphere/plates.js";
+import { createCubedSphereProductionGridAdapter } from "../src/sim/sphere/productionGridAdapter.js";
 import { createSphericalExperimentalWorld } from "../src/sim/sphere/sphericalWorld.js";
 
 const faceSize = Math.max(2, Math.trunc(Number(process.argv[2] ?? 64)));
@@ -38,6 +39,16 @@ const worldModes = new Set([
   "diagnostic-ridge-candidate",
   "diagnostic-trench-candidate",
 ]);
+const adapterModes = new Set([
+  "adapter-diagnostic-elevation",
+  "adapter-diagnostic-sea-candidate",
+  "adapter-external-sea-mask",
+  "adapter-inland-water-candidate",
+  "adapter-closed-basin-id",
+  "adapter-distance-to-external-sea",
+  "adapter-diagnostic-ridge-candidate",
+  "adapter-diagnostic-trench-candidate",
+]);
 const world = worldModes.has(mode)
   ? createSphericalExperimentalWorld({
       seedText,
@@ -48,8 +59,11 @@ const world = worldModes.has(mode)
       steps,
     })
   : null;
-const grid = world?.grid ?? createCubedSphereGrid(faceSize);
-const rendered = createRenderedLayer({ grid, world, mode, width, height, projectionMode });
+const adapter = adapterModes.has(mode)
+  ? createCubedSphereProductionGridAdapter({ faceSize })
+  : null;
+const grid = adapter ?? world?.grid ?? createCubedSphereGrid(faceSize);
+const rendered = createRenderedLayer({ grid, world, adapter, mode, width, height, projectionMode });
 
 writePpm(output, rendered.pixels, width, height);
 
@@ -64,6 +78,7 @@ const result = {
   mode,
   seedText: world ? seedText : undefined,
   steps: world ? steps : undefined,
+  adapterKind: adapter?.kind,
   ...rendered.stats,
   blankShare: rendered.stats.blankPixels / Math.max(1, width * height),
 };
@@ -89,11 +104,12 @@ function createSyntheticField(grid) {
   return field;
 }
 
-function createRenderedLayer({ grid, world, mode, width, height, projectionMode }) {
+function createRenderedLayer({ grid, world, adapter, mode, width, height, projectionMode }) {
   if (mode === "debug-face") return renderSphericalDebugFace(grid, { width, height, projectionMode });
   if (mode === "synthetic-elevation") {
     return renderSphericalField(grid, createSyntheticField(grid), { width, height, projectionMode });
   }
+  if (adapter) return createAdapterRenderedLayer({ grid, adapter, mode, width, height, projectionMode });
   if (!world) throw new Error(`Unknown spherical render mode: ${mode}`);
   if (mode === "plate-id") {
     return renderSphericalField(grid, world.plateAssignment.plate, {
@@ -245,6 +261,74 @@ function createRenderedLayer({ grid, world, mode, width, height, projectionMode 
     projectionMode,
     colorRamp: (value) => colorField(value, 0, 0.9, [32, 42, 58], [226, 220, 126]),
   });
+}
+
+function createAdapterRenderedLayer({ grid, adapter, mode, width, height, projectionMode }) {
+  if (mode === "adapter-diagnostic-elevation") {
+    return renderSphericalField(grid, adapter.diagnosticElevation, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: colorDiagnosticElevation,
+    });
+  }
+  if (mode === "adapter-diagnostic-sea-candidate") {
+    return renderSphericalField(grid, adapter.diagnosticSeaCandidate, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => (value ? [29, 94, 168] : [102, 132, 78]),
+    });
+  }
+  if (mode === "adapter-external-sea-mask") {
+    return renderSphericalField(grid, adapter.externalSeaMask, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => (value ? [34, 124, 218] : [26, 32, 34]),
+    });
+  }
+  if (mode === "adapter-inland-water-candidate") {
+    return renderSphericalField(grid, adapter.inlandWaterCandidate, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => (value ? [88, 224, 224] : [28, 32, 34]),
+    });
+  }
+  if (mode === "adapter-closed-basin-id") {
+    return renderSphericalField(grid, adapter.closedBasinId, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => (value > 0 ? paletteColor(value) : [26, 30, 34]),
+    });
+  }
+  if (mode === "adapter-distance-to-external-sea") {
+    return renderSphericalField(grid, adapter.diagnosticDistanceToExternalSea, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => colorField(value, 0, 0.9, [32, 42, 58], [226, 220, 126]),
+    });
+  }
+  if (mode === "adapter-diagnostic-ridge-candidate") {
+    return renderSphericalField(grid, adapter.diagnosticRidgeCandidate, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => colorField(value, 0, 0.04, [24, 29, 35], [83, 224, 232]),
+    });
+  }
+  if (mode === "adapter-diagnostic-trench-candidate") {
+    return renderSphericalField(grid, adapter.diagnosticTrenchCandidate, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => colorField(value, 0, 0.04, [25, 28, 34], [232, 80, 72]),
+    });
+  }
+  throw new Error(`Unknown spherical adapter render mode: ${mode}`);
 }
 
 function colorBoundaryType(value) {
