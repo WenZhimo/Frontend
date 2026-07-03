@@ -1952,6 +1952,7 @@
     ["elev", Float32Array],
     ["baseElev", Float32Array],
     ["relief", Float32Array],
+    ["boundaryRelief", Float32Array],
     ["crustType", Uint8Array],
     ["crustThickness", Float32Array],
     ["crustAge", Float32Array],
@@ -1967,15 +1968,75 @@
     ["oceanConnectivity", Uint8Array],
     ["inlandWaterCandidate", Uint8Array],
     ["closedBasinId", Int32Array],
+    ["passiveMargin", Float32Array],
+    ["continentalShelf", Float32Array],
+    ["continentalSlope", Float32Array],
+    ["continentalRise", Float32Array],
+    ["abyssalPlain", Float32Array],
+    ["sedimentWedge", Float32Array],
     ["sediment", Float32Array],
+    ["sedimentFlux", Float32Array],
     ["sedimentSink", Float32Array],
     ["sedimentCapacity", Float32Array],
+    ["sedimentCompaction", Float32Array],
+    ["sedimentLoadSubsidence", Float32Array],
+    ["depositionRate", Float32Array],
+    ["erosionRate", Float32Array],
+    ["erosionSource", Float32Array],
+    ["isostaticBase", Float32Array],
+    ["crustBuoyancy", Float32Array],
+    ["densitySubsidence", Float32Array],
+    ["lithosphereCooling", Float32Array],
+    ["isostaticResidual", Float32Array],
+    ["ageSubsidence", Float32Array],
+    ["thicknessBuoyancy", Float32Array],
+    ["sedimentFill", Float32Array],
+    ["ridgeUplift", Float32Array],
+    ["trenchDepression", Float32Array],
+    ["oceanDepthTerms", Float32Array],
+    ["sedimentBudgetError", Float32Array],
     ["basin", Float32Array],
     ["orogeny", Float32Array],
     ["activeOrogeny", Float32Array],
     ["oldOrogeny", Float32Array],
+    ["forelandBasin", Float32Array],
+    ["orogenicSedimentSupply", Float32Array],
+    ["mountainBelt", Float32Array],
+    ["mountainAxis", Float32Array],
     ["tectonicAxis", Float32Array],
+    ["axisCurvature", Float32Array],
+    ["axisContinuity", Float32Array],
+    ["axisBoundaryDependency", Float32Array],
     ["mountainHeight", Float32Array],
+    ["mountainHeightBlockiness", Float32Array],
+    ["orographicBarrier", Float32Array],
+    ["orographicBarrierContinuity", Float32Array],
+    ["planetaryRelief", Float32Array],
+    ["tectonicReliefSupply", Float32Array],
+    ["isostaticReliefSupply", Float32Array],
+    ["erosionFlatteningPressure", Float32Array],
+    ["sedimentSmoothingPressure", Float32Array],
+    ["reliefDeficit", Float32Array],
+    ["seaLevelSensitivity", Float32Array],
+    ["largePlainMask", Uint8Array],
+    ["flatLandMask", Uint8Array],
+    ["coastalSensitivity", Float32Array],
+    ["ridgeVolumeSignal", Float32Array],
+    ["oldOceanCapacitySignal", Float32Array],
+    ["sedimentDisplacementSignal", Float32Array],
+    ["trenchCapacitySignal", Float32Array],
+    ["ridge", Float32Array],
+    ["trench", Float32Array],
+    ["rift", Float32Array],
+    ["islandArc", Float32Array],
+    ["ridgeAxis", Float32Array],
+    ["trenchAxis", Float32Array],
+    ["riftAxis", Float32Array],
+    ["activeTransform", Float32Array],
+    ["transformMemory", Float32Array],
+    ["fractureZoneMemory", Float32Array],
+    ["inactiveBoundaryRelief", Float32Array],
+    ["oldBoundaryCorrelation", Float32Array],
     ["diagnosticElevation", Float32Array],
     ["diagnosticSeaCandidate", Uint8Array],
     ["diagnosticRidgeCandidate", Float32Array],
@@ -2050,6 +2111,47 @@
     grid.baseElev.set(diagnosticTerrain.elevation);
     grid.elev.set(diagnosticTerrain.elevation);
     grid.relief.set(diagnosticNoise.combined);
+    grid.isostaticBase.set(diagnosticTerrain.elevation);
+    grid.ridge.set(diagnosticTerrain.ridgeCandidate);
+    grid.ridgeAxis.set(diagnosticTerrain.ridgeCandidate);
+    grid.ridgeUplift.set(diagnosticTerrain.ridgeCandidate);
+    grid.trench.set(diagnosticTerrain.trenchCandidate);
+    grid.trenchAxis.set(diagnosticTerrain.trenchCandidate);
+    grid.trenchDepression.set(diagnosticTerrain.trenchCandidate);
+    grid.tectonicAxis.set(diagnosticTerrain.ridgeCandidate);
+    for (let id = 0; id < grid.size; id += 1) {
+      const sea = diagnosticTerrain.seaCandidate[id] ? 1 : 0;
+      const ridge = diagnosticTerrain.ridgeCandidate[id];
+      const trench = diagnosticTerrain.trenchCandidate[id];
+      grid.crustType[id] = sea ? 0 : 1;
+      grid.crustThickness[id] = sea ? 0.28 : 0.64;
+      grid.crustAge[id] = sea ? Math.max(0.02, Math.min(1, 0.45 + grid.positionY[id] * 0.22)) : 0;
+      grid.crustDensity[id] = sea ? 0.62 : 0.32;
+      grid.weakness[id] = Math.max(ridge, trench, Math.abs(diagnosticNoise.micro[id]) * 0.2);
+      grid.boundaryInfluence[id] = Math.max(ridge, trench);
+      grid.activeBoundary[id] = grid.boundaryInfluence[id] > 0 ? 1 : 0;
+      grid.boundaryKind[id] = ridge > 0 ? 2 : trench > 0 ? 1 : 0;
+      grid.stress[id] = Math.max(ridge, trench);
+      grid.crustBuoyancy[id] = sea ? -0.08 : 0.08;
+      grid.densitySubsidence[id] = sea ? -0.04 : 0.01;
+      grid.lithosphereCooling[id] = sea ? -grid.crustAge[id] * 0.05 : 0;
+      grid.ageSubsidence[id] = -grid.crustAge[id] * 0.05;
+      grid.thicknessBuoyancy[id] = grid.crustThickness[id] * 0.12;
+      grid.oceanDepthTerms[id] = sea ? grid.ageSubsidence[id] + grid.densitySubsidence[id] : 0;
+      grid.isostaticResidual[id] = grid.elev[id] - grid.isostaticBase[id];
+      grid.abyssalPlain[id] = sea && Math.abs(grid.elev[id] - diagnosticTerrain.seaLevel) > 0.16 ? 0.35 : 0;
+      grid.continentalShelf[id] = sea && Math.abs(grid.elev[id] - diagnosticTerrain.seaLevel) < 0.08 ? 0.28 : 0;
+      grid.continentalSlope[id] = sea && grid.continentalShelf[id] > 0 ? 0.12 : 0;
+      grid.passiveMargin[id] = grid.continentalShelf[id] * 0.5;
+      grid.sedimentCapacity[id] = sea ? 0.25 : 0.18;
+      grid.sedimentSink[id] = Math.max(grid.continentalShelf[id], grid.abyssalPlain[id] * 0.2) * 0.1;
+      grid.sediment[id] = grid.sedimentSink[id] * 0.4;
+      grid.sedimentFill[id] = grid.sediment[id] * 0.08;
+      grid.mountainHeight[id] = Math.max(0, grid.elev[id] - diagnosticTerrain.seaLevel);
+      grid.orographicBarrier[id] = grid.mountainHeight[id] * 0.25;
+      grid.planetaryRelief[id] = Math.abs(grid.relief[id]);
+      grid.coastalSensitivity[id] = Math.max(0, 1 - Math.abs(grid.elev[id] - diagnosticTerrain.seaLevel) / 0.08);
+    }
     grid.externalSeaMask.fill(0);
     grid.oceanConnectivity.fill(0);
     grid.inlandWaterCandidate.fill(0);
@@ -2077,7 +2179,7 @@
       cellCount: grid.cellCount,
       faceSize: grid.faceSize,
       faceCount: grid.faceCount,
-      hasLegacyDimensions: Number.isFinite(grid.width) && Number.isFinite(grid.height),
+      hasLegacyDimensions: Object.hasOwn(grid, "width") && Object.hasOwn(grid, "height"),
       rectangularIndexing: Boolean(grid.topologyOptions?.rectangularIndexing),
       graphBacked: Boolean(grid.topologyOptions?.graphBacked),
       areaTotal,
@@ -6902,6 +7004,9 @@
       distanceToOcean: base.distanceToOcean,
       landmassId: base.landmassId,
       islandId: base.islandId,
+      externalSeaMask: base.externalSeaMask,
+      oceanConnectivity: base.oceanConnectivity,
+      closedBasinId: base.closedBasinId,
       inlandWaterCandidate: base.inlandWaterCandidate,
       passiveMargin: base.passiveMargin,
       continentalShelf: base.continentalShelf,
@@ -6959,7 +7064,6 @@
     const { grid } = world;
     const {
       size,
-      height,
       mountainBelt,
       activeOrogeny,
       oldOrogeny,
@@ -6975,7 +7079,7 @@
     const mountainHeight = new Float32Array(size);
 
     forEachGridCell(grid, (id, _x, y) => {
-      const lat = ((y + 0.5) / height - 0.5) * 180;
+      const lat = latitudeDegrees(grid, id, y);
       const rel = base.relativeElevation[id];
       latitude[id] = lat;
       oceanDepth[id] = Math.max(0, -rel);
@@ -7316,6 +7420,26 @@
     const slope = new Float32Array(size);
     const aspect = new Float32Array(size);
     const ruggedness = new Float32Array(size);
+    const topology = topologyForGrid(grid);
+    if (isGraphBackedGrid(grid, topology)) {
+      for (let id = 0; id < size; id += 1) {
+        const center = field[id];
+        let maxDiff = 0;
+        let totalDiff = 0;
+        let count = 0;
+        topology.forEachNeighbor(id, (nid, _slot, edgeLength = 1) => {
+          const diff = field[nid] - center;
+          const scaled = Math.abs(diff) / Math.max(1, edgeLength);
+          if (scaled > maxDiff) maxDiff = scaled;
+          totalDiff += Math.abs(diff);
+          count += 1;
+        });
+        slope[id] = maxDiff;
+        aspect[id] = 0;
+        ruggedness[id] = count ? totalDiff / count : 0;
+      }
+      return { slope, aspect, ruggedness };
+    }
 
     forEachGridCell(grid, (id, x, y) => {
       const center = field[id];
@@ -7353,6 +7477,10 @@
   }
 
   function distanceFromSources(grid, sourceMask) {
+    const topology = topologyForGrid(grid);
+    if (isGraphBackedGrid(grid, topology) && topology.shortestDistanceSeeds) {
+      return topology.shortestDistanceSeeds(sourceMask);
+    }
     const { size } = grid;
     const distance = new Float32Array(size);
     distance.fill(Number.POSITIVE_INFINITY);
@@ -7472,6 +7600,15 @@
   function finiteSample(grid, field, x, y, fallback) {
     const value = sampleGridWrapped(grid, field, x, y);
     return Number.isFinite(value) ? value : fallback;
+  }
+
+  function latitudeDegrees(grid, id, y) {
+    if (grid.lat && Number.isFinite(grid.lat[id])) return grid.lat[id] * 180 / Math.PI;
+    return ((y + 0.5) / grid.height - 0.5) * 180;
+  }
+
+  function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+    return Boolean(grid.topologyOptions?.graphBacked || topology?.topologyKind === "cubed-sphere" || grid.topologyKind === "cubed-sphere");
   }
 
   function measureComponentSizes(componentId) {
