@@ -26,6 +26,9 @@ const worldModes = new Set([
   "external-sea-mask",
   "inland-water-candidate",
   "distance-to-external-sea",
+  "diagnostic-noise-broad",
+  "diagnostic-noise-micro",
+  "diagnostic-noise-combined",
 ]);
 const world = worldModes.has(mode)
   ? createSphericalExperimentalWorld({
@@ -138,6 +141,30 @@ function createRenderedLayer({ grid, world, mode, width, height, projectionMode 
       height,
       projectionMode,
       colorRamp: (value) => (value ? [88, 224, 224] : [28, 32, 34]),
+    });
+  }
+  if (mode === "diagnostic-noise-broad") {
+    return renderSphericalField(grid, world.diagnosticNoise.broad, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => colorField(value, -0.8, 0.8, [31, 46, 83], [231, 213, 139]),
+    });
+  }
+  if (mode === "diagnostic-noise-micro") {
+    return renderSphericalField(grid, world.diagnosticNoise.micro, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => colorField(value, -0.8, 0.8, [27, 44, 45], [222, 155, 92]),
+    });
+  }
+  if (mode === "diagnostic-noise-combined") {
+    return renderSphericalField(grid, world.diagnosticNoise.combined, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => colorField(value, -0.8, 0.8, [33, 42, 58], [218, 220, 192]),
     });
   }
   return renderSphericalField(grid, world.distanceToExternalSea, {
