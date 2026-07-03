@@ -117,20 +117,58 @@ WebGL2 可以作为渲染加速候选，但不建议作为主计算方案。若�
 
 ## 4. 任务适配矩阵
 
-| 模块 / 字段 | 迁移优先级 | GPU 类型 | CPU 仍需保留 | 验证方式 |
-|---|---:|---|---|---|
-| `map2d` elevation coloring | P0 | render shader / fragment | 是 | snapshot diff |
-| `updateIsostasy` | P1 | compute dense formula | 是 | field RMSE / maxAbs |
-| `rebuildGeologyElevation` | P1 | compute dense formula | 是 | `elev / baseElev / relief / boundaryRelief` compare |
-| slope / local relief / ruggedness | P2 | compute stencil | 是 | terrain derived compare |
-| `smoothMarginFields` | P2 | compute stencil | 是 | margin field compare |
-| sediment capacity | P2 | compute dense + stencil | 是 | capacity / sink share compare |
-| sediment transport passes | P3 | multi-pass compute | 是 | mass budget + visual debug |
-| inactive fracture suppression | P3 | dense + local smooth | 是 | relief correlation compare |
-| debug dense metrics | P3 | reduction kernels | 是 | metric compare |
-| external sea BFS | 延后 | graph | 是 | 暂不迁移 |
-| closed basin id | 延后 | connected components | 是 | 暂不迁移 |
-| hydrology flow accumulation | 延后 | graph / scan | 是 | 暂不迁移 |
+| 模块 / 字段 | 迁移优先级 | 算法类型 | 状态风险 | CPU 仍需保留 | 验证方式 |
+|---|---:|---|---|---|---|
+| `map2d` elevation coloring | P0 | render shader / fragment | 只读渲染 | 是 | snapshot diff |
+| `updateIsostasy` | P1 | dense formula | 派生字段写回 | 是 | field RMSE / maxAbs |
+| `rebuildGeologyElevation` | P1 | dense formula | 派生高程写回 | 是 | `elev / baseElev / relief / boundaryRelief` compare |
+| slope / local relief / ruggedness | P2 | stencil | 派生诊断 | 是 | terrain derived compare |
+| `smoothMarginFields` | P2 | stencil | 派生地貌写回 | 是 | margin field compare |
+| sediment capacity | P2 | dense + stencil | 半状态字段 | 是 | capacity / sink share compare |
+| sediment transport passes | P4 / 实验 | multi-pass scatter | 长期状态写回 | 是 | mass budget + visual debug + long-run compare |
+| inactive fracture suppression | P3 | dense + local smooth | 高程写回 | 是 | relief correlation compare |
+| debug dense metrics | P3 | reduction kernels | 只读诊断 | 是 | metric compare |
+| external sea BFS | 延后 | graph | 拓扑状态 | 是 | 暂不迁移 |
+| closed basin id | 延后 | connected components | 拓扑状态 | 是 | 暂不迁移 |
+| hydrology flow accumulation | 延后 | graph / scan | 水文状态 | 是 | 暂不迁移 |
+
+### 4.1 代码证据映射
+
+| 当前代码位置 | 当前职责 | GPU 改造判断 | 建议落点 |
+|---|---|---|---|
+| `src/render/map2d.js:createMapRenderer` | Canvas 2D 逐像素 `ImageData` 着色与边界 overlay | 低风险，只读渲染，适合作为第一条 GPU 管线 | `renderMap.wgsl` 或 WebGL2 fragment renderer，CPU renderer 保留 |
+| `src/sim/geology/isostasy.js:updateIsostasy` | 壳厚、密度、洋壳年龄、沉积负载到等静力项 | dense formula，首批 compute kernel | `isostasy.wgsl`，先 GPU experimental |
+| `src/sim/geology/elevation.js:rebuildGeologyElevationV2` | 组合等静力、构造 feature、沉积、被动边缘得到 `elev` | dense formula，但每步多次调用，必须控制上传下载 | `elevation.wgsl`，与 isostasy 尽量批处理 |
+| `src/sim/geology/pipeline.js:runGeologyV2Step` | geology-v2 调度与阶段计时 | 不整体迁移，只作为 CPU orchestration | 后端只替换局部 stage |
+| `src/sim/geology/margins.js:updatePassiveMargins` | 距离场、陆架/陆坡/陆隆/深海平原、平滑 | 拆分迁移：BFS 留 CPU，分类/平滑可 GPU | CPU distance + GPU classify/smooth |
+| `src/sim/geology/sediment.js:updateSedimentBudget` | 侵蚀源、容量、搬运、沉积、诊断 | capacity 可早迁，transport scatter 延后 | `sedimentCapacity.wgsl` 先做，transport 仅实验 |
+| `src/sim/geology/rift.js:deriveOceanConnectivity` | external sea / closed basin 连通性 | connected components，不做第一批 GPU | CPU 保留 |
+| `src/sim/hydrology.js:deriveHydrology` | 流向、汇流、流域、湖泊候选 | 图算法和排序传播，不做第一批 GPU | CPU 保留 |
+| `src/sim/derived/terrain.js:measureTerrainShape` | slope / aspect / ruggedness 派生 | stencil，适合 GPU | `localFields.wgsl` |
+| `tools/perf-profile.mjs` | geology-v2 stage profiling | GPU 性能工具应复用其 seed/resolution 参数习惯 | 扩展 `gpu-perf-profile.mjs` |
+
+### 4.2 首批 kernel 字段读写草案
+
+| Kernel | 输入字段 | 输出字段 | 同步策略 | 备注 |
+|---|---|---|---|---|
+| `renderMap` | `elev`, `seaLevel`, `btype`, `activeBoundary`, `boundaryDensity`, `boundaryCoherence`, `plateCheckerboard` | framebuffer / texture | CPU authoritative，不回写模拟 | 第一阶段可先只做 elevation coloring，overlay 保留 CPU |
+| `isostasy` | `crustType`, `crustThickness`, `crustAge`, `crustDensity`, `sediment`, `sedimentLoadSubsidence`, `ridge`, `trench` | `isostaticBase`, `crustBuoyancy`, `densitySubsidence`, `lithosphereCooling`, `ageSubsidence`, `thicknessBuoyancy`, `sedimentFill`, `ridgeUplift`, `trenchDepression`, `oceanDepthTerms`, `isostaticReliefSupply` | 临时 GPU 计算后下载字段 | 先不在 GPU 上跑 diagnostics correlation |
+| `elevation` | `crustType`, `orogeny`, `activeOrogeny`, `oldOrogeny`, `orogenyAge`, `sediment`, `sedimentLoadSubsidence`, `sedimentFill`, `ridgeUplift`, `trenchDepression`, `isostaticBase`, `passiveMargin`, `continentalShelf`, `continentalSlope`, `continentalRise`, `abyssalPlain`, `sedimentWedge`, `forelandBasin`, `activeTransform`, `transformMemory`, `fractureZoneMemory`, `inactiveBoundaryRelief`, `geologyBroadNoise`, `geologyMicroNoise`, `mountainBelt`, `trench`, `ridge`, `rift`, `islandArc`, `basin` | `baseElev`, `relief`, `boundaryRelief`, `elev` | 与 `isostasy` 合批优先，减少 readback | 当前 pipeline 多次调用，单独迁移不一定有收益 |
+| `localFields` | `elev`, `width`, `height`, topology flags | `slope`, `aspect`, `ruggedness`, `localRelief` | 派生结果可下载给 terrain/hydrology | 必须严格匹配 x wrap、y no-wrap |
+| `marginSmooth` | `passiveMargin`, `continentalShelf`, `continentalSlope`, `continentalRise`, `sedimentWedge`, `abyssalPlain` | 同名字段 ping-pong | GPU temporary buffer | 只替代 `smoothMarginFields`，不替代距离场 BFS |
+| `sedimentCapacity` | `elev`, `seaLevel`, `crustType`, `basin`, `forelandBasin`, `riftAxis`, `trench`, `trenchAxis`, `ridge`, `ridgeAxis`, `islandArc`, `inlandWaterCandidate`, `externalSeaMask`, `passiveMargin`, `continentalShelf`, `continentalRise`, `sedimentWedge`, `abyssalPlain`, `boundaryInfluence`, `axisCurvature`, `weakness` | `sedimentCapacity` | 先 GPU experimental | transport pass 仍 CPU |
+
+### 4.3 字段类别与迁移 gate
+
+GPU 迁移时按字段类别分级验收：
+
+| 字段类别 | 示例 | 允许首批 GPU 默认启用 | 额外 gate |
+|---|---|---:|---|
+| 只读渲染 | color buffer, debug texture | 是 | snapshot diff |
+| 纯派生诊断 | slope, ruggedness, straightness risk | 是 | 单步 field compare |
+| 派生高程写回 | `isostaticBase`, `baseElev`, `elev` | 谨慎 | 单步 compare + 20 step compare |
+| 长期状态写回 | `sediment`, `crustAge`, `crustThickness`, `basin` | 否，先实验 | 200 / 739 Myr long-run compare |
+| 拓扑 / 图状态 | `externalSeaMask`, `closedBasinId`, `flowAccumulation` | 否 | 暂留 CPU |
 
 ## 5. 目标架构
 
@@ -168,7 +206,52 @@ const FieldSyncMode = {
 };
 ```
 
-### 5.3 Worker 与 GPU 的关系
+### 5.3 Buffer 布局与对齐
+
+当前 CPU 侧字段混用 `Float32Array / Uint8Array / Int8Array / Int32Array`。WebGPU storage buffer 实现时不要简单假设所有 typed array 都能按原样无成本映射：
+
+- `Float32Array` 字段可优先一字段一 buffer，便于调试和 field compare。
+- `Int32Array` 字段可按 `i32 / u32` buffer 映射。
+- `Uint8Array / Int8Array` mask 字段建议先提升为 `u32` buffer，或集中打包到 mask buffer；不要在第一版追求极限压缩。
+- `seaLevel / width / height / timeScaleFactor / topology flags` 这类 scalar 应进入 uniform buffer 或小型 params buffer。
+- 字段顺序应由 `fieldLayout.js` 统一声明，避免 WGSL 与 JS 两边手写重复列表。
+
+建议先采用“可调试优先”的朴素布局：
+
+```text
+one simulation field -> one GPUBuffer
+small mask fields -> u32 mask buffer
+params -> uniform buffer
+temporary fields -> named ping-pong buffers
+```
+
+等 CPU/GPU 结果稳定后，再考虑把多个 hot fields 合并为 struct-of-arrays buffer，减少 bind group 数量。
+
+### 5.4 Scratch 与临时缓冲区策略
+
+现有 CPU 代码大量复用 `grid.scratch / scratch2 / scratch3`，例如 sediment、margin、transform、surface aging 都会临时写这些数组。GPU 路径不能直接复刻这种隐式共享语义，否则很容易出现 kernel 间数据覆盖。
+
+建议新增 GPU 临时区池：
+
+```js
+class GpuTempPool {
+  acquireFloat(name, size) {}
+  acquireUint(name, size) {}
+  release(name) {}
+  resetFrame() {}
+}
+```
+
+使用规则：
+
+- 每个 kernel 的临时 buffer 必须在 kernel spec 中声明。
+- 多 pass stencil 使用 ping-pong buffer，不复用 CPU `scratch`。
+- CPU fallback 与 GPU experimental 不共享 scratch 生命周期。
+- debug compare 时应能下载每个 pass 的关键临时字段，例如 `capacityRaw / capacitySmoothed / marginSmoothPass1`。
+
+这一步虽然偏工程基础，但对 sediment、margin、fracture suppression 这类多 pass 逻辑非常关键。
+
+### 5.5 Worker 与 GPU 的关系
 
 `src/worker.js` 当前说明 Phase 1 单线程以保持直接打开文件可运行。GPU 改造不应强依赖 Worker。
 
@@ -180,6 +263,18 @@ const FieldSyncMode = {
 4. Worker 内 GPU compute 作为实验项。
 
 这样可以避免同时引入 Worker 消息同步、GPU buffer 生命周期和浏览器安全上下文三类风险。
+
+### 5.6 运行模式矩阵
+
+| 运行方式 | 默认后端 | GPU 可用时 | 约束 |
+|---|---|---|---|
+| 直接双击 `index.html` / `file://` | CPU simulation + CPU render | 可尝试 WebGL2 render；WebGPU 不作为假设 | 必须无报错运行 |
+| 本地 dev server / `localhost` | CPU simulation + optional GPU render | 可启用 WebGPU experimental | 适合人工视觉验证 |
+| Node 工具链 | CPU only | 未来可选 headless GPU，但不作为默认 | `interface-check / long-run-check / resolution-check` 不依赖 GPU |
+| Debug render | CPU field source | 可选 GPU field compare | 输出必须可复现 |
+| Profiling | CPU baseline | GPU profile 作为独立命令 | 必须拆分 upload / kernel / download |
+
+文档中的 GPU 路线是长期加速路线，不代表下一轮地质调参必须先完成 GPU 工程。地质质量规则仍可先在 CPU 路径落地，稳定后再迁移到 GPU。
 
 ## 6. 渐进式路线图
 
@@ -199,6 +294,15 @@ const FieldSyncMode = {
 - 无 WebGPU 时应用行为完全不变。
 - `index.html` 直接打开仍可运行。
 - `perf-profile` 仍可在 CPU-only 环境下使用。
+
+当前落地状态：
+
+- 已新增 `src/gpu/capability.js`：只读检测 secure context、WebGPU、WebGL2，并给出 `cpu / webgl-render-available / webgpu-experimental-available` 建议模式；本阶段不请求 GPU device。
+- 已新增 `src/gpu/gpuContext.js`、`src/gpu/fieldLayout.js`、`src/gpu/gpuWorld.js`：只提供 CPU authoritative 的后端骨架、字段分组与未来同步意图，不执行 WGSL kernel。
+- 已在 `src/main.js` 中记录 capability，并在 `tools/bundle-app.mjs` 中纳入 `src/gpu/capability.js`，保持 `src/app.js` 可直接由 `index.html` 加载运行。
+- 已新增 `tools/gpu-field-compare.mjs`：当前为 CPU baseline vs CPU candidate 框架，供后续 GPU kernel 接入后复用。
+- 已新增 `tools/gpu-perf-profile.mjs`：当前输出 CPU baseline 与 GPU capability，`uploadMs / kernelMs / downloadMs / totalGpuPathMs` 仍为 `null`。
+- 当前没有任何 GPU compute kernel；CPU fallback 仍是默认路径和权威模拟路径。
 
 ### Phase 1：GPU 渲染，不碰模拟
 
@@ -359,6 +463,41 @@ node .\tools\gpu-field-compare.mjs '龙骨海-纪元7' geology-v2 512x256 200 el
 }
 ```
 
+### 8.4 `tools/gpu-drift-check.mjs`
+
+用途：
+
+- 检查 GPU 写回字段是否会在长期演化中放大微小浮点差异。
+- 对比 CPU-only 与 GPU-experimental 在同 seed、同参数、同 step 下的核心诊断。
+- 只在 GPU kernel 准备从 experimental 升级为默认路径前运行。
+
+建议参数：
+
+```powershell
+node .\tools\gpu-drift-check.mjs '龙骨海-纪元7' geology-v2 512x256 20,200,739 elev,isostaticBase,sedimentCapacity
+```
+
+建议输出：
+
+```json
+{
+  "seedText": "龙骨海-纪元7",
+  "resolution": "512x256",
+  "steps": [20, 200, 739],
+  "valid": true,
+  "diagnosticDrift": {
+    "landRatio": 0.002,
+    "seaRatio": 0.002,
+    "depthAgeCorrelation": 0.018,
+    "sedimentBudgetError": 0.011
+  },
+  "fieldDrift": {
+    "elev": { "rmse": 0.0024, "maxAbs": 0.012 },
+    "sedimentCapacity": { "rmse": 0.014, "maxAbs": 0.071 }
+  }
+}
+```
+
 ## 9. GPU 化验收标准
 
 ### 正确性
@@ -366,6 +505,8 @@ node .\tools\gpu-field-compare.mjs '龙骨海-纪元7' geology-v2 512x256 200 el
 - 同 seed / 同参数 / 同 step 下，CPU 与 GPU 字段误差低于阈值。
 - GPU 路径不改变 legacy 模式。
 - geology-v2 的关键诊断仍稳定：陆海比、ridge age reset、depth-age correlation、rift / margin / transform 指标不出现异常漂移。
+- 只读渲染和纯派生诊断可以用单步 compare 验收；凡是写回长期状态的 GPU kernel，必须补跑 20 / 200 / 739 Myr drift check。
+- CPU/GPU 差异应先按字段类别解释：渲染色差可以宽松，派生高程需要严格，长期状态写回必须证明不会造成陆海比、沉积预算或旧边界残影漂移。
 
 ### 可用性
 
@@ -378,6 +519,16 @@ node .\tools\gpu-field-compare.mjs '龙骨海-纪元7' geology-v2 512x256 200 el
 - 只在总路径更快时默认启用 GPU，包括 upload/download。
 - 低分辨率下 GPU 不一定更快，允许继续 CPU。
 - 高分辨率下应优先验证 512x256、1024x512 两档。
+- 默认启用 GPU 的硬性门槛建议设为：`totalGpuPathMs <= cpuBaselineMs * 0.8`，且连续多 seed / 多分辨率不退化；若只快 0%-20%，保留为 experimental。
+- 性能报告必须拆分 `uploadMs / kernelMs / downloadMs / totalGpuPathMs / cpuBaselineMs`，禁止只用 kernel 时间证明收益。
+- 对 `rebuildGeologyElevation` 这类每步多次调用的 stage，应单独记录“合批前”和“合批后”两种 profile，避免单 kernel 快但整步更慢。
+
+### 确定性与长期漂移
+
+- 第一阶段优先迁移派生字段，避免直接改变 `crustAge / sediment / basin / crustThickness` 等长期记忆状态。
+- 若 GPU kernel 写回长期状态，应同时比较字段误差、诊断漂移和 debug 图层；任何一项无法解释，都不能默认启用。
+- 允许 CPU/GPU 之间存在极小浮点差异，但不允许差异在 200 / 739 Myr 形成新的海岸线、沉积色带、旧边界残影或陆海比漂移。
+- 随机扰动、hash jitter、噪声采样必须继续由确定性 seed 驱动；不要引入依赖 GPU 执行顺序的非确定性。
 
 ## 10. 风险与缓解
 

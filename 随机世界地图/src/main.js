@@ -1,4 +1,5 @@
 import { createMapRenderer } from "./render/map2d.js";
+import { detectGpuCapabilities } from "./gpu/capability.js";
 import { stepWorld } from "./sim/evolution.js";
 import { createWorld, updateWorldParams } from "./sim/world.js";
 import { bindControlLabels, randomSeedText, readParams } from "./ui/controls.js";
@@ -31,8 +32,11 @@ const elements = {
 };
 
 bindControlLabels(elements);
+const gpuCapabilities = detectGpuCapabilities(globalThis);
+console.info("[gpu]", gpuCapabilities.recommendedMode, gpuCapabilities.reason);
 const renderer = createMapRenderer(elements.canvas);
 let world = createWorld(readParams(elements));
+world.gpuCapabilities = gpuCapabilities;
 let playing = false;
 let lastFrame = 0;
 
@@ -89,6 +93,7 @@ function rebuildWorld() {
   playing = false;
   elements.playPause.textContent = "播放";
   world = createWorld(readParams(elements));
+  world.gpuCapabilities = gpuCapabilities;
   renderAll();
   if (wasPlaying) {
     playing = true;
