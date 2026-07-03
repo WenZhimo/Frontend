@@ -958,6 +958,13 @@ Hydrology MVP 现在按只读派生层运行，不推进 geology-v2 状态。为
 
 当前 profiling 结论：短步数下主要耗时来自 geology-v2 `stepWorld` 演化本身，而不是 hydrology 派生；因此 hydrology 性能验证应单独报告 `simulation` 与 `hydrologyTotal`，避免把长期模拟成本误归因到水文诊断。
 
+2026-07-03 性能校准补充：`hydrology-profile` 已确认 512×256 / 20 step 下 hydrology 派生约为数百毫秒量级，主要时间在 geology-v2 主循环。`tools/perf-profile.mjs` 现在支持 geology-v2 阶段计时，默认输出模块级 `geologyStageTimings`，可用 `--no-stages` 测整步真实耗时。已落地的主循环优化包括：
+
+- `rebuildGeologyElevation` 缓存固定空间噪声到 `geologyBroadNoise / geologyMicroNoise`，避免同一步多次重建高程时重复采样 3D 噪声。
+- relief budget 诊断从每步强制全量改为模拟中低频刷新，派生层读取时按需刷新，保持诊断可信度但避免长期模拟重复做完整统计。
+- 第二轮 passive-margin / fracture-zone 修正改为低频校正，常规步保留第一轮边缘更新和最终海平面 / 连通性刷新。
+- 20 step `resolution-check '龙骨海-纪元7' geology-v2 256x128,512x256` 已从约 120 秒级降到约 74 秒；512×256 / 20 step `perf-profile --no-stages` 约 76 秒。后续 200 / 739 Myr 深度验证仍应作为受控长任务，而不是塞进日常 smoke。
+
 ## 17. 统一拓扑 API 接口预留
 
 新增模块：`src/sim/topology.js`。

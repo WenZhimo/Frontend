@@ -438,6 +438,8 @@
       baseElev: new Float32Array(size),
       relief: new Float32Array(size),
       boundaryRelief: new Float32Array(size),
+      geologyBroadNoise: new Float32Array(size),
+      geologyMicroNoise: new Float32Array(size),
       scratch: new Float32Array(size),
       scratch2: new Float32Array(size),
       scratch3: new Float32Array(size),
@@ -3529,6 +3531,7 @@
   function rebuildGeologyElevationV2(world) {
     const { grid, textureNoise } = world;
     updateIsostasy(world);
+    ensureGeologyElevationNoise(world);
     const {
       width,
       height,
@@ -3558,6 +3561,8 @@
       baseElev,
       relief,
       boundaryRelief,
+      geologyBroadNoise,
+      geologyMicroNoise,
       elev,
       isContinental,
       mountainBelt,
@@ -3569,11 +3574,8 @@
     } = grid;
 
     for (let i = 0; i < size; i += 1) {
-      const x = i % width;
-      const y = Math.floor(i / width);
-      const sphere = spherePointForCell(grid, x, y);
-      const micro = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
-      const broad = textureNoise(sphere.x * 2.2 + 7, sphere.y * 2.2 - 5, sphere.z * 2.2 + 17, 3, 2, 0.48);
+      const micro = geologyMicroNoise[i];
+      const broad = geologyBroadNoise[i];
       const continental = crustType[i] === CrustType.CONTINENTAL;
       const transitional = crustType[i] === CrustType.TRANSITIONAL;
       isContinental[i] = continental ? 1 : 0;
@@ -3618,6 +3620,20 @@
       elev[i] = baseElev[i] + relief[i] + boundaryRelief[i];
     }
     refreshIsostaticResidual(world);
+  }
+
+  function ensureGeologyElevationNoise(world) {
+    if (world.geologyElevationNoiseInitialized) return;
+    const { grid, textureNoise } = world;
+    const { width, size, geologyBroadNoise, geologyMicroNoise } = grid;
+    for (let i = 0; i < size; i += 1) {
+      const x = i % width;
+      const y = Math.floor(i / width);
+      const sphere = spherePointForCell(grid, x, y);
+      geologyMicroNoise[i] = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
+      geologyBroadNoise[i] = textureNoise(sphere.x * 2.2 + 7, sphere.y * 2.2 - 5, sphere.z * 2.2 + 17, 3, 2, 0.48);
+    }
+    world.geologyElevationNoiseInitialized = true;
   }
 
 
@@ -4759,42 +4775,70 @@
 
   function runGeologyV2Step(world) {
     // The staged calls below define the geology-v2 pipeline contract.
-    advectCrust(world);
-    updatePlateBoundaries(world);
-    updateCrustProperties(world);
-    updateTransformMemory(world);
-    updateTectonicAxes(world);
-    buildTectonicFeatures(world);
-    updateOrogenicLifecycle(world);
-    updateSedimentBudget(world);
-    rebuildGeologyElevation(world);
+    runStage(world, "advectCrust", advectCrust);
+    runStage(world, "updatePlateBoundaries", updatePlateBoundaries);
+    runStage(world, "updateCrustProperties", updateCrustProperties);
+    runStage(world, "updateTransformMemory", updateTransformMemory);
+    runStage(world, "updateTectonicAxes", updateTectonicAxes);
+    runStage(world, "buildTectonicFeatures", buildTectonicFeatures);
+    runStage(world, "updateOrogenicLifecycle", updateOrogenicLifecycle);
+    runStage(world, "updateSedimentBudget", updateSedimentBudget);
+    runStage(world, "rebuildGeologyElevation:initial", rebuildGeologyElevation);
     if (!world.geologyV2SeaInitialized) {
       initializeSeaLevel(world);
       world.geologyV2SeaInitialized = true;
     }
-    updateRiftStages(world);
-    rebuildGeologyElevation(world);
-    applyGeologyV2SurfaceAging(world);
-    rebuildGeologyElevation(world);
-    rebuildMountainInterfaceFields(world);
-    updateSeaLevel(world);
-    updateGeologicSeaLevel(world);
-    deriveOceanConnectivity(world);
-    updatePassiveMargins(world);
-    rebuildGeologyElevation(world);
-    rebuildMountainInterfaceFields(world);
-    suppressInactiveFractureRelief(world);
-    updateSeaLevel(world);
-    updateGeologicSeaLevel(world);
-    deriveOceanConnectivity(world);
-    updatePassiveMargins(world);
-    suppressInactiveFractureRelief(world);
-    updateSeaLevel(world);
-    updateGeologicSeaLevel(world);
-    deriveOceanConnectivity(world);
-    rebuildMountainInterfaceFields(world);
-    updateSurfaceContinuityDiagnostics(world.grid);
-    updateReliefBudgetDiagnostics(world);
+    runStage(world, "updateRiftStages", updateRiftStages);
+    runStage(world, "rebuildGeologyElevation:rift", rebuildGeologyElevation);
+    runStage(world, "applyGeologyV2SurfaceAging", applyGeologyV2SurfaceAging);
+    runStage(world, "rebuildGeologyElevation:aging", rebuildGeologyElevation);
+    runStage(world, "rebuildMountainInterfaceFields:preMargin", rebuildMountainInterfaceFields);
+    runStage(world, "updateSeaLevel:preMargin", updateSeaLevel);
+    runStage(world, "updateGeologicSeaLevel:preMargin", updateGeologicSeaLevel);
+    runStage(world, "deriveOceanConnectivity:preMargin", deriveOceanConnectivity);
+    runStage(world, "updatePassiveMargins:first", updatePassiveMargins);
+    runStage(world, "rebuildGeologyElevation:margin", rebuildGeologyElevation);
+    runStage(world, "rebuildMountainInterfaceFields:postMargin", rebuildMountainInterfaceFields);
+    runStage(world, "suppressInactiveFractureRelief:first", suppressInactiveFractureRelief);
+    runStage(world, "updateSeaLevel:postFracture", updateSeaLevel);
+    runStage(world, "updateGeologicSeaLevel:postFracture", updateGeologicSeaLevel);
+    runStage(world, "deriveOceanConnectivity:postFracture", deriveOceanConnectivity);
+    if (shouldRunSecondMarginPass(world)) {
+      runStage(world, "updatePassiveMargins:second", updatePassiveMargins);
+      runStage(world, "suppressInactiveFractureRelief:second", suppressInactiveFractureRelief);
+    }
+    runStage(world, "updateSeaLevel:final", updateSeaLevel);
+    runStage(world, "updateGeologicSeaLevel:final", updateGeologicSeaLevel);
+    runStage(world, "deriveOceanConnectivity:final", deriveOceanConnectivity);
+    runStage(world, "rebuildMountainInterfaceFields:final", rebuildMountainInterfaceFields);
+    runStage(world, "updateSurfaceContinuityDiagnostics", () => updateSurfaceContinuityDiagnostics(world.grid));
+    if (shouldRefreshFullGeologyDiagnostics(world)) {
+      runStage(world, "updateReliefBudgetDiagnostics", updateReliefBudgetDiagnostics);
+    }
+  }
+
+  function runStage(world, name, fn) {
+    if (!world.profileGeologyV2Stages) {
+      return fn(world);
+    }
+    const t0 = performance.now();
+    const result = fn(world);
+    const elapsed = performance.now() - t0;
+    const timings = world.geologyV2StageTimings ?? (world.geologyV2StageTimings = new Map());
+    const current = timings.get(name) ?? { totalMs: 0, calls: 0, maxMs: 0 };
+    current.totalMs += elapsed;
+    current.calls += 1;
+    if (elapsed > current.maxMs) current.maxMs = elapsed;
+    timings.set(name, current);
+    return result;
+  }
+
+  function shouldRefreshFullGeologyDiagnostics(world) {
+    return Boolean(world.profileGeologyV2Stages || world.fullGeologyDiagnostics || world.step === 0 || world.step % 20 === 19);
+  }
+
+  function shouldRunSecondMarginPass(world) {
+    return Boolean(world.fullGeologyDiagnostics || world.step < 2 || world.step % 5 === 4);
   }
 
   function applyGeologyV2SurfaceAging(world) {
@@ -5343,7 +5387,7 @@
     const seaLevelSensitivity = new Float32Array(grid.seaLevelSensitivity);
     const largePlainMask = new Uint8Array(grid.largePlainMask);
     const flatLandMask = new Uint8Array(grid.flatLandMask);
-    const reliefDiagnostics = getReliefDiagnostics(world);
+    const reliefDiagnostics = updateReliefBudgetDiagnostics(world);
     const geologicSeaLevelDiagnostics = getGeologicSeaLevelDiagnostics(world);
     const coastalSensitivity = new Float32Array(grid.coastalSensitivity);
     const ridgeVolumeSignal = new Float32Array(grid.ridgeVolumeSignal);

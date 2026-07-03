@@ -13,6 +13,8 @@ export function createGrid(width, height) {
     baseElev: new Float32Array(size),
     relief: new Float32Array(size),
     boundaryRelief: new Float32Array(size),
+    geologyBroadNoise: new Float32Array(size),
+    geologyMicroNoise: new Float32Array(size),
     scratch: new Float32Array(size),
     scratch2: new Float32Array(size),
     scratch3: new Float32Array(size),

@@ -9,6 +9,7 @@ export function rebuildGeologyElevation(world) {
 export function rebuildGeologyElevationV2(world) {
   const { grid, textureNoise } = world;
   updateIsostasy(world);
+  ensureGeologyElevationNoise(world);
   const {
     width,
     height,
@@ -38,6 +39,8 @@ export function rebuildGeologyElevationV2(world) {
     baseElev,
     relief,
     boundaryRelief,
+    geologyBroadNoise,
+    geologyMicroNoise,
     elev,
     isContinental,
     mountainBelt,
@@ -49,11 +52,8 @@ export function rebuildGeologyElevationV2(world) {
   } = grid;
 
   for (let i = 0; i < size; i += 1) {
-    const x = i % width;
-    const y = Math.floor(i / width);
-    const sphere = spherePointForCell(grid, x, y);
-    const micro = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
-    const broad = textureNoise(sphere.x * 2.2 + 7, sphere.y * 2.2 - 5, sphere.z * 2.2 + 17, 3, 2, 0.48);
+    const micro = geologyMicroNoise[i];
+    const broad = geologyBroadNoise[i];
     const continental = crustType[i] === CrustType.CONTINENTAL;
     const transitional = crustType[i] === CrustType.TRANSITIONAL;
     isContinental[i] = continental ? 1 : 0;
@@ -98,4 +98,18 @@ export function rebuildGeologyElevationV2(world) {
     elev[i] = baseElev[i] + relief[i] + boundaryRelief[i];
   }
   refreshIsostaticResidual(world);
+}
+
+function ensureGeologyElevationNoise(world) {
+  if (world.geologyElevationNoiseInitialized) return;
+  const { grid, textureNoise } = world;
+  const { width, size, geologyBroadNoise, geologyMicroNoise } = grid;
+  for (let i = 0; i < size; i += 1) {
+    const x = i % width;
+    const y = Math.floor(i / width);
+    const sphere = spherePointForCell(grid, x, y);
+    geologyMicroNoise[i] = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
+    geologyBroadNoise[i] = textureNoise(sphere.x * 2.2 + 7, sphere.y * 2.2 - 5, sphere.z * 2.2 + 17, 3, 2, 0.48);
+  }
+  world.geologyElevationNoiseInitialized = true;
 }

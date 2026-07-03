@@ -17,42 +17,70 @@ import { suppressInactiveFractureRelief, updateTransformMemory } from "./transfo
 
 export function runGeologyV2Step(world) {
   // The staged calls below define the geology-v2 pipeline contract.
-  advectCrust(world);
-  updatePlateBoundaries(world);
-  updateCrustProperties(world);
-  updateTransformMemory(world);
-  updateTectonicAxes(world);
-  buildTectonicFeatures(world);
-  updateOrogenicLifecycle(world);
-  updateSedimentBudget(world);
-  rebuildGeologyElevation(world);
+  runStage(world, "advectCrust", advectCrust);
+  runStage(world, "updatePlateBoundaries", updatePlateBoundaries);
+  runStage(world, "updateCrustProperties", updateCrustProperties);
+  runStage(world, "updateTransformMemory", updateTransformMemory);
+  runStage(world, "updateTectonicAxes", updateTectonicAxes);
+  runStage(world, "buildTectonicFeatures", buildTectonicFeatures);
+  runStage(world, "updateOrogenicLifecycle", updateOrogenicLifecycle);
+  runStage(world, "updateSedimentBudget", updateSedimentBudget);
+  runStage(world, "rebuildGeologyElevation:initial", rebuildGeologyElevation);
   if (!world.geologyV2SeaInitialized) {
     initializeSeaLevel(world);
     world.geologyV2SeaInitialized = true;
   }
-  updateRiftStages(world);
-  rebuildGeologyElevation(world);
-  applyGeologyV2SurfaceAging(world);
-  rebuildGeologyElevation(world);
-  rebuildMountainInterfaceFields(world);
-  updateSeaLevel(world);
-  updateGeologicSeaLevel(world);
-  deriveOceanConnectivity(world);
-  updatePassiveMargins(world);
-  rebuildGeologyElevation(world);
-  rebuildMountainInterfaceFields(world);
-  suppressInactiveFractureRelief(world);
-  updateSeaLevel(world);
-  updateGeologicSeaLevel(world);
-  deriveOceanConnectivity(world);
-  updatePassiveMargins(world);
-  suppressInactiveFractureRelief(world);
-  updateSeaLevel(world);
-  updateGeologicSeaLevel(world);
-  deriveOceanConnectivity(world);
-  rebuildMountainInterfaceFields(world);
-  updateSurfaceContinuityDiagnostics(world.grid);
-  updateReliefBudgetDiagnostics(world);
+  runStage(world, "updateRiftStages", updateRiftStages);
+  runStage(world, "rebuildGeologyElevation:rift", rebuildGeologyElevation);
+  runStage(world, "applyGeologyV2SurfaceAging", applyGeologyV2SurfaceAging);
+  runStage(world, "rebuildGeologyElevation:aging", rebuildGeologyElevation);
+  runStage(world, "rebuildMountainInterfaceFields:preMargin", rebuildMountainInterfaceFields);
+  runStage(world, "updateSeaLevel:preMargin", updateSeaLevel);
+  runStage(world, "updateGeologicSeaLevel:preMargin", updateGeologicSeaLevel);
+  runStage(world, "deriveOceanConnectivity:preMargin", deriveOceanConnectivity);
+  runStage(world, "updatePassiveMargins:first", updatePassiveMargins);
+  runStage(world, "rebuildGeologyElevation:margin", rebuildGeologyElevation);
+  runStage(world, "rebuildMountainInterfaceFields:postMargin", rebuildMountainInterfaceFields);
+  runStage(world, "suppressInactiveFractureRelief:first", suppressInactiveFractureRelief);
+  runStage(world, "updateSeaLevel:postFracture", updateSeaLevel);
+  runStage(world, "updateGeologicSeaLevel:postFracture", updateGeologicSeaLevel);
+  runStage(world, "deriveOceanConnectivity:postFracture", deriveOceanConnectivity);
+  if (shouldRunSecondMarginPass(world)) {
+    runStage(world, "updatePassiveMargins:second", updatePassiveMargins);
+    runStage(world, "suppressInactiveFractureRelief:second", suppressInactiveFractureRelief);
+  }
+  runStage(world, "updateSeaLevel:final", updateSeaLevel);
+  runStage(world, "updateGeologicSeaLevel:final", updateGeologicSeaLevel);
+  runStage(world, "deriveOceanConnectivity:final", deriveOceanConnectivity);
+  runStage(world, "rebuildMountainInterfaceFields:final", rebuildMountainInterfaceFields);
+  runStage(world, "updateSurfaceContinuityDiagnostics", () => updateSurfaceContinuityDiagnostics(world.grid));
+  if (shouldRefreshFullGeologyDiagnostics(world)) {
+    runStage(world, "updateReliefBudgetDiagnostics", updateReliefBudgetDiagnostics);
+  }
+}
+
+function runStage(world, name, fn) {
+  if (!world.profileGeologyV2Stages) {
+    return fn(world);
+  }
+  const t0 = performance.now();
+  const result = fn(world);
+  const elapsed = performance.now() - t0;
+  const timings = world.geologyV2StageTimings ?? (world.geologyV2StageTimings = new Map());
+  const current = timings.get(name) ?? { totalMs: 0, calls: 0, maxMs: 0 };
+  current.totalMs += elapsed;
+  current.calls += 1;
+  if (elapsed > current.maxMs) current.maxMs = elapsed;
+  timings.set(name, current);
+  return result;
+}
+
+function shouldRefreshFullGeologyDiagnostics(world) {
+  return Boolean(world.profileGeologyV2Stages || world.fullGeologyDiagnostics || world.step === 0 || world.step % 20 === 19);
+}
+
+function shouldRunSecondMarginPass(world) {
+  return Boolean(world.fullGeologyDiagnostics || world.step < 2 || world.step % 5 === 4);
 }
 
 function applyGeologyV2SurfaceAging(world) {
