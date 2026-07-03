@@ -1,5 +1,6 @@
 import { createGrid } from "./grid.js";
 import { hashSeed } from "./prng.js";
+import { createCubedSphereGrid } from "./sphere/cubedSphere.js";
 import { initializeBaseTerrain, initializeSeaLevel, updateSeaLevel } from "./terrain.js";
 import { assignPlates, computeBoundaryStress } from "./tectonics.js";
 import { updatePlateBoundaries } from "./geology/boundaries.js";
@@ -10,17 +11,30 @@ export const PipelineMode = {
   GEOLOGY_V2: "geology-v2",
 };
 
+export const TopologyMode = {
+  CYLINDRICAL: "cylindrical",
+  CUBED_SPHERE: "cubed-sphere",
+};
+
+export const ProjectionMode = {
+  EQUIRECTANGULAR: "equirectangular",
+  ORTHOGRAPHIC: "orthographic",
+  DEBUG_FACE: "debug-face",
+};
+
 export function createWorld(params) {
-  const [width, height] = params.resolution.split("x").map(Number);
-  const seedUint32 = hashSeed(params.seedText);
+  const normalizedParams = normalizeParams(params);
+  const [width, height] = normalizedParams.resolution.split("x").map(Number);
+  const seedUint32 = hashSeed(normalizedParams.seedText);
   const grid = createGrid(width, height);
   const world = {
     grid,
-    params: normalizeParams(params),
+    sphericalGrid: createExperimentalSphericalGrid(normalizedParams),
+    params: normalizedParams,
     seedUint32,
     step: 0,
     ageYears: 0,
-    timeScaleFactor: timeScaleFactor(params.timeScale),
+    timeScaleFactor: timeScaleFactor(normalizedParams.timeScale),
     seaLevel: 0,
     waterVolume: 0,
     plates: null,
@@ -50,10 +64,32 @@ export function updateWorldParams(world, params) {
 }
 
 function normalizeParams(params) {
+  const topologyMode = params.topologyMode === TopologyMode.CUBED_SPHERE
+    ? TopologyMode.CUBED_SPHERE
+    : TopologyMode.CYLINDRICAL;
+  const projectionMode = Object.values(ProjectionMode).includes(params.projectionMode)
+    ? params.projectionMode
+    : ProjectionMode.EQUIRECTANGULAR;
   return {
     ...params,
     pipelineMode: params.pipelineMode === PipelineMode.GEOLOGY_V2 ? PipelineMode.GEOLOGY_V2 : PipelineMode.LEGACY,
+    topologyMode,
+    projectionMode,
+    faceSize: normalizeFaceSize(params.faceSize, params.resolution),
   };
+}
+
+function createExperimentalSphericalGrid(params) {
+  if (params.topologyMode !== TopologyMode.CUBED_SPHERE) return null;
+  return createCubedSphereGrid(params.faceSize);
+}
+
+function normalizeFaceSize(faceSize, resolution) {
+  const explicit = Number(faceSize);
+  if (Number.isFinite(explicit) && explicit >= 2) return Math.trunc(explicit);
+  const [width, height] = String(resolution ?? "512x256").split("x").map(Number);
+  const base = Math.max(2, Math.min(width || 512, height || 256));
+  return Math.max(2, Math.round(base / 2));
 }
 
 export function analyzeWorld(world) {
