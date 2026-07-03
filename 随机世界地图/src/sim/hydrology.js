@@ -3,11 +3,13 @@ import { topologyForGrid } from "./topology.js";
 const NO_FLOW = -1;
 const ENDORHEIC_BASE_ID = 1_000_000;
 
-export function deriveHydrology(world, terrain) {
+export function deriveHydrology(world, terrain, options = {}) {
+  const diagnostics = normalizeDiagnostics(options.diagnostics);
+  const profile = options.profile ? createProfile() : null;
   const { grid } = world;
   const topology = topologyForGrid(grid);
   const { size, elev, crustType, sediment, basin, forelandBasin, orogenicSedimentSupply, sedimentSink: budgetSedimentSink, sedimentCapacity } = grid;
-  const hydroElevation = smoothHydroElevation(topology, elev);
+  const hydroElevation = timed(profile, "hydroElevation", () => smoothHydroElevation(topology, elev));
   const flowDirection = new Int8Array(size);
   const flowTarget = new Int32Array(size);
   const flowAccumulation = new Float32Array(size);
@@ -33,10 +35,11 @@ export function deriveHydrology(world, terrain) {
   flowTarget.fill(NO_FLOW);
   outletId.fill(NO_FLOW);
 
-  const landCells = [];
-  let landCount = 0;
-  let coastalLandCount = 0;
-  for (let i = 0; i < size; i += 1) {
+  const prepared = timed(profile, "prepareMasks", () => {
+    const landCells = [];
+    let landCount = 0;
+    let coastalLandCount = 0;
+    for (let i = 0; i < size; i += 1) {
     if (terrain.externalSeaMask[i]) oceanConnectivity[i] = 2;
     else if (terrain.seaMask[i]) oceanConnectivity[i] = 1;
 
@@ -64,18 +67,24 @@ export function deriveHydrology(world, terrain) {
     flowAccumulation[i] = 1;
     if (touchesMask(topology, i, terrain.externalSeaMask, 8)) coastalLandCount += 1;
   }
+    return { landCells, landCount, coastalLandCount };
+  });
+  const { landCells, landCount, coastalLandCount } = prepared;
 
-  assignFlowTargets(topology, world.seaLevel, terrain, hydroElevation, flowTarget, flowDirection, flowSlope, depressionMask, landCells);
+  timed(profile, "assignFlowTargets", () => assignFlowTargets(topology, world.seaLevel, terrain, hydroElevation, flowTarget, flowDirection, flowSlope, depressionMask, landCells));
   landCells.sort((a, b) => hydroElevation[b] - hydroElevation[a]);
-  accumulateFlow(terrain, flowTarget, flowAccumulation, landCells);
+  timed(profile, "accumulateFlow", () => accumulateFlow(terrain, flowTarget, flowAccumulation, landCells));
 
-  const drainage = assignDrainage(topology, terrain, flowTarget, flowAccumulation, drainageBasinId, watershedId, outletId, riverOutlet, endorheicBasin, endorheicSink, depressionMask, lakeCandidate, landCells);
+  const drainage = timed(profile, "assignDrainage", () => assignDrainage(topology, terrain, flowTarget, flowAccumulation, drainageBasinId, watershedId, outletId, riverOutlet, endorheicBasin, endorheicSink, depressionMask, lakeCandidate, landCells));
   const riverThreshold = Math.max(12, landCount * 0.002);
-  buildRivers(terrain, flowTarget, flowAccumulation, flowSlope, riverThreshold, riverMask, riverStrength, lakeCandidate, endorheicSink, landCells);
-  assignRiverOrder(terrain, flowTarget, flowAccumulation, riverMask, riverOrder, landCells);
-  buildWetlands(topology, terrain, flowAccumulation, flowSlope, riverStrength, endorheicBasin, lakeCandidate, wetlandCandidate, landCells);
+  timed(profile, "buildRivers", () => buildRivers(terrain, flowTarget, flowAccumulation, flowSlope, riverThreshold, riverMask, riverStrength, lakeCandidate, endorheicSink, landCells));
+  if (diagnostics !== "none") {
+    timed(profile, "assignRiverOrder", () => assignRiverOrder(terrain, flowTarget, flowAccumulation, riverMask, riverOrder, landCells));
+    timed(profile, "buildWetlands", () => buildWetlands(topology, terrain, flowAccumulation, flowSlope, riverStrength, endorheicBasin, lakeCandidate, wetlandCandidate, landCells));
+  }
 
-  const hydrologyDiagnostics = measureHydrologyDiagnostics({
+  const hydrologyDiagnostics = timed(profile, diagnostics === "full" ? "diagnosticsFull" : "diagnosticsBasic", () => measureHydrologyDiagnostics({
+    diagnostics,
     size,
     landCount,
     coastalLandCount,
@@ -90,7 +99,8 @@ export function deriveHydrology(world, terrain) {
     lakeCandidate,
     terrain,
     drainage,
-  });
+  }));
+  if (profile) profile.total = sumProfile(profile.timingsMs);
 
   return {
     hydroElevation,
@@ -132,6 +142,7 @@ export function deriveHydrology(world, terrain) {
     orogenicSedimentSupply: new Float32Array(grid.orogenicSedimentSupply),
     continentalRise: terrain.continentalRise,
     hydrologyDiagnostics,
+    hydrologyProfile: profile,
   };
 }
 
@@ -355,6 +366,7 @@ function buildWetlands(topology, terrain, flowAccumulation, flowSlope, riverStre
 }
 
 function measureHydrologyDiagnostics({
+  diagnostics,
   size,
   landCount,
   coastalLandCount,
@@ -378,7 +390,9 @@ function measureHydrologyDiagnostics({
   let riverContinuous = 0;
   let external = 0;
   let orphan = drainage.orphanCount;
-  const accumulations = [];
+  let max = 0;
+  const full = diagnostics === "full";
+  const accumulations = full ? [] : null;
 
   for (let i = 0; i < size; i += 1) {
     if (terrain.landMask[i]) {
@@ -387,20 +401,26 @@ function measureHydrologyDiagnostics({
       if (endorheicBasin[i]) endorheic += 1;
       if (outletId[i] > 0) external += 1;
       if (!drainageBasinId[i]) orphan += 1;
-      accumulations.push(flowAccumulation[i]);
+      if (flowAccumulation[i] > max) max = flowAccumulation[i];
+      if (full) accumulations.push(flowAccumulation[i]);
     }
     if (lakeCandidate[i]) lake += 1;
     if (riverMask[i]) {
       river += 1;
-      const target = flowTarget[i];
-      if (target >= 0 && (!terrain.landMask[target] || riverMask[target])) riverContinuous += 1;
-      else if (lakeCandidate[i] || depressionMask[i]) riverContinuous += 1;
+      if (full) {
+        const target = flowTarget[i];
+        if (target >= 0 && (!terrain.landMask[target] || riverMask[target])) riverContinuous += 1;
+        else if (lakeCandidate[i] || depressionMask[i]) riverContinuous += 1;
+      }
     }
   }
 
-  accumulations.sort((a, b) => a - b);
-  const p95 = accumulations.length ? accumulations[Math.min(accumulations.length - 1, Math.floor(accumulations.length * 0.95))] : 0;
-  const max = accumulations.length ? accumulations[accumulations.length - 1] : 0;
+  let p95 = 0;
+  if (full) {
+    accumulations.sort((a, b) => a - b);
+    p95 = accumulations.length ? accumulations[Math.min(accumulations.length - 1, Math.floor(accumulations.length * 0.95))] : 0;
+    max = accumulations.length ? accumulations[accumulations.length - 1] : max;
+  }
   const riverOutletCount = countMask(riverOutlet);
 
   return {
@@ -413,16 +433,40 @@ function measureHydrologyDiagnostics({
     endorheicLandShare: endorheic / Math.max(1, landCount),
     lakeCandidateShare: lake / Math.max(1, size),
     riverCellShare: river / Math.max(1, landCount),
-    riverContinuityScore: river ? riverContinuous / river : 1,
+    riverContinuityScore: full ? (river ? riverContinuous / river : 1) : null,
     riverOutletCount,
-    coastalOutletShare: riverOutletCount / Math.max(1, coastalLandCount),
+    coastalOutletShare: full ? riverOutletCount / Math.max(1, coastalLandCount) : null,
     externalSeaDrainageShare: external / Math.max(1, landCount),
     closedBasinDrainageShare: drainage.closedBasinDrainage / Math.max(1, landCount),
-    largestWatershedShare: drainage.largestWatershed / Math.max(1, landCount),
-    flowAccumulationP95: p95,
+    largestWatershedShare: full ? drainage.largestWatershed / Math.max(1, landCount) : null,
+    flowAccumulationP95: full ? p95 : null,
     flowAccumulationMax: max,
     riverResolutionDrift: 0,
+    diagnosticsLevel: diagnostics,
   };
+}
+
+function normalizeDiagnostics(value) {
+  if (value === "none" || value === "full") return value;
+  return "basic";
+}
+
+function createProfile() {
+  return { timingsMs: {}, total: 0 };
+}
+
+function timed(profile, name, fn) {
+  if (!profile) return fn();
+  const start = performance.now();
+  const value = fn();
+  profile.timingsMs[name] = (profile.timingsMs[name] ?? 0) + performance.now() - start;
+  return value;
+}
+
+function sumProfile(timings) {
+  let total = 0;
+  for (const value of Object.values(timings)) total += value;
+  return total;
 }
 
 function touchesMask(topology, id, mask, mode = 4) {

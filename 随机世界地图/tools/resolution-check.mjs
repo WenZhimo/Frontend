@@ -3,12 +3,16 @@ import { stepWorld } from "../src/sim/evolution.js";
 import { getHydrologyInputs } from "../src/sim/derived/terrain.js";
 import { measureIsostasyDiagnostics } from "../src/sim/geology/isostasy.js";
 import { measureTopologyDiagnostics, topologyForGrid } from "../src/sim/topology.js";
+import { parseBoolOption, parseOptions } from "./lib/cli.mjs";
 
-const seedText = process.argv[2] ?? "榫欓娴?绾厓7";
-const steps = Number(process.argv[3] ?? 200);
-const pipelineMode = process.argv[4] ?? "geology-v2";
-const resolutions = (process.argv[5] ?? "256x128,512x256,1024x512").split(",");
-const sampleResolution = process.argv[6] ?? "512x256";
+const { positional, options } = parseOptions(process.argv.slice(2));
+const hydrologyDiagnosticsMode = parseBoolOption(options, "full-hydrology") ? "full" : "basic";
+
+const seedText = positional[0] ?? "???-??7";
+const steps = Number(positional[1] ?? 200);
+const pipelineMode = positional[2] ?? "geology-v2";
+const resolutions = (positional[3] ?? "256x128,512x256,1024x512").split(",");
+const sampleResolution = positional[4] ?? "512x256";
 
 const worlds = new Map();
 for (const resolution of resolutions) {
@@ -795,7 +799,7 @@ function measureGeologyRisks(world) {
 }
 
 function measureHydrologyDiagnostics(world) {
-  return getHydrologyInputs(world).hydrologyDiagnostics ?? {};
+  return getHydrologyInputs(world, { diagnostics: hydrologyDiagnosticsMode }).hydrologyDiagnostics ?? {};
 }
 
 function measureSedimentBudgetDiagnostics(world) {

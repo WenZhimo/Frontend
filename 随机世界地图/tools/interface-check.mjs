@@ -8,17 +8,21 @@ import {
   getResourceInputs,
   getTerrainDerived,
 } from "../src/sim/derived/terrain.js";
+import { parseBoolOption, parseOptions } from "./lib/cli.mjs";
+
+const { positional, options } = parseOptions(process.argv.slice(2));
+const hydrologyDiagnosticsMode = parseBoolOption(options, "full-hydrology") ? "full" : "basic";
 
 const params = {
-  seedText: process.argv[2] ?? "龙骨海-纪元7",
+  seedText: positional[0] ?? "???-??7",
   waterLevel: 50,
   intensity: 1,
   plateCount: 14,
   timeScale: 1_000_000,
-  pipelineMode: process.argv[4] ?? "geology-v2",
-  resolution: process.argv[5] ?? "512x256",
+  pipelineMode: positional[2] ?? "geology-v2",
+  resolution: positional[3] ?? "512x256",
 };
-const steps = Number(process.argv[3] ?? 0);
+const steps = Number(positional[1] ?? 0);
 
 const world = createWorld(params);
 for (let i = 0; i < steps; i += 1) stepWorld(world);
@@ -26,7 +30,7 @@ for (let i = 0; i < steps; i += 1) stepWorld(world);
 const outputs = {
   terrain: getTerrainDerived(world),
   climate: getClimateInputs(world),
-  hydrology: getHydrologyInputs(world),
+  hydrology: getHydrologyInputs(world, { diagnostics: hydrologyDiagnosticsMode }),
   biosphere: getBiosphereInputs(world),
   resources: getResourceInputs(world),
 };
@@ -233,6 +237,7 @@ const stats = {
   closedBasinCount: maxInt(hydrology.closedBasinId),
   inlandWaterCandidateShare: share(terrain.inlandWaterCandidate),
   hydrologyValid: Boolean(hydrologyDiagnostics.hydrologyValid),
+  hydrologyDiagnosticsLevel: hydrologyDiagnostics.diagnosticsLevel ?? hydrologyDiagnosticsMode,
   flowAssignedShare: hydrologyDiagnostics.flowAssignedShare ?? 0,
   flowCycleCount: hydrologyDiagnostics.flowCycleCount ?? 0,
   orphanFlowShare: hydrologyDiagnostics.orphanFlowShare ?? 0,
@@ -241,13 +246,13 @@ const stats = {
   endorheicLandShare: hydrologyDiagnostics.endorheicLandShare ?? share(hydrology.endorheicBasin),
   lakeCandidateShare: hydrologyDiagnostics.lakeCandidateShare ?? share(hydrology.lakeCandidate),
   riverCellShare: hydrologyDiagnostics.riverCellShare ?? share(hydrology.riverMask),
-  riverContinuityScore: hydrologyDiagnostics.riverContinuityScore ?? 0,
+  riverContinuityScore: hydrologyDiagnostics.riverContinuityScore ?? null,
   riverOutletCount: hydrologyDiagnostics.riverOutletCount ?? 0,
-  coastalOutletShare: hydrologyDiagnostics.coastalOutletShare ?? 0,
+  coastalOutletShare: hydrologyDiagnostics.coastalOutletShare ?? null,
   externalSeaDrainageShare: hydrologyDiagnostics.externalSeaDrainageShare ?? 0,
   closedBasinDrainageShare: hydrologyDiagnostics.closedBasinDrainageShare ?? 0,
-  largestWatershedShare: hydrologyDiagnostics.largestWatershedShare ?? 0,
-  flowAccumulationP95: hydrologyDiagnostics.flowAccumulationP95 ?? 0,
+  largestWatershedShare: hydrologyDiagnostics.largestWatershedShare ?? null,
+  flowAccumulationP95: hydrologyDiagnostics.flowAccumulationP95 ?? null,
   flowAccumulationMax: hydrologyDiagnostics.flowAccumulationMax ?? 0,
   riverResolutionDrift: hydrologyDiagnostics.riverResolutionDrift ?? 0,
   riftStageHistogram: histogram(outputs.resources.riftStage, 6),

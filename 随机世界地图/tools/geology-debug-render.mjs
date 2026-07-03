@@ -14,6 +14,17 @@ const outDir = fromSnapshot ? positional[0] ?? "_geology_debug" : positional[2] 
 const pipelineMode = fromSnapshot ? null : positional[3] ?? "geology-v2";
 const resolution = fromSnapshot ? null : positional[4] ?? "512x256";
 const requestedLayers = new Set(parseCsv(options.layers, []));
+const hydrologyLayers = new Set([
+  "flowDirection",
+  "flowAccumulation",
+  "riverMask",
+  "riverStrength",
+  "drainageBasinId",
+  "endorheicBasin",
+  "depressionMask",
+  "lakeCandidate",
+  "riverOutlet",
+]);
 
 const world = fromSnapshot
   ? loadWorldSnapshot(fromSnapshot)
@@ -31,7 +42,6 @@ const world = fromSnapshot
 if (!fromSnapshot) {
   for (let i = 0; i < steps; i += 1) stepWorld(world);
 }
-world.hydrologyInputs = getHydrologyInputs(world);
 
 mkdirSync(outDir, { recursive: true });
 const layers = {
@@ -132,6 +142,12 @@ const layers = {
 };
 
 const outputs = [];
+const shouldRenderAllLayers = requestedLayers.size === 0;
+const needsHydrology = shouldRenderAllLayers || [...requestedLayers].some((name) => hydrologyLayers.has(name));
+if (needsHydrology) {
+  const hydrologyOnly = requestedLayers.size > 0 && [...requestedLayers].every((name) => hydrologyLayers.has(name));
+  world.hydrologyInputs = getHydrologyInputs(world, { diagnostics: hydrologyOnly ? "basic" : "full" });
+}
 for (const [name, colorFn] of Object.entries(layers)) {
   if (requestedLayers.size && !requestedLayers.has(name)) continue;
   const output = join(outDir, `${name}.ppm`);
