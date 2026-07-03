@@ -169,41 +169,67 @@ export function summarizeSphericalBoundaries(grid, classified) {
     faceSeamBoundary: 0,
     activeBoundary: 0,
   };
+  const areas = {
+    total: 0,
+    interior: 0,
+    convergent: 0,
+    divergent: 0,
+    transform: 0,
+    faceSeamBoundary: 0,
+    activeBoundary: 0,
+  };
   let stressTotal = 0;
   let stressMax = 0;
-  let seamBoundaryTotal = 0;
   let seamBoundaryStress = 0;
 
   for (let id = 0; id < grid.size; id += 1) {
     const type = classified.boundaryType[id];
-    if (type === SphericalBoundaryType.CONVERGENT) counts.convergent += 1;
-    else if (type === SphericalBoundaryType.DIVERGENT) counts.divergent += 1;
-    else if (type === SphericalBoundaryType.TRANSFORM) counts.transform += 1;
-    else counts.interior += 1;
+    const area = grid.area?.[id] ?? 1;
+    areas.total += area;
+    if (type === SphericalBoundaryType.CONVERGENT) {
+      counts.convergent += 1;
+      areas.convergent += area;
+    } else if (type === SphericalBoundaryType.DIVERGENT) {
+      counts.divergent += 1;
+      areas.divergent += area;
+    } else if (type === SphericalBoundaryType.TRANSFORM) {
+      counts.transform += 1;
+      areas.transform += area;
+    } else {
+      counts.interior += 1;
+      areas.interior += area;
+    }
 
     if (!classified.activeBoundary[id]) continue;
     counts.activeBoundary += 1;
+    areas.activeBoundary += area;
     const stress = classified.stress[id];
-    stressTotal += stress;
+    stressTotal += stress * area;
     stressMax = Math.max(stressMax, stress);
     if (touchesFaceSeam(grid, id)) {
       counts.faceSeamBoundary += 1;
-      seamBoundaryTotal += 1;
-      seamBoundaryStress += stress;
+      areas.faceSeamBoundary += area;
+      seamBoundaryStress += stress * area;
     }
   }
 
   const active = Math.max(1, counts.activeBoundary);
+  const activeArea = Math.max(areas.activeBoundary, Number.EPSILON);
   return {
     ...counts,
-    activeBoundaryShare: counts.activeBoundary / Math.max(1, grid.size),
-    convergentShareOfActive: counts.convergent / active,
-    divergentShareOfActive: counts.divergent / active,
-    transformShareOfActive: counts.transform / active,
-    faceSeamBoundaryShareOfActive: counts.faceSeamBoundary / active,
-    stressMean: stressTotal / active,
+    activeBoundaryArea: areas.activeBoundary,
+    activeBoundaryCellShare: counts.activeBoundary / Math.max(1, grid.size),
+    activeBoundaryShare: areas.activeBoundary / Math.max(areas.total, Number.EPSILON),
+    convergentShareOfActive: areas.convergent / activeArea,
+    divergentShareOfActive: areas.divergent / activeArea,
+    transformShareOfActive: areas.transform / activeArea,
+    faceSeamBoundaryShareOfActive: areas.faceSeamBoundary / activeArea,
+    convergentCellShareOfActive: counts.convergent / active,
+    divergentCellShareOfActive: counts.divergent / active,
+    transformCellShareOfActive: counts.transform / active,
+    stressMean: stressTotal / activeArea,
     stressMax,
-    faceSeamStressMean: seamBoundaryStress / Math.max(1, seamBoundaryTotal),
+    faceSeamStressMean: seamBoundaryStress / Math.max(areas.faceSeamBoundary, Number.EPSILON),
   };
 }
 

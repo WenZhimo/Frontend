@@ -910,6 +910,129 @@
   }
 
 
+  // ---- src/sim/sphere/stats.js ----
+  function areaTotal(grid) {
+    let total = 0;
+    for (let id = 0; id < grid.size; id += 1) total += cellArea(grid, id);
+    return total;
+  }
+
+  function weightedSum(grid, field, options = {}) {
+    const predicate = options.predicate;
+    let total = 0;
+    for (let id = 0; id < grid.size; id += 1) {
+      if (predicate && !predicate(id)) continue;
+      total += Number(field[id] ?? 0) * cellArea(grid, id);
+    }
+    return total;
+  }
+
+  function weightedMean(grid, field, options = {}) {
+    const predicate = options.predicate;
+    let total = 0;
+    let weight = 0;
+    for (let id = 0; id < grid.size; id += 1) {
+      if (predicate && !predicate(id)) continue;
+      const area = cellArea(grid, id);
+      total += Number(field[id] ?? 0) * area;
+      weight += area;
+    }
+    return total / Math.max(weight, Number.EPSILON);
+  }
+
+  function weightedShare(grid, mask, options = {}) {
+    const predicate = options.predicate;
+    let covered = 0;
+    let total = 0;
+    for (let id = 0; id < grid.size; id += 1) {
+      if (predicate && !predicate(id)) continue;
+      const area = cellArea(grid, id);
+      total += area;
+      if (mask[id]) covered += area;
+    }
+    return covered / Math.max(total, Number.EPSILON);
+  }
+
+  function weightedCategoryShares(grid, categories, categoryCount, options = {}) {
+    const predicate = options.predicate;
+    const areaByCategory = new Float64Array(Math.max(0, categoryCount));
+    let total = 0;
+    for (let id = 0; id < grid.size; id += 1) {
+      if (predicate && !predicate(id)) continue;
+      const category = categories[id];
+      if (category < 0 || category >= areaByCategory.length) continue;
+      const area = cellArea(grid, id);
+      areaByCategory[category] += area;
+      total += area;
+    }
+    const shares = new Float64Array(areaByCategory.length);
+    for (let i = 0; i < areaByCategory.length; i += 1) {
+      shares[i] = areaByCategory[i] / Math.max(total, Number.EPSILON);
+    }
+    return { areaByCategory, shares, totalArea: total };
+  }
+
+  function measureAreaStats(grid) {
+    let total = 0;
+    let min = Infinity;
+    let max = 0;
+    for (let id = 0; id < grid.size; id += 1) {
+      const area = cellArea(grid, id);
+      total += area;
+      min = Math.min(min, area);
+      max = Math.max(max, area);
+    }
+    return {
+      areaTotal: total,
+      areaTotalError: total - 4 * Math.PI,
+      areaMin: min,
+      areaMax: max,
+      areaMinMaxRatio: max / Math.max(min, Number.EPSILON),
+      equalAreaCell: 4 * Math.PI / Math.max(1, grid.size),
+    };
+  }
+
+  function measureHemisphereAreaStats(grid) {
+    let north = 0;
+    let south = 0;
+    let east = 0;
+    let west = 0;
+    for (let id = 0; id < grid.size; id += 1) {
+      const area = cellArea(grid, id);
+      if (grid.positionY[id] >= 0) north += area;
+      else south += area;
+      if (grid.positionZ[id] >= 0) east += area;
+      else west += area;
+    }
+    return {
+      northAreaShare: north / Math.max(north + south, Number.EPSILON),
+      southAreaShare: south / Math.max(north + south, Number.EPSILON),
+      eastAreaShare: east / Math.max(east + west, Number.EPSILON),
+      westAreaShare: west / Math.max(east + west, Number.EPSILON),
+    };
+  }
+
+  function finiteShare(field) {
+    let finite = 0;
+    for (let i = 0; i < field.length; i += 1) {
+      if (Number.isFinite(field[i])) finite += 1;
+    }
+    return finite / Math.max(1, field.length);
+  }
+
+  function maxFinite(field) {
+    let max = 0;
+    for (let i = 0; i < field.length; i += 1) {
+      if (Number.isFinite(field[i]) && field[i] > max) max = field[i];
+    }
+    return max;
+  }
+
+  function cellArea(grid, id) {
+    return grid.area?.[id] ?? 1;
+  }
+
+
   // ---- src/sim/sphere/plates.js ----
 
   const PLATE_SALT = 0x73706c74;
@@ -1080,41 +1203,67 @@
       faceSeamBoundary: 0,
       activeBoundary: 0,
     };
+    const areas = {
+      total: 0,
+      interior: 0,
+      convergent: 0,
+      divergent: 0,
+      transform: 0,
+      faceSeamBoundary: 0,
+      activeBoundary: 0,
+    };
     let stressTotal = 0;
     let stressMax = 0;
-    let seamBoundaryTotal = 0;
     let seamBoundaryStress = 0;
 
     for (let id = 0; id < grid.size; id += 1) {
       const type = classified.boundaryType[id];
-      if (type === SphericalBoundaryType.CONVERGENT) counts.convergent += 1;
-      else if (type === SphericalBoundaryType.DIVERGENT) counts.divergent += 1;
-      else if (type === SphericalBoundaryType.TRANSFORM) counts.transform += 1;
-      else counts.interior += 1;
+      const area = grid.area?.[id] ?? 1;
+      areas.total += area;
+      if (type === SphericalBoundaryType.CONVERGENT) {
+        counts.convergent += 1;
+        areas.convergent += area;
+      } else if (type === SphericalBoundaryType.DIVERGENT) {
+        counts.divergent += 1;
+        areas.divergent += area;
+      } else if (type === SphericalBoundaryType.TRANSFORM) {
+        counts.transform += 1;
+        areas.transform += area;
+      } else {
+        counts.interior += 1;
+        areas.interior += area;
+      }
 
       if (!classified.activeBoundary[id]) continue;
       counts.activeBoundary += 1;
+      areas.activeBoundary += area;
       const stress = classified.stress[id];
-      stressTotal += stress;
+      stressTotal += stress * area;
       stressMax = Math.max(stressMax, stress);
       if (touchesFaceSeam(grid, id)) {
         counts.faceSeamBoundary += 1;
-        seamBoundaryTotal += 1;
-        seamBoundaryStress += stress;
+        areas.faceSeamBoundary += area;
+        seamBoundaryStress += stress * area;
       }
     }
 
     const active = Math.max(1, counts.activeBoundary);
+    const activeArea = Math.max(areas.activeBoundary, Number.EPSILON);
     return {
       ...counts,
-      activeBoundaryShare: counts.activeBoundary / Math.max(1, grid.size),
-      convergentShareOfActive: counts.convergent / active,
-      divergentShareOfActive: counts.divergent / active,
-      transformShareOfActive: counts.transform / active,
-      faceSeamBoundaryShareOfActive: counts.faceSeamBoundary / active,
-      stressMean: stressTotal / active,
+      activeBoundaryArea: areas.activeBoundary,
+      activeBoundaryCellShare: counts.activeBoundary / Math.max(1, grid.size),
+      activeBoundaryShare: areas.activeBoundary / Math.max(areas.total, Number.EPSILON),
+      convergentShareOfActive: areas.convergent / activeArea,
+      divergentShareOfActive: areas.divergent / activeArea,
+      transformShareOfActive: areas.transform / activeArea,
+      faceSeamBoundaryShareOfActive: areas.faceSeamBoundary / activeArea,
+      convergentCellShareOfActive: counts.convergent / active,
+      divergentCellShareOfActive: counts.divergent / active,
+      transformCellShareOfActive: counts.transform / active,
+      stressMean: stressTotal / activeArea,
       stressMax,
-      faceSeamStressMean: seamBoundaryStress / Math.max(1, seamBoundaryTotal),
+      faceSeamStressMean: seamBoundaryStress / Math.max(areas.faceSeamBoundary, Number.EPSILON),
     };
   }
 
@@ -1354,129 +1503,6 @@
     }
 
     return distance;
-  }
-
-
-  // ---- src/sim/sphere/stats.js ----
-  function areaTotal(grid) {
-    let total = 0;
-    for (let id = 0; id < grid.size; id += 1) total += cellArea(grid, id);
-    return total;
-  }
-
-  function weightedSum(grid, field, options = {}) {
-    const predicate = options.predicate;
-    let total = 0;
-    for (let id = 0; id < grid.size; id += 1) {
-      if (predicate && !predicate(id)) continue;
-      total += Number(field[id] ?? 0) * cellArea(grid, id);
-    }
-    return total;
-  }
-
-  function weightedMean(grid, field, options = {}) {
-    const predicate = options.predicate;
-    let total = 0;
-    let weight = 0;
-    for (let id = 0; id < grid.size; id += 1) {
-      if (predicate && !predicate(id)) continue;
-      const area = cellArea(grid, id);
-      total += Number(field[id] ?? 0) * area;
-      weight += area;
-    }
-    return total / Math.max(weight, Number.EPSILON);
-  }
-
-  function weightedShare(grid, mask, options = {}) {
-    const predicate = options.predicate;
-    let covered = 0;
-    let total = 0;
-    for (let id = 0; id < grid.size; id += 1) {
-      if (predicate && !predicate(id)) continue;
-      const area = cellArea(grid, id);
-      total += area;
-      if (mask[id]) covered += area;
-    }
-    return covered / Math.max(total, Number.EPSILON);
-  }
-
-  function weightedCategoryShares(grid, categories, categoryCount, options = {}) {
-    const predicate = options.predicate;
-    const areaByCategory = new Float64Array(Math.max(0, categoryCount));
-    let total = 0;
-    for (let id = 0; id < grid.size; id += 1) {
-      if (predicate && !predicate(id)) continue;
-      const category = categories[id];
-      if (category < 0 || category >= areaByCategory.length) continue;
-      const area = cellArea(grid, id);
-      areaByCategory[category] += area;
-      total += area;
-    }
-    const shares = new Float64Array(areaByCategory.length);
-    for (let i = 0; i < areaByCategory.length; i += 1) {
-      shares[i] = areaByCategory[i] / Math.max(total, Number.EPSILON);
-    }
-    return { areaByCategory, shares, totalArea: total };
-  }
-
-  function measureAreaStats(grid) {
-    let total = 0;
-    let min = Infinity;
-    let max = 0;
-    for (let id = 0; id < grid.size; id += 1) {
-      const area = cellArea(grid, id);
-      total += area;
-      min = Math.min(min, area);
-      max = Math.max(max, area);
-    }
-    return {
-      areaTotal: total,
-      areaTotalError: total - 4 * Math.PI,
-      areaMin: min,
-      areaMax: max,
-      areaMinMaxRatio: max / Math.max(min, Number.EPSILON),
-      equalAreaCell: 4 * Math.PI / Math.max(1, grid.size),
-    };
-  }
-
-  function measureHemisphereAreaStats(grid) {
-    let north = 0;
-    let south = 0;
-    let east = 0;
-    let west = 0;
-    for (let id = 0; id < grid.size; id += 1) {
-      const area = cellArea(grid, id);
-      if (grid.positionY[id] >= 0) north += area;
-      else south += area;
-      if (grid.positionZ[id] >= 0) east += area;
-      else west += area;
-    }
-    return {
-      northAreaShare: north / Math.max(north + south, Number.EPSILON),
-      southAreaShare: south / Math.max(north + south, Number.EPSILON),
-      eastAreaShare: east / Math.max(east + west, Number.EPSILON),
-      westAreaShare: west / Math.max(east + west, Number.EPSILON),
-    };
-  }
-
-  function finiteShare(field) {
-    let finite = 0;
-    for (let i = 0; i < field.length; i += 1) {
-      if (Number.isFinite(field[i])) finite += 1;
-    }
-    return finite / Math.max(1, field.length);
-  }
-
-  function maxFinite(field) {
-    let max = 0;
-    for (let i = 0; i < field.length; i += 1) {
-      if (Number.isFinite(field[i]) && field[i] > max) max = field[i];
-    }
-    return max;
-  }
-
-  function cellArea(grid, id) {
-    return grid.area?.[id] ?? 1;
   }
 
 
