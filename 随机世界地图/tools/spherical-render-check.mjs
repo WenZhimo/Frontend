@@ -22,6 +22,7 @@ const worldModes = new Set([
   "boundary-type",
   "active-boundary",
   "stress",
+  "geometric-sea-mask",
   "sea-mask",
   "external-sea-mask",
   "inland-water-candidate",
@@ -121,6 +122,14 @@ function createRenderedLayer({ grid, world, mode, width, height, projectionMode 
       height,
       projectionMode,
       colorRamp: (value) => colorField(value, 0, 0.0065, [20, 26, 32], [238, 85, 58]),
+    });
+  }
+  if (mode === "geometric-sea-mask") {
+    return renderSphericalField(grid, world.geometricSeaMask, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => (value ? [70, 108, 142] : [72, 86, 63]),
     });
   }
   if (mode === "sea-mask") {
