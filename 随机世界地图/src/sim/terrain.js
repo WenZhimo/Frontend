@@ -1,6 +1,6 @@
 import { createValueNoise3D } from "./noise.js";
 import { mixSeed } from "./prng.js";
-import { forEachNeighborRadiusById, physicalRadius, resolutionScale } from "./grid.js";
+import { forEachGridCell, forEachNeighborRadiusById, physicalRadius, resolutionScale } from "./grid.js";
 import { spherePointForCell } from "./scale.js";
 
 export function initializeBaseTerrain(world) {
@@ -128,32 +128,27 @@ export function initializeCrustState(grid) {
 
 function initializeCrust(world) {
   const { grid, params, continentNoise, textureNoise } = world;
-  const { width, height, crust } = grid;
+  const { crust } = grid;
   const threshold = -0.08 + (params.waterLevel / 100 - 0.5) * 0.78;
 
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const sphere = spherePointForCell(grid, x, y);
-      const continentality = continentNoise(sphere.x * 1.45 + 17, sphere.y * 1.45 - 3, sphere.z * 1.45 + 9, 5, 2, 0.54);
-      const ragged = textureNoise(sphere.x * 3.7 - 5, sphere.y * 3.7 + 13, sphere.z * 3.7 + 2, 3, 2, 0.45) * 0.18;
-      crust[y * width + x] = continentality + ragged - threshold;
-    }
-  }
+  forEachGridCell(grid, (id, x, y) => {
+    const sphere = spherePointForCell(grid, x, y);
+    const continentality = continentNoise(sphere.x * 1.45 + 17, sphere.y * 1.45 - 3, sphere.z * 1.45 + 9, 5, 2, 0.54);
+    const ragged = textureNoise(sphere.x * 3.7 - 5, sphere.y * 3.7 + 13, sphere.z * 3.7 + 2, 3, 2, 0.45) * 0.18;
+    crust[id] = continentality + ragged - threshold;
+  });
 }
 
 function initializeWeakness(world) {
   const { grid, textureNoise } = world;
-  const { width, height, weakness, crust } = grid;
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const sphere = spherePointForCell(grid, x, y);
-      const broad = textureNoise(sphere.x * 2.1 + 31, sphere.y * 2.1 - 17, sphere.z * 2.1 + 5, 4, 2, 0.52);
-      const fine = textureNoise(sphere.x * 8.5 - 7, sphere.y * 8.5 + 3, sphere.z * 8.5 + 23, 3, 2.2, 0.45);
-      const id = y * width + x;
-      const coastWeakness = 1 - Math.min(1, Math.abs(crust[id]) * 2.8);
-      weakness[id] = Math.max(0, Math.min(1, 0.5 + broad * 0.32 + fine * 0.16 + coastWeakness * 0.18));
-    }
-  }
+  const { weakness, crust } = grid;
+  forEachGridCell(grid, (id, x, y) => {
+    const sphere = spherePointForCell(grid, x, y);
+    const broad = textureNoise(sphere.x * 2.1 + 31, sphere.y * 2.1 - 17, sphere.z * 2.1 + 5, 4, 2, 0.52);
+    const fine = textureNoise(sphere.x * 8.5 - 7, sphere.y * 8.5 + 3, sphere.z * 8.5 + 23, 3, 2.2, 0.45);
+    const coastWeakness = 1 - Math.min(1, Math.abs(crust[id]) * 2.8);
+    weakness[id] = Math.max(0, Math.min(1, 0.5 + broad * 0.32 + fine * 0.16 + coastWeakness * 0.18));
+  });
 }
 
 export function rebuildElevation(world) {
