@@ -1,4 +1,5 @@
 import { createCubedSphereGrid } from "../src/sim/sphere/cubedSphere.js";
+import { finiteShare, maxFinite, weightedShare } from "../src/sim/sphere/stats.js";
 import {
   connectedComponentsGraph,
   deriveSphericalOceanConnectivity,
@@ -27,6 +28,7 @@ const result = {
   allComponentCount: allComponents.componentCount,
   seaComponentCount: seaComponents.componentCount,
   externalComponent: connectivity.externalComponent,
+  externalComponentArea: connectivity.externalArea,
   externalSeaShare: weightedShare(grid, connectivity.externalSeaMask),
   inlandWaterCandidateShare: weightedShare(grid, connectivity.inlandWaterCandidate),
   closedBasinCount: connectivity.closedBasinCount,
@@ -70,36 +72,9 @@ function countMask(mask) {
   return count;
 }
 
-function weightedShare(grid, mask) {
-  let total = 0;
-  let covered = 0;
-  for (let id = 0; id < grid.size; id += 1) {
-    const area = grid.area?.[id] ?? 1;
-    total += area;
-    if (mask[id]) covered += area;
-  }
-  return covered / Math.max(1e-12, total);
-}
-
 function maxInt(field) {
   let max = 0;
   for (let i = 0; i < field.length; i += 1) if (field[i] > max) max = field[i];
-  return max;
-}
-
-function finiteShare(field) {
-  let finite = 0;
-  for (let i = 0; i < field.length; i += 1) {
-    if (Number.isFinite(field[i])) finite += 1;
-  }
-  return finite / Math.max(1, field.length);
-}
-
-function maxFinite(field) {
-  let max = 0;
-  for (let i = 0; i < field.length; i += 1) {
-    if (Number.isFinite(field[i]) && field[i] > max) max = field[i];
-  }
   return max;
 }
 
@@ -120,16 +95,10 @@ function measureFaceSeamContinuity(grid, flood) {
 }
 
 function checkLargestExternalComponent(grid, connectivity) {
-  let externalArea = 0;
-  for (let id = 0; id < grid.size; id += 1) {
-    if (connectivity.externalSeaMask[id]) externalArea += grid.area[id];
-  }
+  const externalArea = connectivity.externalArea;
   for (let component = 1; component <= connectivity.componentCount; component += 1) {
     if (component === connectivity.externalComponent) continue;
-    let area = 0;
-    for (let id = 0; id < grid.size; id += 1) {
-      if (connectivity.componentId[id] === component) area += grid.area[id];
-    }
+    const area = connectivity.componentAreas[component] ?? 0;
     if (area > externalArea + 1e-8) return false;
   }
   return true;
