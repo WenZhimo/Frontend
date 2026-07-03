@@ -1678,17 +1678,9 @@
 
     for (let i = 0; i < steps; i += 1) driftSphericalPlates(plates, 1);
 
-    const plateAssignment = assignNearestSphericalPlates(grid, plates);
-    const boundaries = classifySphericalPlateBoundaries(grid, plates, plateAssignment);
-    const boundarySummary = summarizeSphericalBoundaries(grid, boundaries);
     const diagnosticNoise = createSphericalDiagnosticNoiseFields(grid, seedUint32);
-    const diagnosticTerrain = createSphericalDiagnosticTerrainFields(grid, diagnosticNoise, boundaries);
     const geometricSeaMask = createDiagnosticSeaMask(grid);
-    const seaMask = diagnosticTerrain.seaCandidate;
-    const connectivity = deriveSphericalOceanConnectivity(grid, seaMask);
-    const distanceToExternalSea = distanceFromGraphSources(grid, connectivity.externalSeaMask);
-
-    return {
+    const world = {
       kind: "spherical-experimental-world",
       seedText,
       seedUint32,
@@ -1696,31 +1688,35 @@
       topology,
       plates,
       initialPlates,
-      plateAssignment,
-      boundaries,
-      boundarySummary,
       geometricSeaMask,
-      seaMask,
-      connectivity,
-      distanceToExternalSea,
       diagnosticNoise,
-      diagnosticTerrain,
-      stats: summarizeSphericalExperimentalWorld({
-        grid,
-        topology,
-        plates,
-        initialPlates,
-        plateAssignment,
-        boundaries,
-        boundarySummary,
-        geometricSeaMask,
-        seaMask,
-        connectivity,
-        distanceToExternalSea,
-        diagnosticNoise,
-        diagnosticTerrain,
-      }),
+      diagnosticStep: steps,
     };
+    return rebuildSphericalExperimentalWorldDerived(world);
+  }
+
+  function stepSphericalExperimentalWorld(world, deltaTime = 1) {
+    if (!world || world.kind !== "spherical-experimental-world") return world;
+    driftSphericalPlates(world.plates, deltaTime);
+    world.diagnosticStep = (world.diagnosticStep ?? 0) + deltaTime;
+    return rebuildSphericalExperimentalWorldDerived(world);
+  }
+
+  function rebuildSphericalExperimentalWorldDerived(world) {
+    const grid = world.grid;
+    world.plateAssignment = assignNearestSphericalPlates(grid, world.plates);
+    world.boundaries = classifySphericalPlateBoundaries(grid, world.plates, world.plateAssignment);
+    world.boundarySummary = summarizeSphericalBoundaries(grid, world.boundaries);
+    world.diagnosticTerrain = createSphericalDiagnosticTerrainFields(
+      grid,
+      world.diagnosticNoise,
+      world.boundaries,
+    );
+    world.seaMask = world.diagnosticTerrain.seaCandidate;
+    world.connectivity = deriveSphericalOceanConnectivity(grid, world.seaMask);
+    world.distanceToExternalSea = distanceFromGraphSources(grid, world.connectivity.externalSeaMask);
+    world.stats = summarizeSphericalExperimentalWorld(world);
+    return world;
   }
 
   function summarizeSphericalExperimentalWorld(world) {
@@ -7329,6 +7325,9 @@
     // Future phases plug in here: climateStep, hydrologyStep, biomeStep, resourceStep, impactStep.
     world.step += 1;
     world.ageYears += Number(world.params.timeScale);
+    if (world.params.topologyMode === "cubed-sphere" && world.sphericalWorld) {
+      stepSphericalExperimentalWorld(world.sphericalWorld, 1);
+    }
     world.stats = analyzeWorld(world);
     world.lastStepMs = performance.now() - t0;
     return world;
