@@ -16,6 +16,7 @@ const checks = [
   ["projection-check:mollweide", ["tools/projection-check.mjs", String(faceSize), "mollweide"]],
   ["spherical-topology-api-check", ["tools/spherical-topology-api-check.mjs", String(faceSize)]],
   ["spherical-production-adapter-check", ["tools/spherical-production-adapter-check.mjs", String(faceSize)]],
+  ["spherical-migration-readiness-check", ["tools/spherical-migration-readiness-check.mjs"]],
   ["spherical-connectivity-check", ["tools/spherical-connectivity-check.mjs", String(faceSize)]],
   ["spherical-diffusion-check", ["tools/spherical-diffusion-check.mjs", String(faceSize)]],
   ["spherical-boundary-check", ["tools/spherical-boundary-check.mjs", seedText, String(faceSize), "14", String(steps)]],
@@ -101,6 +102,11 @@ function compactMetrics(parsed) {
     "areaTotalError",
     "roughnessRatio",
     "smoothSeamDiffToInteriorRatio",
+    "productionAdapterReady",
+    "fullMigrationReady",
+    "sphericalForbiddenCount",
+    "legacyRiskCount",
+    "legacyRiskFiles",
   ]) {
     if (parsed[key] !== undefined) picked[key] = parsed[key];
   }
