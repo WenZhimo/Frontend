@@ -1,4 +1,4 @@
-import { physicalRadius, wrapX } from "../grid.js";
+import { forEachNeighbor8ById, physicalRadius, wrapX } from "../grid.js";
 import { BoundaryType } from "../tectonics.js";
 import { CrustType } from "./crust.js";
 
@@ -247,86 +247,56 @@ function hash2(x, y) {
 }
 
 function smoothAxisField(grid, source, target) {
-  const { width, height, scratch2 } = grid;
+  const { size, scratch2 } = grid;
   scratch2.set(source);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      let total = scratch2[id] * 2.2;
-      let weight = 2.2;
-      for (let dy = -1; dy <= 1; dy += 1) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= height) continue;
-        for (let dx = -1; dx <= 1; dx += 1) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = wrapX(width, x + dx);
-          const nid = ny * width + nx;
-          const w = dx === 0 || dy === 0 ? 0.72 : 0.38;
-          total += scratch2[nid] * w;
-          weight += w;
-        }
-      }
-      target[id] = Math.min(1, total / weight);
-    }
+  for (let id = 0; id < size; id += 1) {
+    let total = scratch2[id] * 2.2;
+    let weight = 2.2;
+    forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
+      const w = dx === 0 || dy === 0 ? 0.72 : 0.38;
+      total += scratch2[nid] * w;
+      weight += w;
+    });
+    target[id] = Math.min(1, total / weight);
   }
 }
 
 function smoothMountainHeightField(grid, source, target) {
-  const { width, height, mountainAxis, scratch2 } = grid;
+  const { size, mountainAxis, scratch2 } = grid;
   scratch2.set(source);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      if (scratch2[id] <= 0.0001 && mountainAxis[id] <= 0.025) {
-        target[id] = 0;
-        continue;
-      }
-      let total = scratch2[id] * 2.8;
-      let weight = 2.8;
-      for (let dy = -1; dy <= 1; dy += 1) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= height) continue;
-        for (let dx = -1; dx <= 1; dx += 1) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = wrapX(width, x + dx);
-          const nid = ny * width + nx;
-          const axisWeight = 0.3 + Math.min(1, Math.max(mountainAxis[id], mountainAxis[nid]) * 1.4);
-          const w = (dx === 0 || dy === 0 ? 0.68 : 0.36) * axisWeight;
-          total += scratch2[nid] * w;
-          weight += w;
-        }
-      }
-      target[id] = total / weight;
+  for (let id = 0; id < size; id += 1) {
+    if (scratch2[id] <= 0.0001 && mountainAxis[id] <= 0.025) {
+      target[id] = 0;
+      continue;
     }
+    let total = scratch2[id] * 2.8;
+    let weight = 2.8;
+    forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
+      const axisWeight = 0.3 + Math.min(1, Math.max(mountainAxis[id], mountainAxis[nid]) * 1.4);
+      const w = (dx === 0 || dy === 0 ? 0.68 : 0.36) * axisWeight;
+      total += scratch2[nid] * w;
+      weight += w;
+    });
+    target[id] = total / weight;
   }
 }
 
 function smoothBarrierField(grid, source, target) {
-  const { width, height, mountainAxis, scratch2 } = grid;
+  const { size, mountainAxis, scratch2 } = grid;
   scratch2.set(source);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      if (source[id] <= 0.0001 && mountainAxis[id] <= 0.03) {
-        target[id] = 0;
-        continue;
-      }
-      let total = source[id] * 2.4;
-      let weight = 2.4;
-      for (let dy = -1; dy <= 1; dy += 1) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= height) continue;
-        for (let dx = -1; dx <= 1; dx += 1) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = wrapX(width, x + dx);
-          const nid = ny * width + nx;
-          const w = (dx === 0 || dy === 0 ? 0.8 : 0.45) * (0.35 + Math.min(1, mountainAxis[nid] * 1.2));
-          total += scratch2[nid] * w;
-          weight += w;
-        }
-      }
-      target[id] = total / weight;
+  for (let id = 0; id < size; id += 1) {
+    if (source[id] <= 0.0001 && mountainAxis[id] <= 0.03) {
+      target[id] = 0;
+      continue;
     }
+    let total = source[id] * 2.4;
+    let weight = 2.4;
+    forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
+      const w = (dx === 0 || dy === 0 ? 0.8 : 0.45) * (0.35 + Math.min(1, mountainAxis[nid] * 1.2));
+      total += scratch2[nid] * w;
+      weight += w;
+    });
+    target[id] = total / weight;
   }
 }
 
