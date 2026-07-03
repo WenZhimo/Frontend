@@ -4632,8 +4632,6 @@
   function suppressInactiveFractureRelief(world) {
     const { grid, seaLevel } = world;
     const {
-      width,
-      height,
       elev,
       crustType,
       boundaryInfluence,
@@ -4650,31 +4648,27 @@
     } = grid;
 
     scratch.set(elev);
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        if (crustType[id] !== CrustType.OCEANIC) continue;
-        if (boundaryInfluence[id] > 0.18 || ridge[id] > 0.08 || trench[id] > 0.08) continue;
-        const memory = Math.max(transformMemory[id] * 0.55, fractureZoneMemory[id], inactiveBoundaryRelief[id]);
-        if (memory <= 0.025) continue;
+    forEachGridCell(grid, (id) => {
+      if (crustType[id] !== CrustType.OCEANIC) return;
+      if (boundaryInfluence[id] > 0.18 || ridge[id] > 0.08 || trench[id] > 0.08) return;
+      const memory = Math.max(transformMemory[id] * 0.55, fractureZoneMemory[id], inactiveBoundaryRelief[id]);
+      if (memory <= 0.025) return;
 
-        let total = scratch[id] * 2;
-        let weight = 2;
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          const nid = ny * width + nx;
-          if (crustType[nid] !== CrustType.OCEANIC || ridge[nid] > 0.08 || trench[nid] > 0.08) return;
-          total += scratch[nid];
-          weight += 1;
-        });
-        const smooth = total / weight;
-        const oldPositiveRelief = Math.max(0, scratch[id] - smooth);
-        const flatness = 0.35 + Math.min(1, abyssalPlain[id] + sediment[id] * 1.4 + sedimentWedge[id] * 0.8) * 0.65;
-        const mix = Math.min(0.42, memory * flatness * 0.24);
-        const depressed = scratch[id] - oldPositiveRelief * Math.min(0.65, memory * 0.5);
-        elev[id] = depressed * (1 - mix) + smooth * mix;
-        inactiveBoundaryRelief[id] = Math.max(0, inactiveBoundaryRelief[id] * (1 - mix * 0.45));
-      }
-    }
+      let total = scratch[id] * 2;
+      let weight = 2;
+      forEachNeighbor4ById(grid, id, (nid) => {
+        if (crustType[nid] !== CrustType.OCEANIC || ridge[nid] > 0.08 || trench[nid] > 0.08) return;
+        total += scratch[nid];
+        weight += 1;
+      });
+      const smooth = total / weight;
+      const oldPositiveRelief = Math.max(0, scratch[id] - smooth);
+      const flatness = 0.35 + Math.min(1, abyssalPlain[id] + sediment[id] * 1.4 + sedimentWedge[id] * 0.8) * 0.65;
+      const mix = Math.min(0.42, memory * flatness * 0.24);
+      const depressed = scratch[id] - oldPositiveRelief * Math.min(0.65, memory * 0.5);
+      elev[id] = depressed * (1 - mix) + smooth * mix;
+      inactiveBoundaryRelief[id] = Math.max(0, inactiveBoundaryRelief[id] * (1 - mix * 0.45));
+    });
 
     for (let i = 0; i < grid.size; i += 1) {
       if (crustType[i] !== CrustType.OCEANIC) continue;
@@ -4683,24 +4677,20 @@
   }
 
   function diffuseFractureMemory(grid) {
-    const { width, height, crustType, fractureZoneMemory, boundaryInfluence, ridge, trench, scratch } = grid;
+    const { crustType, fractureZoneMemory, boundaryInfluence, ridge, trench, scratch } = grid;
     scratch.set(fractureZoneMemory);
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        if (crustType[id] !== CrustType.OCEANIC || scratch[id] < 0.02) continue;
-        if (boundaryInfluence[id] > 0.35 || ridge[id] > 0.2 || trench[id] > 0.2) continue;
-        let total = scratch[id] * 3;
-        let weight = 3;
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          const nid = ny * width + nx;
-          if (crustType[nid] !== CrustType.OCEANIC) return;
-          total += scratch[nid] * 0.55;
-          weight += 0.55;
-        });
-        fractureZoneMemory[id] = Math.min(1, total / weight);
-      }
-    }
+    forEachGridCell(grid, (id) => {
+      if (crustType[id] !== CrustType.OCEANIC || scratch[id] < 0.02) return;
+      if (boundaryInfluence[id] > 0.35 || ridge[id] > 0.2 || trench[id] > 0.2) return;
+      let total = scratch[id] * 3;
+      let weight = 3;
+      forEachNeighbor4ById(grid, id, (nid) => {
+        if (crustType[nid] !== CrustType.OCEANIC) return;
+        total += scratch[nid] * 0.55;
+        weight += 0.55;
+      });
+      fractureZoneMemory[id] = Math.min(1, total / weight);
+    });
   }
 
   function updateAgeBandRisk(grid) {
@@ -4764,8 +4754,7 @@
         let sedTotal = scratch3[id] * 2.5;
         let ageWeight = 3.5;
         let sedWeight = 2.5;
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          const nid = ny * width + nx;
+        forEachNeighbor4ById(grid, id, (nid) => {
           if (crustType[nid] !== CrustType.OCEANIC) return;
           if (ridge[nid] > 0.06 || trench[nid] > 0.09 || boundaryInfluence[nid] > 0.22) return;
           ageTotal += scratch[nid];
