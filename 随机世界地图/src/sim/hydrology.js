@@ -1,3 +1,4 @@
+import { forEachNeighbor4ById, forEachNeighbor8ById, forEachNeighborRadiusById } from "./grid.js";
 import { topologyForGrid } from "./topology.js";
 
 const NO_FLOW = -1;
@@ -153,7 +154,7 @@ function assignFlowTargets(topology, seaLevel, terrain, hydroElevation, flowTarg
     let bestDrop = 0;
     let bestDirection = NO_FLOW;
     let bestDistance = 1;
-    topology.forEachNeighbor8(id, (nid, dx, dy) => {
+    forEachHydrologyNeighbor8(topology, id, (nid, dx, dy) => {
       let targetElevation;
       if (terrain.externalSeaMask[nid]) {
         targetElevation = seaLevel;
@@ -299,7 +300,7 @@ function assignDrainage(topology, terrain, flowTarget, flowAccumulation, drainag
       if (flowAccumulation[finalSink] >= Math.max(10, landCells.length * 0.0012) || terrain.inlandWaterCandidate[finalSink]) {
         lakeCandidate[finalSink] = 1;
         if (terrain.landMask[finalSink]) {
-          topology.forEachNeighbor8(finalSink, (nid) => {
+          forEachHydrologyNeighbor8(topology, finalSink, (nid) => {
             if (terrain.landMask[nid] && flowAccumulation[nid] >= Math.max(6, flowAccumulation[finalSink] * 0.35)) lakeCandidate[nid] = 1;
           });
         }
@@ -359,7 +360,7 @@ function buildWetlands(topology, terrain, flowAccumulation, flowSlope, riverStre
     const river = riverStrength[id] * 0.32;
     wetlandCandidate[id] = clamp01(lowSlope * (coast + basin + river) + (lakeCandidate[id] ? 0.55 : 0));
     if (!lakeCandidate[id]) continue;
-    topology.forEachNeighbor8(id, (nid) => {
+    forEachHydrologyNeighbor8(topology, id, (nid) => {
       if (terrain.landMask[nid]) wetlandCandidate[nid] = Math.max(wetlandCandidate[nid], 0.28);
     });
   }
@@ -471,8 +472,8 @@ function sumProfile(timings) {
 
 function touchesMask(topology, id, mask, mode = 4) {
   let touches = false;
-  const visit = mode === 8 ? topology.forEachNeighbor8 : topology.forEachNeighbor4;
-  visit(id, (nid) => {
+  const visit = mode === 8 ? forEachHydrologyNeighbor8 : forEachHydrologyNeighbor4;
+  visit(topology, id, (nid) => {
     if (mask[nid]) touches = true;
   });
   return touches;
@@ -511,7 +512,7 @@ function smoothHydroElevation(topology, field) {
   for (let i = 0; i < field.length; i += 1) {
     let total = field[i] * 2;
     let weight = 2;
-    topology.forEachNeighborRadius(i, 1, (nid, dx, dy) => {
+    forEachHydrologyNeighborRadius(topology, i, 1, (nid, dx, dy) => {
       const distance = Math.max(1, Math.hypot(dx, dy));
       const w = 1 / (1 + distance);
       total += field[nid] * w;
@@ -520,6 +521,30 @@ function smoothHydroElevation(topology, field) {
     output[i] = total / weight;
   }
   return output;
+}
+
+function forEachHydrologyNeighbor4(topology, id, visit) {
+  if (typeof topology.forEachNeighbor4 === "function") {
+    topology.forEachNeighbor4(id, visit);
+    return;
+  }
+  forEachNeighbor4ById(topology.grid, id, visit);
+}
+
+function forEachHydrologyNeighbor8(topology, id, visit) {
+  if (typeof topology.forEachNeighbor8 === "function") {
+    topology.forEachNeighbor8(id, visit);
+    return;
+  }
+  forEachNeighbor8ById(topology.grid, id, visit);
+}
+
+function forEachHydrologyNeighborRadius(topology, id, radius, visit) {
+  if (typeof topology.forEachNeighborRadius === "function") {
+    topology.forEachNeighborRadius(id, radius, visit);
+    return;
+  }
+  forEachNeighborRadiusById(topology.grid, id, radius, visit);
 }
 
 function maxIterableValue(values) {

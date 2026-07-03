@@ -17,6 +17,7 @@ const checks = [
   ["projection-check:mollweide", ["tools/projection-check.mjs", String(faceSize), "mollweide"]],
   ["spherical-topology-api-check", ["tools/spherical-topology-api-check.mjs", String(faceSize)]],
   ["spherical-production-adapter-check", ["tools/spherical-production-adapter-check.mjs", String(faceSize)]],
+  ["spherical-production-init-check", ["tools/spherical-production-init-check.mjs", seedText, String(smallFaceSize)]],
   ["spherical-derived-adapter-check", ["tools/spherical-derived-adapter-check.mjs", String(smallFaceSize)]],
   ["spherical-migration-readiness-check", ["tools/spherical-migration-readiness-check.mjs"]],
   ["spherical-connectivity-check", ["tools/spherical-connectivity-check.mjs", String(faceSize)]],
