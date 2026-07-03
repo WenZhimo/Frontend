@@ -40,6 +40,7 @@ const files = [
   "src/gpu/kernels/elevationKernel.js",
   "src/gpu/elevationCompute.js",
   "src/render/cpuMapRenderer.js",
+  "src/render/sphericalProjectionRenderer.js",
   "src/render/gpuMapRenderer.js",
   "src/render/renderBackend.js",
   "src/render/map2d.js",
