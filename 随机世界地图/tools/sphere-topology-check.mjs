@@ -10,6 +10,7 @@ const areaStats = measureAreaStats(grid);
 const neighborStats = measureNeighborStats(grid);
 const connectivity = measureConnectivity(grid);
 const edgeStats = measureEdgeStats(grid);
+const tangentStats = measureEdgeTangentStats(grid);
 
 const valid =
   unitSphereErrorMax < 1e-5 &&
@@ -17,7 +18,8 @@ const valid =
   neighborStats.neighborSymmetryValid &&
   connectivity.globalConnectivityValid &&
   edgeStats.edgeLengthMin > 0 &&
-  edgeStats.edgeLengthMax < Math.PI / 2;
+  edgeStats.edgeLengthMax < Math.PI / 2 &&
+  tangentStats.edgeTangentValid;
 
 const result = {
   topologyKind: grid.topologyKind,
@@ -29,6 +31,7 @@ const result = {
   ...neighborStats,
   ...connectivity,
   ...edgeStats,
+  ...tangentStats,
   poleSingularityRisk: 0,
 };
 
@@ -137,5 +140,46 @@ function measureEdgeStats(grid) {
     edgeLengthMin,
     edgeLengthMax,
     edgeLengthMean: edgeLengthTotal / Math.max(1, edgeCount),
+  };
+}
+
+function measureEdgeTangentStats(grid) {
+  let tangentCount = 0;
+  let tangentLengthErrorMax = 0;
+  let tangentRadialDotMax = 0;
+  let tangentForwardDotMin = Infinity;
+  for (let id = 0; id < grid.size; id += 1) {
+    const start = grid.neighborStart[id];
+    const ax = grid.positionX[id];
+    const ay = grid.positionY[id];
+    const az = grid.positionZ[id];
+    for (let k = 0; k < grid.neighborCount[id]; k += 1) {
+      const offset = start + k;
+      const nid = grid.neighbors[offset];
+      const tx = grid.edgeTangentX[offset];
+      const ty = grid.edgeTangentY[offset];
+      const tz = grid.edgeTangentZ[offset];
+      const length = Math.hypot(tx, ty, tz);
+      const radialDot = Math.abs(tx * ax + ty * ay + tz * az);
+      const bx = grid.positionX[nid];
+      const by = grid.positionY[nid];
+      const bz = grid.positionZ[nid];
+      const forwardDot = tx * (bx - ax) + ty * (by - ay) + tz * (bz - az);
+      tangentLengthErrorMax = Math.max(tangentLengthErrorMax, Math.abs(length - 1));
+      tangentRadialDotMax = Math.max(tangentRadialDotMax, radialDot);
+      tangentForwardDotMin = Math.min(tangentForwardDotMin, forwardDot);
+      tangentCount += 1;
+    }
+  }
+  return {
+    edgeTangentCount: tangentCount,
+    edgeTangentLengthErrorMax: tangentLengthErrorMax,
+    edgeTangentRadialDotMax: tangentRadialDotMax,
+    edgeTangentForwardDotMin: tangentForwardDotMin,
+    edgeTangentValid:
+      tangentCount === grid.neighbors.length &&
+      tangentLengthErrorMax < 1e-5 &&
+      tangentRadialDotMax < 1e-5 &&
+      tangentForwardDotMin > 0,
   };
 }
