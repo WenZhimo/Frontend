@@ -5701,8 +5701,8 @@
         const id = y * width + x;
         const rel = elev[id] - seaLevel;
         const land = rel >= -0.006;
-        const slope = localSlope(grid, elev, x, y);
-        const relief = localRelief(grid, elev, x, y);
+        const slope = localSlope(grid, elev, id);
+        const relief = localRelief(grid, elev, id);
         const activeConstructive = Math.max(ridge[id], ridgeAxis[id], trench[id] * 0.55, trenchAxis[id] * 0.45);
         const mountainSource = land
           ? activeOrogeny[id] * 0.00042 +
@@ -5730,8 +5730,7 @@
     }
 
     for (let i = 0; i < size; i += 1) {
-      const x = i % width;
-      const y = Math.floor(i / width);
+      const { x, y } = xyOf(grid, i);
       const rel = elev[i] - seaLevel;
       const nearOrBelowSea = clamp01((seaLevel + 0.08 - elev[i]) / 0.16);
       const shelfCapacity =
@@ -5806,7 +5805,7 @@
           let fallback = -1;
           let fallbackScore = -Infinity;
           const candidates = [];
-          visitNeighbor8(grid, x, y, (nid, diagonal) => {
+          visitNeighbor8(grid, id, (nid, diagonal) => {
             const downslope = Math.max(0, centerElev - elev[nid]);
             const softSink = softDepositionalSink(grid, nid);
             const attraction =
@@ -6004,7 +6003,7 @@
           const id = y * width + x;
           let total = scratch3[id] * 1.8;
           let weight = 1.8;
-          visitNeighbor8(grid, x, y, (nid, diagonal) => {
+          visitNeighbor8(grid, id, (nid, diagonal) => {
             const w = diagonal ? 0.38 : 0.72;
             total += scratch3[nid] * w;
             weight += w;
@@ -6055,7 +6054,7 @@
         if (blend <= 0.002) continue;
         let total = scratch3[id] * 1.9;
         let weight = 1.9;
-        visitNeighbor8(grid, x, y, (nid, diagonal) => {
+        visitNeighbor8(grid, id, (nid, diagonal) => {
           const w = diagonal ? 0.28 : 0.58;
           total += scratch3[nid] * w;
           weight += w;
@@ -6079,16 +6078,17 @@
     return relativeElevation < 0 ? 0.42 : 0.3;
   }
 
-  function localSlope(grid, field, x, y) {
-    const left = field[y * grid.width + wrapX(grid.width, x - 1)];
-    const right = field[y * grid.width + wrapX(grid.width, x + 1)];
-    const up = field[Math.max(0, y - 1) * grid.width + x];
-    const down = field[Math.min(grid.height - 1, y + 1) * grid.width + x];
+  function localSlope(grid, field, id) {
+    const { x, y } = xyOf(grid, id);
+    const center = field[id];
+    const left = finiteSample(grid, field, x - 1, y, center);
+    const right = finiteSample(grid, field, x + 1, y, center);
+    const up = finiteSample(grid, field, x, y - 1, center);
+    const down = finiteSample(grid, field, x, y + 1, center);
     return Math.hypot((right - left) * 0.5, (down - up) * 0.5);
   }
 
-  function localRelief(grid, field, x, y) {
-    const id = y * grid.width + x;
+  function localRelief(grid, field, id) {
     const center = field[id];
     let maxDelta = 0;
     forEachNeighbor4ById(grid, id, (nid) => {
@@ -6097,9 +6097,7 @@
     return maxDelta;
   }
 
-  function visitNeighbor8(grid, x, y, visit) {
-    const id = y < 0 || y >= grid.height ? -1 : y * grid.width + wrapX(grid.width, x);
-    if (id < 0) return;
+  function visitNeighbor8(grid, id, visit) {
     forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
       visit(nid, dx !== 0 && dy !== 0);
     });
@@ -6108,9 +6106,7 @@
   function measurePatchiness(grid, field) {
     let total = 0;
     forEachGridCell(grid, (id) => {
-      const x = id % grid.width;
-      const y = Math.floor(id / grid.width);
-      total += localRelief(grid, field, x, y);
+      total += localRelief(grid, field, id);
     });
     return total / grid.size;
   }
@@ -6125,7 +6121,7 @@
       for (let x = 0; x < grid.width; x += 1) {
         const id = y * grid.width + x;
         if (field[id] < 0.05) continue;
-        const contrast = localRelief(grid, field, x, y);
+        const contrast = localRelief(grid, field, id);
         if (contrast < 0.012) continue;
 
         const horizontal = bandScore(grid, field, x, y, 1, 0, 0, 1);
@@ -6178,15 +6174,18 @@
   }
 
   function similarity(grid, field, x, y, value) {
-    if (y < 0 || y >= grid.height) return 0;
-    const id = y * grid.width + wrapX(grid.width, x);
-    return clamp01(1 - Math.abs(field[id] - value) / 0.018);
+    const sample = sampleGridWrapped(grid, field, x, y);
+    return Number.isFinite(sample) ? clamp01(1 - Math.abs(sample - value) / 0.018) : 0;
   }
 
   function contrastAgainst(grid, field, x, y, value) {
-    if (y < 0 || y >= grid.height) return 0;
-    const id = y * grid.width + wrapX(grid.width, x);
-    return smoothstep(0.012, 0.045, Math.abs(field[id] - value));
+    const sample = sampleGridWrapped(grid, field, x, y);
+    return Number.isFinite(sample) ? smoothstep(0.012, 0.045, Math.abs(sample - value)) : 0;
+  }
+
+  function finiteSample(grid, field, x, y, fallback) {
+    const sample = sampleGridWrapped(grid, field, x, y);
+    return Number.isFinite(sample) ? sample : fallback;
   }
 
   function sumField(field) {
@@ -6205,9 +6204,11 @@
   }
 
   function localAverage8(grid, field, x, y) {
-    let total = field[y * grid.width + x] * 1.5;
+    const id = grid.topology?.kind ? grid.topology.index(x, y) : y * grid.width + x;
+    if (id < 0) return 0;
+    let total = field[id] * 1.5;
     let weight = 1.5;
-    visitNeighbor8(grid, x, y, (nid, diagonal) => {
+    visitNeighbor8(grid, id, (nid, diagonal) => {
       const w = diagonal ? 0.45 : 0.8;
       total += field[nid] * w;
       weight += w;
