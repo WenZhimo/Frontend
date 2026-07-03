@@ -49,3 +49,14 @@ export function parseBoolOption(options, name) {
   return options[name] === true || options[name] === "true" || options[name] === "1";
 }
 
+export function parseTopologyOptions(options = {}) {
+  const topologyMode = options.topology ?? options["topology-mode"] ?? options.topologyMode ?? "cylindrical";
+  const projectionMode = options.projection ?? options["projection-mode"] ?? options.projectionMode ?? "equirectangular";
+  const faceSize = parseIntOption(options, "face-size", parseIntOption(options, "faceSize", undefined));
+  const parsed = {
+    topologyMode,
+    projectionMode,
+  };
+  if (Number.isFinite(faceSize)) parsed.faceSize = faceSize;
+  return parsed;
+}

@@ -1,19 +1,24 @@
 import { writeFileSync } from "node:fs";
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
+import { parseOptions, parseTopologyOptions } from "./lib/cli.mjs";
+
+const { positional, options } = parseOptions(process.argv.slice(2));
+const topologyOptions = parseTopologyOptions(options);
 
 const params = {
-  seedText: process.argv[2] ?? "龙骨海-纪元7",
+  seedText: positional[0] ?? "龙骨海-纪元7",
   waterLevel: 50,
   intensity: 1,
   plateCount: 14,
   timeScale: 1_000_000,
-  resolution: process.argv[6] ?? "512x256",
-  pipelineMode: process.argv[5] ?? "legacy",
+  resolution: positional[4] ?? "512x256",
+  pipelineMode: positional[3] ?? "legacy",
+  ...topologyOptions,
   showBoundaries: false,
 };
-const steps = Number(process.argv[3] ?? 739);
-const output = process.argv[4] ?? "_render-check.ppm";
+const steps = Number(positional[1] ?? 739);
+const output = positional[2] ?? "_render-check.ppm";
 
 const world = createWorld(params);
 for (let i = 0; i < steps; i += 1) stepWorld(world);
@@ -35,6 +40,10 @@ console.log(JSON.stringify({
   ageYears: world.ageYears,
   pipelineMode: params.pipelineMode,
   resolution: params.resolution,
+  topologyMode: world.params.topologyMode,
+  projectionMode: world.params.projectionMode,
+  faceSize: world.params.faceSize,
+  sphericalGridSize: world.sphericalGrid?.size ?? 0,
   landRatio: world.stats.landRatio,
   seaRatio: world.stats.seaRatio,
   seaLevel: world.seaLevel,

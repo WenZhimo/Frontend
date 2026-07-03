@@ -3,10 +3,11 @@ import { stepWorld } from "../src/sim/evolution.js";
 import { getHydrologyInputs } from "../src/sim/derived/terrain.js";
 import { measureIsostasyDiagnostics } from "../src/sim/geology/isostasy.js";
 import { measureTopologyDiagnostics, topologyForGrid } from "../src/sim/topology.js";
-import { parseBoolOption, parseOptions } from "./lib/cli.mjs";
+import { parseBoolOption, parseOptions, parseTopologyOptions } from "./lib/cli.mjs";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
 const hydrologyDiagnosticsMode = parseBoolOption(options, "full-hydrology") ? "full" : "basic";
+const topologyOptions = parseTopologyOptions(options);
 
 const params = {
   seedText: positional[0] ?? "???-??7",
@@ -16,6 +17,7 @@ const params = {
   timeScale: 1_000_000,
   resolution: positional[3] ?? "512x256",
   pipelineMode: positional[2] ?? "legacy",
+  ...topologyOptions,
 };
 const steps = Number(positional[1] ?? 200);
 
@@ -43,6 +45,10 @@ console.log(JSON.stringify({
   ageYears: world.ageYears,
   pipelineMode: params.pipelineMode,
   resolution: params.resolution,
+  topologyMode: world.params.topologyMode,
+  projectionMode: world.params.projectionMode,
+  faceSize: world.params.faceSize,
+  sphericalGridSize: world.sphericalGrid?.size ?? 0,
   averageStepMs: totalMs / steps,
   landRatio: world.stats.landRatio,
   seaRatio: world.stats.seaRatio,
