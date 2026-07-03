@@ -11,6 +11,7 @@ const files = [
   "src/sim/sphere/vector.js",
   "src/sim/sphere/cubedSphere.js",
   "src/sim/sphere/projection.js",
+  "src/sim/sphere/plates.js",
   "src/sim/noise.js",
   "src/sim/terrain.js",
   "src/sim/tectonics.js",
