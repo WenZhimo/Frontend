@@ -2,6 +2,7 @@ import { parseCsv, parseIntOption, parseOptions } from "./lib/cli.mjs";
 import { createCheckWorld } from "./lib/world-runner.mjs";
 import { stepWorld } from "../src/sim/evolution.js";
 import { detectGpuCapabilities } from "../src/gpu/capability.js";
+import { runWebGpuIsostasyCandidate } from "../src/gpu/isostasyCompute.js";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
 const seedText = positional[0] ?? "龙骨海-纪元7";
@@ -9,6 +10,7 @@ const pipelineMode = positional[1] ?? "geology-v2";
 const resolution = positional[2] ?? "256x128";
 const steps = parseIntOption(options, "steps", Number(positional[3]) || 20);
 const fields = parseCsv(positional[4] ?? options.fields, ["elev", "isostaticBase", "oceanDepthTerms"]);
+const candidateBackend = options.candidate ?? "cpu";
 
 const baseline = createCheckWorld({ seedText, pipelineMode, resolution });
 const candidate = createCheckWorld({ seedText, pipelineMode, resolution });
@@ -16,17 +18,32 @@ const candidate = createCheckWorld({ seedText, pipelineMode, resolution });
 runSteps(baseline, steps);
 runSteps(candidate, steps);
 
-const fieldResults = fields.map((fieldName) => compareField(fieldName, baseline.grid[fieldName], candidate.grid[fieldName]));
+const gpuCapabilities = detectGpuCapabilities(globalThis);
+const candidateResult = candidateBackend === "webgpu-isostasy"
+  ? await runWebGpuIsostasyCandidate(candidate)
+  : null;
+const fieldResults = fields.map((fieldName) => {
+  const candidateField = candidateResult?.skipped
+    ? candidate.grid[fieldName]
+    : candidateResult?.fields?.[fieldName] ?? candidate.grid[fieldName];
+  return compareField(fieldName, baseline.grid[fieldName], candidateField, thresholdForField(fieldName, candidateBackend));
+});
 const result = {
   seedText,
   pipelineMode,
   resolution,
   steps,
-  backend: "cpu-vs-cpu",
-  gpuCapabilities: detectGpuCapabilities(globalThis),
-  valid: fieldResults.every((field) => field.valid),
+  backend: candidateBackend === "webgpu-isostasy" ? "webgpu-isostasy" : "cpu-vs-cpu",
+  candidate: candidateBackend,
+  skipped: candidateResult?.skipped ?? false,
+  skipReason: candidateResult?.reason ?? null,
+  gpuCapabilities: candidateResult?.gpuCapabilities ?? gpuCapabilities,
+  timings: candidateResult?.timings ?? null,
+  valid: (candidateResult?.valid ?? true) && fieldResults.every((field) => field.valid),
   fields: fieldResults,
-  note: "Phase 0 compare scaffold only: candidate currently uses the CPU path so expected deltas are zero.",
+  note: candidateBackend === "webgpu-isostasy"
+    ? "Phase 2A experimental compare: CPU remains authoritative; WebGPU isostasy only runs when explicitly requested."
+    : "CPU-vs-CPU compare remains the default path so expected deltas are zero.",
 };
 
 console.log(JSON.stringify(result, null, 2));
@@ -35,7 +52,7 @@ function runSteps(world, count) {
   for (let i = 0; i < count; i += 1) stepWorld(world);
 }
 
-function compareField(fieldName, baselineField, candidateField) {
+function compareField(fieldName, baselineField, candidateField, threshold = { rmse: 1e-9, maxAbs: 1e-9 }) {
   if (!baselineField || !candidateField) {
     return {
       field: fieldName,
@@ -69,11 +86,31 @@ function compareField(fieldName, baselineField, candidateField) {
   }
 
   const count = Math.max(1, baselineField.length);
+  const rmse = Math.sqrt(sumSq / count);
+  const meanAbs = sumAbs / count;
   return {
     field: fieldName,
-    valid: maxAbs <= 1e-9,
-    rmse: Math.sqrt(sumSq / count),
-    meanAbs: sumAbs / count,
+    valid: rmse <= threshold.rmse && maxAbs <= threshold.maxAbs,
+    threshold,
+    rmse,
+    meanAbs,
     maxAbs,
   };
+}
+
+function thresholdForField(fieldName, backend) {
+  if (backend !== "webgpu-isostasy") return { rmse: 1e-9, maxAbs: 1e-9 };
+  if (fieldName === "oceanDepthTerms") return { rmse: 0.002, maxAbs: 0.01 };
+  if (
+    fieldName === "isostaticBase" ||
+    fieldName === "ageSubsidence" ||
+    fieldName === "thicknessBuoyancy" ||
+    fieldName === "sedimentFill" ||
+    fieldName === "crustBuoyancy" ||
+    fieldName === "densitySubsidence" ||
+    fieldName === "lithosphereCooling"
+  ) {
+    return { rmse: 0.001, maxAbs: 0.006 };
+  }
+  return { rmse: 0.002, maxAbs: 0.01 };
 }

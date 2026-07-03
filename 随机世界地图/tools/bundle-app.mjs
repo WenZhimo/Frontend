@@ -30,6 +30,8 @@ const files = [
   "src/sim/world.js",
   "src/sim/evolution.js",
   "src/gpu/capability.js",
+  "src/gpu/kernels/isostasyKernel.js",
+  "src/gpu/isostasyCompute.js",
   "src/render/cpuMapRenderer.js",
   "src/render/gpuMapRenderer.js",
   "src/render/renderBackend.js",

@@ -26,7 +26,7 @@ export const GPU_FIELD_GROUPS = {
     ],
   },
   [GpuFieldGroup.ISOSTASY]: {
-    purpose: "Dense per-cell isostasy terms; CPU remains authoritative in Phase 0.",
+    purpose: "Dense per-cell isostasy terms; CPU remains authoritative while Phase 2A can compare an explicit WebGPU candidate.",
     fields: [
       field("crustType", GpuFieldKind.MASK),
       field("crustThickness", GpuFieldKind.FLOAT),
@@ -46,6 +46,8 @@ export const GPU_FIELD_GROUPS = {
       field("ridgeUplift", GpuFieldKind.FLOAT, "output"),
       field("trenchDepression", GpuFieldKind.FLOAT, "output"),
       field("oceanDepthTerms", GpuFieldKind.FLOAT, "output"),
+      field("isostaticResidual", GpuFieldKind.FLOAT, "output"),
+      field("isostaticReliefSupply", GpuFieldKind.FLOAT, "output"),
     ],
   },
   [GpuFieldGroup.ELEVATION]: {
