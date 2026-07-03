@@ -45,10 +45,13 @@ export function updateReliefBudgetDiagnostics(world) {
         grid.rift[i] * 0.25 +
         grid.trench[i] * 0.25 +
         grid.islandArc[i] * 0.35;
-      const isostatic =
-        Math.abs(grid.thicknessBuoyancy[i]) +
-        Math.abs(grid.ageSubsidence[i]) +
-        Math.abs(grid.oceanDepthTerms[i]);
+      const currentIsostatic = grid.isostaticReliefSupply?.[i] ?? 0;
+      const isostatic = currentIsostatic > 0
+        ? currentIsostatic
+        : Math.abs(grid.crustBuoyancy?.[i] ?? grid.thicknessBuoyancy[i]) +
+          Math.abs(grid.densitySubsidence?.[i] ?? 0) +
+          Math.abs(grid.lithosphereCooling?.[i] ?? -grid.ageSubsidence[i]) +
+          Math.abs(grid.oceanDepthTerms[i]) * 0.35;
       const smoothing =
         grid.abyssalPlain[i] * 0.35 +
         grid.sedimentWedge[i] * 0.2 +

@@ -1,4 +1,5 @@
 import { cellsFromReference, referenceCellsFromGridDistance, resolutionScale } from "./scale.js";
+import { createTopology, topologyForGrid } from "./topology.js";
 
 export function createGrid(width, height) {
   const size = width * height;
@@ -6,6 +7,8 @@ export function createGrid(width, height) {
     width,
     height,
     size,
+    topology: createTopology(width, height),
+    topologyOptions: { kind: "cylindrical", wrapX: true, wrapY: false },
     elev: new Float32Array(size),
     baseElev: new Float32Array(size),
     relief: new Float32Array(size),
@@ -138,13 +141,19 @@ export function wrapX(width, x) {
 }
 
 export function indexOf(grid, x, y) {
-  return y * grid.width + wrapX(grid.width, x);
+  return topologyForGrid(grid).index(x, y);
 }
 
 export function forEachNeighbor4(grid, x, y, visit) {
-  const { width, height } = grid;
-  visit(wrapX(width, x - 1), y, -1, 0);
-  visit(wrapX(width, x + 1), y, 1, 0);
-  if (y > 0) visit(x, y - 1, 0, -1);
-  if (y < height - 1) visit(x, y + 1, 0, 1);
+  const topology = topologyForGrid(grid);
+  const id = topology.index(x, y);
+  if (id < 0) return;
+  for (const nid of topology.neighbors4(id)) {
+    const nx = nid % grid.width;
+    const ny = Math.floor(nid / grid.width);
+    let dx = nx - x;
+    if (dx > 1) dx = -1;
+    if (dx < -1) dx = 1;
+    visit(nx, ny, dx, ny - y);
+  }
 }

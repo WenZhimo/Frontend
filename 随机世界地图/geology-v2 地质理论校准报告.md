@@ -1470,3 +1470,64 @@ sedimentFill = fillMax * (1 - exp(-sediment * fillScale));
 ### 20.4 剩余限制
 
 当前版本不是完整河网侵蚀，也没有真实降水、径流、三角洲、风暴搬运或生物碳酸盐平台。后续 hydrology 阶段可以读取本轮字段，但不应把 `sedimentSink` 当作完成态河流沉积系统。
+
+## 21. 已落地：等静力 / 地壳浮力轻量高程校正
+
+### 21.1 实现范围
+
+本轮已把等静力基础层落到 geology-v2 主流程中。实现目标不是完整 Airy / flexural loading 物理模拟，而是把“厚陆壳较高、薄陆壳 / 过渡壳较低、年轻洋壳较浅、老冷洋壳较深、沉积既填平也负载下沉”的规律转为稳定的低频高程底座。
+
+当前公式结构：
+
+```js
+crustBuoyancy = smoothThickness(crustThickness, crustType) * buoyancyScale;
+densitySubsidence = densityNorm(crustDensity, crustType) * densityScale;
+lithosphereCooling = oceanicOrTransitional * sqrt(crustAge) * coolingScale;
+sedimentLoad = sedimentLoadSubsidence * loadScale * diminishingReturn;
+
+isostaticBase =
+  crustTypeBase
+  + crustBuoyancy
+  - densitySubsidence
+  - lithosphereCooling
+  - sedimentLoad
+  + sedimentSurfaceFill;
+```
+
+兼容旧洋底分项：
+
+```js
+ageSubsidence = -lithosphereCooling;
+thicknessBuoyancy = crustBuoyancy;
+oceanDepthTerms =
+  ageSubsidence
+  + thicknessBuoyancy
+  + sedimentSurfaceFill
+  + ridgeUplift
+  + trenchDepression
+  - densitySubsidence
+  - sedimentLoad;
+```
+
+### 21.2 字段与诊断
+
+新增持久 / 派生字段：`isostaticBase / crustBuoyancy / densitySubsidence / lithosphereCooling / isostaticResidual`。既有 `sedimentLoadSubsidence / isostaticReliefSupply` 继续复用。
+
+新增接口与工具诊断：`isostaticContinentalMean / isostaticOceanicMean / isostaticTransitionalMean / continentalOceanReliefGap / youngOldOceanDepthGap / isostaticResidualMean / isostaticResidualP95 / isostasyElevationCorrelation / crustThicknessElevationCorrelation / crustAgeOceanDepthCorrelation / transitionalElevationBand / seaLevelDriftAfterIsostasy / landRatioDriftAfterIsostasy`。
+
+新增 debug 图层：`isostaticBase / crustBuoyancy / densitySubsidence / lithosphereCooling / sedimentLoadSubsidence / isostaticResidual / crustThickness / crustDensity`。
+
+### 21.3 验证结果
+
+`龙骨海-纪元7` 在 512x256 档的代表性结果：
+
+- 200 Myr：`continentalOceanReliefGap ≈ 0.238`，`youngOldOceanDepthGap ≈ 0.078`，`isostaticResidualP95 ≈ 0.0159`。
+- 739 Myr：`continentalOceanReliefGap ≈ 0.206`，`youngOldOceanDepthGap ≈ 0.073`，`isostaticResidualP95 ≈ 0.0191`，`sedimentStraightnessRisk ≈ 0.054`，`flatWorldRisk = false`。
+- 200 Myr resolution-check：256x128 与 512x256 的 `continentalOceanReliefGap` 均约 0.218，`youngOldOceanDepthGap` 均约 0.077，说明等静力趋势在两档分辨率间保持一致。
+
+### 21.4 剩余限制
+
+- `seaLevelDriftAfterIsostasy / landRatioDriftAfterIsostasy` 当前主要用于监控重构后的跳变风险，并不是独立的地质海平面反演。
+- `isostaticResidual` 低并不代表最终视觉必然自然；仍需结合 `oldBoundaryReliefCorrelation / sedimentStraightnessRisk / coastBoundaryShare` 判断旧边界残影。
+- 沉积负载仍是轻量近似，未实现真实 flexural response。
+- 等静力层只提供大尺度底座；山脉、海沟、岛弧、裂谷和被动边缘仍由对应构造模块解释。
