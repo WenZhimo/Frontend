@@ -5179,8 +5179,8 @@
         const i = y * grid.width + x;
         const relative = grid.elev[i] - seaLevel;
         const land = relative >= 0;
-        const local = localRelief(grid, x, y, radius);
-        const slope = localSlope(grid, x, y, seaLevel);
+        const local = localRelief(grid, i, radius);
+        const slope = localSlope(grid, i, seaLevel);
         const seaSensitive = Math.abs(relative) < seaLevelBand ? 1 : 0;
         const plain = land && slope < lowSlope && local < lowRelief ? 1 : 0;
         const broadPlain = plain && local < lowRelief * 0.72 && grid.sediment[i] + grid.basin[i] > 0.05 ? 1 : 0;
@@ -5329,27 +5329,23 @@
     };
   }
 
-  function localRelief(grid, x, y, radius) {
-    let min = Infinity;
-    let max = -Infinity;
-    for (let dy = -radius; dy <= radius; dy += 1) {
-      const ny = y + dy;
-      if (ny < 0 || ny >= grid.height) continue;
-      for (let dx = -radius; dx <= radius; dx += 1) {
-        if (Math.hypot(dx, dy) > radius + 0.01) continue;
-        const h = grid.elev[ny * grid.width + wrapX(grid.width, x + dx)];
-        if (h < min) min = h;
-        if (h > max) max = h;
-      }
-    }
+  function localRelief(grid, id, radius) {
+    let min = grid.elev[id];
+    let max = grid.elev[id];
+    forEachNeighborRadiusById(grid, id, radius, (nid) => {
+      const h = grid.elev[nid];
+      if (h < min) min = h;
+      if (h > max) max = h;
+    });
     return max - min;
   }
 
-  function localSlope(grid, x, y, seaLevel) {
-    const left = grid.elev[y * grid.width + wrapX(grid.width, x - 1)] - seaLevel;
-    const right = grid.elev[y * grid.width + wrapX(grid.width, x + 1)] - seaLevel;
-    const up = grid.elev[Math.max(0, y - 1) * grid.width + x] - seaLevel;
-    const down = grid.elev[Math.min(grid.height - 1, y + 1) * grid.width + x] - seaLevel;
+  function localSlope(grid, id, seaLevel) {
+    const { x, y } = xyOf(grid, id);
+    const left = sampleGridWrapped(grid, grid.elev, x - 1, y) - seaLevel;
+    const right = sampleGridWrapped(grid, grid.elev, x + 1, y) - seaLevel;
+    const up = sampleGridWrapped(grid, grid.elev, x, Math.max(0, y - 1)) - seaLevel;
+    const down = sampleGridWrapped(grid, grid.elev, x, Math.min(grid.height - 1, y + 1)) - seaLevel;
     return Math.hypot((right - left) * 0.5, (down - up) * 0.5);
   }
 
