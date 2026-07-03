@@ -33,38 +33,48 @@ export function createTopology(width, height, options = {}) {
     return { x: i % width, y: Math.floor(i / width) };
   }
 
-  function neighbors4(i) {
-    const { x, y } = xy(i);
-    const out = [];
+  function forEachNeighbor4(i, visit) {
+    const x = i % width;
+    const y = Math.floor(i / width);
     let id = index(x - 1, y);
-    if (id >= 0) out.push(id);
+    if (id >= 0) visit(id, -1, 0);
     id = index(x + 1, y);
-    if (id >= 0) out.push(id);
+    if (id >= 0) visit(id, 1, 0);
     id = index(x, y - 1);
-    if (id >= 0) out.push(id);
+    if (id >= 0) visit(id, 0, -1);
     id = index(x, y + 1);
-    if (id >= 0) out.push(id);
+    if (id >= 0) visit(id, 0, 1);
+  }
+
+  function neighbors4(i) {
+    const out = [];
+    forEachNeighbor4(i, (id) => out.push(id));
     return out;
   }
 
-  function neighbors8(i) {
-    const { x, y } = xy(i);
-    const out = [];
+  function forEachNeighbor8(i, visit) {
+    const x = i % width;
+    const y = Math.floor(i / width);
     for (let dy = -1; dy <= 1; dy += 1) {
       const ny = y + dy;
       if (!inBoundsY(ny)) continue;
       for (let dx = -1; dx <= 1; dx += 1) {
         if (dx === 0 && dy === 0) continue;
         const id = index(x + dx, ny);
-        if (id >= 0) out.push(id);
+        if (id >= 0) visit(id, dx, dy);
       }
     }
+  }
+
+  function neighbors8(i) {
+    const out = [];
+    forEachNeighbor8(i, (id) => out.push(id));
     return out;
   }
 
-  function neighborsRadius(i, radius) {
-    const { x, y } = xy(i);
-    const out = [];
+  function forEachNeighborRadius(i, radius, visit) {
+    const x = i % width;
+    const y = Math.floor(i / width);
     for (let dy = -radius; dy <= radius; dy += 1) {
       const ny = y + dy;
       if (!inBoundsY(ny)) continue;
@@ -72,9 +82,14 @@ export function createTopology(width, height, options = {}) {
         if (dx === 0 && dy === 0) continue;
         if (Math.hypot(dx, dy) > radius + 0.01) continue;
         const id = index(x + dx, ny);
-        if (id >= 0) out.push(id);
+        if (id >= 0) visit(id, dx, dy);
       }
     }
+  }
+
+  function neighborsRadius(i, radius) {
+    const out = [];
+    forEachNeighborRadius(i, radius, (id) => out.push(id));
     return out;
   }
 
@@ -104,11 +119,11 @@ export function createTopology(width, height, options = {}) {
     }
     while (head < tail) {
       const id = queue[head++];
-      for (const nid of neighbors4(id)) {
-        if (visited[nid] || !passableFn(nid)) continue;
+      forEachNeighbor4(id, (nid) => {
+        if (visited[nid] || !passableFn(nid)) return;
         visited[nid] = 1;
         queue[tail++] = nid;
-      }
+      });
     }
     return visited;
   }
@@ -127,11 +142,11 @@ export function createTopology(width, height, options = {}) {
       queue[tail++] = start;
       while (head < tail) {
         const id = queue[head++];
-        for (const nid of neighbors4(id)) {
-          if (!mask[nid] || componentId[nid]) continue;
+        forEachNeighbor4(id, (nid) => {
+          if (!mask[nid] || componentId[nid]) return;
           componentId[nid] = nextId;
           queue[tail++] = nid;
-        }
+        });
       }
       componentSizes[nextId] = tail;
       nextId += 1;
@@ -171,8 +186,11 @@ export function createTopology(width, height, options = {}) {
     inBoundsY,
     index,
     xy,
+    forEachNeighbor4,
     neighbors4,
+    forEachNeighbor8,
     neighbors8,
+    forEachNeighborRadius,
     neighborsRadius,
     distance,
     distanceXY,

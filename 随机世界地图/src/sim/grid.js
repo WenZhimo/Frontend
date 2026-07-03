@@ -148,12 +148,9 @@ export function forEachNeighbor4(grid, x, y, visit) {
   const topology = topologyForGrid(grid);
   const id = topology.index(x, y);
   if (id < 0) return;
-  for (const nid of topology.neighbors4(id)) {
+  topology.forEachNeighbor4(id, (nid, dx, dy) => {
     const nx = nid % grid.width;
     const ny = Math.floor(nid / grid.width);
-    let dx = nx - x;
-    if (dx > 1) dx = -1;
-    if (dx < -1) dx = 1;
-    visit(nx, ny, dx, ny - y);
-  }
+    visit(nx, ny, dx, dy);
+  });
 }
