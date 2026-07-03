@@ -1,3 +1,6 @@
+import { BoundaryType } from "../sim/tectonics.js";
+import { boundaryOverlayStrength } from "./cpuMapRenderer.js";
+
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
 const vec2 POSITIONS[6] = vec2[6](
@@ -18,6 +21,7 @@ void main() {
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 uniform sampler2D uElevation;
+uniform sampler2D uBoundaryOverlay;
 uniform float uSeaLevel;
 in vec2 vUv;
 out vec4 outColor;
@@ -37,8 +41,11 @@ vec3 colorForElevation(float h) {
 }
 
 void main() {
-  float elevation = texture(uElevation, vec2(vUv.x, 1.0 - vUv.y)).r;
-  outColor = vec4(colorForElevation(elevation - uSeaLevel), 1.0);
+  vec2 texCoord = vec2(vUv.x, 1.0 - vUv.y);
+  float elevation = texture(uElevation, texCoord).r;
+  vec3 baseColor = colorForElevation(elevation - uSeaLevel);
+  vec4 boundaryOverlay = texture(uBoundaryOverlay, texCoord);
+  outColor = vec4(mix(baseColor, boundaryOverlay.rgb, boundaryOverlay.a), 1.0);
 }`;
 
 export function createExperimentalWebGlMapRenderer(canvas) {
@@ -53,13 +60,23 @@ export function createExperimentalWebGlMapRenderer(canvas) {
   }
 
   const texture = gl.createTexture();
+  const boundaryTexture = gl.createTexture();
   const vao = gl.createVertexArray();
+  const elevationLocation = gl.getUniformLocation(program, "uElevation");
+  const boundaryOverlayLocation = gl.getUniformLocation(program, "uBoundaryOverlay");
   const seaLevelLocation = gl.getUniformLocation(program, "uSeaLevel");
   let width = 0;
   let height = 0;
   let elevationUpload = null;
+  let boundaryUpload = null;
 
   gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  gl.bindTexture(gl.TEXTURE_2D, boundaryTexture);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -69,6 +86,7 @@ export function createExperimentalWebGlMapRenderer(canvas) {
     const { grid } = world;
     ensureSize(grid.width, grid.height);
     elevationUpload.set(grid.elev);
+    writeBoundaryOverlay(world, boundaryUpload);
 
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.useProgram(program);
@@ -77,6 +95,11 @@ export function createExperimentalWebGlMapRenderer(canvas) {
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, width, height, gl.RED, gl.FLOAT, elevationUpload);
+    gl.uniform1i(elevationLocation, 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, boundaryTexture);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, boundaryUpload);
+    gl.uniform1i(boundaryOverlayLocation, 1);
     gl.uniform1f(seaLevelLocation, world.seaLevel);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
@@ -91,8 +114,11 @@ export function createExperimentalWebGlMapRenderer(canvas) {
     canvas.width = width;
     canvas.height = height;
     elevationUpload = new Float32Array(width * height);
+    boundaryUpload = new Uint8Array(width * height * 4);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, width, height, 0, gl.RED, gl.FLOAT, elevationUpload);
+    gl.bindTexture(gl.TEXTURE_2D, boundaryTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, boundaryUpload);
   }
 
   return {
@@ -103,6 +129,33 @@ export function createExperimentalWebGlMapRenderer(canvas) {
       render,
     },
   };
+}
+
+function writeBoundaryOverlay(world, upload) {
+  upload.fill(0);
+  if (world.params.showBoundaries === false) return;
+  const { grid } = world;
+  const { btype, activeBoundary } = grid;
+  for (let i = 0; i < grid.size; i += 1) {
+    if (btype[i] === BoundaryType.INTERIOR || !activeBoundary[i]) continue;
+    const overlayStrength = boundaryOverlayStrength(grid, i);
+    if (overlayStrength <= 0) continue;
+    const offset = i * 4;
+    if (btype[i] === BoundaryType.CONVERGENT) {
+      writeOverlayPixel(upload, offset, 231, 86, 66, 0.55 * overlayStrength);
+    } else if (btype[i] === BoundaryType.DIVERGENT) {
+      writeOverlayPixel(upload, offset, 77, 195, 215, 0.5 * overlayStrength);
+    } else {
+      writeOverlayPixel(upload, offset, 236, 196, 83, 0.46 * overlayStrength);
+    }
+  }
+}
+
+function writeOverlayPixel(upload, offset, r, g, b, alpha) {
+  upload[offset] = r;
+  upload[offset + 1] = g;
+  upload[offset + 2] = b;
+  upload[offset + 3] = Math.round(Math.max(0, Math.min(1, alpha)) * 255);
 }
 
 function getWebGl2Context(canvas) {
