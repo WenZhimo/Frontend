@@ -570,6 +570,22 @@
     return topologyForGrid(grid).index(x, y);
   }
 
+  function xyOf(grid, id) {
+    return topologyForGrid(grid).xy(id);
+  }
+
+  function sampleGrid(grid, field, x, y) {
+    return topologyForGrid(grid).sample(field, x, y);
+  }
+
+  function sampleGridWrapped(grid, field, x, y) {
+    return topologyForGrid(grid).sampleWrapped(field, x, y);
+  }
+
+  function forEachGridCell(grid, visit) {
+    topologyForGrid(grid).forEachCell(visit);
+  }
+
   function forEachNeighbor4(grid, x, y, visit) {
     const topology = topologyForGrid(grid);
     const id = topology.index(x, y);
@@ -578,6 +594,27 @@
       const nx = nid % grid.width;
       const ny = Math.floor(nid / grid.width);
       visit(nx, ny, dx, dy);
+    });
+  }
+
+  function forEachNeighbor4ById(grid, id, visit) {
+    const topology = topologyForGrid(grid);
+    topology.forEachNeighbor4(id, (nid, dx, dy) => {
+      visit(nid, dx, dy);
+    });
+  }
+
+  function forEachNeighbor8ById(grid, id, visit) {
+    const topology = topologyForGrid(grid);
+    topology.forEachNeighbor8(id, (nid, dx, dy) => {
+      visit(nid, dx, dy);
+    });
+  }
+
+  function forEachNeighborRadiusById(grid, id, radius, visit) {
+    const topology = topologyForGrid(grid);
+    topology.forEachNeighborRadius(id, radius, (nid, dx, dy) => {
+      visit(nid, dx, dy);
     });
   }
 
