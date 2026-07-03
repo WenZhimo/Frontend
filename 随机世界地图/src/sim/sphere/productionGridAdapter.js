@@ -1,5 +1,9 @@
 import { createCubedSphereGrid } from "./cubedSphere.js";
 import {
+  createSphericalDiagnosticNoiseFields,
+  createSphericalDiagnosticTerrainFields,
+} from "./sphericalWorld.js";
+import {
   measureAreaStats,
   measureHemisphereAreaStats,
   finiteShare,
@@ -43,6 +47,10 @@ const FIELD_SPECS = [
   ["oldOrogeny", Float32Array],
   ["tectonicAxis", Float32Array],
   ["mountainHeight", Float32Array],
+  ["diagnosticElevation", Float32Array],
+  ["diagnosticSeaCandidate", Uint8Array],
+  ["diagnosticRidgeCandidate", Float32Array],
+  ["diagnosticTrenchCandidate", Float32Array],
 ];
 
 export function createCubedSphereProductionGridAdapter({
@@ -91,6 +99,39 @@ export function createCubedSphereProductionGridAdapter({
     grid[name] = new Type(sphericalGrid.size);
   }
 
+  populateProductionAdapterDiagnosticTerrain(grid);
+  return grid;
+}
+
+export function populateProductionAdapterDiagnosticTerrain(grid, { seedUint32 = 0 } = {}) {
+  const diagnosticNoise = createSphericalDiagnosticNoiseFields(grid, seedUint32);
+  const diagnosticBoundaries = createDiagnosticBoundaryProbe(grid);
+  const diagnosticTerrain = createSphericalDiagnosticTerrainFields(
+    grid,
+    diagnosticNoise,
+    diagnosticBoundaries,
+  );
+  grid.diagnosticNoise = diagnosticNoise;
+  grid.diagnosticBoundaries = diagnosticBoundaries;
+  grid.diagnosticTerrain = diagnosticTerrain;
+  grid.diagnosticElevation.set(diagnosticTerrain.elevation);
+  grid.diagnosticSeaCandidate.set(diagnosticTerrain.seaCandidate);
+  grid.diagnosticRidgeCandidate.set(diagnosticTerrain.ridgeCandidate);
+  grid.diagnosticTrenchCandidate.set(diagnosticTerrain.trenchCandidate);
+  grid.baseElev.set(diagnosticTerrain.elevation);
+  grid.elev.set(diagnosticTerrain.elevation);
+  grid.relief.set(diagnosticNoise.combined);
+  grid.externalSeaMask.fill(0);
+  grid.oceanConnectivity.fill(0);
+  grid.inlandWaterCandidate.fill(0);
+  grid.closedBasinId.fill(0);
+  const connectivity = deriveSphericalOceanConnectivity(grid, grid.diagnosticSeaCandidate);
+  grid.externalSeaMask.set(connectivity.externalSeaMask);
+  grid.oceanConnectivity.set(connectivity.oceanConnectivity);
+  grid.inlandWaterCandidate.set(connectivity.inlandWaterCandidate);
+  grid.closedBasinId.set(connectivity.closedBasinId);
+  grid.diagnosticConnectivity = connectivity;
+  grid.diagnosticDistanceToExternalSea = distanceFromGraphSources(grid, connectivity.externalSeaMask);
   return grid;
 }
 
@@ -126,6 +167,7 @@ export function summarizeProductionGridAdapter(grid) {
       categoryTotalArea: categoryShares.totalArea,
     },
     connectivityProbe: connectivity,
+    diagnosticTerrainProbe: createDiagnosticTerrainProbe(grid),
   };
 }
 
@@ -202,6 +244,45 @@ function createConnectivityProbe(grid, seaMask) {
     distanceMaxFinite: maxFinite(distanceToExternalSea),
     largestComponentIsExternal: isLargestExternalComponent(connectivity),
   };
+}
+
+function createDiagnosticTerrainProbe(grid) {
+  const terrain = grid.diagnosticTerrain;
+  const connectivity = grid.diagnosticConnectivity;
+  const distance = grid.diagnosticDistanceToExternalSea;
+  return {
+    hasDiagnosticTerrain: Boolean(terrain),
+    seaLevel: terrain?.seaLevel ?? null,
+    elevationMean: weightedMean(grid, grid.diagnosticElevation),
+    seaCandidateShare: weightedShare(grid, grid.diagnosticSeaCandidate),
+    externalSeaShare: weightedShare(grid, grid.externalSeaMask),
+    inlandWaterCandidateShare: weightedShare(grid, grid.inlandWaterCandidate),
+    closedBasinCount: connectivity?.closedBasinCount ?? 0,
+    distanceFiniteShare: distance ? finiteShare(distance) : 0,
+    ridgeCandidateMean: weightedMean(grid, grid.diagnosticRidgeCandidate),
+    trenchCandidateMean: weightedMean(grid, grid.diagnosticTrenchCandidate),
+    noiseCombinedMean: grid.diagnosticNoise ? weightedMean(grid, grid.diagnosticNoise.combined) : null,
+  };
+}
+
+function createDiagnosticBoundaryProbe(grid) {
+  const boundaryType = new Uint8Array(grid.size);
+  const stress = new Float32Array(grid.size);
+  for (let id = 0; id < grid.size; id += 1) {
+    const x = grid.positionX[id];
+    const y = grid.positionY[id];
+    const z = grid.positionZ[id];
+    const ridge = Math.abs(z + Math.sin(y * 3.1) * 0.18) < 0.035 && x > -0.75;
+    const trench = Math.abs(x - Math.cos(z * 2.3) * 0.28) < 0.03 && y < 0.42;
+    if (ridge) {
+      boundaryType[id] = 2;
+      stress[id] = 0.004 + Math.abs(y) * 0.002;
+    } else if (trench) {
+      boundaryType[id] = 1;
+      stress[id] = 0.004 + Math.abs(z) * 0.002;
+    }
+  }
+  return { boundaryType, stress };
 }
 
 function isLargestExternalComponent(connectivity) {
