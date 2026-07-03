@@ -1,5 +1,5 @@
 import { nearestCellByVector } from "../sim/sphere/cubedSphere.js";
-import { equirectangularPixelToVec3 } from "../sim/sphere/projection.js";
+import { equirectangularPixelToVec3, mollweidePixelToVec3 } from "../sim/sphere/projection.js";
 import { lonLatToVec3, normalize3 } from "../sim/sphere/vector.js";
 
 export function renderSphericalField(grid, field, options = {}) {
@@ -57,6 +57,9 @@ export function renderSphericalDebugFace(grid, options = {}) {
 export function projectionSampleToVec3(x, y, width, height, projectionMode, options = {}) {
   if (projectionMode === "orthographic") {
     return orthographicPixelToVec3(x, y, width, height, options);
+  }
+  if (projectionMode === "mollweide") {
+    return mollweidePixelToVec3(x, y, width, height);
   }
   return {
     ...equirectangularPixelToVec3(x, y, width, height),
