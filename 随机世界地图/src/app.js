@@ -6413,22 +6413,15 @@
         let thickTotal = scratch2[id] * 2.5;
         let sedTotal = scratch3[id] * 2.5;
         let weightTotal = 2.5;
-        for (let dy = -1; dy <= 1; dy += 1) {
-          const ny = y + dy;
-          if (ny < 0 || ny >= height) continue;
-          for (let dx = -1; dx <= 1; dx += 1) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = wrapX(width, x + dx);
-            const nid = ny * width + nx;
-            const sameFamily = crustType[nid] === CrustType.OCEANIC || crustType[nid] === CrustType.TRANSITIONAL;
-            if (!sameFamily || boundaryInfluence[nid] > 0.55) continue;
-            const w = dx === 0 || dy === 0 ? 1 : 0.55;
-            ageTotal += scratch[nid] * w;
-            thickTotal += scratch2[nid] * w;
-            sedTotal += scratch3[nid] * w;
-            weightTotal += w;
-          }
-        }
+        forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
+          const sameFamily = crustType[nid] === CrustType.OCEANIC || crustType[nid] === CrustType.TRANSITIONAL;
+          if (!sameFamily || boundaryInfluence[nid] > 0.55) return;
+          const w = dx === 0 || dy === 0 ? 1 : 0.55;
+          ageTotal += scratch[nid] * w;
+          thickTotal += scratch2[nid] * w;
+          sedTotal += scratch3[nid] * w;
+          weightTotal += w;
+        });
 
         const mix = Math.min(0.2, inactive * 0.12);
         crustAge[id] = scratch[id] * (1 - mix) + (ageTotal / weightTotal) * mix;
