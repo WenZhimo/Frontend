@@ -3157,8 +3157,6 @@
   function rebuildOceanicAgeFromRidges(world) {
     const { grid } = world;
     const {
-      width,
-      height,
       size,
       crustType,
       crustAge,
@@ -3200,9 +3198,7 @@
       while (head < tail) {
         const id = queue[head++];
         const nextDistance = ridgeDistance[id] + 1;
-        const x = id % width;
-        const y = Math.floor(id / width);
-        visitNeighbor4(grid, x, y, (nid) => {
+        forEachNeighbor4ById(grid, id, (nid) => {
           if (crustType[nid] !== CrustType.OCEANIC) return;
           if (nextDistance >= ridgeDistance[nid]) return;
           ridgeDistance[nid] = nextDistance;
@@ -3227,20 +3223,17 @@
     }
 
     scratch2.set(crustAge);
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        if (crustType[id] !== CrustType.OCEANIC || ridgeDistance[id] <= 1) continue;
-        let total = scratch2[id] * 2.5;
-        let weight = 2.5;
-        visitNeighbor4(grid, x, y, (nid) => {
-          if (crustType[nid] !== CrustType.OCEANIC || Math.abs(ridgeDistance[nid] - ridgeDistance[id]) > 3) return;
-          total += scratch2[nid];
-          weight += 1;
-        });
-        crustAge[id] = Math.min(1, total / weight);
-      }
-    }
+    forEachGridCell(grid, (id) => {
+      if (crustType[id] !== CrustType.OCEANIC || ridgeDistance[id] <= 1) return;
+      let total = scratch2[id] * 2.5;
+      let weight = 2.5;
+      forEachNeighbor4ById(grid, id, (nid) => {
+        if (crustType[nid] !== CrustType.OCEANIC || Math.abs(ridgeDistance[nid] - ridgeDistance[id]) > 3) return;
+        total += scratch2[nid];
+        weight += 1;
+      });
+      crustAge[id] = Math.min(1, total / weight);
+    });
   }
 
   function rebuildCrustCompatibilityFields(grid) {
@@ -3260,13 +3253,6 @@
         isContinental[i] = 0;
       }
     }
-  }
-
-  function visitNeighbor4(grid, x, y, visit) {
-    visit(y * grid.width + wrapX(grid.width, x - 1));
-    visit(y * grid.width + wrapX(grid.width, x + 1));
-    if (y > 0) visit((y - 1) * grid.width + x);
-    if (y < grid.height - 1) visit((y + 1) * grid.width + x);
   }
 
 
