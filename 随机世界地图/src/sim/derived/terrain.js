@@ -1,4 +1,11 @@
-import { forEachGridCell, forEachNeighbor4ById, forEachNeighborRadiusById, physicalRadius, sampleGridWrapped } from "../grid.js";
+import {
+  forEachGridCell,
+  forEachNeighbor4ById,
+  forEachNeighborRadiusById,
+  gridParamHeight,
+  physicalRadius,
+  sampleGridWrapped,
+} from "../grid.js";
 import { updateReliefBudgetDiagnostics } from "../geology/reliefBudget.js";
 import { deriveOceanConnectivity } from "../geology/rift.js";
 import { getGeologicSeaLevelDiagnostics } from "../geology/seaLevel.js";
@@ -629,7 +636,8 @@ function finiteSample(grid, field, x, y, fallback) {
 
 function latitudeDegrees(grid, id, y) {
   if (grid.lat && Number.isFinite(grid.lat[id])) return grid.lat[id] * 180 / Math.PI;
-  return ((y + 0.5) / grid.height - 0.5) * 180;
+  const height = gridParamHeight(grid);
+  return height ? ((y + 0.5) / height - 0.5) * 180 : 0;
 }
 
 function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
