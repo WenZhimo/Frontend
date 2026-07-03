@@ -7050,8 +7050,8 @@
 
         let sum = 0;
         let count = 0;
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          sum += Math.abs(field[id] - field[ny * width + nx]);
+        forEachNeighbor4ById(grid, id, (nid) => {
+          sum += Math.abs(field[id] - field[nid]);
           count += 1;
         });
         ruggedness[id] = count ? sum / count : 0;
@@ -7115,21 +7115,18 @@
 
   function distanceFromCoast(grid, landMask) {
     const coast = new Uint8Array(grid.size);
-    for (let y = 0; y < grid.height; y += 1) {
-      for (let x = 0; x < grid.width; x += 1) {
-        const id = y * grid.width + x;
-        let nearOpposite = false;
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          if (landMask[ny * grid.width + nx] !== landMask[id]) nearOpposite = true;
-        });
-        if (nearOpposite) coast[id] = 1;
-      }
-    }
+    forEachGridCell(grid, (id) => {
+      let nearOpposite = false;
+      forEachNeighbor4ById(grid, id, (nid) => {
+        if (landMask[nid] !== landMask[id]) nearOpposite = true;
+      });
+      if (nearOpposite) coast[id] = 1;
+    });
     return distanceFromSources(grid, coast);
   }
 
   function distanceFromSources(grid, sourceMask) {
-    const { width, size } = grid;
+    const { size } = grid;
     const distance = new Float32Array(size);
     distance.fill(Number.POSITIVE_INFINITY);
     const queue = new Int32Array(size);
@@ -7145,10 +7142,7 @@
     while (head < tail) {
       const id = queue[head++];
       const nextDistance = distance[id] + 1;
-      const x = id % width;
-      const y = Math.floor(id / width);
-      forEachNeighbor4(grid, x, y, (nx, ny) => {
-        const nid = ny * width + nx;
+      forEachNeighbor4ById(grid, id, (nid) => {
         if (nextDistance >= distance[nid]) return;
         distance[nid] = nextDistance;
         queue[tail++] = nid;
@@ -7159,7 +7153,7 @@
   }
 
   function labelLandmasses(grid, landMask) {
-    const { width, size } = grid;
+    const { size } = grid;
     const landmassId = new Int32Array(size);
     const islandId = new Int32Array(size);
     const queue = new Int32Array(size);
@@ -7175,10 +7169,7 @@
       queue[tail++] = start;
       while (head < tail) {
         const id = queue[head++];
-        const x = id % width;
-        const y = Math.floor(id / width);
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          const nid = ny * width + nx;
+        forEachNeighbor4ById(grid, id, (nid) => {
           if (!landMask[nid] || landmassId[nid]) return;
           landmassId[nid] = nextLandId;
           queue[tail++] = nid;
@@ -7196,7 +7187,7 @@
   }
 
   function labelClosedBasins(grid, seaMask, externalSeaMask) {
-    const { width, size } = grid;
+    const { size } = grid;
     const closedBasinId = new Int32Array(size);
     const queue = new Int32Array(size);
     let nextId = 1;
@@ -7209,10 +7200,7 @@
       queue[tail++] = start;
       while (head < tail) {
         const id = queue[head++];
-        const x = id % width;
-        const y = Math.floor(id / width);
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          const nid = ny * width + nx;
+        forEachNeighbor4ById(grid, id, (nid) => {
           if (!seaMask[nid] || externalSeaMask[nid] || closedBasinId[nid]) return;
           closedBasinId[nid] = nextId;
           queue[tail++] = nid;
@@ -7226,17 +7214,14 @@
 
   function findLocalDepressions(grid, field, seaMask) {
     const depressionMask = new Uint8Array(grid.size);
-    for (let y = 0; y < grid.height; y += 1) {
-      for (let x = 0; x < grid.width; x += 1) {
-        const id = indexOf(grid, x, y);
-        if (seaMask[id]) continue;
-        let lowerThanAll = true;
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          if (field[id] >= field[ny * grid.width + nx]) lowerThanAll = false;
-        });
-        if (lowerThanAll) depressionMask[id] = 1;
-      }
-    }
+    forEachGridCell(grid, (id) => {
+      if (seaMask[id]) return;
+      let lowerThanAll = true;
+      forEachNeighbor4ById(grid, id, (nid) => {
+        if (field[id] >= field[nid]) lowerThanAll = false;
+      });
+      if (lowerThanAll) depressionMask[id] = 1;
+    });
     return depressionMask;
   }
 
