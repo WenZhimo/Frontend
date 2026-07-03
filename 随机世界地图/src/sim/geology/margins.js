@@ -1,4 +1,4 @@
-import { forEachNeighbor4, physicalRadius } from "../grid.js";
+import { forEachGridCell, forEachNeighbor4ById, physicalRadius } from "../grid.js";
 import { CrustType } from "./crust.js";
 
 export function updatePassiveMargins(world) {
@@ -41,16 +41,13 @@ export function updatePassiveMargins(world) {
       if (elev[i] >= seaLevel) landMask[i] = 1;
     }
 
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        let coast = false;
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          if (landMask[ny * width + nx] !== landMask[id]) coast = true;
-        });
-        if (coast) coastMask[id] = 1;
-      }
-    }
+    forEachGridCell(grid, (id) => {
+      let coast = false;
+      forEachNeighbor4ById(grid, id, (nid) => {
+        if (landMask[nid] !== landMask[id]) coast = true;
+      });
+      if (coast) coastMask[id] = 1;
+    });
 
     marginCoastDistance.set(marginDistanceFromSources(grid, coastMask, scratch));
     marginContinentalDistance.set(marginDistanceFromCrust(grid, (type) => type === CrustType.CONTINENTAL, scratch2));
@@ -117,7 +114,7 @@ export function updatePassiveMargins(world) {
 }
 
 function marginDistanceFromSources(grid, sourceMask, scratch) {
-  const { width, size } = grid;
+  const { size } = grid;
   scratch.fill(Number.POSITIVE_INFINITY);
   const queue = new Int32Array(size);
   let head = 0;
@@ -129,11 +126,8 @@ function marginDistanceFromSources(grid, sourceMask, scratch) {
   }
   while (head < tail) {
     const id = queue[head++];
-    const x = id % width;
-    const y = Math.floor(id / width);
     const next = scratch[id] + 1;
-    forEachNeighbor4(grid, x, y, (nx, ny) => {
-      const nid = ny * width + nx;
+    forEachNeighbor4ById(grid, id, (nid) => {
       if (next >= scratch[nid]) return;
       scratch[nid] = next;
       queue[tail++] = nid;
@@ -159,21 +153,18 @@ function smoothMarginFields(grid) {
     grid.sedimentWedge,
     grid.abyssalPlain,
   ];
-  const { width, height, scratch } = grid;
+  const { scratch } = grid;
   for (const field of fields) {
     scratch.set(field);
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        let total = scratch[id] * 2.5;
-        let weight = 2.5;
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          total += scratch[ny * width + nx];
-          weight += 1;
-        });
-        field[id] = Math.max(0, Math.min(1, total / weight));
-      }
-    }
+    forEachGridCell(grid, (id) => {
+      let total = scratch[id] * 2.5;
+      let weight = 2.5;
+      forEachNeighbor4ById(grid, id, (nid) => {
+        total += scratch[nid];
+        weight += 1;
+      });
+      field[id] = Math.max(0, Math.min(1, total / weight));
+    });
   }
 }
 
