@@ -748,8 +748,10 @@ function generateBotanicalTreeStructure(config: TreeConfig): TreeStructure {
     }
   }
 
+  const deepestTerminalDepth = terminalNodes.reduce((deepest, node) => Math.max(deepest, node.depth), 0);
+  const terminalDepthFloor = Math.max(2, Math.min(maxDepth - 2, deepestTerminalDepth - 1));
   const eligibleTerminals = terminalNodes
-    .filter((node) => node.depth >= Math.max(2, maxDepth - 2) && node.end.y > crown.baseY - crown.radiusY * 0.18)
+    .filter((node) => node.depth >= terminalDepthFloor && node.end.y > crown.baseY - crown.radiusY * 0.18)
     .sort((a, b) => b.light * b.vigor - a.light * a.vigor);
 
   let nextClusterId = 1;
@@ -1328,7 +1330,9 @@ export function createDefaultConfig(): TreeConfig {
 
 export function generateTreeStructure(config: TreeConfig): TreeStructure {
   return generateBotanicalTreeStructure(config);
+}
 
+function generateLegacyTreeStructure(config: TreeConfig): TreeStructure {
   const stage = getStagePreset(config.stageId);
   const weather = getWeatherPreset(config.weather);
   const treeType = getTreeTypePreset(config.treeType ?? 'broadleaf');
