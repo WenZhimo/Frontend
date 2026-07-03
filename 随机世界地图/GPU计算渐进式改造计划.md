@@ -320,6 +320,14 @@ class GpuTempPool {
 - snapshot diff 只允许小范围插值差异。
 - 没有 GPU 时自动使用 CPU renderer。
 
+当前落地状态：
+
+- 已拆分 `src/render/cpuMapRenderer.js`、`src/render/gpuMapRenderer.js`、`src/render/renderBackend.js`，`src/render/map2d.js` 只负责选择后端并暴露统一 `render(world)` 接口。
+- CPU Canvas renderer 仍是默认可靠路径；WebGL2 GPU renderer 仅在 URL 显式 opt-in（`?gpuRender=1` 或 `?renderBackend=webgl2`）且能力探测允许时启用。
+- WebGL2 renderer 当前只读取 `grid.elev` 与 `world.seaLevel` 做基础 elevation coloring，不写回 `world` 或任何模拟字段；板块边界 overlay 暂由 CPU Canvas 完整路径保留。
+- 已新增 `tools/gpu-render-check.mjs`，在 Node/headless 环境下生成 CPU reference PPM，并安全报告 GPU render skipped/fallback。
+- 当前仍没有任何地质、水文、沉积、板块或等静力 GPU compute kernel；下一步建议进入 Phase 2A：`updateIsostasy` GPU experimental，先做 field compare，不默认启用。
+
 ### Phase 2：GPU 派生高程与等静力
 
 目标：迁移最高确定性的 dense formula。

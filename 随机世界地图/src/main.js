@@ -34,7 +34,11 @@ const elements = {
 bindControlLabels(elements);
 const gpuCapabilities = detectGpuCapabilities(globalThis);
 console.info("[gpu]", gpuCapabilities.recommendedMode, gpuCapabilities.reason);
-const renderer = createMapRenderer(elements.canvas);
+const renderer = createMapRenderer(elements.canvas, {
+  gpuCapabilities,
+  experimentalGpuRender: readExperimentalGpuRenderFlag(),
+});
+console.info("[render]", renderer.kind, renderer.fallbackReason ?? "active");
 let world = createWorld(readParams(elements));
 world.gpuCapabilities = gpuCapabilities;
 let playing = false;
@@ -129,4 +133,13 @@ function formatYears(years) {
   if (years >= 100000000) return `${(years / 100000000).toFixed(2)} 亿年`;
   if (years >= 10000) return `${(years / 10000).toFixed(1)} 万年`;
   return `${years.toLocaleString("zh-CN")} 年`;
+}
+
+function readExperimentalGpuRenderFlag() {
+  try {
+    const params = new URLSearchParams(globalThis.location?.search ?? "");
+    return params.get("gpuRender") === "1" || params.get("renderBackend") === "webgl2";
+  } catch {
+    return false;
+  }
 }
