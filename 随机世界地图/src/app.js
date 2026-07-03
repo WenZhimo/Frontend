@@ -5629,29 +5629,22 @@
   }
 
   function localSlope(grid, id) {
-    const x = id % grid.width;
-    const y = Math.floor(id / grid.width);
-    const left = grid.elev[y * grid.width + wrap(grid.width, x - 1)];
-    const right = grid.elev[y * grid.width + wrap(grid.width, x + 1)];
-    const up = grid.elev[Math.max(0, y - 1) * grid.width + x];
-    const down = grid.elev[Math.min(grid.height - 1, y + 1) * grid.width + x];
+    const { x, y } = xyOf(grid, id);
+    const left = sampleGridWrapped(grid, grid.elev, x - 1, y);
+    const right = sampleGridWrapped(grid, grid.elev, x + 1, y);
+    const up = sampleGridWrapped(grid, grid.elev, x, Math.max(0, y - 1));
+    const down = sampleGridWrapped(grid, grid.elev, x, Math.min(grid.height - 1, y + 1));
     return Math.hypot((right - left) * 0.5, (down - up) * 0.5);
   }
 
   function localRelief4(grid, id) {
-    const x = id % grid.width;
-    const y = Math.floor(id / grid.width);
     let min = grid.elev[id];
     let max = grid.elev[id];
-    const visit = (nx, ny) => {
-      const value = grid.elev[ny * grid.width + wrap(grid.width, nx)];
+    forEachNeighbor4ById(grid, id, (nid) => {
+      const value = grid.elev[nid];
       if (value < min) min = value;
       if (value > max) max = value;
-    };
-    visit(x - 1, y);
-    visit(x + 1, y);
-    visit(x, Math.max(0, y - 1));
-    visit(x, Math.min(grid.height - 1, y + 1));
+    });
     return max - min;
   }
 
@@ -5673,10 +5666,6 @@
 
   function moveToward(current, target, maxStep) {
     return current + clamp(target - current, -maxStep, maxStep);
-  }
-
-  function wrap(width, x) {
-    return ((x % width) + width) % width;
   }
 
   function clamp01(value) {
