@@ -338,6 +338,8 @@
   function measureTopologyDiagnostics(world) {
     const grid = world.grid;
     const topology = topologyForGrid(grid);
+    if (isGraphBackedTopology(grid, topology)) return measureGraphTopologyDiagnostics(grid, topology);
+
     const first = topology.index(0, 0);
     const westWrap = topology.index(-1, 0) === topology.index(grid.width - 1, 0);
     const eastWrap = topology.index(grid.width, 0) === first;
@@ -380,6 +382,86 @@
       topologyMigrationCoverage: 0.58,
       topologyResolutionDrift: 0,
     };
+  }
+
+  function isGraphBackedTopology(grid, topology) {
+    return Boolean(
+      grid.topologyOptions?.graphBacked ||
+        topology?.topologyKind === "cubed-sphere" ||
+        grid.topologyKind === "cubed-sphere",
+    );
+  }
+
+  function measureGraphTopologyDiagnostics(grid, topology) {
+    const allMask = new Uint8Array(grid.size);
+    allMask.fill(1);
+    const components = topology.connectedComponents(allMask);
+    const flood = topology.floodFill([0], () => true);
+    let floodCount = 0;
+    for (let i = 0; i < flood.length; i += 1) floodCount += flood[i];
+    const neighborSymmetryValid = checkGraphNeighborSymmetry(topology);
+    const isolatedCellCount = countGraphIsolatedCells(topology);
+    const areaTotal = sumArea(grid);
+    return {
+      topologyKind: topology.topologyKind ?? grid.topologyKind ?? "graph",
+      graphBacked: true,
+      wrapXEnabled: false,
+      wrapYEnabled: false,
+      neighborConsistencyValid: isolatedCellCount === 0 && neighborSymmetryValid,
+      neighbor4SymmetryValid: neighborSymmetryValid,
+      neighbor8SymmetryValid: neighborSymmetryValid,
+      distanceWrapValid: true,
+      floodFillTopologyValid: floodCount === grid.size,
+      connectedComponentTopologyValid: components.componentCount === 1,
+      connectedComponentCount: components.componentCount,
+      isolatedCellCount,
+      seamContinuityRisk: 0,
+      polarBoundaryRisk: 0,
+      polarAccessRisk: 0,
+      topologyManualAccessRisk: 0,
+      topologyMigrationCoverage: 1,
+      topologyResolutionDrift: 0,
+      areaTotal,
+      areaTotalError: Number.isFinite(areaTotal) ? Math.abs(areaTotal - 4 * Math.PI) : null,
+    };
+  }
+
+  function checkGraphNeighborSymmetry(topology) {
+    let valid = true;
+    topology.forEachCell((id) => {
+      if (!valid) return;
+      topology.forEachNeighbor(id, (nid) => {
+        if (!hasGraphNeighbor(topology, nid, id)) valid = false;
+      });
+    });
+    return valid;
+  }
+
+  function hasGraphNeighbor(topology, id, target) {
+    let found = false;
+    topology.forEachNeighbor(id, (nid) => {
+      if (nid === target) found = true;
+    });
+    return found;
+  }
+
+  function countGraphIsolatedCells(topology) {
+    let count = 0;
+    topology.forEachCell((id) => {
+      let neighborCount = 0;
+      topology.forEachNeighbor(id, () => {
+        neighborCount += 1;
+      });
+      if (neighborCount === 0) count += 1;
+    });
+    return count;
+  }
+
+  function sumArea(grid) {
+    if (!grid.area) return null;
+    let total = 0;
+    for (let id = 0; id < grid.size; id += 1) total += grid.area[id];
+    return total;
   }
 
   function checkNeighborSymmetry(topology, mode) {
