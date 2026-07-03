@@ -1,10 +1,13 @@
 import {
+  clampGridParamY,
   forEachGridCell,
   forEachNeighbor8ById,
+  gridParamToU,
+  gridParamToV,
   indexOf,
   resolutionScale,
-  sampleGridWrapped,
-  wrapX,
+  sampleGridBilinear,
+  wrapGridParamX,
 } from "../grid.js";
 import { CrustType } from "./crust.js";
 
@@ -20,8 +23,8 @@ export function advectPlatesV2(world) {
   if (!plates) return;
   const drift = 0.1 * world.timeScaleFactor * Math.max(0, params.intensity) * resolutionScale(grid);
   for (let p = 0; p < plates.centersX.length; p += 1) {
-    plates.centersX[p] = wrapX(grid.width, plates.centersX[p] + plates.vx[p] * drift);
-    plates.centersY[p] = Math.max(0, Math.min(grid.height - 1, plates.centersY[p] + plates.vy[p] * drift));
+    plates.centersX[p] = wrapGridParamX(grid, plates.centersX[p] + plates.vx[p] * drift);
+    plates.centersY[p] = clampGridParamY(grid, plates.centersY[p] + plates.vy[p] * drift);
     syncPlateCenterUv(grid, plates, p);
   }
 }
@@ -29,7 +32,7 @@ export function advectPlatesV2(world) {
 export function rasterizePlatesV2(world) {
   const { grid, plates } = world;
   if (!plates) return;
-  const { width, height, size, plate, pvx, pvy, weakness, crustThickness } = grid;
+  const { size, plate, pvx, pvy, weakness, crustThickness } = grid;
   const cost = new Float32Array(size);
   const q = new Int32Array(size * 8);
   let head = 0;
@@ -38,8 +41,8 @@ export function rasterizePlatesV2(world) {
   cost.fill(Infinity);
 
   for (let p = 0; p < plates.centersX.length; p += 1) {
-    const x = Math.floor(wrapX(width, plates.centersX[p]));
-    const y = Math.max(0, Math.min(height - 1, Math.floor(plates.centersY[p])));
+    const x = Math.floor(wrapGridParamX(grid, plates.centersX[p]));
+    const y = Math.floor(clampGridParamY(grid, plates.centersY[p]));
     const id = indexOf(grid, x, y);
     if (id < 0) continue;
     plate[id] = p;
@@ -134,23 +137,7 @@ export function advectCrustByPlateMotion(world) {
 }
 
 function sampleBilinear(grid, field, x, y) {
-  const { height } = grid;
-  const sx = wrapX(grid.width, x);
-  const sy = Math.max(0, Math.min(height - 1.001, y));
-  const x0 = Math.floor(sx);
-  const y0 = Math.floor(sy);
-  const x1 = wrapX(grid.width, x0 + 1);
-  const y1 = Math.min(height - 1, y0 + 1);
-  const tx = sx - x0;
-  const ty = sy - y0;
-  const i00 = indexOf(grid, x0, y0);
-  const i10 = indexOf(grid, x1, y0);
-  const i01 = indexOf(grid, x0, y1);
-  const i11 = indexOf(grid, x1, y1);
-  if (i00 < 0 || i10 < 0 || i01 < 0 || i11 < 0) return sampleGridWrapped(grid, field, Math.round(x), Math.round(y)) ?? 0;
-  const a = field[i00] * (1 - tx) + field[i10] * tx;
-  const b = field[i01] * (1 - tx) + field[i11] * tx;
-  return a * (1 - ty) + b * ty;
+  return sampleGridBilinear(grid, field, x, y, 0);
 }
 
 function classifyCrustType(thickness, age, previousType) {
@@ -232,6 +219,6 @@ function isCheckerboardCell(grid, x, y) {
 
 function syncPlateCenterUv(grid, plates, p) {
   if (!plates.centersU || !plates.centersV) return;
-  plates.centersU[p] = wrapX(grid.width, plates.centersX[p]) / grid.width;
-  plates.centersV[p] = Math.max(0, Math.min(1, plates.centersY[p] / grid.height));
+  plates.centersU[p] = gridParamToU(grid, plates.centersX[p]);
+  plates.centersV[p] = gridParamToV(grid, plates.centersY[p]);
 }

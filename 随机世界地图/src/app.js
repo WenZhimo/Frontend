@@ -575,6 +575,33 @@
     return ((x % width) + width) % width;
   }
 
+  function gridParamWidth(grid) {
+    return topologyForGrid(grid).width;
+  }
+
+  function gridParamHeight(grid) {
+    return topologyForGrid(grid).height;
+  }
+
+  function wrapGridParamX(grid, x) {
+    return topologyForGrid(grid).wrapX(x);
+  }
+
+  function clampGridParamY(grid, y) {
+    const topology = topologyForGrid(grid);
+    return Math.max(0, Math.min(topology.height - 1, y));
+  }
+
+  function gridParamToU(grid, x) {
+    const width = gridParamWidth(grid);
+    return width ? wrapGridParamX(grid, x) / width : 0;
+  }
+
+  function gridParamToV(grid, y) {
+    const height = gridParamHeight(grid);
+    return height ? Math.max(0, Math.min(1, y / height)) : 0;
+  }
+
   function indexOf(grid, x, y) {
     return topologyForGrid(grid).index(x, y);
   }
@@ -589,6 +616,29 @@
 
   function sampleGridWrapped(grid, field, x, y) {
     return topologyForGrid(grid).sampleWrapped(field, x, y);
+  }
+
+  function sampleGridBilinear(grid, field, x, y, fallback = 0) {
+    const topology = topologyForGrid(grid);
+    const sx = topology.wrapX(x);
+    const sy = Math.max(0, Math.min(topology.height - 1.001, y));
+    const x0 = Math.floor(sx);
+    const y0 = Math.floor(sy);
+    const x1 = topology.wrapX(x0 + 1);
+    const y1 = Math.min(topology.height - 1, y0 + 1);
+    const tx = sx - x0;
+    const ty = sy - y0;
+    const i00 = topology.index(x0, y0);
+    const i10 = topology.index(x1, y0);
+    const i01 = topology.index(x0, y1);
+    const i11 = topology.index(x1, y1);
+    if (i00 < 0 || i10 < 0 || i01 < 0 || i11 < 0) {
+      const nearest = topology.sampleWrapped(field, Math.round(x), Math.round(y));
+      return Number.isFinite(nearest) ? nearest : fallback;
+    }
+    const a = field[i00] * (1 - tx) + field[i10] * tx;
+    const b = field[i01] * (1 - tx) + field[i11] * tx;
+    return a * (1 - ty) + b * ty;
   }
 
   function forEachGridCell(grid, visit) {
@@ -2707,7 +2757,8 @@
 
   function assignPlates(world) {
     const { grid, params, seedUint32 } = world;
-    const { width, height } = grid;
+    const width = gridParamWidth(grid);
+    const height = gridParamHeight(grid);
     const plateCount = params.plateCount;
     const random = mulberry32(mixSeed(seedUint32, 0x706c6174));
     const centersU = new Float32Array(plateCount);
@@ -2743,8 +2794,8 @@
     const driftScale = plateDriftScale(world);
 
     for (let p = 0; p < plates.centersX.length; p += 1) {
-      plates.centersX[p] = wrapX(grid.width, plates.centersX[p] + plates.vx[p] * driftScale);
-      plates.centersY[p] = Math.max(0, Math.min(grid.height - 1, plates.centersY[p] + plates.vy[p] * driftScale));
+      plates.centersX[p] = wrapGridParamX(grid, plates.centersX[p] + plates.vx[p] * driftScale);
+      plates.centersY[p] = clampGridParamY(grid, plates.centersY[p] + plates.vy[p] * driftScale);
       syncPlateCenterUv(grid, plates, p);
     }
 
@@ -2755,8 +2806,8 @@
 
   function syncPlateCenterUv(grid, plates, p) {
     if (!plates.centersU || !plates.centersV) return;
-    plates.centersU[p] = wrapX(grid.width, plates.centersX[p]) / grid.width;
-    plates.centersV[p] = Math.max(0, Math.min(1, plates.centersY[p] / grid.height));
+    plates.centersU[p] = gridParamToU(grid, plates.centersX[p]);
+    plates.centersV[p] = gridParamToV(grid, plates.centersY[p]);
   }
 
   function plateDriftScale(world) {
@@ -2765,7 +2816,7 @@
 
   function rasterizePlates(world) {
     const { grid, plates } = world;
-    const { width, height, size, plate, pvx, pvy, weakness, crust } = grid;
+    const { size, plate, pvx, pvy, weakness, crust } = grid;
     const maxCost = size * 8;
     const cost = new Float32Array(size);
     const q = new Int32Array(size * 8);
@@ -2775,8 +2826,8 @@
     cost.fill(Infinity);
 
     for (let p = 0; p < plates.centersX.length; p += 1) {
-      const x = Math.floor(wrapX(width, plates.centersX[p]));
-      const y = Math.max(0, Math.min(height - 1, Math.floor(plates.centersY[p])));
+      const x = Math.floor(wrapGridParamX(grid, plates.centersX[p]));
+      const y = Math.floor(clampGridParamY(grid, plates.centersY[p]));
       const id = indexOf(grid, x, y);
       if (id < 0) continue;
       plate[id] = p;
@@ -3000,23 +3051,7 @@
   }
 
   function sampleBilinear(grid, field, x, y) {
-    const { height } = grid;
-    const sx = wrapX(grid.width, x);
-    const sy = Math.max(0, Math.min(height - 1.001, y));
-    const x0 = Math.floor(sx);
-    const y0 = Math.floor(sy);
-    const x1 = wrapX(grid.width, x0 + 1);
-    const y1 = Math.min(height - 1, y0 + 1);
-    const tx = sx - x0;
-    const ty = sy - y0;
-    const i00 = indexOf(grid, x0, y0);
-    const i10 = indexOf(grid, x1, y0);
-    const i01 = indexOf(grid, x0, y1);
-    const i11 = indexOf(grid, x1, y1);
-    if (i00 < 0 || i10 < 0 || i01 < 0 || i11 < 0) return sampleGridWrapped(grid, field, Math.round(x), Math.round(y)) ?? 0;
-    const a = field[i00] * (1 - tx) + field[i10] * tx;
-    const b = field[i01] * (1 - tx) + field[i11] * tx;
-    return a * (1 - ty) + b * ty;
+    return sampleGridBilinear(grid, field, x, y, 0);
   }
 
   function spreadBoundaryEffects(grid, strength) {
@@ -3159,8 +3194,8 @@
     if (!plates) return;
     const drift = 0.1 * world.timeScaleFactor * Math.max(0, params.intensity) * resolutionScale(grid);
     for (let p = 0; p < plates.centersX.length; p += 1) {
-      plates.centersX[p] = wrapX(grid.width, plates.centersX[p] + plates.vx[p] * drift);
-      plates.centersY[p] = Math.max(0, Math.min(grid.height - 1, plates.centersY[p] + plates.vy[p] * drift));
+      plates.centersX[p] = wrapGridParamX(grid, plates.centersX[p] + plates.vx[p] * drift);
+      plates.centersY[p] = clampGridParamY(grid, plates.centersY[p] + plates.vy[p] * drift);
       syncPlateCenterUv(grid, plates, p);
     }
   }
@@ -3168,7 +3203,7 @@
   function rasterizePlatesV2(world) {
     const { grid, plates } = world;
     if (!plates) return;
-    const { width, height, size, plate, pvx, pvy, weakness, crustThickness } = grid;
+    const { size, plate, pvx, pvy, weakness, crustThickness } = grid;
     const cost = new Float32Array(size);
     const q = new Int32Array(size * 8);
     let head = 0;
@@ -3177,8 +3212,8 @@
     cost.fill(Infinity);
 
     for (let p = 0; p < plates.centersX.length; p += 1) {
-      const x = Math.floor(wrapX(width, plates.centersX[p]));
-      const y = Math.max(0, Math.min(height - 1, Math.floor(plates.centersY[p])));
+      const x = Math.floor(wrapGridParamX(grid, plates.centersX[p]));
+      const y = Math.floor(clampGridParamY(grid, plates.centersY[p]));
       const id = indexOf(grid, x, y);
       if (id < 0) continue;
       plate[id] = p;
@@ -3273,23 +3308,7 @@
   }
 
   function sampleBilinear(grid, field, x, y) {
-    const { height } = grid;
-    const sx = wrapX(grid.width, x);
-    const sy = Math.max(0, Math.min(height - 1.001, y));
-    const x0 = Math.floor(sx);
-    const y0 = Math.floor(sy);
-    const x1 = wrapX(grid.width, x0 + 1);
-    const y1 = Math.min(height - 1, y0 + 1);
-    const tx = sx - x0;
-    const ty = sy - y0;
-    const i00 = indexOf(grid, x0, y0);
-    const i10 = indexOf(grid, x1, y0);
-    const i01 = indexOf(grid, x0, y1);
-    const i11 = indexOf(grid, x1, y1);
-    if (i00 < 0 || i10 < 0 || i01 < 0 || i11 < 0) return sampleGridWrapped(grid, field, Math.round(x), Math.round(y)) ?? 0;
-    const a = field[i00] * (1 - tx) + field[i10] * tx;
-    const b = field[i01] * (1 - tx) + field[i11] * tx;
-    return a * (1 - ty) + b * ty;
+    return sampleGridBilinear(grid, field, x, y, 0);
   }
 
   function classifyCrustType(thickness, age, previousType) {
@@ -3371,8 +3390,8 @@
 
   function syncPlateCenterUv(grid, plates, p) {
     if (!plates.centersU || !plates.centersV) return;
-    plates.centersU[p] = wrapX(grid.width, plates.centersX[p]) / grid.width;
-    plates.centersV[p] = Math.max(0, Math.min(1, plates.centersY[p] / grid.height));
+    plates.centersU[p] = gridParamToU(grid, plates.centersX[p]);
+    plates.centersV[p] = gridParamToV(grid, plates.centersY[p]);
   }
 
 
