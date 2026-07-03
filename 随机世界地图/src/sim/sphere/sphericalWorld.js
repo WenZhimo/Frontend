@@ -41,11 +41,12 @@ export function createSphericalExperimentalWorld({
   const plateAssignment = assignNearestSphericalPlates(grid, plates);
   const boundaries = classifySphericalPlateBoundaries(grid, plates, plateAssignment);
   const boundarySummary = summarizeSphericalBoundaries(grid, boundaries);
-  const seaMask = createDiagnosticSeaMask(grid);
-  const connectivity = deriveSphericalOceanConnectivity(grid, seaMask);
-  const distanceToExternalSea = distanceFromGraphSources(grid, connectivity.externalSeaMask);
   const diagnosticNoise = createSphericalDiagnosticNoiseFields(grid, seedUint32);
   const diagnosticTerrain = createSphericalDiagnosticTerrainFields(grid, diagnosticNoise, boundaries);
+  const geometricSeaMask = createDiagnosticSeaMask(grid);
+  const seaMask = diagnosticTerrain.seaCandidate;
+  const connectivity = deriveSphericalOceanConnectivity(grid, seaMask);
+  const distanceToExternalSea = distanceFromGraphSources(grid, connectivity.externalSeaMask);
 
   return {
     kind: "spherical-experimental-world",
@@ -58,6 +59,7 @@ export function createSphericalExperimentalWorld({
     plateAssignment,
     boundaries,
     boundarySummary,
+    geometricSeaMask,
     seaMask,
     connectivity,
     distanceToExternalSea,
@@ -71,6 +73,7 @@ export function createSphericalExperimentalWorld({
       plateAssignment,
       boundaries,
       boundarySummary,
+      geometricSeaMask,
       seaMask,
       connectivity,
       distanceToExternalSea,
@@ -95,6 +98,9 @@ export function summarizeSphericalExperimentalWorld(world) {
     divergentShareOfActive: world.boundarySummary.divergentShareOfActive,
     transformShareOfActive: world.boundarySummary.transformShareOfActive,
     faceSeamBoundaryShareOfActive: world.boundarySummary.faceSeamBoundaryShareOfActive,
+    geometricSeaShare: weightedShare(grid, world.geometricSeaMask),
+    derivedSeaShare: weightedShare(grid, world.seaMask),
+    geometricDerivedSeaOverlapShare: weightedOverlapShare(grid, world.geometricSeaMask, world.seaMask),
     externalSeaShare: weightedShare(grid, world.connectivity.externalSeaMask),
     inlandWaterCandidateShare: weightedShare(grid, world.connectivity.inlandWaterCandidate),
     closedBasinCount: world.connectivity.closedBasinCount,
@@ -130,19 +136,31 @@ export function createSphericalDiagnosticTerrainFields(grid, diagnosticNoise, bo
   const seaCandidate = new Uint8Array(grid.size);
   const ridgeCandidate = new Float32Array(grid.size);
   const trenchCandidate = new Float32Array(grid.size);
+  const targetSeaShare = 0.58;
 
   for (let id = 0; id < grid.size; id += 1) {
-    const latitudeLift = grid.positionY[id] * 0.08;
-    const noiseRelief = diagnosticNoise.combined[id] * 0.42 + diagnosticNoise.broad[id] * 0.18;
+    const x = grid.positionX[id];
+    const y = grid.positionY[id];
+    const z = grid.positionZ[id];
+    const latitudeLift = y * 0.05;
+    const basinWave =
+      Math.sin(x * 2.2 + z * 1.4) * 0.18 +
+      Math.cos(z * 2.0 - y * 1.3) * 0.16 -
+      Math.sin((x - y + z) * 1.15) * 0.12;
+    const noiseRelief = diagnosticNoise.combined[id] * 0.18 + diagnosticNoise.broad[id] * 0.22;
     const divergent = boundaries.boundaryType[id] === 2 ? boundaries.stress[id] * 42 : 0;
     const convergent = boundaries.boundaryType[id] === 1 ? boundaries.stress[id] * 36 : 0;
     ridgeCandidate[id] = divergent;
     trenchCandidate[id] = convergent;
-    elevation[id] = noiseRelief + latitudeLift + divergent * 0.18 - convergent * 0.12;
-    if (elevation[id] < -0.08) seaCandidate[id] = 1;
+    elevation[id] = basinWave + noiseRelief + latitudeLift + divergent * 0.12 - convergent * 0.08;
   }
 
-  return { elevation, seaCandidate, ridgeCandidate, trenchCandidate };
+  const seaLevel = areaWeightedQuantile(grid, elevation, targetSeaShare);
+  for (let id = 0; id < grid.size; id += 1) {
+    if (elevation[id] <= seaLevel) seaCandidate[id] = 1;
+  }
+
+  return { elevation, seaCandidate, ridgeCandidate, trenchCandidate, seaLevel };
 }
 
 function createDiagnosticSeaMask(grid) {
@@ -167,6 +185,35 @@ function weightedMean(grid, field) {
     weight += area;
   }
   return total / Math.max(weight, Number.EPSILON);
+}
+
+function weightedOverlapShare(grid, a, b) {
+  let overlap = 0;
+  let total = 0;
+  for (let id = 0; id < grid.size; id += 1) {
+    const area = grid.area?.[id] ?? 1;
+    total += area;
+    if (a[id] && b[id]) overlap += area;
+  }
+  return overlap / Math.max(total, Number.EPSILON);
+}
+
+function areaWeightedQuantile(grid, field, targetShare) {
+  const samples = [];
+  let totalArea = 0;
+  for (let id = 0; id < grid.size; id += 1) {
+    const area = grid.area?.[id] ?? 1;
+    samples.push({ value: field[id], area });
+    totalArea += area;
+  }
+  samples.sort((a, b) => a.value - b.value);
+  const targetArea = totalArea * Math.max(0, Math.min(1, targetShare));
+  let cumulative = 0;
+  for (const sample of samples) {
+    cumulative += sample.area;
+    if (cumulative >= targetArea) return sample.value;
+  }
+  return samples[samples.length - 1]?.value ?? 0;
 }
 
 function minFinite(field) {
