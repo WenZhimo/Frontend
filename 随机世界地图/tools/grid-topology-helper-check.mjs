@@ -11,6 +11,7 @@ import {
   wrapX,
   xyOf,
 } from "../src/sim/grid.js";
+import { createCubedSphereProductionGridAdapter } from "../src/sim/sphere/productionGridAdapter.js";
 
 const sizes = [
   [8, 4],
@@ -28,6 +29,13 @@ for (const [width, height] of sizes) {
   for (const [name, valid] of Object.entries(result.checks)) {
     if (!valid) failures.push(`${width}x${height}:${name}`);
   }
+}
+
+const graphGrid = createCubedSphereProductionGridAdapter({ faceSize: 16 });
+const graphResult = checkGraphGridHelpers(graphGrid);
+results.push(graphResult);
+for (const [name, valid] of Object.entries(graphResult.checks)) {
+  if (!valid) failures.push(`cubed-sphere:${name}`);
 }
 
 const report = {
@@ -92,4 +100,26 @@ function sameSet(a, b) {
     if (aa[i] !== bb[i]) return false;
   }
   return true;
+}
+
+function checkGraphGridHelpers(grid) {
+  const topology = grid.topology;
+  const center = 0;
+  const cells = [];
+  forEachGridCell(grid, (id) => cells.push(id));
+  const helperNeighbor4 = collectNeighborIds((visit) => forEachNeighbor4ById(grid, center, visit));
+  const helperNeighbor8 = collectNeighborIds((visit) => forEachNeighbor8ById(grid, center, visit));
+  const graphNeighbors = collectNeighborIds((visit) => topology.forEachNeighbor(center, visit));
+  const helperRadius = collectNeighborIds((visit) => forEachNeighborRadiusById(grid, center, 2, visit));
+  const graphRing = collectNeighborIds((visit) => topology.forEachNeighborRing(center, 2, visit));
+
+  return {
+    size: `cubed-sphere-${grid.faceSize}`,
+    checks: {
+      cellIterationMatchesGraph: cells.length === grid.size && cells.every((id, index) => id === index),
+      neighbor4ByIdFallsBackToGraph: sameSet(helperNeighbor4, graphNeighbors),
+      neighbor8ByIdFallsBackToGraph: sameSet(helperNeighbor8, graphNeighbors),
+      neighborRadiusByIdFallsBackToGraphRing: sameSet(helperRadius, graphRing),
+    },
+  };
 }
