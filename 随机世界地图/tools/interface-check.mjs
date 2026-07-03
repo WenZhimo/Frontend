@@ -1,6 +1,6 @@
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
-import { measureTopologyDiagnostics } from "../src/sim/topology.js";
+import { measureTopologyDiagnostics, topologyForGrid } from "../src/sim/topology.js";
 import {
   getBiosphereInputs,
   getClimateInputs,
@@ -258,9 +258,17 @@ const stats = {
   wrapXEnabled: topology.wrapXEnabled,
   wrapYEnabled: topology.wrapYEnabled,
   neighborConsistencyValid: topology.neighborConsistencyValid,
+  neighbor4SymmetryValid: topology.neighbor4SymmetryValid,
+  neighbor8SymmetryValid: topology.neighbor8SymmetryValid,
+  distanceWrapValid: topology.distanceWrapValid,
   floodFillTopologyValid: topology.floodFillTopologyValid,
+  connectedComponentTopologyValid: topology.connectedComponentTopologyValid,
   connectedComponentCount: topology.connectedComponentCount,
+  seamContinuityRisk: topology.seamContinuityRisk,
+  polarBoundaryRisk: topology.polarBoundaryRisk,
   polarAccessRisk: topology.polarAccessRisk,
+  topologyManualAccessRisk: topology.topologyManualAccessRisk,
+  topologyMigrationCoverage: topology.topologyMigrationCoverage,
   topologyResolutionDrift: topology.topologyResolutionDrift,
   isostaticContinentalMean: isostasy.isostaticContinentalMean,
   isostaticOceanicMean: isostasy.isostaticOceanicMean,
@@ -624,8 +632,7 @@ function mountainAxisCurvature(grid) {
 }
 
 function axisAt(grid, x, y) {
-  if (y < 0 || y >= grid.height) return 0;
-  return grid.mountainAxis[y * grid.width + ((x % grid.width) + grid.width) % grid.width];
+  return topologyForGrid(grid).sampleWrapped(grid.mountainAxis, x, y) ?? 0;
 }
 
 function plateIslandNoiseShare(grid) {
@@ -662,15 +669,10 @@ function isPlateIslandNoise(grid, id) {
 }
 
 function visitNeighbor8Ids(grid, x, y, visit) {
-  for (let dy = -1; dy <= 1; dy += 1) {
-    const ny = y + dy;
-    if (ny < 0 || ny >= grid.height) continue;
-    for (let dx = -1; dx <= 1; dx += 1) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = ((x + dx) % grid.width + grid.width) % grid.width;
-      visit(ny * grid.width + nx);
-    }
-  }
+  const topology = topologyForGrid(grid);
+  const id = topology.index(x, y);
+  if (id < 0) return;
+  topology.forEachNeighbor8(id, visit);
 }
 
 function measureAgeBandStraightnessSplit(grid) {
@@ -713,8 +715,7 @@ function measureAgeBandStraightnessSplit(grid) {
 }
 
 function sameAgeBand(grid, x, y, band) {
-  if (y < 0 || y >= grid.height) return 0;
-  const nx = ((x % grid.width) + grid.width) % grid.width;
-  const id = y * grid.width + nx;
+  const id = topologyForGrid(grid).index(x, y);
+  if (id < 0) return 0;
   return grid.crustType[id] === 0 && Math.floor(grid.crustAge[id] * 10) === band ? 1 : 0;
 }

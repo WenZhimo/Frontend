@@ -1,3 +1,5 @@
+import { topologyForGrid } from "../../src/sim/topology.js";
+
 export function compactMetrics(world, timing = {}) {
   const grid = world.grid;
   const coast = measureCoastBoundaryShare(grid, world.seaLevel);
@@ -131,16 +133,16 @@ function measureAgeBandStraightnessSplit(grid) {
 }
 
 function sameAgeBand(grid, x, y, band) {
-  if (y < 0 || y >= grid.height) return 0;
-  const id = y * grid.width + wrapX(grid.width, x);
+  const id = topologyForGrid(grid).index(x, y);
+  if (id < 0) return 0;
   return grid.crustType[id] === 0 && Math.floor(grid.crustAge[id] * 12) === band ? 1 : 0;
 }
 
 function visitNeighbor4Ids(grid, x, y, visit) {
-  visit(y * grid.width + wrapX(grid.width, x - 1));
-  visit(y * grid.width + wrapX(grid.width, x + 1));
-  if (y > 0) visit((y - 1) * grid.width + x);
-  if (y < grid.height - 1) visit((y + 1) * grid.width + x);
+  const topology = topologyForGrid(grid);
+  const id = topology.index(x, y);
+  if (id < 0) return;
+  topology.forEachNeighbor4(id, visit);
 }
 
 function average(field) {
@@ -174,10 +176,6 @@ function maxInt(field) {
   let max = 0;
   for (let i = 0; i < field.length; i += 1) if (field[i] > max) max = field[i];
   return max;
-}
-
-function wrapX(width, x) {
-  return (x + width) % width;
 }
 
 function formatValue(value) {
