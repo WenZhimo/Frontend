@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { parseBoolOption, parseNumberList, parseOptions } from "./lib/cli.mjs";
+import { parseBoolOption, parseNumberList, parseOptions, parseTopologyOptions } from "./lib/cli.mjs";
 import { compactMetrics, summarizeScenario } from "./lib/metrics-summary.mjs";
 import { saveWorldSnapshot } from "./lib/snapshot-cache.mjs";
 import { createCheckWorld, runToCheckpoints } from "./lib/world-runner.mjs";
@@ -12,15 +12,16 @@ const checkpoints = parseNumberList(options.checkpoints, [20, 200, 739]);
 const full = parseBoolOption(options, "full");
 const out = typeof options.out === "string" ? options.out : null;
 const snapshotDir = typeof options["snapshot-dir"] === "string" ? options["snapshot-dir"] : null;
+const topologyOptions = parseTopologyOptions(options);
 
-const world = createCheckWorld({ seedText, pipelineMode, resolution });
+const world = createCheckWorld({ seedText, pipelineMode, resolution, ...topologyOptions });
 const snapshots = [];
 const run = runToCheckpoints(world, checkpoints, (currentWorld, timing) => {
   const metrics = compactMetrics(currentWorld, timing);
   if (snapshotDir) {
     snapshots.push({
       step: currentWorld.step,
-      file: saveWorldSnapshot(currentWorld, snapshotDir, { seedText, pipelineMode, resolution }),
+      file: saveWorldSnapshot(currentWorld, snapshotDir, { seedText, pipelineMode, resolution, ...topologyOptions }),
     });
   }
   return full
@@ -37,6 +38,7 @@ const result = summarizeScenario({
   seedText,
   pipelineMode,
   resolution,
+  ...topologyOptions,
   totalMs: run.totalMs,
   averageStepMs: run.averageStepMs,
   checkpoints: run.results,
@@ -50,6 +52,7 @@ const terminalResult = out
       seedText,
       pipelineMode,
       resolution,
+      ...topologyOptions,
       totalMs: result.totalMs,
       averageStepMs: result.averageStepMs,
       checkpoints: result.checkpoints.map((checkpoint) => compactTerminalCheckpoint(checkpoint)),

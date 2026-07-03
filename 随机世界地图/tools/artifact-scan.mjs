@@ -1,4 +1,4 @@
-import { parseCsv, parseIntOption, parseOptions } from "./lib/cli.mjs";
+import { parseCsv, parseIntOption, parseOptions, parseTopologyOptions } from "./lib/cli.mjs";
 import { assessArtifactRisk, compactMetrics } from "./lib/metrics-summary.mjs";
 import { createCheckWorld } from "./lib/world-runner.mjs";
 import { stepWorld } from "../src/sim/evolution.js";
@@ -12,6 +12,7 @@ const sampleEvery = Math.max(1, parseIntOption(options, "sample-every", 5));
 const randomPrefix = options["random-prefix"] ?? "artifact-seed";
 const seedList = parseCsv(options["seed-list"], []);
 const seeds = seedList.length ? seedList : Array.from({ length: seedCount }, (_, i) => `${randomPrefix}-${i + 1}`);
+const topologyOptions = parseTopologyOptions(options);
 
 const startedAt = performance.now();
 const failures = [];
@@ -19,7 +20,7 @@ const passed = [];
 const worstMetrics = {};
 
 for (const seedText of seeds) {
-  const world = createCheckWorld({ seedText, pipelineMode, resolution });
+  const world = createCheckWorld({ seedText, pipelineMode, resolution, ...topologyOptions });
   let totalMs = 0;
   let firstFailure = null;
   let lastMetrics = compactMetrics(world, { totalMs, averageStepMs: 0 });
@@ -54,6 +55,7 @@ for (const seedText of seeds) {
 const result = {
   mode: pipelineMode,
   resolution,
+  ...topologyOptions,
   steps,
   sampleEvery,
   testedSeeds: seeds.length,
