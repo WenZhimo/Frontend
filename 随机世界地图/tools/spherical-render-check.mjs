@@ -60,6 +60,7 @@ const result = {
 if (rendered.stats.sampledPixels <= 0) result.valid = false;
 if (projectionMode === "equirectangular" && rendered.stats.blankPixels !== 0) result.valid = false;
 if (projectionMode === "orthographic" && !(result.blankShare > 0.1 && result.blankShare < 0.35)) result.valid = false;
+if (projectionMode === "mollweide" && !(result.blankShare > 0.12 && result.blankShare < 0.35)) result.valid = false;
 if (rendered.stats.nearestCellMaxReuse <= 0) result.valid = false;
 
 console.log(JSON.stringify(result, null, 2));

@@ -1,5 +1,9 @@
 import { createCubedSphereGrid } from "../src/sim/sphere/cubedSphere.js";
-import { equirectangularPixelToVec3, lonLatToEquirectangularPixel } from "../src/sim/sphere/projection.js";
+import {
+  equirectangularPixelToVec3,
+  lonLatToEquirectangularPixel,
+  mollweidePixelToVec3,
+} from "../src/sim/sphere/projection.js";
 import { angularDistance3, lonLatToVec3, TAU } from "../src/sim/sphere/vector.js";
 import { parseIntOption, parseOptions } from "./lib/cli.mjs";
 
@@ -9,16 +13,20 @@ const projection = positional[1] ?? options.projection ?? "equirectangular";
 const width = parseIntOption(options, "width", faceSize * 4);
 const height = parseIntOption(options, "height", faceSize * 2);
 
-if (projection !== "equirectangular") {
+const supportedProjections = new Set(["equirectangular", "mollweide"]);
+if (!supportedProjections.has(projection)) {
   console.error(`Unsupported projection check: ${projection}`);
   process.exit(1);
 }
 
 const grid = createCubedSphereGrid(faceSize);
-const sampling = measureProjectionSampling(grid, width, height);
+const sampling = measureProjectionSampling(grid, width, height, projection);
 const seam = measureDateLineSeam(grid, width, height);
 const pole = measurePoleCrossing(width, height);
-const valid = sampling.maxNearestAngularError < Math.PI / faceSize * 1.5 && seam.dateLineContinuityRisk < Math.PI / faceSize * 2 && pole.northPoleHalfMapReturnValid && pole.southPoleHalfMapReturnValid;
+const samplingValid = sampling.sampleCount > 0 && sampling.maxNearestAngularError < Math.PI / faceSize * 1.5;
+const equirectangularValid = seam.dateLineContinuityRisk < Math.PI / faceSize * 2 && pole.northPoleHalfMapReturnValid && pole.southPoleHalfMapReturnValid;
+const mollweideValid = sampling.blankSampleShare > 0.12 && sampling.blankSampleShare < 0.35;
+const valid = samplingValid && (projection === "equirectangular" ? equirectangularValid : mollweideValid);
 
 console.log(
   JSON.stringify(
@@ -38,15 +46,22 @@ console.log(
 );
 if (!valid) process.exit(1);
 
-function measureProjectionSampling(grid, width, height) {
+function measureProjectionSampling(grid, width, height, projection) {
   let maxNearestAngularError = 0;
   let meanNearestAngularError = 0;
   let sampleCount = 0;
+  let blankSampleCount = 0;
   const stepX = Math.max(1, Math.floor(width / 64));
   const stepY = Math.max(1, Math.floor(height / 32));
   for (let y = 0; y < height; y += stepY) {
     for (let x = 0; x < width; x += stepX) {
-      const p = equirectangularPixelToVec3(x, y, width, height);
+      const p = projection === "mollweide"
+        ? mollweidePixelToVec3(x, y, width, height)
+        : { ...equirectangularPixelToVec3(x, y, width, height), visible: true };
+      if (!p.visible) {
+        blankSampleCount += 1;
+        continue;
+      }
       const id = grid.nearestCell(p.x, p.y, p.z);
       const error = angularDistance3(p.x, p.y, p.z, grid.positionX[id], grid.positionY[id], grid.positionZ[id]);
       maxNearestAngularError = Math.max(maxNearestAngularError, error);
@@ -56,6 +71,8 @@ function measureProjectionSampling(grid, width, height) {
   }
   return {
     sampleCount,
+    blankSampleCount,
+    blankSampleShare: blankSampleCount / Math.max(1, sampleCount + blankSampleCount),
     maxNearestAngularError,
     meanNearestAngularError: meanNearestAngularError / Math.max(1, sampleCount),
   };
