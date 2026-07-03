@@ -1,4 +1,4 @@
-import { forEachGridCell, forEachNeighbor4, forEachNeighbor4ById, physicalRadius, wrapX } from "../grid.js";
+import { forEachGridCell, forEachNeighbor4, forEachNeighbor4ById, forEachNeighborRadiusById, physicalRadius, sampleGridWrapped, wrapX } from "../grid.js";
 import { updateReliefBudgetDiagnostics } from "../geology/reliefBudget.js";
 import { deriveOceanConnectivity } from "../geology/rift.js";
 import { getGeologicSeaLevelDiagnostics } from "../geology/seaLevel.js";
@@ -451,10 +451,11 @@ function measureTerrainShape(grid, field) {
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const id = y * width + x;
-      const left = field[y * width + wrapX(width, x - 1)];
-      const right = field[y * width + wrapX(width, x + 1)];
-      const up = field[Math.max(0, y - 1) * width + x];
-      const down = field[Math.min(height - 1, y + 1) * width + x];
+      const center = field[id];
+      const left = finiteSample(grid, field, x - 1, y, center);
+      const right = finiteSample(grid, field, x + 1, y, center);
+      const up = finiteSample(grid, field, x, y - 1, center);
+      const down = finiteSample(grid, field, x, y + 1, center);
       const dx = (right - left) * 0.5;
       const dy = (down - up) * 0.5;
       slope[id] = Math.hypot(dx, dy);
@@ -638,28 +639,25 @@ function findLocalDepressions(grid, field, seaMask) {
 }
 
 function smoothElevation(grid, field, radius) {
-  const { width, height } = grid;
+  const { size } = grid;
   const output = new Float32Array(field.length);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      let total = field[y * width + x] * 2;
-      let weight = 2;
-      for (let dy = -radius; dy <= radius; dy += 1) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= height) continue;
-        for (let dx = -radius; dx <= radius; dx += 1) {
-          if (dx === 0 && dy === 0) continue;
-          const dist = Math.hypot(dx, dy);
-          if (dist > radius + 0.01) continue;
-          const w = 1 / (1 + dist);
-          total += field[ny * width + wrapX(width, x + dx)] * w;
-          weight += w;
-        }
-      }
-      output[y * width + x] = total / weight;
-    }
+  for (let id = 0; id < size; id += 1) {
+    let total = field[id] * 2;
+    let weight = 2;
+    forEachNeighborRadiusById(grid, id, radius, (nid, dx, dy) => {
+      const dist = Math.hypot(dx, dy);
+      const w = 1 / (1 + dist);
+      total += field[nid] * w;
+      weight += w;
+    });
+    output[id] = total / weight;
   }
   return output;
+}
+
+function finiteSample(grid, field, x, y, fallback) {
+  const value = sampleGridWrapped(grid, field, x, y);
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function measureComponentSizes(componentId) {
