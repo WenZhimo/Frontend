@@ -29,6 +29,10 @@ const worldModes = new Set([
   "diagnostic-noise-broad",
   "diagnostic-noise-micro",
   "diagnostic-noise-combined",
+  "diagnostic-elevation",
+  "diagnostic-sea-candidate",
+  "diagnostic-ridge-candidate",
+  "diagnostic-trench-candidate",
 ]);
 const world = worldModes.has(mode)
   ? createSphericalExperimentalWorld({
@@ -167,6 +171,38 @@ function createRenderedLayer({ grid, world, mode, width, height, projectionMode 
       colorRamp: (value) => colorField(value, -0.8, 0.8, [33, 42, 58], [218, 220, 192]),
     });
   }
+  if (mode === "diagnostic-elevation") {
+    return renderSphericalField(grid, world.diagnosticTerrain.elevation, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: colorDiagnosticElevation,
+    });
+  }
+  if (mode === "diagnostic-sea-candidate") {
+    return renderSphericalField(grid, world.diagnosticTerrain.seaCandidate, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => (value ? [29, 94, 168] : [102, 132, 78]),
+    });
+  }
+  if (mode === "diagnostic-ridge-candidate") {
+    return renderSphericalField(grid, world.diagnosticTerrain.ridgeCandidate, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => colorField(value, 0, 0.04, [24, 29, 35], [83, 224, 232]),
+    });
+  }
+  if (mode === "diagnostic-trench-candidate") {
+    return renderSphericalField(grid, world.diagnosticTerrain.trenchCandidate, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => colorField(value, 0, 0.04, [25, 28, 34], [232, 80, 72]),
+    });
+  }
   return renderSphericalField(grid, world.distanceToExternalSea, {
     width,
     height,
@@ -180,6 +216,12 @@ function colorBoundaryType(value) {
   if (value === SphericalBoundaryType.DIVERGENT) return [72, 204, 226];
   if (value === SphericalBoundaryType.TRANSFORM) return [236, 206, 75];
   return [26, 30, 34];
+}
+
+function colorDiagnosticElevation(value) {
+  if (value < -0.08) return colorField(value, -0.55, -0.08, [8, 35, 70], [72, 141, 166]);
+  if (value < 0.18) return colorField(value, -0.08, 0.18, [76, 125, 78], [158, 163, 91]);
+  return colorField(value, 0.18, 0.65, [132, 94, 64], [236, 239, 226]);
 }
 
 function colorField(value, min, max, low, high) {

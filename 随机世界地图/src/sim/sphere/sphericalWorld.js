@@ -45,6 +45,7 @@ export function createSphericalExperimentalWorld({
   const connectivity = deriveSphericalOceanConnectivity(grid, seaMask);
   const distanceToExternalSea = distanceFromGraphSources(grid, connectivity.externalSeaMask);
   const diagnosticNoise = createSphericalDiagnosticNoiseFields(grid, seedUint32);
+  const diagnosticTerrain = createSphericalDiagnosticTerrainFields(grid, diagnosticNoise, boundaries);
 
   return {
     kind: "spherical-experimental-world",
@@ -61,6 +62,7 @@ export function createSphericalExperimentalWorld({
     connectivity,
     distanceToExternalSea,
     diagnosticNoise,
+    diagnosticTerrain,
     stats: summarizeSphericalExperimentalWorld({
       grid,
       topology,
@@ -73,6 +75,7 @@ export function createSphericalExperimentalWorld({
       connectivity,
       distanceToExternalSea,
       diagnosticNoise,
+      diagnosticTerrain,
     }),
   };
 }
@@ -100,6 +103,9 @@ export function summarizeSphericalExperimentalWorld(world) {
     diagnosticBroadNoiseMean: weightedMean(grid, world.diagnosticNoise.broad),
     diagnosticMicroNoiseMean: weightedMean(grid, world.diagnosticNoise.micro),
     diagnosticNoiseRange: maxFinite(world.diagnosticNoise.combined) - minFinite(world.diagnosticNoise.combined),
+    diagnosticElevationMean: weightedMean(grid, world.diagnosticTerrain.elevation),
+    diagnosticElevationRange: maxFinite(world.diagnosticTerrain.elevation) - minFinite(world.diagnosticTerrain.elevation),
+    diagnosticSeaCandidateShare: weightedShare(grid, world.diagnosticTerrain.seaCandidate),
   };
 }
 
@@ -117,6 +123,26 @@ export function createSphericalDiagnosticNoiseFields(grid, seedUint32 = 0) {
     combined[id] = broad[id] * 0.72 + micro[id] * 0.28;
   }
   return { broad, micro, combined };
+}
+
+export function createSphericalDiagnosticTerrainFields(grid, diagnosticNoise, boundaries) {
+  const elevation = new Float32Array(grid.size);
+  const seaCandidate = new Uint8Array(grid.size);
+  const ridgeCandidate = new Float32Array(grid.size);
+  const trenchCandidate = new Float32Array(grid.size);
+
+  for (let id = 0; id < grid.size; id += 1) {
+    const latitudeLift = grid.positionY[id] * 0.08;
+    const noiseRelief = diagnosticNoise.combined[id] * 0.42 + diagnosticNoise.broad[id] * 0.18;
+    const divergent = boundaries.boundaryType[id] === 2 ? boundaries.stress[id] * 42 : 0;
+    const convergent = boundaries.boundaryType[id] === 1 ? boundaries.stress[id] * 36 : 0;
+    ridgeCandidate[id] = divergent;
+    trenchCandidate[id] = convergent;
+    elevation[id] = noiseRelief + latitudeLift + divergent * 0.18 - convergent * 0.12;
+    if (elevation[id] < -0.08) seaCandidate[id] = 1;
+  }
+
+  return { elevation, seaCandidate, ridgeCandidate, trenchCandidate };
 }
 
 function createDiagnosticSeaMask(grid) {
