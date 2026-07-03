@@ -1,4 +1,6 @@
 import { createCubedSphereGrid } from "./cubedSphere.js";
+import { createValueNoise3D } from "../noise.js";
+import { mixSeed } from "../prng.js";
 import {
   assignNearestSphericalPlates,
   classifySphericalPlateBoundaries,
@@ -18,6 +20,8 @@ import {
   weightedCategoryShares,
   weightedShare,
 } from "./stats.js";
+
+const DIAGNOSTIC_NOISE_SALT = 0x5f51d3ed;
 
 export function createSphericalExperimentalWorld({
   seedUint32 = 0,
@@ -40,6 +44,7 @@ export function createSphericalExperimentalWorld({
   const seaMask = createDiagnosticSeaMask(grid);
   const connectivity = deriveSphericalOceanConnectivity(grid, seaMask);
   const distanceToExternalSea = distanceFromGraphSources(grid, connectivity.externalSeaMask);
+  const diagnosticNoise = createSphericalDiagnosticNoiseFields(grid, seedUint32);
 
   return {
     kind: "spherical-experimental-world",
@@ -55,6 +60,7 @@ export function createSphericalExperimentalWorld({
     seaMask,
     connectivity,
     distanceToExternalSea,
+    diagnosticNoise,
     stats: summarizeSphericalExperimentalWorld({
       grid,
       topology,
@@ -66,6 +72,7 @@ export function createSphericalExperimentalWorld({
       seaMask,
       connectivity,
       distanceToExternalSea,
+      diagnosticNoise,
     }),
   };
 }
@@ -90,7 +97,26 @@ export function summarizeSphericalExperimentalWorld(world) {
     closedBasinCount: world.connectivity.closedBasinCount,
     distanceToExternalSeaFiniteShare: finiteShare(world.distanceToExternalSea),
     distanceToExternalSeaMax: maxFinite(world.distanceToExternalSea),
+    diagnosticBroadNoiseMean: weightedMean(grid, world.diagnosticNoise.broad),
+    diagnosticMicroNoiseMean: weightedMean(grid, world.diagnosticNoise.micro),
+    diagnosticNoiseRange: maxFinite(world.diagnosticNoise.combined) - minFinite(world.diagnosticNoise.combined),
   };
+}
+
+export function createSphericalDiagnosticNoiseFields(grid, seedUint32 = 0) {
+  const noise = createValueNoise3D(mixSeed(seedUint32, DIAGNOSTIC_NOISE_SALT));
+  const broad = new Float32Array(grid.size);
+  const micro = new Float32Array(grid.size);
+  const combined = new Float32Array(grid.size);
+  for (let id = 0; id < grid.size; id += 1) {
+    const x = grid.positionX[id];
+    const y = grid.positionY[id];
+    const z = grid.positionZ[id];
+    broad[id] = noise(x * 2.1 + 31, y * 2.1 - 17, z * 2.1 + 5, 5, 2, 0.52);
+    micro[id] = noise(x * 8.5 - 7, y * 8.5 + 3, z * 8.5 + 23, 3, 2.2, 0.45);
+    combined[id] = broad[id] * 0.72 + micro[id] * 0.28;
+  }
+  return { broad, micro, combined };
 }
 
 function createDiagnosticSeaMask(grid) {
@@ -104,6 +130,25 @@ function createDiagnosticSeaMask(grid) {
     if (externalOcean || closedBasin) seaMask[id] = 1;
   }
   return seaMask;
+}
+
+function weightedMean(grid, field) {
+  let total = 0;
+  let weight = 0;
+  for (let id = 0; id < grid.size; id += 1) {
+    const area = grid.area?.[id] ?? 1;
+    total += field[id] * area;
+    weight += area;
+  }
+  return total / Math.max(weight, Number.EPSILON);
+}
+
+function minFinite(field) {
+  let min = Infinity;
+  for (let i = 0; i < field.length; i += 1) {
+    if (Number.isFinite(field[i]) && field[i] < min) min = field[i];
+  }
+  return min;
 }
 
 function cloneSphericalPlates(plates) {
