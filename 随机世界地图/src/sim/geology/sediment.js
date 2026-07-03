@@ -1,4 +1,5 @@
 import { forEachNeighbor4, wrapX } from "../grid.js";
+import { topologyForGrid } from "../topology.js";
 import { CrustType } from "./crust.js";
 
 const TRANSPORT_PASSES = 4;
@@ -472,15 +473,12 @@ function localRelief(grid, field, x, y) {
 }
 
 function visitNeighbor8(grid, x, y, visit) {
-  for (let dy = -1; dy <= 1; dy += 1) {
-    const ny = y + dy;
-    if (ny < 0 || ny >= grid.height) continue;
-    for (let dx = -1; dx <= 1; dx += 1) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = wrapX(grid.width, x + dx);
-      visit(ny * grid.width + nx, dx !== 0 && dy !== 0);
-    }
-  }
+  const topology = topologyForGrid(grid);
+  const id = topology.index(x, y);
+  if (id < 0) return;
+  topology.forEachNeighbor8(id, (nid, dx, dy) => {
+    visit(nid, dx !== 0 && dy !== 0);
+  });
 }
 
 function measurePatchiness(grid, field) {
