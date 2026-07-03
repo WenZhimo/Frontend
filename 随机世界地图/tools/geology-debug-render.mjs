@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
+import { getHydrologyInputs } from "../src/sim/derived/terrain.js";
 import { parseCsv, parseOptions } from "./lib/cli.mjs";
 import { loadWorldSnapshot } from "./lib/snapshot-cache.mjs";
 
@@ -30,6 +31,7 @@ const world = fromSnapshot
 if (!fromSnapshot) {
   for (let i = 0; i < steps; i += 1) stepWorld(world);
 }
+world.hydrologyInputs = getHydrologyInputs(world);
 
 mkdirSync(outDir, { recursive: true });
 const layers = {
@@ -106,6 +108,15 @@ const layers = {
   inlandWaterCandidate: colorInlandWaterCandidate,
   closedBasinId: colorClosedBasinId,
   protoOceanCandidate: colorProtoOceanCandidate,
+  flowDirection: colorFlowDirection,
+  flowAccumulation: colorHydrologyLogField("flowAccumulation", [18, 25, 38], [214, 238, 255]),
+  riverMask: colorHydrologyMask("riverMask", [30, 98, 206]),
+  riverStrength: colorHydrologyField("riverStrength", 0, 1, [18, 35, 58], [81, 213, 240]),
+  drainageBasinId: colorHydrologyIntId("drainageBasinId"),
+  endorheicBasin: colorHydrologyMask("endorheicBasin", [144, 82, 196]),
+  depressionMask: colorHydrologyMask("depressionMask", [226, 61, 53]),
+  lakeCandidate: colorHydrologyMask("lakeCandidate", [80, 215, 224]),
+  riverOutlet: colorHydrologyMask("riverOutlet", [245, 235, 122]),
   passiveMargin: colorField("passiveMargin", 0, 1, [31, 45, 42], [182, 214, 88]),
   continentalShelf: colorField("continentalShelf", 0, 1, [24, 60, 75], [104, 211, 214]),
   continentalSlope: colorField("continentalSlope", 0, 1, [28, 41, 79], [119, 92, 190]),
@@ -247,6 +258,63 @@ function colorProtoOceanCandidate(world, i) {
   if (world.grid.riftStage[i] === 5) return [58, 117, 225];
   if (world.grid.riftStage[i] > 0) return [180, 113, 76];
   return [34, 38, 42];
+}
+
+function colorFlowDirection(world, i) {
+  const hydrology = world.hydrologyInputs;
+  if (!hydrology?.flowDirection || !hydrology?.riverStrength) return [31, 34, 36];
+  if (!world.grid || world.grid.elev[i] < world.seaLevel) return [22, 33, 43];
+  const dir = hydrology.flowDirection[i];
+  if (dir < 0) return hydrology.depressionMask?.[i] ? [204, 66, 58] : [58, 58, 54];
+  const palette = [
+    [72, 164, 220],
+    [72, 205, 190],
+    [94, 205, 104],
+    [180, 207, 88],
+    [224, 180, 72],
+    [221, 112, 76],
+    [190, 88, 190],
+    [112, 96, 214],
+  ];
+  const base = palette[dir % palette.length];
+  const strength = Math.max(0.25, Math.min(1, hydrology.riverStrength[i] * 1.4));
+  return lerpColor([31, 34, 36], base, strength);
+}
+
+function colorHydrologyField(fieldName, min, max, low, high) {
+  return (world, i) => {
+    const field = world.hydrologyInputs?.[fieldName];
+    if (!field) return [31, 34, 36];
+    const t = Math.max(0, Math.min(1, (field[i] - min) / (max - min)));
+    return lerpColor(low, high, t);
+  };
+}
+
+function colorHydrologyLogField(fieldName, low, high) {
+  return (world, i) => {
+    const field = world.hydrologyInputs?.[fieldName];
+    if (!field) return [31, 34, 36];
+    const max = world.hydrologyInputs?.hydrologyDiagnostics?.flowAccumulationMax ?? 1;
+    const t = Math.log1p(Math.max(0, field[i])) / Math.max(1e-6, Math.log1p(max));
+    return lerpColor(low, high, Math.max(0, Math.min(1, t)));
+  };
+}
+
+function colorHydrologyMask(fieldName, high) {
+  return (world, i) => (world.hydrologyInputs?.[fieldName]?.[i] ? high : [31, 34, 36]);
+}
+
+function colorHydrologyIntId(fieldName) {
+  return (world, i) => {
+    const id = world.hydrologyInputs?.[fieldName]?.[i] ?? 0;
+    if (!id) return [32, 35, 38];
+    const n = Math.abs(id);
+    return [
+      48 + (n * 73) % 170,
+      55 + (n * 131) % 165,
+      62 + (n * 47) % 160,
+    ];
+  };
 }
 
 function colorMask(fieldName, high) {

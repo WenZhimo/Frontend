@@ -5116,53 +5116,7 @@
 
   function getHydrologyInputs(world) {
     const base = buildTerrainBase(world);
-    const { grid } = world;
-    const { size, elev, crustType, sediment, basin, forelandBasin, orogenicSedimentSupply, sedimentSink: budgetSedimentSink, sedimentCapacity } = grid;
-    const hydroElevation = smoothElevation(grid, elev, physicalRadius(grid, 1));
-    const depressionMask = findLocalDepressions(grid, hydroElevation, base.seaMask);
-    const oceanConnectivity = new Uint8Array(size);
-    const erodibility = new Float32Array(size);
-    const permeability = new Float32Array(size);
-    const sedimentSink = new Float32Array(size);
-
-    for (let i = 0; i < size; i += 1) {
-      if (base.externalSeaMask[i]) oceanConnectivity[i] = 2;
-      else if (base.seaMask[i]) oceanConnectivity[i] = 1;
-
-      const sed = sediment?.[i] ?? 0;
-      const basinValue = basin?.[i] ?? 0;
-      const slopePenalty = 1 - Math.min(1, base.slope[i] * 4.5);
-      const type = crustType?.[i] ?? (base.landMask[i] ? 1 : 0);
-      erodibility[i] = Math.max(0, Math.min(1, 0.22 + sed * 0.42 + base.slope[i] * 2.2 + (type === 2 ? 0.12 : 0)));
-      permeability[i] = Math.max(0, Math.min(1, 0.18 + sed * 0.48 + (type === 0 ? 0.08 : 0) - basinValue * 0.16));
-      sedimentSink[i] = Math.max(budgetSedimentSink?.[i] ?? 0, Math.max(0, Math.min(1, basinValue * 0.34 + (sedimentCapacity?.[i] ?? 0) * 0.5 + (forelandBasin?.[i] ?? 0) * 0.28 + sed * 0.18 + (orogenicSedimentSupply?.[i] ?? 0) * 0.12 + slopePenalty * (base.landMask[i] ? 0.1 : 0.18))));
-    }
-
-    return {
-      hydroElevation,
-      externalSeaMask: base.externalSeaMask,
-      oceanConnectivity: base.oceanConnectivity,
-      inlandWaterCandidate: base.inlandWaterCandidate,
-      closedBasinId: base.closedBasinId,
-      depressionMask,
-      slope: base.slope,
-      erodibility,
-      permeability,
-      sedimentSink,
-      sediment: new Float32Array(grid.sediment),
-      sedimentCapacity: new Float32Array(grid.sedimentCapacity),
-      basin: new Float32Array(grid.basin),
-      drainageGradientPotential: base.reliefDiagnostics.drainageGradientPotential,
-      flatLandMask: base.flatLandMask,
-      largePlainMask: base.largePlainMask,
-      seaLevel: world.seaLevel,
-      baseSeaLevel: base.geologicSeaLevelDiagnostics.baseSeaLevel,
-      geologicSeaLevelOffset: base.geologicSeaLevelDiagnostics.geologicSeaLevelOffset,
-      coastalSensitivity: base.coastalSensitivity,
-      forelandBasin: new Float32Array(grid.forelandBasin),
-      orogenicSedimentSupply: new Float32Array(grid.orogenicSedimentSupply),
-      continentalRise: base.continentalRise,
-    };
+    return deriveHydrology(world, base);
   }
 
   function getBiosphereInputs(world) {

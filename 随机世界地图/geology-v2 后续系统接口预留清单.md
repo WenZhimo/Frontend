@@ -128,10 +128,21 @@ precipitation =
 | `oceanConnectivity` | Uint8Array / Int32Array | 水体连通性 |
 | `closedBasinId` | Int32Array | 内流盆地 |
 | `drainageBasinId` | Int32Array | 流域 |
+| `watershedId` | Int32Array | 与 `drainageBasinId` 同步的流域接口别名 |
 | `depressionMask` | Uint8Array | 局地洼地 |
 | `flowDirection` | Int8Array | D8 或类似流向 |
+| `flowTarget` | Int32Array | 下游格点 index，无法外排为 -1 |
 | `flowAccumulation` | Float32Array | 汇流累积 |
-| `lakePotential` | Float32Array | 湖泊候选 |
+| `flowSlope` | Float32Array | 到下游格点的有效坡降 |
+| `riverMask` | Uint8Array | 主河道候选 |
+| `riverStrength` | Float32Array | 连续河流强度 |
+| `riverOrder` | Uint8Array | 近似 Strahler 等级 |
+| `riverOutlet` | Uint8Array | 入外海口候选 |
+| `outletId` | Int32Array | 外海出口或内流终点编号 |
+| `endorheicBasin` | Uint8Array | 内流盆地区域 |
+| `endorheicSink` | Uint8Array | 内流汇水终点 |
+| `lakeCandidate` | Uint8Array | 湖泊候选，不是完成态湖泊 |
+| `wetlandCandidate` | Float32Array | 湿地候选 |
 | `sedimentSink` | Float32Array | 沉积汇 |
 | `erodibility` | Float32Array | 可侵蚀性 |
 | `permeability` | Float32Array | 渗透性、地下水候选 |
@@ -174,6 +185,40 @@ inlandWaterCandidate = seaMask && !externalSeaMask;
 - 大型封闭盆地能被识别。
 - 小噪声不应生成大量碎湖。
 - 沉积汇集中在盆地、低地、被动边缘和河口附近。
+
+### 5.5 Hydrology MVP 当前实现
+
+当前已新增 topology 驱动的 Hydrology MVP。`getHydrologyInputs(world)` 只读当前地形派生状态，不推进模拟、不写回 geology-v2。实现范围：
+
+- `hydroElevation`：基于 topology 半径邻域的轻量平滑高程，保留大型山脉、盆地和陆缘，降低单格噪声对流向的支配。
+- `flowDirection / flowTarget / flowSlope`：D8 最陡下降，允许陆地流向更低陆地、外海邻格或 `inlandWaterCandidate`，不允许穿过外海再回陆地。
+- `flowAccumulation`：统一 runoff 占位权重的汇流面积，用于主河候选，不代表真实降水或径流量。
+- `drainageBasinId / watershedId / outletId`：追踪最终入外海出口或内流终点。
+- `riverMask / riverStrength / riverOrder / riverOutlet`：主河道、连续强度、近似等级和入海口候选。
+- `endorheicBasin / endorheicSink / lakeCandidate / wetlandCandidate`：内流盆地、汇水终点、湖泊候选和湿地候选；仍不是完整湖泊水量系统。
+
+MVP 诊断字段：
+
+- `hydrologyValid`
+- `flowAssignedShare`
+- `flowCycleCount`
+- `orphanFlowShare`
+- `depressionShare`
+- `endorheicBasinCount`
+- `endorheicLandShare`
+- `lakeCandidateShare`
+- `riverCellShare`
+- `riverContinuityScore`
+- `riverOutletCount`
+- `coastalOutletShare`
+- `externalSeaDrainageShare`
+- `closedBasinDrainageShare`
+- `largestWatershedShare`
+- `flowAccumulationP95`
+- `flowAccumulationMax`
+- `riverResolutionDrift`
+
+明确不在本轮实现：气候降水、蒸发、地下水、湖面高度、真实水量收支、priority-flood 填洼、三角洲和水文反作用侵蚀。这些应进入 Hydrology Phase 2。
 
 ## 6. 生物圈系统输入
 

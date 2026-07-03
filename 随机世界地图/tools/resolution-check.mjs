@@ -1,5 +1,6 @@
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
+import { getHydrologyInputs } from "../src/sim/derived/terrain.js";
 import { measureIsostasyDiagnostics } from "../src/sim/geology/isostasy.js";
 import { measureTopologyDiagnostics, topologyForGrid } from "../src/sim/topology.js";
 
@@ -51,6 +52,7 @@ for (const resolution of resolutions) {
     orogenyDiagnostics: measureOrogenyDiagnostics(world),
     axisDiagnostics: measureAxisDiagnostics(world),
     geologicSeaLevelDiagnostics: measureGeologicSeaLevelDiagnostics(world),
+    hydrologyDiagnostics: measureHydrologyDiagnostics(world),
     topologyDiagnostics: measureTopologyDiagnostics(world),
     isostasyDiagnostics: measureIsostasyDiagnostics(world),
     reliefDiagnostics: measureReliefDiagnostics(world),
@@ -790,6 +792,10 @@ function measureGeologyRisks(world) {
     sedimentSeaFillRisk: world.sedimentBudgetDiagnostics?.sedimentSeaFillRisk ?? 0,
     sedimentOverfillShare: world.sedimentBudgetDiagnostics?.sedimentOverfillShare ?? 0,
   };
+}
+
+function measureHydrologyDiagnostics(world) {
+  return getHydrologyInputs(world).hydrologyDiagnostics ?? {};
 }
 
 function measureSedimentBudgetDiagnostics(world) {
