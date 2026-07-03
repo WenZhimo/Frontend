@@ -3920,42 +3920,37 @@
   }
 
   function naturalizeAxis(grid, source, target, referenceRadius, gain, options = {}) {
-    const { width, height, size, weakness, oldOrogeny, riftStage, transformMemory, fractureZoneMemory, crustType, noisyBoundaryPatch, plateCheckerboard } = grid;
+    const { size, weakness, oldOrogeny, riftStage, transformMemory, fractureZoneMemory, crustType, noisyBoundaryPatch, plateCheckerboard } = grid;
     const radius = Math.max(1, Math.min(physicalRadius(grid, referenceRadius), physicalRadius(grid, 8)));
     const seedSource = new Float32Array(source);
     const spread = new Float32Array(size);
 
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        const seed = seedSource[id];
-        if (seed <= 0.0001) continue;
-        const pull = weakness[id] - 0.5 + oldOrogeny[id] * 0.18 + (riftStage[id] > 0 ? 0.12 : 0) + transformMemory[id] * 0.08 - fractureZoneMemory[id] * 0.04;
-        const bendX = Math.round(pull * radius * 1.15 + (hash2(Math.floor(x / 13), Math.floor(y / 9)) - 0.5) * radius * 0.8);
-        const bendY = Math.round((hash2(Math.floor((x + 5) / 17), Math.floor((y + 3) / 11)) - 0.5) * radius * 0.7);
-        const segment = segmentMask(x, y, weakness[id], options.segmented);
-        const arcShift = options.arcBend ? Math.max(1, Math.round(radius * 0.55)) : 0;
+    forEachGridCell(grid, (id, x, y) => {
+      const seed = seedSource[id];
+      if (seed <= 0.0001) return;
+      const pull = weakness[id] - 0.5 + oldOrogeny[id] * 0.18 + (riftStage[id] > 0 ? 0.12 : 0) + transformMemory[id] * 0.08 - fractureZoneMemory[id] * 0.04;
+      const bendX = Math.round(pull * radius * 1.15 + (hash2(Math.floor(x / 13), Math.floor(y / 9)) - 0.5) * radius * 0.8);
+      const bendY = Math.round((hash2(Math.floor((x + 5) / 17), Math.floor((y + 3) / 11)) - 0.5) * radius * 0.7);
+      const segment = segmentMask(x, y, weakness[id], options.segmented);
+      const arcShift = options.arcBend ? Math.max(1, Math.round(radius * 0.55)) : 0;
 
-        for (let dy = -radius; dy <= radius; dy += 1) {
-          const ny = y + dy + bendY + arcShift;
-          if (ny < 0 || ny >= height) continue;
-          for (let dx = -radius; dx <= radius; dx += 1) {
-            const dist = Math.hypot(dx, dy);
-            if (dist > radius + 0.01) continue;
-            const nx = wrapX(width, x + dx + bendX);
-            const nid = ny * width + nx;
-            if (noisyBoundaryPatch[nid] && dist <= 1.5) continue;
-            if ((plateCheckerboard[nid] ?? 0) > 0.32) continue;
-            if (options.continentalBias && crustType[nid] === CrustType.OCEANIC && dist > radius * 0.45) continue;
-            if (options.oceanicBias && crustType[nid] === CrustType.CONTINENTAL && dist > radius * 0.55) continue;
-            const weakWeight = 0.55 + weakness[nid] * 0.65 + oldOrogeny[nid] * 0.25;
-            const falloff = Math.max(0, 1 - dist / (radius + 0.65));
-            const addition = seed * gain * falloff * weakWeight * segment;
-            if (addition > spread[nid]) spread[nid] = addition;
-          }
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const dist = Math.hypot(dx, dy);
+          if (dist > radius + 0.01) continue;
+          const nid = indexOf(grid, x + dx + bendX, y + dy + bendY + arcShift);
+          if (nid < 0) continue;
+          if (noisyBoundaryPatch[nid] && dist <= 1.5) continue;
+          if ((plateCheckerboard[nid] ?? 0) > 0.32) continue;
+          if (options.continentalBias && crustType[nid] === CrustType.OCEANIC && dist > radius * 0.45) continue;
+          if (options.oceanicBias && crustType[nid] === CrustType.CONTINENTAL && dist > radius * 0.55) continue;
+          const weakWeight = 0.55 + weakness[nid] * 0.65 + oldOrogeny[nid] * 0.25;
+          const falloff = Math.max(0, 1 - dist / (radius + 0.65));
+          const addition = seed * gain * falloff * weakWeight * segment;
+          if (addition > spread[nid]) spread[nid] = addition;
         }
       }
-    }
+    });
 
     for (let i = 0; i < size; i += 1) {
       if (spread[i] > 0) target[i] = Math.min(1, Math.max(target[i], spread[i]));
@@ -3970,34 +3965,31 @@
   }
 
   function measureAxisDiagnostics(grid) {
-    const { width, height, tectonicAxis, axisCurvature, axisContinuity, axisBoundaryDependency, axisSegmentId, boundaryInfluence, activeBoundary, scratch } = grid;
+    const { tectonicAxis, axisCurvature, axisContinuity, axisBoundaryDependency, axisSegmentId, boundaryInfluence, activeBoundary, scratch } = grid;
     scratch.fill(0);
     let nextSegment = 1;
 
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        const v = tectonicAxis[id];
-        if (v <= 0.035) {
-          axisCurvature[id] = 0;
-          axisContinuity[id] = 0;
-          axisBoundaryDependency[id] = 0;
-          axisSegmentId[id] = 0;
-          continue;
-        }
-
-        const left = sample(grid, tectonicAxis, x - 1, y);
-        const right = sample(grid, tectonicAxis, x + 1, y);
-        const up = sample(grid, tectonicAxis, x, y - 1);
-        const down = sample(grid, tectonicAxis, x, y + 1);
-        const dx = Math.abs(left - right);
-        const dy = Math.abs(up - down);
-        const localMax = Math.max(left, right, up, down);
-        axisCurvature[id] = Math.min(1, Math.abs(dx - dy) * 4 + Math.min(dx + dy, 1) * 0.25);
-        axisContinuity[id] = Math.min(1, (localMax + v) * 0.5);
-        axisBoundaryDependency[id] = Math.min(1, v * 0.45 + boundaryInfluence[id] * 0.45 + (activeBoundary[id] ? 0.1 : 0));
+    forEachGridCell(grid, (id, x, y) => {
+      const v = tectonicAxis[id];
+      if (v <= 0.035) {
+        axisCurvature[id] = 0;
+        axisContinuity[id] = 0;
+        axisBoundaryDependency[id] = 0;
+        axisSegmentId[id] = 0;
+        return;
       }
-    }
+
+      const left = sample(grid, tectonicAxis, x - 1, y);
+      const right = sample(grid, tectonicAxis, x + 1, y);
+      const up = sample(grid, tectonicAxis, x, y - 1);
+      const down = sample(grid, tectonicAxis, x, y + 1);
+      const dx = Math.abs(left - right);
+      const dy = Math.abs(up - down);
+      const localMax = Math.max(left, right, up, down);
+      axisCurvature[id] = Math.min(1, Math.abs(dx - dy) * 4 + Math.min(dx + dy, 1) * 0.25);
+      axisContinuity[id] = Math.min(1, (localMax + v) * 0.5);
+      axisBoundaryDependency[id] = Math.min(1, v * 0.45 + boundaryInfluence[id] * 0.45 + (activeBoundary[id] ? 0.1 : 0));
+    });
 
     for (let i = 0; i < axisSegmentId.length; i += 1) axisSegmentId[i] = 0;
     const queue = new Int32Array(axisSegmentId.length);
@@ -4020,44 +4012,36 @@
   }
 
   function measureFieldBlockiness(grid, field, output) {
-    const { width, height } = grid;
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        const v = field[id];
-        if (v <= 0.0001) {
-          output[id] = 0;
-          continue;
-        }
-        const left = sample(grid, field, x - 1, y);
-        const right = sample(grid, field, x + 1, y);
-        const up = sample(grid, field, x, y - 1);
-        const down = sample(grid, field, x, y + 1);
-        const cardinal = Math.abs(left - right) + Math.abs(up - down);
-        const diagonal = Math.abs(sample(grid, field, x - 1, y - 1) - sample(grid, field, x + 1, y + 1))
-          + Math.abs(sample(grid, field, x + 1, y - 1) - sample(grid, field, x - 1, y + 1));
-        output[id] = Math.min(1, Math.abs(cardinal - diagonal) * 2.8);
+    forEachGridCell(grid, (id, x, y) => {
+      const v = field[id];
+      if (v <= 0.0001) {
+        output[id] = 0;
+        return;
       }
-    }
+      const left = sample(grid, field, x - 1, y);
+      const right = sample(grid, field, x + 1, y);
+      const up = sample(grid, field, x, y - 1);
+      const down = sample(grid, field, x, y + 1);
+      const cardinal = Math.abs(left - right) + Math.abs(up - down);
+      const diagonal = Math.abs(sample(grid, field, x - 1, y - 1) - sample(grid, field, x + 1, y + 1))
+        + Math.abs(sample(grid, field, x + 1, y - 1) - sample(grid, field, x - 1, y + 1));
+      output[id] = Math.min(1, Math.abs(cardinal - diagonal) * 2.8);
+    });
   }
 
   function measureFieldContinuity(grid, field, output) {
-    const { width, height } = grid;
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        const v = field[id];
-        if (v <= 0.0001) {
-          output[id] = 0;
-          continue;
-        }
-        let neighbors = 0;
-        forEachNeighbor4ById(grid, id, (nid) => {
-          if (field[nid] > v * 0.35) neighbors += 1;
-        });
-        output[id] = neighbors / 4;
+    forEachGridCell(grid, (id) => {
+      const v = field[id];
+      if (v <= 0.0001) {
+        output[id] = 0;
+        return;
       }
-    }
+      let neighbors = 0;
+      forEachNeighbor4ById(grid, id, (nid) => {
+        if (field[nid] > v * 0.35) neighbors += 1;
+      });
+      output[id] = neighbors / 4;
+    });
   }
 
   function segmentMask(x, y, weakness, forceSegmented) {
@@ -4075,8 +4059,9 @@
   }
 
   function sample(grid, field, x, y) {
-    const sy = Math.max(0, Math.min(grid.height - 1, y));
-    return sampleGridWrapped(grid, field, x, sy);
+    const id = indexOf(grid, x, y);
+    if (id < 0) return 0;
+    return sampleGridWrapped(grid, field, x, y);
   }
 
 
