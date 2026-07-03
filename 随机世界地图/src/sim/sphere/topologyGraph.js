@@ -143,6 +143,40 @@ export function distanceFromGraphSources(grid, sourceMask) {
   return distance;
 }
 
+export function smoothGraphField(grid, field, options = {}) {
+  const iterations = Math.max(0, Math.trunc(options.iterations ?? 1));
+  const strength = Math.max(0, Math.min(1, Number(options.strength ?? 0.5)));
+  const mask = options.mask ?? null;
+  let current = new Float32Array(field);
+  let next = new Float32Array(grid.size);
+
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    for (let id = 0; id < grid.size; id += 1) {
+      if (mask && !mask[id]) {
+        next[id] = current[id];
+        continue;
+      }
+      const start = grid.neighborStart[id];
+      const count = grid.neighborCount[id];
+      let total = current[id];
+      let weight = 1;
+      for (let k = 0; k < count; k += 1) {
+        const nid = grid.neighbors[start + k];
+        if (mask && !mask[nid]) continue;
+        total += current[nid];
+        weight += 1;
+      }
+      const neighborMean = total / Math.max(1, weight);
+      next[id] = current[id] * (1 - strength) + neighborMean * strength;
+    }
+    const swap = current;
+    current = next;
+    next = swap;
+  }
+
+  return current;
+}
+
 class MinDistanceHeap {
   constructor(capacity) {
     this.ids = new Int32Array(capacity);

@@ -17,6 +17,7 @@ const checks = [
   ["spherical-topology-api-check", ["tools/spherical-topology-api-check.mjs", String(faceSize)]],
   ["spherical-production-adapter-check", ["tools/spherical-production-adapter-check.mjs", String(faceSize)]],
   ["spherical-connectivity-check", ["tools/spherical-connectivity-check.mjs", String(faceSize)]],
+  ["spherical-diffusion-check", ["tools/spherical-diffusion-check.mjs", String(faceSize)]],
   ["spherical-boundary-check", ["tools/spherical-boundary-check.mjs", seedText, String(faceSize), "14", String(steps)]],
   ["spherical-plate-check", ["tools/spherical-plate-check.mjs", seedText, String(faceSize), "14", String(steps)]],
   ["spherical-core-check", ["tools/spherical-core-check.mjs", seedText, String(faceSize), "14", String(steps)]],
@@ -98,6 +99,8 @@ function compactMetrics(parsed) {
     "poleLongitudeVarianceMax",
     "maxNearestAngularError",
     "areaTotalError",
+    "roughnessRatio",
+    "smoothSeamDiffToInteriorRatio",
   ]) {
     if (parsed[key] !== undefined) picked[key] = parsed[key];
   }
