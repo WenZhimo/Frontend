@@ -29,6 +29,7 @@ const files = [
   "src/sim/derived/terrain.js",
   "src/sim/world.js",
   "src/sim/evolution.js",
+  "src/gpu/capability.js",
   "src/render/map2d.js",
   "src/ui/controls.js",
   "src/main.js",
