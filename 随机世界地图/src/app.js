@@ -7604,7 +7604,8 @@
 
   function latitudeDegrees(grid, id, y) {
     if (grid.lat && Number.isFinite(grid.lat[id])) return grid.lat[id] * 180 / Math.PI;
-    return ((y + 0.5) / grid.height - 0.5) * 180;
+    const height = gridParamHeight(grid);
+    return height ? ((y + 0.5) / height - 0.5) * 180 : 0;
   }
 
   function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
