@@ -551,48 +551,65 @@ function measureIsostasyDiagnostics(world) {
 }
 
 function share(mask) {
-  let count = 0;
-  for (let i = 0; i < mask.length; i += 1) if (mask[i]) count += 1;
-  return count / mask.length;
+  let covered = 0;
+  let total = 0;
+  for (let i = 0; i < mask.length; i += 1) {
+    const area = metricArea(i);
+    total += area;
+    if (mask[i]) covered += area;
+  }
+  return covered / Math.max(total, Number.EPSILON);
 }
 
 function shareWhere(mask, predicate) {
-  let count = 0;
+  let covered = 0;
+  let total = 0;
   for (let i = 0; i < mask.length; i += 1) {
-    if (mask[i] && predicate(i)) count += 1;
+    const area = metricArea(i);
+    total += area;
+    if (mask[i] && predicate(i)) covered += area;
   }
-  return count / mask.length;
+  return covered / Math.max(total, Number.EPSILON);
 }
 
 function coverage(field, threshold) {
-  let count = 0;
+  let covered = 0;
+  let total = 0;
   for (let i = 0; i < field.length; i += 1) {
-    if (field[i] > threshold) count += 1;
+    const area = metricArea(i);
+    total += area;
+    if (field[i] > threshold) covered += area;
   }
-  return count / field.length;
+  return covered / Math.max(total, Number.EPSILON);
 }
 
 function average(field) {
-  let sum = 0;
-  for (let i = 0; i < field.length; i += 1) sum += field[i];
-  return sum / field.length;
+  let total = 0;
+  let weight = 0;
+  for (let i = 0; i < field.length; i += 1) {
+    const area = metricArea(i);
+    total += field[i] * area;
+    weight += area;
+  }
+  return total / Math.max(weight, Number.EPSILON);
 }
 
 function sum(field) {
   let total = 0;
-  for (let i = 0; i < field.length; i += 1) total += field[i];
+  for (let i = 0; i < field.length; i += 1) total += field[i] * metricArea(i);
   return total;
 }
 
 function averageWhere(field, include) {
-  let sum = 0;
-  let count = 0;
+  let total = 0;
+  let weight = 0;
   for (let i = 0; i < field.length; i += 1) {
     if (!include(i)) continue;
-    sum += field[i];
-    count += 1;
+    const area = metricArea(i);
+    total += field[i] * area;
+    weight += area;
   }
-  return count ? sum / count : 0;
+  return weight ? total / weight : 0;
 }
 
 function maxInt(field) {
@@ -606,19 +623,29 @@ function conditionalShare(field, include, predicate) {
   let matched = 0;
   for (let i = 0; i < field.length; i += 1) {
     if (!include(i)) continue;
-    total += 1;
-    if (predicate(i)) matched += 1;
+    const area = metricArea(i);
+    total += area;
+    if (predicate(i)) matched += area;
   }
   return total ? matched / total : 0;
 }
 
 function histogram(field, buckets) {
   const result = Array.from({ length: buckets }, () => 0);
+  let total = 0;
   for (let i = 0; i < field.length; i += 1) {
     const v = field[i];
-    if (v >= 0 && v < buckets) result[v] += 1;
+    if (v < 0 || v >= buckets) continue;
+    const area = metricArea(i);
+    result[v] += area;
+    total += area;
   }
-  return result.map((count) => count / field.length);
+  return result.map((count) => count / Math.max(total, Number.EPSILON));
+}
+
+function metricArea(id) {
+  const area = world.grid.area?.[id];
+  return Number.isFinite(area) && area > 0 ? area : 1;
 }
 
 function ratio(active, inactive) {
