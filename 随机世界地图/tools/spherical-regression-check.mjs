@@ -15,6 +15,7 @@ const checks = [
   ["projection-check:equirectangular", ["tools/projection-check.mjs", String(faceSize), "equirectangular"]],
   ["projection-check:mollweide", ["tools/projection-check.mjs", String(faceSize), "mollweide"]],
   ["spherical-topology-api-check", ["tools/spherical-topology-api-check.mjs", String(faceSize)]],
+  ["spherical-production-adapter-check", ["tools/spherical-production-adapter-check.mjs", String(faceSize)]],
   ["spherical-connectivity-check", ["tools/spherical-connectivity-check.mjs", String(faceSize)]],
   ["spherical-boundary-check", ["tools/spherical-boundary-check.mjs", seedText, String(faceSize), "14", String(steps)]],
   ["spherical-plate-check", ["tools/spherical-plate-check.mjs", seedText, String(faceSize), "14", String(steps)]],

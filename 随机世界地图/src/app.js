@@ -1742,6 +1742,8 @@
 
   function summarizeProductionGridAdapter(grid) {
     const areaTotal = sumField(grid.area);
+    const synthetic = createStatsProbeFields(grid);
+    const categoryShares = weightedCategoryShares(grid, synthetic.category, 3);
     return {
       kind: grid.kind,
       topologyKind: grid.topologyKind,
@@ -1755,9 +1757,19 @@
       graphBacked: Boolean(grid.topologyOptions?.graphBacked),
       areaTotal,
       areaTotalError: Math.abs(areaTotal - 4 * Math.PI),
+      areaStats: measureAreaStats(grid),
+      hemisphereAreaStats: measureHemisphereAreaStats(grid),
       fieldCount: FIELD_SPECS.length,
       allFieldsMatchSize: FIELD_SPECS.every(([name]) => grid[name]?.length === grid.size),
       neighborSymmetryValid: measureNeighborSymmetry(grid),
+      statsProbe: {
+        weightedSum: weightedSum(grid, synthetic.scalar),
+        weightedMean: weightedMean(grid, synthetic.scalar),
+        northShare: weightedShare(grid, synthetic.northMask),
+        categoryShares: Array.from(categoryShares.shares),
+        categoryShareTotal: Array.from(categoryShares.shares).reduce((sum, value) => sum + value, 0),
+        categoryTotalArea: categoryShares.totalArea,
+      },
     };
   }
 
@@ -1792,6 +1804,18 @@
     let total = 0;
     for (let i = 0; i < field.length; i += 1) total += field[i];
     return total;
+  }
+
+  function createStatsProbeFields(grid) {
+    const scalar = new Float32Array(grid.size);
+    const northMask = new Uint8Array(grid.size);
+    const category = new Int32Array(grid.size);
+    for (let id = 0; id < grid.size; id += 1) {
+      scalar[id] = grid.positionY[id] * 0.5 + grid.positionZ[id] * 0.25;
+      northMask[id] = grid.positionY[id] >= 0 ? 1 : 0;
+      category[id] = grid.face[id] % 3;
+    }
+    return { scalar, northMask, category };
   }
 
 
