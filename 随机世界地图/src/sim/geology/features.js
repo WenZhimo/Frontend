@@ -1,4 +1,4 @@
-import { physicalRadius, wrapX } from "../grid.js";
+import { forEachGridCell, indexOf, physicalRadius } from "../grid.js";
 import { BoundaryType } from "../tectonics.js";
 import { CrustType } from "./crust.js";
 
@@ -111,37 +111,36 @@ function blendAxisSources(grid, sources) {
 }
 
 function diffuseFeature(grid, source, target, referenceRadius, gain, options = {}) {
-  const { width, height, size, crustType, weakness } = grid;
+  const { size, crustType, weakness } = grid;
   const radius = Math.max(1, Math.min(physicalRadius(grid, referenceRadius), physicalRadius(grid, 8)));
   const spread = new Float32Array(size);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      const seed = source[id];
-      if (seed <= 0.0001) continue;
-      const bend = Math.round((weakness[id] - 0.5) * radius * 0.9);
-      const arcShift = options.arcOffset ? Math.max(1, Math.round(radius * 0.75)) : 0;
-      for (let dy = -radius; dy <= radius; dy += 1) {
-        const ny = y + dy + (options.arcOffset ? arcShift : 0);
-        if (ny < 0 || ny >= height) continue;
-        for (let dx = -radius; dx <= radius; dx += 1) {
-          const dist = Math.hypot(dx, dy);
-          if (dist > radius + 0.01) continue;
-          const nx = wrapX(width, x + dx + bend);
-          const nid = ny * width + nx;
-          if (options.continentalOnly && crustType[nid] !== CrustType.CONTINENTAL) continue;
-          if (options.oceanicBias && crustType[nid] !== CrustType.OCEANIC && dist > radius * 0.45) continue;
-          const weak = weakness[nid];
-          if (weak < (options.minWeakness ?? 0) && dist > 1.5) continue;
-          if (options.segmented && weak < 0.38 && segmentMask(nx, ny, weak) < 0.8) continue;
-          const falloff = Math.max(0, 1 - dist / (radius + 0.5));
-          const weakWeight = 0.45 + weak * 0.9;
-          const addition = seed * gain * falloff * weakWeight;
-          if (addition > spread[nid]) spread[nid] = addition;
-        }
+
+  forEachGridCell(grid, (id, x, y) => {
+    const seed = source[id];
+    if (seed <= 0.0001) return;
+    const bend = Math.round((weakness[id] - 0.5) * radius * 0.9);
+    const arcShift = options.arcOffset ? Math.max(1, Math.round(radius * 0.75)) : 0;
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        const dist = Math.hypot(dx, dy);
+        if (dist > radius + 0.01) continue;
+        const sx = x + dx + bend;
+        const sy = y + dy + arcShift;
+        const nid = indexOf(grid, sx, sy);
+        if (nid < 0) continue;
+        if (options.continentalOnly && crustType[nid] !== CrustType.CONTINENTAL) continue;
+        if (options.oceanicBias && crustType[nid] !== CrustType.OCEANIC && dist > radius * 0.45) continue;
+        const weak = weakness[nid];
+        if (weak < (options.minWeakness ?? 0) && dist > 1.5) continue;
+        if (options.segmented && weak < 0.38 && segmentMask(sx, sy, weak) < 0.8) continue;
+        const falloff = Math.max(0, 1 - dist / (radius + 0.5));
+        const weakWeight = 0.45 + weak * 0.9;
+        const addition = seed * gain * falloff * weakWeight;
+        if (addition > spread[nid]) spread[nid] = addition;
       }
     }
-  }
+  });
+
   for (let i = 0; i < size; i += 1) {
     if (spread[i] > 0) target[i] = Math.min(1, target[i] + spread[i]);
   }
