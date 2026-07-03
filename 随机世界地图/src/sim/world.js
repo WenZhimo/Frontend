@@ -1,6 +1,7 @@
 import { createGrid } from "./grid.js";
 import { hashSeed } from "./prng.js";
 import { createCubedSphereGrid } from "./sphere/cubedSphere.js";
+import { createSphericalExperimentalWorld } from "./sphere/sphericalWorld.js";
 import { initializeBaseTerrain, initializeSeaLevel, updateSeaLevel } from "./terrain.js";
 import { assignPlates, computeBoundaryStress } from "./tectonics.js";
 import { updatePlateBoundaries } from "./geology/boundaries.js";
@@ -30,6 +31,7 @@ export function createWorld(params) {
   const world = {
     grid,
     sphericalGrid: createExperimentalSphericalGrid(normalizedParams),
+    sphericalWorld: createExperimentalSphericalWorld(normalizedParams, seedUint32),
     params: normalizedParams,
     seedUint32,
     step: 0,
@@ -82,6 +84,18 @@ function normalizeParams(params) {
 function createExperimentalSphericalGrid(params) {
   if (params.topologyMode !== TopologyMode.CUBED_SPHERE) return null;
   return createCubedSphereGrid(params.faceSize);
+}
+
+function createExperimentalSphericalWorld(params, seedUint32) {
+  if (params.topologyMode !== TopologyMode.CUBED_SPHERE) return null;
+  return createSphericalExperimentalWorld({
+    seedText: params.seedText,
+    seedUint32,
+    faceSize: params.faceSize,
+    plateCount: params.plateCount,
+    intensity: params.intensity,
+    steps: 0,
+  });
 }
 
 function normalizeFaceSize(faceSize, resolution) {

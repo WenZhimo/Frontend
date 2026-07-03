@@ -29,6 +29,7 @@ const result = {
     topologyMode: cylindrical.params.topologyMode,
     projectionMode: cylindrical.params.projectionMode,
     hasSphericalGrid: Boolean(cylindrical.sphericalGrid),
+    hasSphericalWorld: Boolean(cylindrical.sphericalWorld),
     simulationGridKind: cylindrical.grid.topology?.kind ?? cylindrical.grid.kind ?? "cylindrical",
     simulationSize: cylindrical.grid.size,
   },
@@ -36,11 +37,15 @@ const result = {
     topologyMode: spherical.params.topologyMode,
     projectionMode: spherical.params.projectionMode,
     hasSphericalGrid: Boolean(spherical.sphericalGrid),
+    hasSphericalWorld: Boolean(spherical.sphericalWorld),
     simulationGridKind: spherical.grid.topology?.kind ?? spherical.grid.kind ?? "cylindrical",
     simulationSize: spherical.grid.size,
     sphericalGridKind: spherical.sphericalGrid?.topologyKind ?? null,
     sphericalGridSize: spherical.sphericalGrid?.size ?? 0,
     sphericalFaceSize: spherical.sphericalGrid?.faceSize ?? 0,
+    sphericalWorldKind: spherical.sphericalWorld?.kind ?? null,
+    sphericalWorldCellCount: spherical.sphericalWorld?.stats?.cellCount ?? 0,
+    sphericalWorldActiveBoundaryShare: spherical.sphericalWorld?.stats?.activeBoundaryShare ?? 0,
   },
   notes: [
     "cubed-sphere is attached as an experimental diagnostic grid only",
@@ -50,10 +55,14 @@ const result = {
 
 if (result.cylindrical.topologyMode !== "cylindrical") result.valid = false;
 if (result.cylindrical.hasSphericalGrid) result.valid = false;
+if (result.cylindrical.hasSphericalWorld) result.valid = false;
 if (result.spherical.topologyMode !== "cubed-sphere") result.valid = false;
 if (!result.spherical.hasSphericalGrid) result.valid = false;
+if (!result.spherical.hasSphericalWorld) result.valid = false;
 if (result.spherical.sphericalGridKind !== "cubed-sphere") result.valid = false;
 if (result.spherical.sphericalFaceSize !== Math.max(2, Math.trunc(faceSize))) result.valid = false;
+if (result.spherical.sphericalWorldKind !== "spherical-experimental-world") result.valid = false;
+if (result.spherical.sphericalWorldCellCount !== result.spherical.sphericalGridSize) result.valid = false;
 if (result.spherical.simulationSize !== result.cylindrical.simulationSize) result.valid = false;
 
 console.log(JSON.stringify(result, null, 2));

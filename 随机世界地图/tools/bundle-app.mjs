@@ -13,6 +13,7 @@ const files = [
   "src/sim/sphere/projection.js",
   "src/sim/sphere/plates.js",
   "src/sim/sphere/topologyGraph.js",
+  "src/sim/sphere/sphericalWorld.js",
   "src/sim/noise.js",
   "src/sim/terrain.js",
   "src/sim/tectonics.js",
@@ -54,7 +55,8 @@ for (const file of files) {
   const abs = join(root, file);
   let code = readFileSync(abs, "utf8");
   code = code
-    .replace(/^import .*?;\r?\n/gm, "")
+    .replace(/^\s*import\s+[\s\S]*?\s+from\s+["'][^"']+["'];\r?\n/gm, "")
+    .replace(/^\s*import\s+["'][^"']+["'];\r?\n/gm, "")
     .replace(/^export \{.*?\};\r?\n/gm, "")
     .replace(/^export async function /gm, "async function ")
     .replace(/^export class /gm, "class ")
