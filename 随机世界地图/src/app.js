@@ -5029,30 +5029,25 @@
   }
 
   function updateAgeBandRisk(grid) {
-    const { width, height, crustType, crustAge, ridge, boundaryInfluence, fractureZoneMemory, ageBandStraightnessRisk } = grid;
-    for (let y = 1; y < height - 1; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        if (crustType[id] !== CrustType.OCEANIC) continue;
-        const band = Math.floor(crustAge[id] * 10);
-        const horizontal = sameAgeBandAt(grid, x - 1, y, band) + sameAgeBandAt(grid, x + 1, y, band);
-        const vertical = sameAgeBandAt(grid, x, y - 1, band) + sameAgeBandAt(grid, x, y + 1, band);
-        const diagA = sameAgeBandAt(grid, x - 1, y - 1, band) + sameAgeBandAt(grid, x + 1, y + 1, band);
-        const diagB = sameAgeBandAt(grid, x + 1, y - 1, band) + sameAgeBandAt(grid, x - 1, y + 1, band);
-        const aligned = Math.max(horizontal, vertical, diagA, diagB);
-        if (aligned < 2) continue;
-        const nearRidge = ridge[id] > 0.05 || grid.ridgeDistance[id] <= 3;
-        if (nearRidge) continue;
-        const inactive = 1 - Math.min(1, boundaryInfluence[id]);
-        ageBandStraightnessRisk[id] = Math.max(0, Math.min(1, inactive * (0.4 + fractureZoneMemory[id] * 0.8)));
-      }
-    }
+    const { crustType, crustAge, ridge, boundaryInfluence, fractureZoneMemory, ageBandStraightnessRisk } = grid;
+    forEachGridCell(grid, (id, x, y) => {
+      if (crustType[id] !== CrustType.OCEANIC) return;
+      const band = Math.floor(crustAge[id] * 10);
+      const horizontal = sameAgeBandAt(grid, x - 1, y, band) + sameAgeBandAt(grid, x + 1, y, band);
+      const vertical = sameAgeBandAt(grid, x, y - 1, band) + sameAgeBandAt(grid, x, y + 1, band);
+      const diagA = sameAgeBandAt(grid, x - 1, y - 1, band) + sameAgeBandAt(grid, x + 1, y + 1, band);
+      const diagB = sameAgeBandAt(grid, x + 1, y - 1, band) + sameAgeBandAt(grid, x - 1, y + 1, band);
+      const aligned = Math.max(horizontal, vertical, diagA, diagB);
+      if (aligned < 2) return;
+      const nearRidge = ridge[id] > 0.05 || grid.ridgeDistance[id] <= 3;
+      if (nearRidge) return;
+      const inactive = 1 - Math.min(1, boundaryInfluence[id]);
+      ageBandStraightnessRisk[id] = Math.max(0, Math.min(1, inactive * (0.4 + fractureZoneMemory[id] * 0.8)));
+    });
   }
 
   function softenInactiveFractureSourceFields(grid, dt) {
     const {
-      width,
-      height,
       crustType,
       crustAge,
       crustThickness,
@@ -5072,48 +5067,44 @@
     scratch2.set(crustThickness);
     scratch3.set(sediment);
 
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        if (crustType[id] !== CrustType.OCEANIC) continue;
-        if (boundaryInfluence[id] > 0.16 || ridge[id] > 0.05 || trench[id] > 0.08) continue;
-        if (ridgeDistance[id] >= 0 && ridgeDistance[id] <= 4) continue;
+    forEachGridCell(grid, (id) => {
+      if (crustType[id] !== CrustType.OCEANIC) return;
+      if (boundaryInfluence[id] > 0.16 || ridge[id] > 0.05 || trench[id] > 0.08) return;
+      if (ridgeDistance[id] >= 0 && ridgeDistance[id] <= 4) return;
 
-        const inactive = 1 - Math.min(1, boundaryInfluence[id]);
-        const memory = Math.max(fractureZoneMemory[id], transformMemory[id] * 0.45);
-        const risk = Math.max(ageBandStraightnessRisk[id], Math.max(0, memory - 0.04) * 0.75);
-        if (risk <= 0.035) continue;
+      const inactive = 1 - Math.min(1, boundaryInfluence[id]);
+      const memory = Math.max(fractureZoneMemory[id], transformMemory[id] * 0.45);
+      const risk = Math.max(ageBandStraightnessRisk[id], Math.max(0, memory - 0.04) * 0.75);
+      if (risk <= 0.035) return;
 
-        let ageTotal = scratch[id] * 3.5;
-        let thickTotal = scratch2[id] * 3.5;
-        let sedTotal = scratch3[id] * 2.5;
-        let ageWeight = 3.5;
-        let sedWeight = 2.5;
-        forEachNeighbor4ById(grid, id, (nid) => {
-          if (crustType[nid] !== CrustType.OCEANIC) return;
-          if (ridge[nid] > 0.06 || trench[nid] > 0.09 || boundaryInfluence[nid] > 0.22) return;
-          ageTotal += scratch[nid];
-          thickTotal += scratch2[nid];
-          sedTotal += scratch3[nid];
-          ageWeight += 1;
-          sedWeight += 1;
-        });
+      let ageTotal = scratch[id] * 3.5;
+      let thickTotal = scratch2[id] * 3.5;
+      let sedTotal = scratch3[id] * 2.5;
+      let ageWeight = 3.5;
+      let sedWeight = 2.5;
+      forEachNeighbor4ById(grid, id, (nid) => {
+        if (crustType[nid] !== CrustType.OCEANIC) return;
+        if (ridge[nid] > 0.06 || trench[nid] > 0.09 || boundaryInfluence[nid] > 0.22) return;
+        ageTotal += scratch[nid];
+        thickTotal += scratch2[nid];
+        sedTotal += scratch3[nid];
+        ageWeight += 1;
+        sedWeight += 1;
+      });
 
-        const ageSmooth = ageTotal / ageWeight;
-        const thickSmooth = thickTotal / ageWeight;
-        const sedSmooth = sedTotal / sedWeight;
-        const mix = Math.min(0.18, risk * inactive * Math.min(1, dt / 2) * 0.13);
-        crustAge[id] = Math.max(0, Math.min(1, scratch[id] * (1 - mix) + ageSmooth * mix));
-        crustThickness[id] = Math.max(0.12, Math.min(0.42, scratch2[id] * (1 - mix * 0.6) + thickSmooth * mix * 0.6));
-        sediment[id] = Math.max(0, Math.min(1, scratch3[id] * (1 - mix * 0.35) + sedSmooth * mix * 0.35));
-      }
-    }
+      const ageSmooth = ageTotal / ageWeight;
+      const thickSmooth = thickTotal / ageWeight;
+      const sedSmooth = sedTotal / sedWeight;
+      const mix = Math.min(0.18, risk * inactive * Math.min(1, dt / 2) * 0.13);
+      crustAge[id] = Math.max(0, Math.min(1, scratch[id] * (1 - mix) + ageSmooth * mix));
+      crustThickness[id] = Math.max(0.12, Math.min(0.42, scratch2[id] * (1 - mix * 0.6) + thickSmooth * mix * 0.6));
+      sediment[id] = Math.max(0, Math.min(1, scratch3[id] * (1 - mix * 0.35) + sedSmooth * mix * 0.35));
+    });
   }
 
   function sameAgeBandAt(grid, x, y, band) {
-    if (y < 0 || y >= grid.height) return 0;
-    const nx = ((x % grid.width) + grid.width) % grid.width;
-    const id = y * grid.width + nx;
+    const id = indexOf(grid, x, y);
+    if (id < 0) return 0;
     return grid.crustType[id] === CrustType.OCEANIC && Math.floor(grid.crustAge[id] * 10) === band ? 1 : 0;
   }
 
