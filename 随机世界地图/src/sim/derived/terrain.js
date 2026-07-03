@@ -3,6 +3,7 @@ import { getReliefDiagnostics } from "../geology/reliefBudget.js";
 import { deriveOceanConnectivity } from "../geology/rift.js";
 import { getGeologicSeaLevelDiagnostics } from "../geology/seaLevel.js";
 import { getSedimentBudgetDiagnostics } from "../geology/sediment.js";
+import { getIsostasyDiagnostics } from "../geology/isostasy.js";
 
 export function getTerrainDerived(world) {
   const base = buildTerrainBase(world);
@@ -32,10 +33,16 @@ export function getTerrainDerived(world) {
     sedimentCapacity: base.sedimentCapacity,
     sedimentCompaction: base.sedimentCompaction,
     sedimentLoadSubsidence: base.sedimentLoadSubsidence,
+    isostaticBase: base.isostaticBase,
+    crustBuoyancy: base.crustBuoyancy,
+    densitySubsidence: base.densitySubsidence,
+    lithosphereCooling: base.lithosphereCooling,
+    isostaticResidual: base.isostaticResidual,
     sedimentBudgetError: base.sedimentBudgetError,
     depositionRate: base.depositionRate,
     erosionRate: base.erosionRate,
     sedimentBudgetDiagnostics: base.sedimentBudgetDiagnostics,
+    isostasyDiagnostics: base.isostasyDiagnostics,
     forelandBasin: base.forelandBasin,
     orogenicSedimentSupply: base.orogenicSedimentSupply,
     activeTransform: base.activeTransform,
@@ -232,7 +239,7 @@ export function getBiosphereInputs(world) {
 export function getResourceInputs(world) {
   const base = buildTerrainBase(world);
   const { grid } = world;
-  const { size, crustType, crustAge, crustThickness, orogeny, activeOrogeny, oldOrogeny, forelandBasin, islandArc, riftStage, sediment, sedimentSink, basin, ridge, weakness, boundaryInfluence } = grid;
+  const { size, crustType, crustAge, crustThickness, crustBuoyancy, isostaticResidual, orogeny, activeOrogeny, oldOrogeny, forelandBasin, islandArc, riftStage, sediment, sedimentSink, basin, ridge, weakness, boundaryInfluence } = grid;
   const volcanicArc = new Float32Array(size);
   const passiveMargin = new Float32Array(grid.passiveMargin);
   const sedimentaryBasin = new Float32Array(size);
@@ -256,6 +263,8 @@ export function getResourceInputs(world) {
     crustType,
     crustAge,
     crustThickness,
+    crustBuoyancy: new Float32Array(crustBuoyancy),
+    isostaticResidual: new Float32Array(isostaticResidual),
     orogeny,
     orogenicBelt: maxFields(activeOrogeny, oldOrogeny, orogeny),
     tectonicAxis: new Float32Array(grid.tectonicAxis),
@@ -321,10 +330,16 @@ function buildTerrainBase(world) {
   const sedimentCapacity = new Float32Array(grid.sedimentCapacity);
   const sedimentCompaction = new Float32Array(grid.sedimentCompaction);
   const sedimentLoadSubsidence = new Float32Array(grid.sedimentLoadSubsidence);
+  const isostaticBase = new Float32Array(grid.isostaticBase);
+  const crustBuoyancy = new Float32Array(grid.crustBuoyancy);
+  const densitySubsidence = new Float32Array(grid.densitySubsidence);
+  const lithosphereCooling = new Float32Array(grid.lithosphereCooling);
+  const isostaticResidual = new Float32Array(grid.isostaticResidual);
   const sedimentBudgetError = new Float32Array(grid.sedimentBudgetError);
   const depositionRate = new Float32Array(grid.depositionRate);
   const erosionRate = new Float32Array(grid.erosionRate);
   const sedimentBudgetDiagnostics = getSedimentBudgetDiagnostics(world);
+  const isostasyDiagnostics = getIsostasyDiagnostics(world);
   const activeTransform = new Float32Array(grid.activeTransform);
   const transformMemory = new Float32Array(grid.transformMemory);
   const fractureZoneMemory = new Float32Array(grid.fractureZoneMemory);
@@ -378,10 +393,16 @@ function buildTerrainBase(world) {
     sedimentCapacity,
     sedimentCompaction,
     sedimentLoadSubsidence,
+    isostaticBase,
+    crustBuoyancy,
+    densitySubsidence,
+    lithosphereCooling,
+    isostaticResidual,
     sedimentBudgetError,
     depositionRate,
     erosionRate,
     sedimentBudgetDiagnostics,
+    isostasyDiagnostics,
     forelandBasin,
     orogenicSedimentSupply,
     activeTransform,

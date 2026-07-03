@@ -6,6 +6,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const files = [
   "src/sim/prng.js",
   "src/sim/scale.js",
+  "src/sim/topology.js",
   "src/sim/grid.js",
   "src/sim/noise.js",
   "src/sim/terrain.js",

@@ -94,6 +94,231 @@
   }
 
 
+  // ---- src/sim/topology.js ----
+  function createTopology(width, height, options = {}) {
+    const kind = options.kind ?? "cylindrical";
+    const wrapXEnabled = options.wrapX ?? true;
+    const wrapYEnabled = options.wrapY ?? false;
+    const polarMode = options.polarMode ?? "cap";
+    const size = width * height;
+
+    function wrapX(x) {
+      if (!wrapXEnabled) return x;
+      return ((x % width) + width) % width;
+    }
+
+    function wrapY(y) {
+      if (!wrapYEnabled) return y;
+      return ((y % height) + height) % height;
+    }
+
+    function inBoundsY(y) {
+      return wrapYEnabled || (y >= 0 && y < height);
+    }
+
+    function inBoundsX(x) {
+      return wrapXEnabled || (x >= 0 && x < width);
+    }
+
+    function index(x, y) {
+      const yy = wrapY(y);
+      if (!inBoundsX(x) || !inBoundsY(yy)) return -1;
+      return yy * width + wrapX(x);
+    }
+
+    function xy(i) {
+      return { x: i % width, y: Math.floor(i / width) };
+    }
+
+    function neighbors4(i) {
+      const { x, y } = xy(i);
+      const out = [];
+      let id = index(x - 1, y);
+      if (id >= 0) out.push(id);
+      id = index(x + 1, y);
+      if (id >= 0) out.push(id);
+      id = index(x, y - 1);
+      if (id >= 0) out.push(id);
+      id = index(x, y + 1);
+      if (id >= 0) out.push(id);
+      return out;
+    }
+
+    function neighbors8(i) {
+      const { x, y } = xy(i);
+      const out = [];
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const ny = y + dy;
+        if (!inBoundsY(ny)) continue;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const id = index(x + dx, ny);
+          if (id >= 0) out.push(id);
+        }
+      }
+      return out;
+    }
+
+    function neighborsRadius(i, radius) {
+      const { x, y } = xy(i);
+      const out = [];
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        const ny = y + dy;
+        if (!inBoundsY(ny)) continue;
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          if (Math.hypot(dx, dy) > radius + 0.01) continue;
+          const id = index(x + dx, ny);
+          if (id >= 0) out.push(id);
+        }
+      }
+      return out;
+    }
+
+    function distanceXY(ax, ay, bx, by) {
+      let dx = Math.abs(ax - bx);
+      if (wrapXEnabled) dx = Math.min(dx, width - dx);
+      let dy = Math.abs(ay - by);
+      if (wrapYEnabled) dy = Math.min(dy, height - dy);
+      return Math.hypot(dx, dy);
+    }
+
+    function distance(a, b) {
+      const aa = xy(a);
+      const bb = xy(b);
+      return distanceXY(aa.x, aa.y, bb.x, bb.y);
+    }
+
+    function floodFill(seedIndices, passableFn) {
+      const visited = new Uint8Array(size);
+      const queue = new Int32Array(size);
+      let head = 0;
+      let tail = 0;
+      for (const seed of seedIndices) {
+        if (seed < 0 || seed >= size || visited[seed] || !passableFn(seed)) continue;
+        visited[seed] = 1;
+        queue[tail++] = seed;
+      }
+      while (head < tail) {
+        const id = queue[head++];
+        for (const nid of neighbors4(id)) {
+          if (visited[nid] || !passableFn(nid)) continue;
+          visited[nid] = 1;
+          queue[tail++] = nid;
+        }
+      }
+      return visited;
+    }
+
+    function connectedComponents(mask) {
+      const componentId = new Int32Array(size);
+      const queue = new Int32Array(size);
+      const componentSizes = [];
+      let nextId = 1;
+
+      for (let start = 0; start < size; start += 1) {
+        if (!mask[start] || componentId[start]) continue;
+        let head = 0;
+        let tail = 0;
+        componentId[start] = nextId;
+        queue[tail++] = start;
+        while (head < tail) {
+          const id = queue[head++];
+          for (const nid of neighbors4(id)) {
+            if (!mask[nid] || componentId[nid]) continue;
+            componentId[nid] = nextId;
+            queue[tail++] = nid;
+          }
+        }
+        componentSizes[nextId] = tail;
+        nextId += 1;
+      }
+
+      return {
+        componentId,
+        componentSizes,
+        componentCount: nextId - 1,
+      };
+    }
+
+    function forEachCell(fn) {
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          fn(y * width + x, x, y);
+        }
+      }
+    }
+
+    function sampleWrapped(x, y, field) {
+      const id = index(x, y);
+      return id >= 0 ? field[id] : undefined;
+    }
+
+    return {
+      kind,
+      width,
+      height,
+      size,
+      wrapXEnabled,
+      wrapYEnabled,
+      polarMode,
+      wrapX,
+      wrapY,
+      inBoundsX,
+      inBoundsY,
+      index,
+      xy,
+      neighbors4,
+      neighbors8,
+      neighborsRadius,
+      distance,
+      distanceXY,
+      floodFill,
+      connectedComponents,
+      forEachCell,
+      sampleWrapped,
+    };
+  }
+
+  function topologyForGrid(grid) {
+    if (!grid.topology) {
+      grid.topology = createTopology(grid.width, grid.height, grid.topologyOptions);
+    }
+    return grid.topology;
+  }
+
+  function measureTopologyDiagnostics(world) {
+    const grid = world.grid;
+    const topology = topologyForGrid(grid);
+    const first = topology.index(0, 0);
+    const westWrap = topology.index(-1, 0) === topology.index(grid.width - 1, 0);
+    const eastWrap = topology.index(grid.width, 0) === first;
+    const northBlocked = topology.index(0, -1) < 0;
+    const southBlocked = topology.index(0, grid.height) < 0;
+    const n4 = topology.neighbors4(first);
+    const edge = topology.index(0, grid.height - 1);
+    const edgeN4 = topology.neighbors4(edge);
+    const allMask = new Uint8Array(grid.size);
+    allMask.fill(1);
+    const components = topology.connectedComponents(allMask);
+    const flood = topology.floodFill([first], () => true);
+    let floodCount = 0;
+    for (let i = 0; i < flood.length; i += 1) floodCount += flood[i];
+    const polarAccessRisk = topology.wrapYEnabled ? 1 : 0;
+
+    return {
+      topologyKind: topology.kind,
+      wrapXEnabled: topology.wrapXEnabled,
+      wrapYEnabled: topology.wrapYEnabled,
+      neighborConsistencyValid: westWrap && eastWrap && northBlocked && southBlocked && n4.length === 3 && edgeN4.length === 3,
+      floodFillTopologyValid: floodCount === grid.size,
+      connectedComponentCount: components.componentCount,
+      polarAccessRisk,
+      topologyResolutionDrift: 0,
+    };
+  }
+
+
   // ---- src/sim/grid.js ----
 
   function createGrid(width, height) {
@@ -102,6 +327,8 @@
       width,
       height,
       size,
+      topology: createTopology(width, height),
+      topologyOptions: { kind: "cylindrical", wrapX: true, wrapY: false },
       elev: new Float32Array(size),
       baseElev: new Float32Array(size),
       relief: new Float32Array(size),
@@ -115,6 +342,11 @@
       crustThickness: new Float32Array(size),
       crustAge: new Float32Array(size),
       ridgeDistance: new Float32Array(size),
+      isostaticBase: new Float32Array(size),
+      crustBuoyancy: new Float32Array(size),
+      densitySubsidence: new Float32Array(size),
+      lithosphereCooling: new Float32Array(size),
+      isostaticResidual: new Float32Array(size),
       ageSubsidence: new Float32Array(size),
       thicknessBuoyancy: new Float32Array(size),
       sedimentFill: new Float32Array(size),
@@ -228,15 +460,21 @@
   }
 
   function indexOf(grid, x, y) {
-    return y * grid.width + wrapX(grid.width, x);
+    return topologyForGrid(grid).index(x, y);
   }
 
   function forEachNeighbor4(grid, x, y, visit) {
-    const { width, height } = grid;
-    visit(wrapX(width, x - 1), y, -1, 0);
-    visit(wrapX(width, x + 1), y, 1, 0);
-    if (y > 0) visit(x, y - 1, 0, -1);
-    if (y < height - 1) visit(x, y + 1, 0, 1);
+    const topology = topologyForGrid(grid);
+    const id = topology.index(x, y);
+    if (id < 0) return;
+    for (const nid of topology.neighbors4(id)) {
+      const nx = nid % grid.width;
+      const ny = Math.floor(nid / grid.width);
+      let dx = nx - x;
+      if (dx > 1) dx = -1;
+      if (dx < -1) dx = 1;
+      visit(nx, ny, dx, ny - y);
+    }
   }
 
 
@@ -380,6 +618,11 @@
     grid.oldBoundaryCorrelation.fill(0);
     grid.ageBandStraightnessRisk.fill(0);
     grid.ridgeDistance.fill(0);
+    grid.isostaticBase.fill(0);
+    grid.crustBuoyancy.fill(0);
+    grid.densitySubsidence.fill(0);
+    grid.lithosphereCooling.fill(0);
+    grid.isostaticResidual.fill(0);
     grid.ageSubsidence.fill(0);
     grid.thicknessBuoyancy.fill(0);
     grid.sedimentFill.fill(0);
@@ -2693,76 +2936,41 @@
   }
 
   function fillExternalSea(grid, seaMask, externalSeaMask) {
-    const { width, size } = grid;
+    const { size } = grid;
+    const topology = topologyForGrid(grid);
     externalSeaMask.fill(0);
-    const visited = new Uint8Array(size);
-    const queue = new Int32Array(size);
+    const components = topology.connectedComponents(seaMask);
     let largestStart = -1;
     let largestSize = 0;
 
-    for (let start = 0; start < size; start += 1) {
-      if (!seaMask[start] || visited[start]) continue;
-      let head = 0;
-      let tail = 0;
-      visited[start] = 1;
-      queue[tail++] = start;
-      while (head < tail) {
-        const id = queue[head++];
-        const x = id % width;
-        const y = Math.floor(id / width);
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          const nid = ny * width + nx;
-          if (!seaMask[nid] || visited[nid]) return;
-          visited[nid] = 1;
-          queue[tail++] = nid;
-        });
-      }
-      if (tail > largestSize) {
-        largestSize = tail;
-        largestStart = start;
+    for (let id = 1; id < components.componentSizes.length; id += 1) {
+      const componentSize = components.componentSizes[id] ?? 0;
+      if (componentSize > largestSize) {
+        largestSize = componentSize;
+        largestStart = id;
       }
     }
 
     if (largestStart < 0) return;
-    let head = 0;
-    let tail = 0;
-    externalSeaMask[largestStart] = 1;
-    queue[tail++] = largestStart;
-    while (head < tail) {
-      const id = queue[head++];
-      const x = id % width;
-      const y = Math.floor(id / width);
-      forEachNeighbor4(grid, x, y, (nx, ny) => {
-        const nid = ny * width + nx;
-        if (!seaMask[nid] || externalSeaMask[nid]) return;
-        externalSeaMask[nid] = 1;
-        queue[tail++] = nid;
-      });
+    for (let i = 0; i < size; i += 1) {
+      if (components.componentId[i] === largestStart) externalSeaMask[i] = 1;
     }
   }
 
   function labelClosedBasins(grid, seaMask, externalSeaMask, closedBasinId) {
-    const { width, size } = grid;
+    const { size } = grid;
+    const topology = topologyForGrid(grid);
     closedBasinId.fill(0);
-    const queue = new Int32Array(size);
+    const closedMask = new Uint8Array(size);
+    for (let i = 0; i < size; i += 1) {
+      if (seaMask[i] && !externalSeaMask[i]) closedMask[i] = 1;
+    }
+    const components = topology.connectedComponents(closedMask);
     let nextId = 1;
 
-    for (let start = 0; start < size; start += 1) {
-      if (!seaMask[start] || externalSeaMask[start] || closedBasinId[start]) continue;
-      let head = 0;
-      let tail = 0;
-      closedBasinId[start] = nextId;
-      queue[tail++] = start;
-      while (head < tail) {
-        const id = queue[head++];
-        const x = id % width;
-        const y = Math.floor(id / width);
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          const nid = ny * width + nx;
-          if (!seaMask[nid] || externalSeaMask[nid] || closedBasinId[nid]) return;
-          closedBasinId[nid] = nextId;
-          queue[tail++] = nid;
-        });
+    for (let componentId = 1; componentId <= components.componentCount; componentId += 1) {
+      for (let i = 0; i < size; i += 1) {
+        if (components.componentId[i] === componentId) closedBasinId[i] = nextId;
       }
       nextId += 1;
     }
@@ -3218,25 +3426,22 @@
 
   function rebuildGeologyElevationV2(world) {
     const { grid, textureNoise } = world;
+    updateIsostasy(world);
     const {
       width,
       height,
       size,
       crustType,
-      crustThickness,
-      crustAge,
       orogeny,
       activeOrogeny,
       oldOrogeny,
       orogenyAge,
       sediment,
       sedimentLoadSubsidence,
-      ageSubsidence,
-      thicknessBuoyancy,
       sedimentFill,
       ridgeUplift,
       trenchDepression,
-      oceanDepthTerms,
+      isostaticBase,
       passiveMargin,
       continentalShelf,
       continentalSlope,
@@ -3271,39 +3476,13 @@
       const transitional = crustType[i] === CrustType.TRANSITIONAL;
       isContinental[i] = continental ? 1 : 0;
 
-      let crustBase;
-      if (continental) {
-        ageSubsidence[i] = 0;
-        thicknessBuoyancy[i] = (crustThickness[i] - 0.52) * 0.19;
-        sedimentFill[i] = saturatingFill(sediment[i], 0.028, 1.6);
-        ridgeUplift[i] = 0;
-        trenchDepression[i] = 0;
-        oceanDepthTerms[i] = 0;
-        crustBase = 0.083 + (crustThickness[i] - 0.52) * 0.19;
-      } else if (transitional) {
-        ageSubsidence[i] = -Math.pow(Math.max(0, Math.min(1, crustAge[i])), 0.65) * 0.018;
-        thicknessBuoyancy[i] = (crustThickness[i] - 0.38) * 0.22;
-        sedimentFill[i] = saturatingFill(sediment[i], 0.085, 2.0);
-        ridgeUplift[i] = ridge[i] * 0.018;
-        trenchDepression[i] = -trench[i] * 0.026;
-        oceanDepthTerms[i] = ageSubsidence[i] + thicknessBuoyancy[i] + sedimentFill[i] + ridgeUplift[i] + trenchDepression[i];
-        crustBase = 0.046 + thicknessBuoyancy[i] + ageSubsidence[i] * 0.35;
-      } else {
-        const normalizedAge = Math.max(0, Math.min(1, crustAge[i]));
-        ageSubsidence[i] = -Math.pow(normalizedAge, 0.58) * 0.112;
-        thicknessBuoyancy[i] = (crustThickness[i] - 0.22) * 0.105;
-        sedimentFill[i] = saturatingFill(sediment[i], 0.065, 1.8);
-        ridgeUplift[i] = ridge[i] * 0.06;
-        trenchDepression[i] = -trench[i] * (0.075 + normalizedAge * 0.035);
-        oceanDepthTerms[i] = ageSubsidence[i] + thicknessBuoyancy[i] + sedimentFill[i] + ridgeUplift[i] + trenchDepression[i];
-        crustBase = -0.03 + ageSubsidence[i] + thicknessBuoyancy[i];
-      }
+      const crustBase = isostaticBase[i];
       const ageReduction = 0.35 + Math.max(0, Math.min(1, orogenyAge?.[i] ?? 0)) * 0.55;
       const oldOrogenRelief = (oldOrogeny?.[i] ?? 0) * (continental ? 0.075 : transitional ? 0.035 : 0.004) * (1 - ageReduction * 0.62);
       const rootRelief = orogeny[i] * (continental ? 0.105 : transitional ? 0.032 : 0.004);
       const forelandSubsidence = (forelandBasin?.[i] ?? 0) * (continental ? 0.026 : transitional ? 0.018 : 0.002);
-      const loadSubsidence = (sedimentLoadSubsidence?.[i] ?? 0) * (continental ? 0.22 : transitional ? 0.42 : 0.36);
-      const longTerm = rootRelief + oldOrogenRelief + sedimentFill[i] - basin[i] * (transitional ? 0.002 : 0.018) - forelandSubsidence - loadSubsidence;
+      const loadSubsidence = (sedimentLoadSubsidence?.[i] ?? 0) * (continental ? 0.06 : transitional ? 0.08 : 0.07);
+      const longTerm = rootRelief + oldOrogenRelief + sedimentFill[i] * 0.36 - basin[i] * (transitional ? 0.002 : 0.018) - forelandSubsidence - loadSubsidence;
       const activeFeature =
         mountainBelt[i] * 0.15 +
         (activeOrogeny?.[i] ?? 0) * (continental ? 0.055 : transitional ? 0.024 : 0.006) -
@@ -3336,10 +3515,7 @@
       boundaryRelief[i] = activeFeature + marginElevation + transformActiveRelief - inactiveTransformPenalty;
       elev[i] = baseElev[i] + relief[i] + boundaryRelief[i];
     }
-  }
-
-  function saturatingFill(sediment, fillMax, fillScale) {
-    return fillMax * (1 - Math.exp(-Math.max(0, sediment) * fillScale));
+    refreshIsostaticResidual(world);
   }
 
 
@@ -3390,10 +3566,13 @@
           grid.rift[i] * 0.25 +
           grid.trench[i] * 0.25 +
           grid.islandArc[i] * 0.35;
-        const isostatic =
-          Math.abs(grid.thicknessBuoyancy[i]) +
-          Math.abs(grid.ageSubsidence[i]) +
-          Math.abs(grid.oceanDepthTerms[i]);
+        const currentIsostatic = grid.isostaticReliefSupply?.[i] ?? 0;
+        const isostatic = currentIsostatic > 0
+          ? currentIsostatic
+          : Math.abs(grid.crustBuoyancy?.[i] ?? grid.thicknessBuoyancy[i]) +
+            Math.abs(grid.densitySubsidence?.[i] ?? 0) +
+            Math.abs(grid.lithosphereCooling?.[i] ?? -grid.ageSubsidence[i]) +
+            Math.abs(grid.oceanDepthTerms[i]) * 0.35;
         const smoothing =
           grid.abyssalPlain[i] * 0.35 +
           grid.sedimentWedge[i] * 0.2 +
@@ -4742,10 +4921,16 @@
       sedimentCapacity: base.sedimentCapacity,
       sedimentCompaction: base.sedimentCompaction,
       sedimentLoadSubsidence: base.sedimentLoadSubsidence,
+      isostaticBase: base.isostaticBase,
+      crustBuoyancy: base.crustBuoyancy,
+      densitySubsidence: base.densitySubsidence,
+      lithosphereCooling: base.lithosphereCooling,
+      isostaticResidual: base.isostaticResidual,
       sedimentBudgetError: base.sedimentBudgetError,
       depositionRate: base.depositionRate,
       erosionRate: base.erosionRate,
       sedimentBudgetDiagnostics: base.sedimentBudgetDiagnostics,
+      isostasyDiagnostics: base.isostasyDiagnostics,
       forelandBasin: base.forelandBasin,
       orogenicSedimentSupply: base.orogenicSedimentSupply,
       activeTransform: base.activeTransform,
@@ -4942,7 +5127,7 @@
   function getResourceInputs(world) {
     const base = buildTerrainBase(world);
     const { grid } = world;
-    const { size, crustType, crustAge, crustThickness, orogeny, activeOrogeny, oldOrogeny, forelandBasin, islandArc, riftStage, sediment, sedimentSink, basin, ridge, weakness, boundaryInfluence } = grid;
+    const { size, crustType, crustAge, crustThickness, crustBuoyancy, isostaticResidual, orogeny, activeOrogeny, oldOrogeny, forelandBasin, islandArc, riftStage, sediment, sedimentSink, basin, ridge, weakness, boundaryInfluence } = grid;
     const volcanicArc = new Float32Array(size);
     const passiveMargin = new Float32Array(grid.passiveMargin);
     const sedimentaryBasin = new Float32Array(size);
@@ -4966,6 +5151,8 @@
       crustType,
       crustAge,
       crustThickness,
+      crustBuoyancy: new Float32Array(crustBuoyancy),
+      isostaticResidual: new Float32Array(isostaticResidual),
       orogeny,
       orogenicBelt: maxFields(activeOrogeny, oldOrogeny, orogeny),
       tectonicAxis: new Float32Array(grid.tectonicAxis),
@@ -5031,10 +5218,16 @@
     const sedimentCapacity = new Float32Array(grid.sedimentCapacity);
     const sedimentCompaction = new Float32Array(grid.sedimentCompaction);
     const sedimentLoadSubsidence = new Float32Array(grid.sedimentLoadSubsidence);
+    const isostaticBase = new Float32Array(grid.isostaticBase);
+    const crustBuoyancy = new Float32Array(grid.crustBuoyancy);
+    const densitySubsidence = new Float32Array(grid.densitySubsidence);
+    const lithosphereCooling = new Float32Array(grid.lithosphereCooling);
+    const isostaticResidual = new Float32Array(grid.isostaticResidual);
     const sedimentBudgetError = new Float32Array(grid.sedimentBudgetError);
     const depositionRate = new Float32Array(grid.depositionRate);
     const erosionRate = new Float32Array(grid.erosionRate);
     const sedimentBudgetDiagnostics = getSedimentBudgetDiagnostics(world);
+    const isostasyDiagnostics = getIsostasyDiagnostics(world);
     const activeTransform = new Float32Array(grid.activeTransform);
     const transformMemory = new Float32Array(grid.transformMemory);
     const fractureZoneMemory = new Float32Array(grid.fractureZoneMemory);
@@ -5088,10 +5281,16 @@
       sedimentCapacity,
       sedimentCompaction,
       sedimentLoadSubsidence,
+      isostaticBase,
+      crustBuoyancy,
+      densitySubsidence,
+      lithosphereCooling,
+      isostaticResidual,
       sedimentBudgetError,
       depositionRate,
       erosionRate,
       sedimentBudgetDiagnostics,
+      isostasyDiagnostics,
       forelandBasin,
       orogenicSedimentSupply,
       activeTransform,

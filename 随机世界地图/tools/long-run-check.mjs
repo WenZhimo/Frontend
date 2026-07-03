@@ -1,8 +1,10 @@
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
+import { measureIsostasyDiagnostics } from "../src/sim/geology/isostasy.js";
+import { measureTopologyDiagnostics } from "../src/sim/topology.js";
 
 const params = {
-  seedText: process.argv[2] ?? "龙骨海-纪元7",
+  seedText: process.argv[2] ?? "榫欓娴?绾厓7",
   waterLevel: 50,
   intensity: 1,
   plateCount: 14,
@@ -60,6 +62,8 @@ console.log(JSON.stringify({
     orogenyDiagnostics: measureOrogenyDiagnostics(world),
     axisDiagnostics: measureAxisDiagnostics(world),
     geologicSeaLevelDiagnostics: measureGeologicSeaLevelDiagnostics(world),
+    topologyDiagnostics: measureTopologyDiagnostics(world),
+    isostasyDiagnostics: measureIsostasyDiagnostics(world),
     reliefDiagnostics: measureReliefDiagnostics(world),
     boundaryDiagnostics: measureBoundaryDiagnostics(world.grid),
     geologyRisks: measureGeologyRisks(world),
@@ -123,6 +127,11 @@ function measureCrustStats(grid) {
     sedimentCapacity: measureFieldStats(grid.sedimentCapacity, grid.size),
     sedimentCompaction: measureFieldStats(grid.sedimentCompaction, grid.size),
     sedimentLoadSubsidence: measureFieldStats(grid.sedimentLoadSubsidence, grid.size),
+    isostaticBase: measureFieldStats(grid.isostaticBase, grid.size),
+    crustBuoyancy: measureFieldStats(grid.crustBuoyancy, grid.size),
+    densitySubsidence: measureFieldStats(grid.densitySubsidence, grid.size),
+    lithosphereCooling: measureFieldStats(grid.lithosphereCooling, grid.size),
+    isostaticResidual: measureFieldStats(grid.isostaticResidual, grid.size),
     basin: measureFieldStats(grid.basin, grid.size),
   };
   for (let i = 0; i < grid.size; i += 1) {

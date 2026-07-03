@@ -1,4 +1,4 @@
-import { forEachNeighbor4, wrapX } from "../grid.js";
+import { topologyForGrid } from "../topology.js";
 import { BoundaryType } from "../tectonics.js";
 import { CrustType } from "./crust.js";
 
@@ -123,76 +123,41 @@ export function deriveOceanConnectivity(world) {
 }
 
 function fillExternalSea(grid, seaMask, externalSeaMask) {
-  const { width, size } = grid;
+  const { size } = grid;
+  const topology = topologyForGrid(grid);
   externalSeaMask.fill(0);
-  const visited = new Uint8Array(size);
-  const queue = new Int32Array(size);
+  const components = topology.connectedComponents(seaMask);
   let largestStart = -1;
   let largestSize = 0;
 
-  for (let start = 0; start < size; start += 1) {
-    if (!seaMask[start] || visited[start]) continue;
-    let head = 0;
-    let tail = 0;
-    visited[start] = 1;
-    queue[tail++] = start;
-    while (head < tail) {
-      const id = queue[head++];
-      const x = id % width;
-      const y = Math.floor(id / width);
-      forEachNeighbor4(grid, x, y, (nx, ny) => {
-        const nid = ny * width + nx;
-        if (!seaMask[nid] || visited[nid]) return;
-        visited[nid] = 1;
-        queue[tail++] = nid;
-      });
-    }
-    if (tail > largestSize) {
-      largestSize = tail;
-      largestStart = start;
+  for (let id = 1; id < components.componentSizes.length; id += 1) {
+    const componentSize = components.componentSizes[id] ?? 0;
+    if (componentSize > largestSize) {
+      largestSize = componentSize;
+      largestStart = id;
     }
   }
 
   if (largestStart < 0) return;
-  let head = 0;
-  let tail = 0;
-  externalSeaMask[largestStart] = 1;
-  queue[tail++] = largestStart;
-  while (head < tail) {
-    const id = queue[head++];
-    const x = id % width;
-    const y = Math.floor(id / width);
-    forEachNeighbor4(grid, x, y, (nx, ny) => {
-      const nid = ny * width + nx;
-      if (!seaMask[nid] || externalSeaMask[nid]) return;
-      externalSeaMask[nid] = 1;
-      queue[tail++] = nid;
-    });
+  for (let i = 0; i < size; i += 1) {
+    if (components.componentId[i] === largestStart) externalSeaMask[i] = 1;
   }
 }
 
 function labelClosedBasins(grid, seaMask, externalSeaMask, closedBasinId) {
-  const { width, size } = grid;
+  const { size } = grid;
+  const topology = topologyForGrid(grid);
   closedBasinId.fill(0);
-  const queue = new Int32Array(size);
+  const closedMask = new Uint8Array(size);
+  for (let i = 0; i < size; i += 1) {
+    if (seaMask[i] && !externalSeaMask[i]) closedMask[i] = 1;
+  }
+  const components = topology.connectedComponents(closedMask);
   let nextId = 1;
 
-  for (let start = 0; start < size; start += 1) {
-    if (!seaMask[start] || externalSeaMask[start] || closedBasinId[start]) continue;
-    let head = 0;
-    let tail = 0;
-    closedBasinId[start] = nextId;
-    queue[tail++] = start;
-    while (head < tail) {
-      const id = queue[head++];
-      const x = id % width;
-      const y = Math.floor(id / width);
-      forEachNeighbor4(grid, x, y, (nx, ny) => {
-        const nid = ny * width + nx;
-        if (!seaMask[nid] || externalSeaMask[nid] || closedBasinId[nid]) return;
-        closedBasinId[nid] = nextId;
-        queue[tail++] = nid;
-      });
+  for (let componentId = 1; componentId <= components.componentCount; componentId += 1) {
+    for (let i = 0; i < size; i += 1) {
+      if (components.componentId[i] === componentId) closedBasinId[i] = nextId;
     }
     nextId += 1;
   }

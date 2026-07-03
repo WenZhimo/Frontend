@@ -1,5 +1,6 @@
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
+import { measureTopologyDiagnostics } from "../src/sim/topology.js";
 import {
   getBiosphereInputs,
   getClimateInputs,
@@ -57,6 +58,11 @@ const requiredFields = {
     "sedimentCapacity",
     "sedimentCompaction",
     "sedimentLoadSubsidence",
+    "isostaticBase",
+    "crustBuoyancy",
+    "densitySubsidence",
+    "lithosphereCooling",
+    "isostaticResidual",
     "sedimentBudgetError",
     "depositionRate",
     "erosionRate",
@@ -150,6 +156,8 @@ const requiredFields = {
     "crustType",
     "crustAge",
     "crustThickness",
+    "crustBuoyancy",
+    "isostaticResidual",
     "orogeny",
     "orogenicBelt",
     "activeOrogeny",
@@ -194,6 +202,8 @@ const climate = outputs.climate;
 const biosphere = outputs.biosphere;
 const ageBandSplit = measureAgeBandStraightnessSplit(world.grid);
 const sedimentBudget = terrain.sedimentBudgetDiagnostics ?? {};
+const isostasy = terrain.isostasyDiagnostics ?? measureIsostasyDiagnostics(world);
+const topology = measureTopologyDiagnostics(world);
 
 const stats = {
   landRatio: share(terrain.landMask),
@@ -244,6 +254,27 @@ const stats = {
   sedimentSeaFillRisk: sedimentBudget.sedimentSeaFillRisk ?? 0,
   sedimentShelfConcentration: sedimentBudget.sedimentShelfConcentration ?? 0,
   sedimentAbyssalConcentration: sedimentBudget.sedimentAbyssalConcentration ?? 0,
+  topologyKind: topology.topologyKind,
+  wrapXEnabled: topology.wrapXEnabled,
+  wrapYEnabled: topology.wrapYEnabled,
+  neighborConsistencyValid: topology.neighborConsistencyValid,
+  floodFillTopologyValid: topology.floodFillTopologyValid,
+  connectedComponentCount: topology.connectedComponentCount,
+  polarAccessRisk: topology.polarAccessRisk,
+  topologyResolutionDrift: topology.topologyResolutionDrift,
+  isostaticContinentalMean: isostasy.isostaticContinentalMean,
+  isostaticOceanicMean: isostasy.isostaticOceanicMean,
+  isostaticTransitionalMean: isostasy.isostaticTransitionalMean,
+  continentalOceanReliefGap: isostasy.continentalOceanReliefGap,
+  youngOldOceanDepthGap: isostasy.youngOldOceanDepthGap,
+  isostaticResidualMean: isostasy.isostaticResidualMean,
+  isostaticResidualP95: isostasy.isostaticResidualP95,
+  isostasyElevationCorrelation: isostasy.isostasyElevationCorrelation,
+  crustThicknessElevationCorrelation: isostasy.crustThicknessElevationCorrelation,
+  crustAgeOceanDepthCorrelation: isostasy.crustAgeOceanDepthCorrelation,
+  transitionalElevationBand: isostasy.transitionalElevationBand,
+  seaLevelDriftAfterIsostasy: isostasy.seaLevelDriftAfterIsostasy,
+  landRatioDriftAfterIsostasy: isostasy.landRatioDriftAfterIsostasy,
   closedBasinMisclassifiedAsMarginShare: conditionalShare(terrain.inlandWaterCandidate, (i) => terrain.inlandWaterCandidate[i], (i) => terrain.passiveMargin[i] > 0.05),
   activeBoundaryMisclassifiedAsPassiveMarginShare: conditionalShare(terrain.passiveMargin, (i) => terrain.passiveMargin[i] > 0.05, (i) => world.grid.boundaryInfluence[i] > 0.35 || world.grid.ridge[i] > 0.2 || world.grid.trench[i] > 0.2),
   activeTransformCoverage: coverage(terrain.activeTransform, 0.05),
@@ -400,6 +431,69 @@ function geologicSeaLevelStats(world) {
     landShareBeforeGeologicOffset: diagnostics.landShareBeforeGeologicOffset ?? 0,
     landShareAfterGeologicOffset: diagnostics.landShareAfterGeologicOffset ?? shareWhere(world.grid.elev, (i) => world.grid.elev[i] >= world.seaLevel),
     geologicSeaLevelLandShareDelta: diagnostics.geologicSeaLevelLandShareDelta ?? 0,
+  };
+}
+
+function measureIsostasyDiagnostics(world) {
+  const { grid, seaLevel } = world;
+  const diagnostics = world.isostasyDiagnostics ?? {};
+  const continental = [];
+  const oceanic = [];
+  const transitional = [];
+  const residuals = [];
+  const isoVals = [];
+  const elevVals = [];
+  const thicknessVals = [];
+  const relVals = [];
+  const ageVals = [];
+  const depthVals = [];
+  const youngDepths = [];
+  const oldDepths = [];
+  let sedimentLoadSum = 0;
+
+  for (let i = 0; i < grid.size; i += 1) {
+    const rel = grid.elev[i] - seaLevel;
+    const baseRel = grid.isostaticBase[i] - seaLevel;
+    const residual = Math.abs(grid.isostaticResidual[i]);
+    residuals.push(residual);
+    isoVals.push(grid.isostaticBase[i]);
+    elevVals.push(grid.elev[i]);
+    thicknessVals.push(grid.crustThickness[i]);
+    relVals.push(rel);
+    sedimentLoadSum += grid.sedimentLoadSubsidence[i];
+    if (grid.crustType[i] === 1) {
+      continental.push(baseRel);
+    } else if (grid.crustType[i] === 2) {
+      transitional.push(baseRel);
+    } else {
+      const depth = Math.max(0, seaLevel - grid.elev[i]);
+      oceanic.push(baseRel);
+      ageVals.push(grid.crustAge[i]);
+      depthVals.push(depth);
+      if (grid.crustAge[i] < 0.18) youngDepths.push(depth);
+      if (grid.crustAge[i] > 0.72) oldDepths.push(depth);
+    }
+  }
+
+  residuals.sort((a, b) => a - b);
+  const continentalMean = diagnostics.isostaticContinentalMean ?? meanArray(continental);
+  const oceanicMean = diagnostics.isostaticOceanicMean ?? meanArray(oceanic);
+  const transitionalMean = diagnostics.isostaticTransitionalMean ?? meanArray(transitional);
+  return {
+    isostaticContinentalMean: continentalMean,
+    isostaticOceanicMean: oceanicMean,
+    isostaticTransitionalMean: transitionalMean,
+    continentalOceanReliefGap: diagnostics.continentalOceanReliefGap ?? continentalMean - oceanicMean,
+    youngOldOceanDepthGap: diagnostics.youngOldOceanDepthGap ?? meanArray(oldDepths) - meanArray(youngDepths),
+    sedimentLoadSubsidenceMean: diagnostics.sedimentLoadSubsidenceMean ?? sedimentLoadSum / Math.max(1, grid.size),
+    isostaticResidualMean: diagnostics.isostaticResidualMean ?? meanArray(residuals),
+    isostaticResidualP95: diagnostics.isostaticResidualP95 ?? percentileSorted(residuals, 0.95),
+    isostasyElevationCorrelation: diagnostics.isostasyElevationCorrelation ?? correlation(isoVals, elevVals),
+    crustThicknessElevationCorrelation: diagnostics.crustThicknessElevationCorrelation ?? correlation(thicknessVals, relVals),
+    crustAgeOceanDepthCorrelation: diagnostics.crustAgeOceanDepthCorrelation ?? correlation(ageVals, depthVals),
+    transitionalElevationBand: diagnostics.transitionalElevationBand ?? transitionalMean,
+    seaLevelDriftAfterIsostasy: diagnostics.seaLevelDriftAfterIsostasy ?? 0,
+    landRatioDriftAfterIsostasy: diagnostics.landRatioDriftAfterIsostasy ?? 0,
   };
 }
 

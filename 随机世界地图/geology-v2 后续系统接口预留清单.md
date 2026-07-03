@@ -828,3 +828,137 @@ node .\tools\geology-debug-render.mjs _debug_fast --from-snapshot <snapshot-file
 - 旧 `geology-debug-render.mjs seed steps outDir mode resolution` 参数顺序保持可用。
 - 旧 `interface-check / long-run-check / resolution-check` 不降低输出和检查可信度。
 - 快照只作为测试产物，不参与正式 world 初始化或演化。
+
+## 16. 等静力 / 地壳浮力接口补充
+
+本轮 geology-v2 已将轻量等静力基础层接入 terrain/resource/debug/diagnostics。所有 getter 仍保持只读，不推进模拟，不改变“海陆后置”原则。
+
+`getTerrainDerived(world)` 新增：
+
+```js
+isostaticBase
+crustBuoyancy
+densitySubsidence
+lithosphereCooling
+sedimentLoadSubsidence
+isostaticResidual
+isostasyDiagnostics
+```
+
+`getResourceInputs(world)` 新增：
+
+```js
+crustBuoyancy
+isostaticResidual
+```
+
+兼容别名：
+
+- `ageSubsidence = -lithosphereCooling`
+- `thicknessBuoyancy = crustBuoyancy`
+- `oceanDepthTerms` 仍作为洋底高程解释汇总项。
+
+新增诊断指标：
+
+```js
+isostaticContinentalMean
+isostaticOceanicMean
+isostaticTransitionalMean
+continentalOceanReliefGap
+youngOldOceanDepthGap
+sedimentLoadSubsidenceMean
+isostaticResidualMean
+isostaticResidualP95
+isostasyElevationCorrelation
+crustThicknessElevationCorrelation
+crustAgeOceanDepthCorrelation
+transitionalElevationBand
+seaLevelDriftAfterIsostasy
+landRatioDriftAfterIsostasy
+```
+
+新增 debug 图层：
+
+```text
+isostaticBase
+crustBuoyancy
+densitySubsidence
+lithosphereCooling
+sedimentLoadSubsidence
+isostaticResidual
+crustThickness
+crustDensity
+```
+
+后续水文 / 气候可读取 `relativeElevation / seaMask / externalSeaMask / continentalShelf` 等派生结果；不应直接依赖 `isostaticBase` 做水体完成态判定。资源系统可读取 `crustBuoyancy / isostaticResidual` 作为构造背景参考。
+
+## 17. 统一拓扑 API 接口预留
+
+新增模块：`src/sim/topology.js`。
+
+默认行为：
+
+```js
+{
+  kind: "cylindrical",
+  wrapX: true,
+  wrapY: false,
+  polarMode: "cap"
+}
+```
+
+公开 API：
+
+```js
+createTopology(width, height, options)
+topologyForGrid(grid)
+topology.index(x, y)
+topology.xy(i)
+topology.wrapX(x)
+topology.inBoundsY(y)
+topology.neighbors4(i)
+topology.neighbors8(i)
+topology.neighborsRadius(i, radius)
+topology.distance(a, b)
+topology.distanceXY(ax, ay, bx, by)
+topology.floodFill(seedIndices, passableFn)
+topology.connectedComponents(mask)
+topology.forEachCell(fn)
+topology.sampleWrapped(x, y, field)
+```
+
+已迁移：
+
+- `grid.indexOf / forEachNeighbor4`
+- `deriveOceanConnectivity` 的 external sea 与 closed basin connected components
+- `interface-check / long-run-check / resolution-check` 的 topology diagnostics
+
+新增诊断：
+
+```js
+topologyKind
+wrapXEnabled
+wrapYEnabled
+neighborConsistencyValid
+floodFillTopologyValid
+connectedComponentCount
+polarAccessRisk
+topologyResolutionDrift
+```
+
+spherical-ready 预留：
+
+```js
+{
+  kind: "spherical",
+  wrapX: true,
+  polarMode: "cap" | "pinch" | "reduced-neighbors"
+}
+```
+
+后续迁移优先级：
+
+1. 水文 `flow direction / catchment / basin fill`。
+2. 气候 `wind fetch / latitude band neighbor sampling`。
+3. 沉积和侵蚀中的八邻域搬运。
+4. debug / diagnostic 中的 coast distance、component labeling 和局部连通统计。
