@@ -4992,9 +4992,16 @@
 
   // ---- src/sim/derived/terrain.js ----
 
+  const TERRAIN_BASE_CACHE = Symbol("terrainBaseCache");
+  const TERRAIN_DERIVED_CACHE = Symbol("terrainDerivedCache");
+  const HYDROLOGY_CACHE = Symbol("hydrologyInputsCache");
+
   function getTerrainDerived(world) {
-    const base = buildTerrainBase(world);
-    return {
+    const cached = getStepCache(world, TERRAIN_DERIVED_CACHE);
+    if (cached) return cached.value;
+
+    const base = getTerrainBase(world);
+    const value = {
       relativeElevation: base.relativeElevation,
       landMask: base.landMask,
       seaMask: base.seaMask,
@@ -5055,10 +5062,12 @@
       sedimentDisplacementSignal: base.sedimentDisplacementSignal,
       trenchCapacitySignal: base.trenchCapacitySignal,
     };
+    setStepCache(world, TERRAIN_DERIVED_CACHE, value);
+    return value;
   }
 
   function getClimateInputs(world) {
-    const base = buildTerrainBase(world);
+    const base = getTerrainBase(world);
     const { grid } = world;
     const {
       size,
@@ -5114,13 +5123,20 @@
     };
   }
 
-  function getHydrologyInputs(world) {
-    const base = buildTerrainBase(world);
-    return deriveHydrology(world, base);
+  function getHydrologyInputs(world, options = {}) {
+    const diagnostics = options.diagnostics ?? "basic";
+    const level = diagnosticsLevel(diagnostics);
+    const cached = getStepCache(world, HYDROLOGY_CACHE);
+    if (cached && cached.level >= level && !options.profile) return cached.value;
+
+    const base = getTerrainBase(world);
+    const value = deriveHydrology(world, base, options);
+    if (!options.profile) setStepCache(world, HYDROLOGY_CACHE, value, { level });
+    return value;
   }
 
   function getBiosphereInputs(world) {
-    const base = buildTerrainBase(world);
+    const base = getTerrainBase(world);
     const { grid } = world;
     const { size, elev, crustType, sediment, boundaryInfluence, ridge, trench, rift, islandArc, mountainBelt, activeOrogeny, oldOrogeny, forelandBasin, orogenicSedimentSupply } = grid;
     const biomeBaseElevation = smoothElevation(grid, elev, physicalRadius(grid, 1));
@@ -5179,7 +5195,7 @@
   }
 
   function getResourceInputs(world) {
-    const base = buildTerrainBase(world);
+    const base = getTerrainBase(world);
     const { grid } = world;
     const { size, crustType, crustAge, crustThickness, crustBuoyancy, isostaticResidual, orogeny, activeOrogeny, oldOrogeny, forelandBasin, islandArc, riftStage, sediment, sedimentSink, basin, ridge, weakness, boundaryInfluence } = grid;
     const volcanicArc = new Float32Array(size);
@@ -5228,6 +5244,35 @@
       transformMemory: new Float32Array(grid.transformMemory),
       fractureZoneMemory: new Float32Array(grid.fractureZoneMemory),
     };
+  }
+
+  function getTerrainBase(world) {
+    const cached = getStepCache(world, TERRAIN_BASE_CACHE);
+    if (cached) return cached.value;
+    const value = buildTerrainBase(world);
+    setStepCache(world, TERRAIN_BASE_CACHE, value);
+    return value;
+  }
+
+  function getStepCache(world, key) {
+    const cached = world[key];
+    if (!cached || cached.step !== world.step || cached.ageYears !== world.ageYears) return null;
+    return cached;
+  }
+
+  function setStepCache(world, key, value, extra = {}) {
+    world[key] = {
+      step: world.step,
+      ageYears: world.ageYears,
+      value,
+      ...extra,
+    };
+  }
+
+  function diagnosticsLevel(diagnostics) {
+    if (diagnostics === "full") return 2;
+    if (diagnostics === "none") return 0;
+    return 1;
   }
 
   function buildTerrainBase(world) {

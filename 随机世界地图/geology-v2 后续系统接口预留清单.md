@@ -937,6 +937,27 @@ crustDensity
 
 后续水文 / 气候可读取 `relativeElevation / seaMask / externalSeaMask / continentalShelf` 等派生结果；不应直接依赖 `isostaticBase` 做水体完成态判定。资源系统可读取 `crustBuoyancy / isostaticResidual` 作为构造背景参考。
 
+## 23. Hydrology MVP 性能分档与验证策略
+
+Hydrology MVP 现在按只读派生层运行，不推进 geology-v2 状态。为避免验证脚本把所有水文检查塞进同一次慢路径，`getHydrologyInputs(world, options)` 支持：
+
+- `diagnostics: "none"`：只生成核心流向、汇流、流域和候选水体字段，适合只读 `flowAccumulation / riverMask` 的轻量调试。
+- `diagnostics: "basic"`：默认检查档，输出 `hydrologyValid / flowCycleCount / orphanFlowShare / depressionShare / endorheicLandShare / lakeCandidateShare / riverCellShare / externalSeaDrainageShare / closedBasinDrainageShare` 等单 pass 指标。
+- `diagnostics: "full"`：显式深度档，额外计算 `riverContinuityScore / coastalOutletShare / largestWatershedShare / flowAccumulationP95` 等较重或更细指标。
+- `profile: true`：返回 `hydrologyProfile.timingsMs`，用于定位 `hydroElevation / assignFlowTargets / accumulateFlow / assignDrainage / buildRivers / diagnostics*` 阶段耗时。
+
+同一 `world.step / world.ageYears` 内，`getTerrainDerived`、terrain base 与 `getHydrologyInputs` 会缓存派生结果；若先算 `full`，后续 `basic` 可复用；若先算 `basic` 后请求 `full`，会重新计算一次。缓存不跨 step 复用，避免演化后读取旧地形。
+
+工具默认策略：
+
+- `interface-check / long-run-check / resolution-check` 默认使用 `basic` hydrology；需要完整水文诊断时显式加 `--full-hydrology`。
+- `geology-debug-render` 只有在请求水文图层或未指定图层全量输出时才计算 hydrology；纯地质 debug 图层不再预先计算水文。
+- 新增 `tools/hydrology-profile.mjs` 用于单世界阶段耗时拆分。
+- 新增 `tools/hydrology-benchmark.mjs` 用于对比多分辨率、多步数和缓存复用成本。
+- 新增 `tools/hydrology-smoke-check.mjs` 用于快速确认字段完整性和 basic 诊断有效性。
+
+当前 profiling 结论：短步数下主要耗时来自 geology-v2 `stepWorld` 演化本身，而不是 hydrology 派生；因此 hydrology 性能验证应单独报告 `simulation` 与 `hydrologyTotal`，避免把长期模拟成本误归因到水文诊断。
+
 ## 17. 统一拓扑 API 接口预留
 
 新增模块：`src/sim/topology.js`。
