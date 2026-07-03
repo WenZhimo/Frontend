@@ -31,10 +31,16 @@ const legacyMigrationScopes = [
   "src/sim/scale.js",
 ];
 
+const topologyAwareLegacyFiles = new Set([
+  "src/sim/scale.js",
+]);
+
 const sphericalMatches = scanPaths(sphericalProductionPaths).filter((match) => {
   return !allowedSphericalMatches.has(`${match.file}:${match.line}:${match.pattern}`);
 });
-const legacyMatches = scanPaths(legacyMigrationScopes);
+const legacyMatches = scanPaths(legacyMigrationScopes).filter((match) => {
+  return !topologyAwareLegacyFiles.has(match.file);
+});
 const sphericalByFile = summarizeByFile(sphericalMatches);
 const legacyByFile = summarizeByFile(legacyMatches);
 
@@ -48,6 +54,7 @@ const result = {
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
   legacyRiskFiles: Object.keys(legacyByFile).length,
+  topologyAwareLegacyFiles: Array.from(topologyAwareLegacyFiles).sort(),
   topLegacyRiskFiles: Object.entries(legacyByFile)
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 12)
