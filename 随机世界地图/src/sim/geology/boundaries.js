@@ -1,5 +1,5 @@
 import { BoundaryType } from "../tectonics.js";
-import { forEachGridCell, forEachNeighbor4ById, physicalRadius, wrapX } from "../grid.js";
+import { forEachGridCell, forEachNeighbor4ById, forEachNeighbor8ById, physicalRadius, wrapX, xyOf } from "../grid.js";
 
 export function updatePlateBoundaries(world) {
   updatePlateBoundariesV2(world);
@@ -114,38 +114,29 @@ export function classifyBoundaryKindV2(world) {
 }
 
 function deriveBoundaryCoherence(grid) {
-  const { width, height, plate, activeBoundary, boundaryDensity, boundaryCoherence, noisyBoundaryPatch, plateCheckerboard } = grid;
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      let boundaryCount = 0;
-      let cells = 0;
-      let same = 0;
-      let different = 0;
-      for (let dy = -1; dy <= 1; dy += 1) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= height) continue;
-        for (let dx = -1; dx <= 1; dx += 1) {
-          const nx = wrapX(width, x + dx);
-          const nid = ny * width + nx;
-          cells += 1;
-          if (activeBoundary[nid]) boundaryCount += 1;
-          if (nid === id) continue;
-          if (plate[nid] === plate[id]) same += 1;
-          else different += 1;
-        }
-      }
+  const { plate, activeBoundary, boundaryDensity, boundaryCoherence, noisyBoundaryPatch, plateCheckerboard } = grid;
+  forEachGridCell(grid, (id) => {
+    let boundaryCount = activeBoundary[id] ? 1 : 0;
+    let cells = 1;
+    let same = 0;
+    let different = 0;
+    forEachNeighbor8ById(grid, id, (nid) => {
+      cells += 1;
+      if (activeBoundary[nid]) boundaryCount += 1;
+      if (plate[nid] === plate[id]) same += 1;
+      else different += 1;
+    });
 
-      const density = cells ? boundaryCount / cells : 0;
-      const checker = checkerboardRiskAt(grid, x, y);
-      const islandNoise = same <= 2 && different >= 5 ? 1 : 0;
-      const coherence = Math.max(0, Math.min(1, 1 - Math.max(0, density - 0.42) * 1.35 - checker * 0.75 - islandNoise * 0.55));
-      boundaryDensity[id] = density;
-      plateCheckerboard[id] = checker;
-      boundaryCoherence[id] = coherence;
-      if (density > 0.66 || checker > 0.4 || islandNoise) noisyBoundaryPatch[id] = 1;
-    }
-  }
+    const { x, y } = xyOf(grid, id);
+    const density = cells ? boundaryCount / cells : 0;
+    const checker = checkerboardRiskAt(grid, x, y);
+    const islandNoise = same <= 2 && different >= 5 ? 1 : 0;
+    const coherence = Math.max(0, Math.min(1, 1 - Math.max(0, density - 0.42) * 1.35 - checker * 0.75 - islandNoise * 0.55));
+    boundaryDensity[id] = density;
+    plateCheckerboard[id] = checker;
+    boundaryCoherence[id] = coherence;
+    if (density > 0.66 || checker > 0.4 || islandNoise) noisyBoundaryPatch[id] = 1;
+  });
 }
 
 function checkerboardRiskAt(grid, x, y) {
