@@ -19,9 +19,12 @@ const steps = Math.max(0, Math.trunc(Number(process.argv[9] ?? 200)));
 
 const worldModes = new Set([
   "plate-id",
+  "plate-distance",
   "boundary-type",
   "active-boundary",
   "stress",
+  "normal-motion",
+  "shear-motion",
   "geometric-sea-mask",
   "sea-mask",
   "external-sea-mask",
@@ -100,6 +103,14 @@ function createRenderedLayer({ grid, world, mode, width, height, projectionMode 
       colorRamp: (value) => paletteColor(value),
     });
   }
+  if (mode === "plate-distance") {
+    return renderSphericalField(grid, world.plateAssignment.distance, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => colorField(value, 0, 0.9, [31, 34, 39], [219, 202, 118]),
+    });
+  }
   if (mode === "boundary-type") {
     return renderSphericalField(grid, world.boundaries.boundaryType, {
       width,
@@ -122,6 +133,22 @@ function createRenderedLayer({ grid, world, mode, width, height, projectionMode 
       height,
       projectionMode,
       colorRamp: (value) => colorField(value, 0, 0.0065, [20, 26, 32], [238, 85, 58]),
+    });
+  }
+  if (mode === "normal-motion") {
+    return renderSphericalField(grid, world.boundaries.normalMotion, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => colorDivergentConvergent(value),
+    });
+  }
+  if (mode === "shear-motion") {
+    return renderSphericalField(grid, world.boundaries.shearMotion, {
+      width,
+      height,
+      projectionMode,
+      colorRamp: (value) => colorField(value, 0, 0.012, [28, 28, 33], [236, 204, 72]),
     });
   }
   if (mode === "geometric-sea-mask") {
@@ -224,6 +251,12 @@ function colorBoundaryType(value) {
   if (value === SphericalBoundaryType.CONVERGENT) return [225, 72, 62];
   if (value === SphericalBoundaryType.DIVERGENT) return [72, 204, 226];
   if (value === SphericalBoundaryType.TRANSFORM) return [236, 206, 75];
+  return [26, 30, 34];
+}
+
+function colorDivergentConvergent(value) {
+  if (value < 0) return colorField(-value, 0, 0.0065, [30, 31, 38], [225, 72, 62]);
+  if (value > 0) return colorField(value, 0, 0.0065, [28, 32, 38], [72, 204, 226]);
   return [26, 30, 34];
 }
 
