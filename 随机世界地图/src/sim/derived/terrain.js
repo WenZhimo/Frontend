@@ -1,5 +1,5 @@
 import { forEachNeighbor4, indexOf, physicalRadius, wrapX } from "../grid.js";
-import { getReliefDiagnostics } from "../geology/reliefBudget.js";
+import { updateReliefBudgetDiagnostics } from "../geology/reliefBudget.js";
 import { deriveOceanConnectivity } from "../geology/rift.js";
 import { getGeologicSeaLevelDiagnostics } from "../geology/seaLevel.js";
 import { getSedimentBudgetDiagnostics } from "../geology/sediment.js";
@@ -358,7 +358,7 @@ function buildTerrainBase(world) {
   const seaLevelSensitivity = new Float32Array(grid.seaLevelSensitivity);
   const largePlainMask = new Uint8Array(grid.largePlainMask);
   const flatLandMask = new Uint8Array(grid.flatLandMask);
-  const reliefDiagnostics = getReliefDiagnostics(world);
+  const reliefDiagnostics = updateReliefBudgetDiagnostics(world);
   const geologicSeaLevelDiagnostics = getGeologicSeaLevelDiagnostics(world);
   const coastalSensitivity = new Float32Array(grid.coastalSensitivity);
   const ridgeVolumeSignal = new Float32Array(grid.ridgeVolumeSignal);
