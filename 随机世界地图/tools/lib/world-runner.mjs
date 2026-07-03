@@ -5,6 +5,9 @@ export function createCheckWorld({
   seedText = "龙骨海-纪元7",
   pipelineMode = "geology-v2",
   resolution = "512x256",
+  topologyMode = "cylindrical",
+  projectionMode = "equirectangular",
+  faceSize,
   waterLevel = 50,
   intensity = 1,
   plateCount = 14,
@@ -18,6 +21,9 @@ export function createCheckWorld({
     timeScale,
     resolution,
     pipelineMode,
+    topologyMode,
+    projectionMode,
+    faceSize,
     showBoundaries: false,
   });
 }
@@ -49,4 +55,3 @@ export function runToCheckpoints(world, checkpoints, onCheckpoint) {
   }
   return { results, totalMs, averageStepMs: totalMs / Math.max(1, maxStep) };
 }
-
