@@ -1,5 +1,5 @@
 import { BoundaryType } from "../tectonics.js";
-import { forEachGridCell, forEachNeighbor4ById, forEachNeighbor8ById, physicalRadius, wrapX, xyOf } from "../grid.js";
+import { forEachGridCell, forEachNeighbor4ById, forEachNeighbor8ById, indexOf, physicalRadius, xyOf } from "../grid.js";
 
 export function updatePlateBoundaries(world) {
   updatePlateBoundariesV2(world);
@@ -60,51 +60,42 @@ export function updatePlateBoundariesV2(world) {
 
 export function classifyBoundaryKindV2(world) {
   const { grid } = world;
-  const { width, height, size, plate, pvx, pvy, btype, boundaryKind, stress, activeBoundary, boundaryCoherence, noisyBoundaryPatch } = grid;
+  const { size, plate, btype, boundaryKind, stress, activeBoundary, boundaryCoherence, noisyBoundaryPatch } = grid;
   btype.fill(BoundaryType.INTERIOR);
   boundaryKind.fill(BoundaryType.INTERIOR);
   stress.fill(0);
 
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      const currentPlate = plate[id];
-      let convergent = 0;
-      let divergent = 0;
-      let shear = 0;
-      let touches = false;
+  forEachGridCell(grid, (id) => {
+    const currentPlate = plate[id];
+    let convergent = 0;
+    let divergent = 0;
+    let shear = 0;
+    let touches = false;
 
-      inspectBoundaryNeighbor(grid, x, y, wrapX(width, x + 1), y, 1, 0, currentPlate, id, (normal, tangent) => {
+    forEachNeighbor4ById(grid, id, (nid, dx, dy) => {
+      inspectBoundaryNeighbor(grid, id, nid, dx, dy, currentPlate, (normal, tangent) => {
         touches = true;
         if (normal > 0.02) convergent += normal;
         else if (normal < -0.02) divergent += -normal;
         shear += Math.abs(tangent);
       });
-      if (y < height - 1) {
-        inspectBoundaryNeighbor(grid, x, y, x, y + 1, 0, 1, currentPlate, id, (normal, tangent) => {
-          touches = true;
-          if (normal > 0.02) convergent += normal;
-          else if (normal < -0.02) divergent += -normal;
-          shear += Math.abs(tangent);
-        });
-      }
+    });
 
-      if (!touches) continue;
-      activeBoundary[id] = 1;
-      const coherenceGate = noisyBoundaryPatch[id] ? 0.22 : 0.45 + boundaryCoherence[id] * 0.55;
-      if (convergent > divergent && convergent > shear * 0.55) {
-        btype[id] = BoundaryType.CONVERGENT;
-        stress[id] = convergent * coherenceGate;
-      } else if (divergent > convergent && divergent > shear * 0.55) {
-        btype[id] = BoundaryType.DIVERGENT;
-        stress[id] = divergent * coherenceGate;
-      } else {
-        btype[id] = BoundaryType.TRANSFORM;
-        stress[id] = shear * 0.5 * coherenceGate;
-      }
-      boundaryKind[id] = btype[id];
+    if (!touches) return;
+    activeBoundary[id] = 1;
+    const coherenceGate = noisyBoundaryPatch[id] ? 0.22 : 0.45 + boundaryCoherence[id] * 0.55;
+    if (convergent > divergent && convergent > shear * 0.55) {
+      btype[id] = BoundaryType.CONVERGENT;
+      stress[id] = convergent * coherenceGate;
+    } else if (divergent > convergent && divergent > shear * 0.55) {
+      btype[id] = BoundaryType.DIVERGENT;
+      stress[id] = divergent * coherenceGate;
+    } else {
+      btype[id] = BoundaryType.TRANSFORM;
+      stress[id] = shear * 0.5 * coherenceGate;
     }
-  }
+    boundaryKind[id] = btype[id];
+  });
 
   for (let i = 0; i < size; i += 1) {
     if (boundaryKind[i] === BoundaryType.INTERIOR && grid.boundaryInfluence[i] > 0.01) {
@@ -144,23 +135,25 @@ function checkerboardRiskAt(grid, x, y) {
   for (let dy = -1; dy <= 0; dy += 1) {
     const y0 = y + dy;
     const y1 = y0 + 1;
-    if (y0 < 0 || y1 >= grid.height) continue;
     for (let dx = -1; dx <= 0; dx += 1) {
-      const x0 = wrapX(grid.width, x + dx);
-      const x1 = wrapX(grid.width, x + dx + 1);
-      const a = grid.plate[y0 * grid.width + x0];
-      const b = grid.plate[y0 * grid.width + x1];
-      const c = grid.plate[y1 * grid.width + x0];
-      const d = grid.plate[y1 * grid.width + x1];
+      const x0 = x + dx;
+      const x1 = x + dx + 1;
+      const aId = indexOf(grid, x0, y0);
+      const bId = indexOf(grid, x1, y0);
+      const cId = indexOf(grid, x0, y1);
+      const dId = indexOf(grid, x1, y1);
+      if (aId < 0 || bId < 0 || cId < 0 || dId < 0) continue;
+      const a = grid.plate[aId];
+      const b = grid.plate[bId];
+      const c = grid.plate[cId];
+      const d = grid.plate[dId];
       if (a === d && b === c && a !== b) risk = 1;
     }
   }
   return risk;
 }
 
-function inspectBoundaryNeighbor(grid, x, y, nx, ny, dx, dy, currentPlate, id, visit) {
-  if (ny < 0 || ny >= grid.height) return;
-  const nid = ny * grid.width + nx;
+function inspectBoundaryNeighbor(grid, id, nid, dx, dy, currentPlate, visit) {
   if (grid.plate[nid] === currentPlate) return;
   const rvx = grid.pvx[id] - grid.pvx[nid];
   const rvy = grid.pvy[id] - grid.pvy[nid];
