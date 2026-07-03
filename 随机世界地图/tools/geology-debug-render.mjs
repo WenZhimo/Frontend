@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
 import { getHydrologyInputs } from "../src/sim/derived/terrain.js";
-import { parseCsv, parseOptions } from "./lib/cli.mjs";
+import { parseCsv, parseOptions, parseTopologyOptions } from "./lib/cli.mjs";
 import { loadWorldSnapshot } from "./lib/snapshot-cache.mjs";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
@@ -13,6 +13,7 @@ const steps = fromSnapshot ? 0 : Number(positional[1] ?? 200);
 const outDir = fromSnapshot ? positional[0] ?? "_geology_debug" : positional[2] ?? "_geology_debug";
 const pipelineMode = fromSnapshot ? null : positional[3] ?? "geology-v2";
 const resolution = fromSnapshot ? null : positional[4] ?? "512x256";
+const topologyOptions = parseTopologyOptions(options);
 const requestedLayers = new Set(parseCsv(options.layers, []));
 const hydrologyLayers = new Set([
   "flowDirection",
@@ -36,6 +37,7 @@ const world = fromSnapshot
       timeScale: 1_000_000,
       resolution,
       pipelineMode,
+      ...topologyOptions,
       showBoundaries: false,
     });
 
@@ -164,6 +166,9 @@ console.log(JSON.stringify({
   ageYears: world.ageYears,
   pipelineMode: pipelineMode ?? world.snapshotMeta?.pipelineMode ?? world.params?.pipelineMode,
   resolution: resolution ?? world.snapshotMeta?.resolution ?? world.params?.resolution,
+  topologyMode: world.params?.topologyMode ?? topologyOptions.topologyMode,
+  projectionMode: world.params?.projectionMode ?? topologyOptions.projectionMode,
+  faceSize: world.params?.faceSize ?? topologyOptions.faceSize,
   fromSnapshot,
   requestedLayers: [...requestedLayers],
   landRatio: world.stats.landRatio,

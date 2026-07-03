@@ -1,4 +1,4 @@
-import { parseIntOption, parseOptions } from "./lib/cli.mjs";
+import { parseIntOption, parseOptions, parseTopologyOptions } from "./lib/cli.mjs";
 import { createCheckWorld } from "./lib/world-runner.mjs";
 import { stepWorld } from "../src/sim/evolution.js";
 
@@ -7,8 +7,9 @@ const seedText = positional[0] ?? "龙骨海-纪元7";
 const pipelineMode = positional[1] ?? "geology-v2";
 const resolution = positional[2] ?? "256x128";
 const steps = parseIntOption(options, "steps", Number(positional[3]) || 100);
+const topologyOptions = parseTopologyOptions(options);
 
-const world = createCheckWorld({ seedText, pipelineMode, resolution });
+const world = createCheckWorld({ seedText, pipelineMode, resolution, ...topologyOptions });
 const profileStages = options.stages !== false && options["no-stages"] !== true;
 if (profileStages && pipelineMode === "geology-v2") {
   world.profileGeologyV2Stages = true;
@@ -29,6 +30,7 @@ const result = {
   seedText,
   pipelineMode,
   resolution,
+  ...topologyOptions,
   steps,
   totalMs,
   averageStepMs: sumStepMs / Math.max(1, stepMs.length),
