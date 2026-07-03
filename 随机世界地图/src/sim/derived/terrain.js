@@ -1,4 +1,4 @@
-import { forEachGridCell, forEachNeighbor4, forEachNeighbor4ById, forEachNeighborRadiusById, physicalRadius, sampleGridWrapped, wrapX } from "../grid.js";
+import { forEachGridCell, forEachNeighbor4ById, forEachNeighborRadiusById, physicalRadius, sampleGridWrapped } from "../grid.js";
 import { updateReliefBudgetDiagnostics } from "../geology/reliefBudget.js";
 import { deriveOceanConnectivity } from "../geology/rift.js";
 import { getGeologicSeaLevelDiagnostics } from "../geology/seaLevel.js";
@@ -86,7 +86,6 @@ export function getClimateInputs(world) {
   const { grid } = world;
   const {
     size,
-    width,
     height,
     mountainBelt,
     activeOrogeny,
@@ -102,18 +101,15 @@ export function getClimateInputs(world) {
   const mountainAxis = new Float32Array(size);
   const mountainHeight = new Float32Array(size);
 
-  for (let y = 0; y < height; y += 1) {
+  forEachGridCell(grid, (id, _x, y) => {
     const lat = ((y + 0.5) / height - 0.5) * 180;
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      const rel = base.relativeElevation[id];
-      latitude[id] = lat;
-      oceanDepth[id] = Math.max(0, -rel);
-      mountainAxis[id] = Math.max(storedMountainAxis?.[id] ?? 0, mountainBelt?.[id] ?? 0, activeOrogeny?.[id] ?? 0, oldOrogeny?.[id] ?? 0, orogeny?.[id] ?? 0);
-      mountainHeight[id] = Math.max(storedMountainHeight?.[id] ?? 0, Math.max(0, rel) * (0.45 + Math.min(1, mountainAxis[id] * 2.2)));
-      orographicBarrier[id] = Math.max(storedOrographicBarrier?.[id] ?? 0, Math.max(0, rel) * Math.min(1, base.ruggedness[id] * 5.5 + mountainAxis[id] * 1.4));
-    }
-  }
+    const rel = base.relativeElevation[id];
+    latitude[id] = lat;
+    oceanDepth[id] = Math.max(0, -rel);
+    mountainAxis[id] = Math.max(storedMountainAxis?.[id] ?? 0, mountainBelt?.[id] ?? 0, activeOrogeny?.[id] ?? 0, oldOrogeny?.[id] ?? 0, orogeny?.[id] ?? 0);
+    mountainHeight[id] = Math.max(storedMountainHeight?.[id] ?? 0, Math.max(0, rel) * (0.45 + Math.min(1, mountainAxis[id] * 2.2)));
+    orographicBarrier[id] = Math.max(storedOrographicBarrier?.[id] ?? 0, Math.max(0, rel) * Math.min(1, base.ruggedness[id] * 5.5 + mountainAxis[id] * 1.4));
+  });
 
   return {
     latitude,
@@ -443,87 +439,32 @@ function maxFields(...fields) {
 }
 
 function measureTerrainShape(grid, field) {
-  const { width, height, size } = grid;
+  const { size } = grid;
   const slope = new Float32Array(size);
   const aspect = new Float32Array(size);
   const ruggedness = new Float32Array(size);
 
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      const center = field[id];
-      const left = finiteSample(grid, field, x - 1, y, center);
-      const right = finiteSample(grid, field, x + 1, y, center);
-      const up = finiteSample(grid, field, x, y - 1, center);
-      const down = finiteSample(grid, field, x, y + 1, center);
-      const dx = (right - left) * 0.5;
-      const dy = (down - up) * 0.5;
-      slope[id] = Math.hypot(dx, dy);
-      aspect[id] = Math.atan2(dy, dx);
+  forEachGridCell(grid, (id, x, y) => {
+    const center = field[id];
+    const left = finiteSample(grid, field, x - 1, y, center);
+    const right = finiteSample(grid, field, x + 1, y, center);
+    const up = finiteSample(grid, field, x, y - 1, center);
+    const down = finiteSample(grid, field, x, y + 1, center);
+    const dx = (right - left) * 0.5;
+    const dy = (down - up) * 0.5;
+    slope[id] = Math.hypot(dx, dy);
+    aspect[id] = Math.atan2(dy, dx);
 
-      let sum = 0;
-      let count = 0;
-      forEachNeighbor4ById(grid, id, (nid) => {
-        sum += Math.abs(field[id] - field[nid]);
-        count += 1;
-      });
-      ruggedness[id] = count ? sum / count : 0;
-    }
-  }
+    let sum = 0;
+    let count = 0;
+    forEachNeighbor4ById(grid, id, (nid) => {
+      sum += Math.abs(field[id] - field[nid]);
+      count += 1;
+    });
+    ruggedness[id] = count ? sum / count : 0;
+  });
 
   return { slope, aspect, ruggedness };
-}
-
-function floodExternalSea(grid, seaMask) {
-  const { width, size } = grid;
-  const externalSeaMask = new Uint8Array(size);
-  const queue = new Int32Array(size);
-  const visited = new Uint8Array(size);
-  let largestStart = -1;
-  let largestSize = 0;
-
-  for (let start = 0; start < size; start += 1) {
-    if (!seaMask[start] || visited[start]) continue;
-    let head = 0;
-    let tail = 0;
-    visited[start] = 1;
-    queue[tail++] = start;
-    while (head < tail) {
-      const id = queue[head++];
-      const x = id % width;
-      const y = Math.floor(id / width);
-      forEachNeighbor4(grid, x, y, (nx, ny) => {
-        const nid = ny * width + nx;
-        if (!seaMask[nid] || visited[nid]) return;
-        visited[nid] = 1;
-        queue[tail++] = nid;
-      });
-    }
-    if (tail > largestSize) {
-      largestSize = tail;
-      largestStart = start;
-    }
-  }
-
-  if (largestStart >= 0) {
-    let head = 0;
-    let tail = 0;
-    externalSeaMask[largestStart] = 1;
-    queue[tail++] = largestStart;
-    while (head < tail) {
-      const id = queue[head++];
-      const x = id % width;
-      const y = Math.floor(id / width);
-      forEachNeighbor4(grid, x, y, (nx, ny) => {
-        const nid = ny * width + nx;
-        if (!seaMask[nid] || externalSeaMask[nid]) return;
-        externalSeaMask[nid] = 1;
-        queue[tail++] = nid;
-      });
-    }
-  }
-
-  return externalSeaMask;
 }
 
 function distanceFromCoast(grid, landMask) {
