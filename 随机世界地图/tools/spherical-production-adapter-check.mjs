@@ -43,6 +43,24 @@ if (!Number.isFinite(summary.statsProbe.weightedMean)) result.valid = false;
 if (Math.abs(summary.statsProbe.northShare - 0.5) > 0.01) result.valid = false;
 if (Math.abs(summary.statsProbe.categoryShareTotal - 1) > 1e-9) result.valid = false;
 if (Math.abs(summary.statsProbe.categoryTotalArea - 4 * Math.PI) > 1e-5) result.valid = false;
+if (!summary.fieldSummaries || Object.keys(summary.fieldSummaries).length !== summary.fieldCount) result.valid = false;
+for (const name of result.fieldNames) {
+  const field = summary.fieldSummaries?.[name];
+  if (!field) result.valid = false;
+  else {
+    if (field.finiteShare !== 1) result.valid = false;
+    if (field.finiteCount !== summary.size) result.valid = false;
+    if (!Number.isFinite(field.weightedMean)) result.valid = false;
+    if (!Number.isFinite(field.sampledArea) || Math.abs(field.sampledArea - 4 * Math.PI) > 1e-5) {
+      result.valid = false;
+    }
+  }
+}
+if (!(summary.fieldSummaries.diagnosticElevation.max > summary.fieldSummaries.diagnosticElevation.min)) {
+  result.valid = false;
+}
+if (!(summary.fieldSummaries.externalSeaMask.nonZeroShare > 0.1)) result.valid = false;
+if (!(summary.fieldSummaries.inlandWaterCandidate.nonZeroShare > 0)) result.valid = false;
 if (!(summary.connectivityProbe.seaShare > 0.1 && summary.connectivityProbe.seaShare < 0.9)) result.valid = false;
 if (summary.connectivityProbe.componentCount < 2) result.valid = false;
 if (summary.connectivityProbe.externalSeaShare <= summary.connectivityProbe.inlandWaterCandidateShare) result.valid = false;

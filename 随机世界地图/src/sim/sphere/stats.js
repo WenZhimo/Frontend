@@ -59,6 +59,47 @@ export function weightedCategoryShares(grid, categories, categoryCount, options 
   return { areaByCategory, shares, totalArea: total };
 }
 
+export function weightedFieldSummary(grid, field, options = {}) {
+  const predicate = options.predicate;
+  let weightedTotal = 0;
+  let totalArea = 0;
+  let finiteArea = 0;
+  let nonZeroArea = 0;
+  let positiveArea = 0;
+  let negativeArea = 0;
+  let finiteCount = 0;
+  let min = Infinity;
+  let max = -Infinity;
+  for (let id = 0; id < grid.size; id += 1) {
+    if (predicate && !predicate(id)) continue;
+    const area = cellArea(grid, id);
+    totalArea += area;
+    const value = Number(field[id] ?? NaN);
+    if (!Number.isFinite(value)) continue;
+    finiteCount += 1;
+    finiteArea += area;
+    weightedTotal += value * area;
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+    if (value !== 0) nonZeroArea += area;
+    if (value > 0) positiveArea += area;
+    if (value < 0) negativeArea += area;
+  }
+  const safeTotalArea = Math.max(totalArea, Number.EPSILON);
+  const safeFiniteArea = Math.max(finiteArea, Number.EPSILON);
+  return {
+    finiteShare: finiteArea / safeTotalArea,
+    finiteCount,
+    weightedMean: weightedTotal / safeFiniteArea,
+    min: finiteCount ? min : null,
+    max: finiteCount ? max : null,
+    nonZeroShare: nonZeroArea / safeTotalArea,
+    positiveShare: positiveArea / safeTotalArea,
+    negativeShare: negativeArea / safeTotalArea,
+    sampledArea: totalArea,
+  };
+}
+
 export function measureAreaStats(grid) {
   let total = 0;
   let min = Infinity;
