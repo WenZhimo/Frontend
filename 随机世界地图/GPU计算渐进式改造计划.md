@@ -351,8 +351,17 @@ Phase 2A 当前落地状态：
 - `tools/gpu-field-compare.mjs` 已支持 `--candidate=webgpu-isostasy`；默认不带 candidate 时仍是 CPU-vs-CPU，预期误差为 0。
 - `tools/gpu-perf-profile.mjs` 已支持 `--kernel=isostasy`，并拆分 `uploadMs / kernelMs / downloadMs / totalGpuPathMs`；WebGPU 不可用时安全 `skipped`。
 - CPU `updateIsostasy` 仍是生产路径；`stepWorld`、`runGeologyV2Step`、`rebuildGeologyElevation` 均未接入 GPU isostasy。
-- 当前仍未迁移 `rebuildGeologyElevation`、sediment、rift、hydrology、passive margin、closed basin 或任何图算法。
-- 下一步建议进入 Phase 2B：`rebuildGeologyElevation` GPU experimental，但必须基于 Phase 2A compare/profile 结果决定是否值得继续。
+- 当前仍未把 GPU isostasy 串入生产 pipeline，也未迁移 sediment、rift、hydrology、passive margin、closed basin 或任何图算法。
+
+Phase 2B 当前落地状态：
+
+- 已新增 `src/gpu/kernels/elevationKernel.js`，以 WGSL compute shader 对齐 CPU `rebuildGeologyElevationV2` 的核心逐 cell 公式。
+- 已新增 `src/gpu/elevationCompute.js`，只在显式 experimental compare/profile 调用时申请 WebGPU device；默认不写回 `world.grid`，只返回 `baseElev / relief / boundaryRelief / elev` candidate 字段。
+- `tools/gpu-field-compare.mjs` 已支持 `--candidate=webgpu-elevation`；默认不带 candidate 时仍是 CPU-vs-CPU，`--candidate=webgpu-isostasy` 继续保持 Phase 2A 行为。
+- `tools/gpu-perf-profile.mjs` 已支持 `--kernel=elevation`，并拆分 `uploadMs / kernelMs / downloadMs / totalGpuPathMs`；WebGPU 不可用时安全 `skipped`。
+- CPU `rebuildGeologyElevation` 仍是生产路径；`stepWorld`、`runGeologyV2Step`、生产 `updateIsostasy` 均未接入 GPU elevation。
+- 当前仍未把 Phase 2A isostasy kernel 与 Phase 2B elevation kernel 合批接入 pipeline。
+- 下一步可进入 Phase 2C（isostasy + elevation combined profile / batching experiment）或 Phase 3（local terrain stencil experimental），具体取决于 Phase 2B compare/profile 结果。
 
 建议阈值：
 
