@@ -1,4 +1,4 @@
-import { forEachNeighborRadiusById, physicalRadius, sampleGridWrapped, xyOf } from "../grid.js";
+import { forEachGridCell, forEachNeighbor4ById, forEachNeighborRadiusById, physicalRadius } from "../grid.js";
 
 export function updateReliefBudgetDiagnostics(world) {
   const { grid, seaLevel, params } = world;
@@ -27,9 +27,7 @@ export function updateReliefBudgetDiagnostics(world) {
     Math.max(0, target.globalElevationStd - stats.globalElevationStd);
   const normalizedDeficit = Math.min(1, deficit / 0.18);
 
-  for (let y = 0; y < grid.height; y += 1) {
-    for (let x = 0; x < grid.width; x += 1) {
-      const i = y * grid.width + x;
+  forEachGridCell(grid, (i) => {
       const relative = grid.elev[i] - seaLevel;
       const land = relative >= 0;
       const local = localRelief(grid, i, radius);
@@ -85,8 +83,7 @@ export function updateReliefBudgetDiagnostics(world) {
         landCount += 1;
       }
       if (grid.orographicBarrier[i] > orographicPotential) orographicPotential = grid.orographicBarrier[i];
-    }
-  }
+  });
 
   const flatLandShare = flatLand / grid.size;
   const largePlainShare = largePlain / grid.size;
@@ -194,11 +191,18 @@ function localRelief(grid, id, radius) {
 }
 
 function localSlope(grid, id, seaLevel) {
-  const { x, y } = xyOf(grid, id);
-  const left = sampleGridWrapped(grid, grid.elev, x - 1, y) - seaLevel;
-  const right = sampleGridWrapped(grid, grid.elev, x + 1, y) - seaLevel;
-  const up = sampleGridWrapped(grid, grid.elev, x, Math.max(0, y - 1)) - seaLevel;
-  const down = sampleGridWrapped(grid, grid.elev, x, Math.min(grid.height - 1, y + 1)) - seaLevel;
+  const center = grid.elev[id] - seaLevel;
+  let left = center;
+  let right = center;
+  let up = center;
+  let down = center;
+  forEachNeighbor4ById(grid, id, (nid, dx, dy) => {
+    const value = grid.elev[nid] - seaLevel;
+    if (dx < 0) left = value;
+    else if (dx > 0) right = value;
+    else if (dy < 0) up = value;
+    else if (dy > 0) down = value;
+  });
   return Math.hypot((right - left) * 0.5, (down - up) * 0.5);
 }
 
