@@ -2,6 +2,7 @@ import { parseCsv, parseIntOption, parseOptions } from "./lib/cli.mjs";
 import { createCheckWorld } from "./lib/world-runner.mjs";
 import { stepWorld } from "../src/sim/evolution.js";
 import { detectGpuCapabilities } from "../src/gpu/capability.js";
+import { runWebGpuElevationCandidate } from "../src/gpu/elevationCompute.js";
 import { runWebGpuIsostasyCandidate } from "../src/gpu/isostasyCompute.js";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
@@ -19,9 +20,7 @@ runSteps(baseline, steps);
 runSteps(candidate, steps);
 
 const gpuCapabilities = detectGpuCapabilities(globalThis);
-const candidateResult = candidateBackend === "webgpu-isostasy"
-  ? await runWebGpuIsostasyCandidate(candidate)
-  : null;
+const candidateResult = await runCandidate(candidateBackend, candidate);
 const fieldResults = fields.map((fieldName) => {
   const candidateField = candidateResult?.skipped
     ? candidate.grid[fieldName]
@@ -33,7 +32,7 @@ const result = {
   pipelineMode,
   resolution,
   steps,
-  backend: candidateBackend === "webgpu-isostasy" ? "webgpu-isostasy" : "cpu-vs-cpu",
+  backend: candidateBackend === "webgpu-isostasy" || candidateBackend === "webgpu-elevation" ? candidateBackend : "cpu-vs-cpu",
   candidate: candidateBackend,
   skipped: candidateResult?.skipped ?? false,
   skipReason: candidateResult?.reason ?? null,
@@ -43,6 +42,8 @@ const result = {
   fields: fieldResults,
   note: candidateBackend === "webgpu-isostasy"
     ? "Phase 2A experimental compare: CPU remains authoritative; WebGPU isostasy only runs when explicitly requested."
+    : candidateBackend === "webgpu-elevation"
+      ? "Phase 2B experimental compare: CPU remains authoritative; WebGPU elevation only runs when explicitly requested."
     : "CPU-vs-CPU compare remains the default path so expected deltas are zero.",
 };
 
@@ -50,6 +51,12 @@ console.log(JSON.stringify(result, null, 2));
 
 function runSteps(world, count) {
   for (let i = 0; i < count; i += 1) stepWorld(world);
+}
+
+async function runCandidate(candidateName, world) {
+  if (candidateName === "webgpu-isostasy") return runWebGpuIsostasyCandidate(world);
+  if (candidateName === "webgpu-elevation") return runWebGpuElevationCandidate(world);
+  return null;
 }
 
 function compareField(fieldName, baselineField, candidateField, threshold = { rmse: 1e-9, maxAbs: 1e-9 }) {
@@ -99,6 +106,13 @@ function compareField(fieldName, baselineField, candidateField, threshold = { rm
 }
 
 function thresholdForField(fieldName, backend) {
+  if (backend === "webgpu-elevation") {
+    if (fieldName === "boundaryRelief") return { rmse: 0.003, maxAbs: 0.015 };
+    if (fieldName === "baseElev" || fieldName === "relief" || fieldName === "elev") {
+      return { rmse: 0.002, maxAbs: 0.01 };
+    }
+    return { rmse: 0.003, maxAbs: 0.015 };
+  }
   if (backend !== "webgpu-isostasy") return { rmse: 1e-9, maxAbs: 1e-9 };
   if (fieldName === "oceanDepthTerms") return { rmse: 0.002, maxAbs: 0.01 };
   if (

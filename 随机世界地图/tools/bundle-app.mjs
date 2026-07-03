@@ -32,6 +32,8 @@ const files = [
   "src/gpu/capability.js",
   "src/gpu/kernels/isostasyKernel.js",
   "src/gpu/isostasyCompute.js",
+  "src/gpu/kernels/elevationKernel.js",
+  "src/gpu/elevationCompute.js",
   "src/render/cpuMapRenderer.js",
   "src/render/gpuMapRenderer.js",
   "src/render/renderBackend.js",

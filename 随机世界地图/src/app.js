@@ -6330,6 +6330,338 @@
   }
 
 
+  // ---- src/gpu/kernels/elevationKernel.js ----
+  const ELEVATION_WGSL = String.raw`
+  struct Params {
+    size: u32,
+    _pad0: u32,
+    _pad1: u32,
+    _pad2: u32,
+  };
+
+  @group(0) @binding(0) var<uniform> params: Params;
+  @group(0) @binding(1) var<storage, read> input0: array<vec4<f32>>;
+  @group(0) @binding(2) var<storage, read> input1: array<vec4<f32>>;
+  @group(0) @binding(3) var<storage, read> input2: array<vec4<f32>>;
+  @group(0) @binding(4) var<storage, read> input3: array<vec4<f32>>;
+  @group(0) @binding(5) var<storage, read> input4: array<vec4<f32>>;
+  @group(0) @binding(6) var<storage, read> input5: array<vec4<f32>>;
+  @group(0) @binding(7) var<storage, read> input6: array<vec4<f32>>;
+  @group(0) @binding(8) var<storage, read> input7: array<vec4<f32>>;
+  @group(0) @binding(9) var<storage, read_write> output0: array<vec4<f32>>;
+
+  fn clamp01(value: f32) -> f32 {
+    return clamp(value, 0.0, 1.0);
+  }
+
+  @compute @workgroup_size(64)
+  fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let i = global_id.x;
+    if (i >= params.size) {
+      return;
+    }
+
+    let a = input0[i];
+    let b = input1[i];
+    let c = input2[i];
+    let d = input3[i];
+    let e = input4[i];
+    let f = input5[i];
+    let g = input6[i];
+    let h = input7[i];
+
+    let crust_type = u32(a.x + 0.5);
+    let orogeny = a.y;
+    let active_orogeny = a.z;
+    let old_orogeny = a.w;
+    let orogeny_age = b.x;
+    let sediment = b.y;
+    let sediment_load_subsidence = b.z;
+    let sediment_fill = b.w;
+    let ridge_uplift = c.x;
+    let trench_depression = c.y;
+    let isostatic_base = c.z;
+    let passive_margin = c.w;
+    let continental_shelf = d.x;
+    let continental_slope = d.y;
+    let continental_rise = d.z;
+    let abyssal_plain = d.w;
+    let sediment_wedge = e.x;
+    let foreland_basin = e.y;
+    let active_transform = e.z;
+    let transform_memory = e.w;
+    let fracture_zone_memory = f.x;
+    let inactive_boundary_relief = f.y;
+    let geology_broad_noise = f.z;
+    let geology_micro_noise = f.w;
+    let mountain_belt = g.x;
+    let trench = g.y;
+    let ridge = g.z;
+    let rift = g.w;
+    let island_arc = h.x;
+    let basin = h.y;
+
+    let continental = crust_type == 1u;
+    let transitional = crust_type == 2u;
+
+    let age_reduction = 0.35 + clamp01(orogeny_age) * 0.55;
+    let old_orogen_relief = old_orogeny * select(select(0.004, 0.035, transitional), 0.075, continental) * (1.0 - age_reduction * 0.62);
+    let root_relief = orogeny * select(select(0.004, 0.032, transitional), 0.105, continental);
+    let foreland_subsidence = foreland_basin * select(select(0.002, 0.018, transitional), 0.026, continental);
+    let load_subsidence = sediment_load_subsidence * select(select(0.07, 0.08, transitional), 0.06, continental);
+    let long_term =
+      root_relief +
+      old_orogen_relief +
+      sediment_fill * 0.36 -
+      basin * select(0.018, 0.002, transitional) -
+      foreland_subsidence -
+      load_subsidence;
+    let active_feature =
+      mountain_belt * 0.15 +
+      active_orogeny * select(select(0.006, 0.024, transitional), 0.055, continental) -
+      select(-trench_depression, trench * 0.105, continental) +
+      select(ridge_uplift, ridge * 0.048, continental) -
+      rift * 0.055 +
+      island_arc * 0.06 -
+      basin * 0.025;
+
+    let roughness_damp = max(0.0, 1.0 - abyssal_plain * 0.58 - passive_margin * 0.12);
+    let margin_elevation =
+      continental_shelf * 0.018 +
+      continental_rise * 0.015 +
+      sediment_wedge * 0.012 -
+      continental_slope * 0.012 -
+      abyssal_plain * 0.006;
+    let transform_active_relief =
+      active_transform *
+      select(select(0.006, 0.008, transitional), 0.012, continental) *
+      (0.45 + abs(geology_micro_noise));
+    let inactive_transform_penalty = select(
+      max(0.0, transform_memory * 0.003 + fracture_zone_memory * 0.005 + inactive_boundary_relief * 0.006) *
+        (0.4 + abyssal_plain + sediment),
+      0.0,
+      continental
+    );
+
+    let base_elev =
+      isostatic_base +
+      geology_broad_noise * select(select(0.009, 0.014, transitional), 0.018, continental) * roughness_damp +
+      geology_micro_noise * select(select(0.006, 0.008, transitional), 0.011, continental) * roughness_damp;
+    let relief = long_term;
+    let boundary_relief = active_feature + margin_elevation + transform_active_relief - inactive_transform_penalty;
+    let elev = base_elev + relief + boundary_relief;
+    let is_continental = select(0.0, 1.0, continental);
+
+    output0[i] = vec4<f32>(base_elev, relief, boundary_relief, elev + is_continental * 0.0);
+  }
+  `;
+
+
+  // ---- src/gpu/elevationCompute.js ----
+
+  const GPU_ELEVATION_OUTPUT_FIELDS = [
+    "baseElev",
+    "relief",
+    "boundaryRelief",
+    "elev",
+  ];
+
+  export async function runWebGpuElevationCandidate(world, options = {}) {
+    const globalObject = options.globalObject ?? globalThis;
+    const capabilities = detectGpuCapabilities(globalObject);
+    const gpu = globalObject?.navigator?.gpu;
+    if (!capabilities.secureContext || !capabilities.webgpuAvailable || !gpu?.requestAdapter) {
+      return skippedElevationResult(capabilities, "WebGPU is not available in this environment.");
+    }
+
+    let adapter;
+    let device;
+    try {
+      adapter = await gpu.requestAdapter();
+      if (!adapter) {
+        return skippedElevationResult(capabilities, "WebGPU adapter request returned null.");
+      }
+      device = await adapter.requestDevice();
+    } catch (error) {
+      return skippedElevationResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
+    }
+
+    try {
+      return await computeElevationOnDevice(world, device, capabilities);
+    } catch (error) {
+      return {
+        skipped: true,
+        valid: true,
+        backend: "webgpu-elevation",
+        gpuCapabilities: capabilities,
+        reason: `WebGPU elevation candidate failed safely: ${error?.message ?? "unknown error"}`,
+        timings: emptyElevationTimings(),
+        fields: {},
+      };
+    } finally {
+      device?.destroy?.();
+    }
+  }
+
+  async function computeElevationOnDevice(world, device, capabilities) {
+    const { grid } = world;
+    const size = grid.size;
+    const inputs = Array.from({ length: 8 }, () => new Float32Array(size * 4));
+
+    const uploadStartedAt = performance.now();
+    for (let i = 0; i < size; i += 1) {
+      const offset = i * 4;
+      inputs[0][offset] = grid.crustType[i];
+      inputs[0][offset + 1] = grid.orogeny[i];
+      inputs[0][offset + 2] = grid.activeOrogeny?.[i] ?? 0;
+      inputs[0][offset + 3] = grid.oldOrogeny?.[i] ?? 0;
+      inputs[1][offset] = grid.orogenyAge?.[i] ?? 0;
+      inputs[1][offset + 1] = grid.sediment[i];
+      inputs[1][offset + 2] = grid.sedimentLoadSubsidence?.[i] ?? 0;
+      inputs[1][offset + 3] = grid.sedimentFill[i];
+      inputs[2][offset] = grid.ridgeUplift[i];
+      inputs[2][offset + 1] = grid.trenchDepression[i];
+      inputs[2][offset + 2] = grid.isostaticBase[i];
+      inputs[2][offset + 3] = grid.passiveMargin?.[i] ?? 0;
+      inputs[3][offset] = grid.continentalShelf?.[i] ?? 0;
+      inputs[3][offset + 1] = grid.continentalSlope?.[i] ?? 0;
+      inputs[3][offset + 2] = grid.continentalRise?.[i] ?? 0;
+      inputs[3][offset + 3] = grid.abyssalPlain?.[i] ?? 0;
+      inputs[4][offset] = grid.sedimentWedge?.[i] ?? 0;
+      inputs[4][offset + 1] = grid.forelandBasin?.[i] ?? 0;
+      inputs[4][offset + 2] = grid.activeTransform?.[i] ?? 0;
+      inputs[4][offset + 3] = grid.transformMemory?.[i] ?? 0;
+      inputs[5][offset] = grid.fractureZoneMemory?.[i] ?? 0;
+      inputs[5][offset + 1] = grid.inactiveBoundaryRelief?.[i] ?? 0;
+      inputs[5][offset + 2] = grid.geologyBroadNoise[i];
+      inputs[5][offset + 3] = grid.geologyMicroNoise[i];
+      inputs[6][offset] = grid.mountainBelt[i];
+      inputs[6][offset + 1] = grid.trench[i];
+      inputs[6][offset + 2] = grid.ridge[i];
+      inputs[6][offset + 3] = grid.rift[i];
+      inputs[7][offset] = grid.islandArc[i];
+      inputs[7][offset + 1] = grid.basin[i];
+    }
+
+    const usage = globalThis.GPUBufferUsage;
+    const mapMode = globalThis.GPUMapMode;
+    if (!usage || !mapMode) {
+      return skippedElevationResult(capabilities, "WebGPU constants are unavailable in this JavaScript runtime.");
+    }
+
+    const paramData = new Uint32Array([size, 0, 0, 0]);
+    const paramBuffer = createElevationBufferWithData(device, paramData, usage.UNIFORM | usage.COPY_DST);
+    const inputBuffers = inputs.map((input) => createElevationBufferWithData(device, input, usage.STORAGE | usage.COPY_DST));
+    const outputBytes = size * 4 * Float32Array.BYTES_PER_ELEMENT;
+    const outputBuffer = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
+    const readBuffer = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+    const uploadMs = performance.now() - uploadStartedAt;
+
+    const shaderModule = device.createShaderModule({ code: ELEVATION_WGSL });
+    const pipeline = device.createComputePipeline({
+      layout: "auto",
+      compute: { module: shaderModule, entryPoint: "main" },
+    });
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: paramBuffer } },
+        ...inputBuffers.map((buffer, index) => ({ binding: index + 1, resource: { buffer } })),
+        { binding: 9, resource: { buffer: outputBuffer } },
+      ],
+    });
+
+    const kernelStartedAt = performance.now();
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(size / 64));
+    pass.end();
+    encoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, outputBytes);
+    device.queue.submit([encoder.finish()]);
+    await device.queue.onSubmittedWorkDone();
+    const kernelMs = performance.now() - kernelStartedAt;
+
+    const downloadStartedAt = performance.now();
+    await readBuffer.mapAsync(mapMode.READ);
+    const packed = new Float32Array(readBuffer.getMappedRange().slice(0));
+    readBuffer.unmap();
+    const downloadMs = performance.now() - downloadStartedAt;
+
+    const fields = unpackElevationFields(size, packed);
+    destroyElevationBuffers([paramBuffer, ...inputBuffers, outputBuffer, readBuffer]);
+
+    return {
+      skipped: false,
+      valid: true,
+      backend: "webgpu-elevation",
+      gpuCapabilities: capabilities,
+      reason: null,
+      timings: {
+        uploadMs,
+        kernelMs,
+        downloadMs,
+        totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+      },
+      fields,
+    };
+  }
+
+  function createElevationBufferWithData(device, typedArray, usage) {
+    const buffer = device.createBuffer({
+      size: typedArray.byteLength,
+      usage,
+      mappedAtCreation: true,
+    });
+    new typedArray.constructor(buffer.getMappedRange()).set(typedArray);
+    buffer.unmap();
+    return buffer;
+  }
+
+  function unpackElevationFields(size, packed) {
+    const fields = {};
+    for (const name of GPU_ELEVATION_OUTPUT_FIELDS) {
+      fields[name] = new Float32Array(size);
+    }
+    for (let i = 0; i < size; i += 1) {
+      const offset = i * 4;
+      fields.baseElev[i] = packed[offset];
+      fields.relief[i] = packed[offset + 1];
+      fields.boundaryRelief[i] = packed[offset + 2];
+      fields.elev[i] = packed[offset + 3];
+    }
+    return fields;
+  }
+
+  function destroyElevationBuffers(buffers) {
+    for (const buffer of buffers) {
+      buffer?.destroy?.();
+    }
+  }
+
+  function skippedElevationResult(capabilities, reason) {
+    return {
+      skipped: true,
+      valid: true,
+      backend: "webgpu-elevation",
+      gpuCapabilities: capabilities,
+      reason,
+      timings: emptyElevationTimings(),
+      fields: {},
+    };
+  }
+
+  function emptyElevationTimings() {
+    return {
+      uploadMs: null,
+      kernelMs: null,
+      downloadMs: null,
+      totalGpuPathMs: null,
+    };
+  }
+
+
   // ---- src/render/cpuMapRenderer.js ----
 
   function createCpuMapRenderer(canvas) {

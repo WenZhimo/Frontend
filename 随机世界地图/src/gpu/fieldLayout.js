@@ -51,7 +51,7 @@ export const GPU_FIELD_GROUPS = {
     ],
   },
   [GpuFieldGroup.ELEVATION]: {
-    purpose: "Dense geology-v2 elevation rebuild candidates.",
+    purpose: "Dense geology-v2 elevation rebuild candidates; CPU remains authoritative while Phase 2B can compare an explicit WebGPU candidate.",
     fields: [
       field("isostaticBase", GpuFieldKind.FLOAT),
       field("orogeny", GpuFieldKind.FLOAT),

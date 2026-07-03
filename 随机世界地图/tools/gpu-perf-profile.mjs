@@ -2,6 +2,7 @@ import { parseIntOption, parseOptions } from "./lib/cli.mjs";
 import { createCheckWorld } from "./lib/world-runner.mjs";
 import { stepWorld } from "../src/sim/evolution.js";
 import { detectGpuCapabilities } from "../src/gpu/capability.js";
+import { runWebGpuElevationCandidate } from "../src/gpu/elevationCompute.js";
 import { runWebGpuIsostasyCandidate } from "../src/gpu/isostasyCompute.js";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
@@ -24,14 +25,14 @@ for (let i = 0; i < steps; i += 1) {
 const totalMs = performance.now() - startedAt;
 const cpuBaselineMs = stepMs.reduce((sum, value) => sum + value, 0);
 stepMs.sort((a, b) => a - b);
-const gpuCandidate = kernel === "isostasy" ? await runWebGpuIsostasyCandidate(world) : null;
+const gpuCandidate = await runKernelCandidate(kernel, world);
 
 const result = {
   seedText,
   pipelineMode,
   resolution,
   steps,
-  backend: kernel === "isostasy" ? "webgpu-isostasy" : gpuCapabilities.recommendedMode,
+  backend: kernel === "isostasy" ? "webgpu-isostasy" : kernel === "elevation" ? "webgpu-elevation" : gpuCapabilities.recommendedMode,
   kernel,
   skipped: gpuCandidate?.skipped ?? false,
   skipReason: gpuCandidate?.reason ?? null,
@@ -48,6 +49,8 @@ const result = {
   finalSeaRatio: world.stats.seaRatio,
   note: kernel === "isostasy"
     ? "Phase 2A experimental profile: CPU step path remains authoritative; GPU timing includes upload, compute, and download when available."
+    : kernel === "elevation"
+      ? "Phase 2B experimental profile: CPU step path remains authoritative; this is a single elevation candidate pass, not a production pipeline profile."
     : "Default profile keeps the CPU baseline and capability report without requesting a GPU device.",
 };
 
@@ -65,4 +68,10 @@ function round2(value) {
 
 function roundNullable(value) {
   return Number.isFinite(value) ? round2(value) : null;
+}
+
+async function runKernelCandidate(kernelName, world) {
+  if (kernelName === "isostasy") return runWebGpuIsostasyCandidate(world);
+  if (kernelName === "elevation") return runWebGpuElevationCandidate(world);
+  return null;
 }
