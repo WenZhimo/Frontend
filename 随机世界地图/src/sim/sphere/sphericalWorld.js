@@ -11,6 +11,12 @@ import {
   deriveSphericalOceanConnectivity,
   distanceFromGraphSources,
 } from "./topologyGraph.js";
+import {
+  finiteShare,
+  maxFinite,
+  weightedCategoryShares,
+  weightedShare,
+} from "./stats.js";
 
 export function createSphericalExperimentalWorld({
   seedUint32 = 0,
@@ -110,13 +116,7 @@ function cloneSphericalPlates(plates) {
 }
 
 function measurePlateCoverage(grid, plate, plateCount) {
-  const areaByPlate = new Float64Array(plateCount);
-  let total = 0;
-  for (let id = 0; id < grid.size; id += 1) {
-    const area = grid.area[id] ?? 1;
-    total += area;
-    areaByPlate[plate[id]] += area;
-  }
+  const { areaByCategory: areaByPlate, totalArea: total } = weightedCategoryShares(grid, plate, plateCount);
   let min = Infinity;
   let max = 0;
   let emptyCount = 0;
@@ -132,31 +132,4 @@ function measurePlateCoverage(grid, plate, plateCount) {
     mean: 1 / Math.max(1, plateCount),
     emptyCount,
   };
-}
-
-function weightedShare(grid, mask) {
-  let total = 0;
-  let covered = 0;
-  for (let id = 0; id < grid.size; id += 1) {
-    const area = grid.area[id] ?? 1;
-    total += area;
-    if (mask[id]) covered += area;
-  }
-  return covered / Math.max(total, Number.EPSILON);
-}
-
-function finiteShare(field) {
-  let finite = 0;
-  for (let i = 0; i < field.length; i += 1) {
-    if (Number.isFinite(field[i])) finite += 1;
-  }
-  return finite / Math.max(1, field.length);
-}
-
-function maxFinite(field) {
-  let max = 0;
-  for (let i = 0; i < field.length; i += 1) {
-    if (Number.isFinite(field[i]) && field[i] > max) max = field[i];
-  }
-  return max;
 }
