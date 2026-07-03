@@ -677,6 +677,9 @@
     const neighborCount = new Uint8Array(size);
     const neighbors = new Int32Array(size * 4);
     const edgeLength = new Float32Array(size * 4);
+    const edgeTangentX = new Float32Array(size * 4);
+    const edgeTangentY = new Float32Array(size * 4);
+    const edgeTangentZ = new Float32Array(size * 4);
 
     for (let f = 0; f < FACE_COUNT; f += 1) {
       for (let v = 0; v < n; v += 1) {
@@ -713,6 +716,7 @@
       const start = neighborStart[id];
       for (let k = 0; k < neighborCount[id]; k += 1) {
         const nid = neighbors[start + k];
+        const offset = start + k;
         edgeLength[start + k] = angularDistance3(
           positionX[id],
           positionY[id],
@@ -721,6 +725,17 @@
           positionY[nid],
           positionZ[nid],
         );
+        const tangent = tangentTowardNeighbor(
+          positionX[id],
+          positionY[id],
+          positionZ[id],
+          positionX[nid],
+          positionY[nid],
+          positionZ[nid],
+        );
+        edgeTangentX[offset] = tangent.x;
+        edgeTangentY[offset] = tangent.y;
+        edgeTangentZ[offset] = tangent.z;
       }
     }
 
@@ -745,6 +760,9 @@
       neighborCount,
       neighbors,
       edgeLength,
+      edgeTangentX,
+      edgeTangentY,
+      edgeTangentZ,
       cellId: (f, u, v) => cellId(n, f, u, v),
       faceUv: (id) => faceUvFromId(n, id),
       forEachCell: (visit) => {
@@ -764,6 +782,15 @@
         angularDistance3(positionX[a], positionY[a], positionZ[a], positionX[b], positionY[b], positionZ[b]),
       nearestCell: (x, y, z) => nearestCellByVector({ size, positionX, positionY, positionZ }, x, y, z),
     };
+  }
+
+  function tangentTowardNeighbor(ax, ay, az, bx, by, bz) {
+    const radialProjection = dot3(bx, by, bz, ax, ay, az);
+    return normalize3(
+      bx - ax * radialProjection,
+      by - ay * radialProjection,
+      bz - az * radialProjection,
+    );
   }
 
   function cellId(faceSize, face, u, v) {
