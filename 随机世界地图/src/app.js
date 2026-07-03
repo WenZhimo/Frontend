@@ -1390,17 +1390,20 @@
     const componentId = new Int32Array(grid.size);
     const queue = new Int32Array(grid.size);
     const componentSizes = [];
+    const componentAreas = [];
     let nextId = 1;
 
     for (let start = 0; start < grid.size; start += 1) {
       if (!mask[start] || componentId[start]) continue;
       let head = 0;
       let tail = 0;
+      let area = 0;
       componentId[start] = nextId;
       queue[tail++] = start;
 
       while (head < tail) {
         const id = queue[head++];
+        area += grid.area?.[id] ?? 1;
         const nStart = grid.neighborStart[id];
         const count = grid.neighborCount[id];
         for (let k = 0; k < count; k += 1) {
@@ -1412,12 +1415,14 @@
       }
 
       componentSizes[nextId] = tail;
+      componentAreas[nextId] = area;
       nextId += 1;
     }
 
     return {
       componentId,
       componentSizes,
+      componentAreas,
       componentCount: nextId - 1,
     };
   }
@@ -1432,10 +1437,7 @@
     let externalArea = 0;
 
     for (let component = 1; component <= components.componentCount; component += 1) {
-      let area = 0;
-      for (let id = 0; id < grid.size; id += 1) {
-        if (components.componentId[id] === component) area += grid.area?.[id] ?? 1;
-      }
+      const area = components.componentAreas[component] ?? 0;
       if (area > externalArea) {
         externalArea = area;
         externalComponent = component;
@@ -1465,6 +1467,7 @@
       closedBasinId,
       componentId: components.componentId,
       componentSizes: components.componentSizes,
+      componentAreas: components.componentAreas,
       componentCount: components.componentCount,
       externalComponent,
       externalArea,
