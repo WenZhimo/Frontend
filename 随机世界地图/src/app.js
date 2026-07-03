@@ -1011,6 +1011,113 @@
     );
   }
 
+  const SphericalBoundaryType = {
+    INTERIOR: 0,
+    CONVERGENT: 1,
+    DIVERGENT: 2,
+    TRANSFORM: 3,
+  };
+
+  function classifySphericalPlateBoundaries(grid, plates, assignment, options = {}) {
+    const plate = assignment.plate ?? assignment;
+    const threshold = Number.isFinite(options.threshold) ? options.threshold : 0.000025;
+    const boundaryType = new Uint8Array(grid.size);
+    const stress = new Float32Array(grid.size);
+    const activeBoundary = new Uint8Array(grid.size);
+    const normalMotion = new Float32Array(grid.size);
+    const shearMotion = new Float32Array(grid.size);
+
+    for (let id = 0; id < grid.size; id += 1) {
+      const currentPlate = plate[id];
+      let convergent = 0;
+      let divergent = 0;
+      let shear = 0;
+      let touchesBoundary = false;
+      const start = grid.neighborStart[id];
+      const count = grid.neighborCount[id];
+
+      for (let k = 0; k < count; k += 1) {
+        const nid = grid.neighbors[start + k];
+        if (plate[nid] === currentPlate) continue;
+        touchesBoundary = true;
+        const split = splitSphericalBoundaryMotion(grid, plates, id, nid, currentPlate, plate[nid]);
+        if (split.normal > threshold) divergent += split.normal;
+        else if (split.normal < -threshold) convergent += -split.normal;
+        shear += Math.abs(split.shear);
+      }
+
+      if (!touchesBoundary) continue;
+      activeBoundary[id] = 1;
+      normalMotion[id] = divergent - convergent;
+      shearMotion[id] = shear;
+      if (convergent > divergent && convergent > shear * 0.55) {
+        boundaryType[id] = SphericalBoundaryType.CONVERGENT;
+        stress[id] = convergent;
+      } else if (divergent > convergent && divergent > shear * 0.55) {
+        boundaryType[id] = SphericalBoundaryType.DIVERGENT;
+        stress[id] = divergent;
+      } else {
+        boundaryType[id] = SphericalBoundaryType.TRANSFORM;
+        stress[id] = shear * 0.5;
+      }
+    }
+
+    return {
+      boundaryType,
+      stress,
+      activeBoundary,
+      normalMotion,
+      shearMotion,
+    };
+  }
+
+  function summarizeSphericalBoundaries(grid, classified) {
+    const counts = {
+      interior: 0,
+      convergent: 0,
+      divergent: 0,
+      transform: 0,
+      faceSeamBoundary: 0,
+      activeBoundary: 0,
+    };
+    let stressTotal = 0;
+    let stressMax = 0;
+    let seamBoundaryTotal = 0;
+    let seamBoundaryStress = 0;
+
+    for (let id = 0; id < grid.size; id += 1) {
+      const type = classified.boundaryType[id];
+      if (type === SphericalBoundaryType.CONVERGENT) counts.convergent += 1;
+      else if (type === SphericalBoundaryType.DIVERGENT) counts.divergent += 1;
+      else if (type === SphericalBoundaryType.TRANSFORM) counts.transform += 1;
+      else counts.interior += 1;
+
+      if (!classified.activeBoundary[id]) continue;
+      counts.activeBoundary += 1;
+      const stress = classified.stress[id];
+      stressTotal += stress;
+      stressMax = Math.max(stressMax, stress);
+      if (touchesFaceSeam(grid, id)) {
+        counts.faceSeamBoundary += 1;
+        seamBoundaryTotal += 1;
+        seamBoundaryStress += stress;
+      }
+    }
+
+    const active = Math.max(1, counts.activeBoundary);
+    return {
+      ...counts,
+      activeBoundaryShare: counts.activeBoundary / Math.max(1, grid.size),
+      convergentShareOfActive: counts.convergent / active,
+      divergentShareOfActive: counts.divergent / active,
+      transformShareOfActive: counts.transform / active,
+      faceSeamBoundaryShareOfActive: counts.faceSeamBoundary / active,
+      stressMean: stressTotal / active,
+      stressMax,
+      faceSeamStressMean: seamBoundaryStress / Math.max(1, seamBoundaryTotal),
+    };
+  }
+
   function measureSphericalPlateDrift(initialPlates, currentPlates) {
     let total = 0;
     for (let p = 0; p < currentPlates.count; p += 1) {
@@ -1024,6 +1131,43 @@
       );
     }
     return total / Math.max(1, currentPlates.count);
+  }
+
+  function splitSphericalBoundaryMotion(grid, plates, id, nid, plateA, plateB) {
+    const ax = grid.positionX[id];
+    const ay = grid.positionY[id];
+    const az = grid.positionZ[id];
+    const bx = grid.positionX[nid];
+    const by = grid.positionY[nid];
+    const bz = grid.positionZ[nid];
+    const va = sphericalPlateVelocityAt(plates, plateA, ax, ay, az);
+    const vb = sphericalPlateVelocityAt(plates, plateB, bx, by, bz);
+    const rvx = vb.x - va.x;
+    const rvy = vb.y - va.y;
+    const rvz = vb.z - va.z;
+    const mid = normalize3(ax + bx, ay + by, az + bz);
+    const rawNormal = normalize3(bx - ax, by - ay, bz - az);
+    const normalDotRadial = dot3(rawNormal.x, rawNormal.y, rawNormal.z, mid.x, mid.y, mid.z);
+    const normal = normalize3(
+      rawNormal.x - mid.x * normalDotRadial,
+      rawNormal.y - mid.y * normalDotRadial,
+      rawNormal.z - mid.z * normalDotRadial,
+    );
+    const tangent = cross3(mid.x, mid.y, mid.z, normal.x, normal.y, normal.z);
+    return {
+      normal: rvx * normal.x + rvy * normal.y + rvz * normal.z,
+      shear: rvx * tangent.x + rvy * tangent.y + rvz * tangent.z,
+    };
+  }
+
+  function touchesFaceSeam(grid, id) {
+    const face = grid.face[id];
+    const start = grid.neighborStart[id];
+    const count = grid.neighborCount[id];
+    for (let k = 0; k < count; k += 1) {
+      if (grid.face[grid.neighbors[start + k]] !== face) return true;
+    }
+    return false;
   }
 
   function fibonacciSpherePoint(index, count, random) {
