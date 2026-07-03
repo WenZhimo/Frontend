@@ -38,7 +38,7 @@ const result = {
     cubedSphereHasDiagnosticWorld: before.spherical.hasSphericalWorld === true,
     productionGridStillCylindrical: before.spherical.productionGridKind === "cylindrical",
     productionStepAdvanced: after.spherical.step === steps,
-    diagnosticSphericalWorldNotAdvanced: after.spherical.sphericalMeanPlateDriftRadians === before.spherical.sphericalMeanPlateDriftRadians,
+    diagnosticSphericalWorldAdvanced: after.spherical.sphericalMeanPlateDriftRadians > before.spherical.sphericalMeanPlateDriftRadians,
     productionStatsStillPresent: Number.isFinite(after.spherical.landRatio) && Number.isFinite(after.spherical.seaRatio),
   },
 };
