@@ -1,4 +1,4 @@
-import { forEachGridCell, forEachNeighbor4ById, forEachNeighbor8ById, sampleGridWrapped, xyOf } from "../grid.js";
+import { forEachGridCell, forEachNeighbor4ById, forEachNeighbor8ById, indexOf, sampleGridWrapped, xyOf } from "../grid.js";
 import { CrustType } from "./crust.js";
 
 const TRANSPORT_PASSES = 4;
@@ -10,8 +10,6 @@ export function updateSedimentBudget(world) {
   const { grid, seaLevel } = world;
   const {
     size,
-    width,
-    height,
     elev,
     crustType,
     sediment,
@@ -71,38 +69,35 @@ export function updateSedimentBudget(world) {
   scratch3.fill(0);
 
   let produced = 0;
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      const rel = elev[id] - seaLevel;
-      const land = rel >= -0.006;
-      const slope = localSlope(grid, elev, id);
-      const relief = localRelief(grid, elev, id);
-      const activeConstructive = Math.max(ridge[id], ridgeAxis[id], trench[id] * 0.55, trenchAxis[id] * 0.45);
-      const mountainSource = land
-        ? activeOrogeny[id] * 0.00042 +
-          mountainBelt[id] * 0.00034 +
-          oldOrogeny[id] * 0.00016 +
-          orogeny[id] * 0.00018 +
-          mountainAxis[id] * 0.00014 +
-          orographicBarrier[id] * 0.00009 +
-          orogenicSedimentSupply[id] * 0.00032
-        : 0;
-      const slopeSource = land
-        ? smoothstep(0.012, 0.055, slope) * smoothstep(0.018, 0.12, relief) * 0.00023
-        : 0;
-      const riftShoulderSource = land
-        ? riftAxis[id] * smoothstep(0.006, 0.08, rel) * 0.000055
-        : 0;
-      const boundaryDamp = 1 - Math.min(0.75, activeConstructive * 0.72 + Math.max(0, boundaryInfluence[id] - 0.45) * 0.25);
-      const source = clamp01((mountainSource + slopeSource + riftShoulderSource) * dt * boundaryDamp);
-      erosionSource[id] = source;
-      erosionRate[id] = source / Math.max(0.000001, dt);
-      scratch[id] = source;
-      sedimentFlux[id] = source;
-      produced += source;
-    }
-  }
+  forEachGridCell(grid, (id) => {
+    const rel = elev[id] - seaLevel;
+    const land = rel >= -0.006;
+    const slope = localSlope(grid, elev, id);
+    const relief = localRelief(grid, elev, id);
+    const activeConstructive = Math.max(ridge[id], ridgeAxis[id], trench[id] * 0.55, trenchAxis[id] * 0.45);
+    const mountainSource = land
+      ? activeOrogeny[id] * 0.00042 +
+        mountainBelt[id] * 0.00034 +
+        oldOrogeny[id] * 0.00016 +
+        orogeny[id] * 0.00018 +
+        mountainAxis[id] * 0.00014 +
+        orographicBarrier[id] * 0.00009 +
+        orogenicSedimentSupply[id] * 0.00032
+      : 0;
+    const slopeSource = land
+      ? smoothstep(0.012, 0.055, slope) * smoothstep(0.018, 0.12, relief) * 0.00023
+      : 0;
+    const riftShoulderSource = land
+      ? riftAxis[id] * smoothstep(0.006, 0.08, rel) * 0.000055
+      : 0;
+    const boundaryDamp = 1 - Math.min(0.75, activeConstructive * 0.72 + Math.max(0, boundaryInfluence[id] - 0.45) * 0.25);
+    const source = clamp01((mountainSource + slopeSource + riftShoulderSource) * dt * boundaryDamp);
+    erosionSource[id] = source;
+    erosionRate[id] = source / Math.max(0.000001, dt);
+    scratch[id] = source;
+    sedimentFlux[id] = source;
+    produced += source;
+  });
 
   for (let i = 0; i < size; i += 1) {
     const { x, y } = xyOf(grid, i);
@@ -157,73 +152,70 @@ export function updateSedimentBudget(world) {
   let dissipated = 0;
   for (let pass = 0; pass < TRANSPORT_PASSES; pass += 1) {
     scratch2.fill(0);
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        let remaining = scratch[id];
-        if (remaining <= 0) continue;
-        const maxSediment = maxSedimentForCell(grid, id, elev[id] - seaLevel);
-        const saturation = clamp01(sediment[id] / Math.max(0.001, maxSediment));
-        const sinkEfficiency = 0.32 + pass * 0.12;
-        const localCapacity = sedimentCapacity[id] * (1 - saturation * 0.82) * sinkEfficiency * 0.018 * dt;
-        const localDeposit = Math.min(remaining, Math.max(0, localCapacity));
-        if (localDeposit > 0) {
-          sedimentSink[id] += localDeposit;
-          remaining -= localDeposit;
-          deposited += localDeposit;
-        }
-        if (remaining <= 0) continue;
-
-        const centerElev = elev[id];
-        const deterministicJitter = 0.82 + (((id * 1103515245 + pass * 1013904223) >>> 0) % 997) / 997 * 0.18;
-        let weightSum = 0;
-        let fallback = -1;
-        let fallbackScore = -Infinity;
-        const candidates = [];
-        visitNeighbor8(grid, id, (nid, diagonal) => {
-          const downslope = Math.max(0, centerElev - elev[nid]);
-          const softSink = softDepositionalSink(grid, nid);
-          const attraction =
-            softSink * 0.74 +
-            basin[nid] * 0.24 +
-            forelandBasin[nid] * 0.5 +
-            passiveMargin[nid] * 0.32 +
-            continentalShelf[nid] * 0.52 +
-            continentalRise[nid] * 0.34 +
-            inlandWaterCandidate[nid] * 0.48 +
-            sedimentCapacity[nid] * 0.42 +
-            abyssalPlain[nid] * 0.12;
-          const constructivePenalty = ridge[nid] * 0.48 + ridgeAxis[nid] * 0.58 + activeOrogeny[nid] * 0.24;
-          const bend = 0.88 + Math.min(0.3, (axisCurvature?.[nid] ?? 0) * 0.16 + (weakness?.[nid] ?? 0) * 0.08);
-          const score = downslope * 12 + attraction - constructivePenalty;
-          const weight = Math.max(0, score) * (diagonal ? 0.68 : 1) * bend * deterministicJitter;
-          if (weight > 0) {
-            candidates.push([nid, weight]);
-            weightSum += weight;
-          }
-          if (score > fallbackScore) {
-            fallback = nid;
-            fallbackScore = score;
-          }
-        });
-
-        if (weightSum > 0) {
-          const travel = remaining * (0.72 - pass * 0.08);
-          const localLoss = remaining - travel;
-          dissipated += localLoss;
-          for (const [nid, weight] of candidates) scratch2[nid] += travel * (weight / weightSum);
-        } else if (fallback >= 0 && sedimentCapacity[fallback] > sedimentCapacity[id] * 0.95) {
-          const travel = remaining * 0.42;
-          scratch2[fallback] += travel;
-          dissipated += remaining - travel;
-        } else {
-          const extraDeposit = Math.min(remaining, Math.max(0, sedimentCapacity[id] * 0.006 * dt));
-          sedimentSink[id] += extraDeposit;
-          deposited += extraDeposit;
-          dissipated += remaining - extraDeposit;
-        }
+    forEachGridCell(grid, (id) => {
+      let remaining = scratch[id];
+      if (remaining <= 0) return;
+      const maxSediment = maxSedimentForCell(grid, id, elev[id] - seaLevel);
+      const saturation = clamp01(sediment[id] / Math.max(0.001, maxSediment));
+      const sinkEfficiency = 0.32 + pass * 0.12;
+      const localCapacity = sedimentCapacity[id] * (1 - saturation * 0.82) * sinkEfficiency * 0.018 * dt;
+      const localDeposit = Math.min(remaining, Math.max(0, localCapacity));
+      if (localDeposit > 0) {
+        sedimentSink[id] += localDeposit;
+        remaining -= localDeposit;
+        deposited += localDeposit;
       }
-    }
+      if (remaining <= 0) return;
+
+      const centerElev = elev[id];
+      const deterministicJitter = 0.82 + (((id * 1103515245 + pass * 1013904223) >>> 0) % 997) / 997 * 0.18;
+      let weightSum = 0;
+      let fallback = -1;
+      let fallbackScore = -Infinity;
+      const candidates = [];
+      visitNeighbor8(grid, id, (nid, diagonal) => {
+        const downslope = Math.max(0, centerElev - elev[nid]);
+        const softSink = softDepositionalSink(grid, nid);
+        const attraction =
+          softSink * 0.74 +
+          basin[nid] * 0.24 +
+          forelandBasin[nid] * 0.5 +
+          passiveMargin[nid] * 0.32 +
+          continentalShelf[nid] * 0.52 +
+          continentalRise[nid] * 0.34 +
+          inlandWaterCandidate[nid] * 0.48 +
+          sedimentCapacity[nid] * 0.42 +
+          abyssalPlain[nid] * 0.12;
+        const constructivePenalty = ridge[nid] * 0.48 + ridgeAxis[nid] * 0.58 + activeOrogeny[nid] * 0.24;
+        const bend = 0.88 + Math.min(0.3, (axisCurvature?.[nid] ?? 0) * 0.16 + (weakness?.[nid] ?? 0) * 0.08);
+        const score = downslope * 12 + attraction - constructivePenalty;
+        const weight = Math.max(0, score) * (diagonal ? 0.68 : 1) * bend * deterministicJitter;
+        if (weight > 0) {
+          candidates.push([nid, weight]);
+          weightSum += weight;
+        }
+        if (score > fallbackScore) {
+          fallback = nid;
+          fallbackScore = score;
+        }
+      });
+
+      if (weightSum > 0) {
+        const travel = remaining * (0.72 - pass * 0.08);
+        const localLoss = remaining - travel;
+        dissipated += localLoss;
+        for (const [nid, weight] of candidates) scratch2[nid] += travel * (weight / weightSum);
+      } else if (fallback >= 0 && sedimentCapacity[fallback] > sedimentCapacity[id] * 0.95) {
+        const travel = remaining * 0.42;
+        scratch2[fallback] += travel;
+        dissipated += remaining - travel;
+      } else {
+        const extraDeposit = Math.min(remaining, Math.max(0, sedimentCapacity[id] * 0.006 * dt));
+        sedimentSink[id] += extraDeposit;
+        deposited += extraDeposit;
+        dissipated += remaining - extraDeposit;
+      }
+    });
     scratch.set(scratch2);
     for (let i = 0; i < size; i += 1) sedimentFlux[i] += scratch[i];
   }
@@ -370,39 +362,35 @@ function measureSedimentBudget(world, totals) {
 }
 
 function softenSedimentCapacity(grid) {
-  const { width, height, sedimentCapacity, scratch3 } = grid;
+  const { sedimentCapacity, scratch3 } = grid;
   for (let pass = 0; pass < CAPACITY_SMOOTH_PASSES; pass += 1) {
     scratch3.set(sedimentCapacity);
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        let total = scratch3[id] * 1.8;
-        let weight = 1.8;
-        visitNeighbor8(grid, id, (nid, diagonal) => {
-          const w = diagonal ? 0.38 : 0.72;
-          total += scratch3[nid] * w;
-          weight += w;
-        });
-        const local = scratch3[id];
-        const smoothed = total / weight;
-        const naturalSink = softDepositionalSink(grid, id);
-        const structuralLine = clamp01(
-          Math.max(0, grid.boundaryInfluence[id] - 0.14) * 1.8 +
-            (grid.fractureZoneMemory?.[id] ?? 0) * 0.65 +
-            (grid.transformMemory?.[id] ?? 0) * 0.42 +
-            (grid.inactiveBoundaryRelief?.[id] ?? 0) * 2.2,
-        );
-        const blend = clamp01(0.16 + naturalSink * 0.16 + structuralLine * 0.22);
-        const edgeClamp = 0.06 + naturalSink * 0.04;
-        sedimentCapacity[id] = clamp01(mix(local, Math.min(local + edgeClamp, smoothed), blend));
-      }
-    }
+    forEachGridCell(grid, (id) => {
+      let total = scratch3[id] * 1.8;
+      let weight = 1.8;
+      visitNeighbor8(grid, id, (nid, diagonal) => {
+        const w = diagonal ? 0.38 : 0.72;
+        total += scratch3[nid] * w;
+        weight += w;
+      });
+      const local = scratch3[id];
+      const smoothed = total / weight;
+      const naturalSink = softDepositionalSink(grid, id);
+      const structuralLine = clamp01(
+        Math.max(0, grid.boundaryInfluence[id] - 0.14) * 1.8 +
+          (grid.fractureZoneMemory?.[id] ?? 0) * 0.65 +
+          (grid.transformMemory?.[id] ?? 0) * 0.42 +
+          (grid.inactiveBoundaryRelief?.[id] ?? 0) * 2.2,
+      );
+      const blend = clamp01(0.16 + naturalSink * 0.16 + structuralLine * 0.22);
+      const edgeClamp = 0.06 + naturalSink * 0.04;
+      sedimentCapacity[id] = clamp01(mix(local, Math.min(local + edgeClamp, smoothed), blend));
+    });
   }
 }
 
 function softDepositionalSink(grid, id) {
-  const x = id % grid.width;
-  const y = Math.floor(id / grid.width);
+  const { x, y } = xyOf(grid, id);
   const broadBasin = localAverage8(grid, grid.basin, x, y);
   const structuralLine = structuralLineMemory(grid, id);
   const natural =
@@ -418,26 +406,23 @@ function softDepositionalSink(grid, id) {
 }
 
 function softenSedimentDeposits(grid, seaLevel) {
-  const { width, height, sediment, scratch3 } = grid;
+  const { sediment, scratch3 } = grid;
   scratch3.set(sediment);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      const structuralLine = structuralLineMemory(grid, id);
-      const naturalSink = softDepositionalSink(grid, id);
-      const blend = clamp01(structuralLine * 0.085 + naturalSink * 0.035);
-      if (blend <= 0.002) continue;
-      let total = scratch3[id] * 1.9;
-      let weight = 1.9;
-      visitNeighbor8(grid, id, (nid, diagonal) => {
-        const w = diagonal ? 0.28 : 0.58;
-        total += scratch3[nid] * w;
-        weight += w;
-      });
-      const maxSediment = maxSedimentForCell(grid, id, grid.elev[id] - seaLevel);
-      sediment[id] = Math.min(maxSediment, mix(scratch3[id], total / weight, blend));
-    }
-  }
+  forEachGridCell(grid, (id) => {
+    const structuralLine = structuralLineMemory(grid, id);
+    const naturalSink = softDepositionalSink(grid, id);
+    const blend = clamp01(structuralLine * 0.085 + naturalSink * 0.035);
+    if (blend <= 0.002) return;
+    let total = scratch3[id] * 1.9;
+    let weight = 1.9;
+    visitNeighbor8(grid, id, (nid, diagonal) => {
+      const w = diagonal ? 0.28 : 0.58;
+      total += scratch3[nid] * w;
+      weight += w;
+    });
+    const maxSediment = maxSedimentForCell(grid, id, grid.elev[id] - seaLevel);
+    sediment[id] = Math.min(maxSediment, mix(scratch3[id], total / weight, blend));
+  });
 }
 
 function maxSedimentForCell(grid, id, relativeElevation) {
@@ -492,43 +477,40 @@ function measureSedimentStraightnessDiagnostics(grid, field) {
   let structuralWeight = 0;
   let naturalWeight = 0;
   let axisWeight = 0;
-  for (let y = 1; y < grid.height - 1; y += 1) {
-    for (let x = 0; x < grid.width; x += 1) {
-      const id = y * grid.width + x;
-      if (field[id] < 0.05) continue;
-      const contrast = localRelief(grid, field, id);
-      if (contrast < 0.012) continue;
+  forEachGridCell(grid, (id, x, y) => {
+    if (field[id] < 0.05) return;
+    const contrast = localRelief(grid, field, id);
+    if (contrast < 0.012) return;
 
-      const horizontal = bandScore(grid, field, x, y, 1, 0, 0, 1);
-      const vertical = bandScore(grid, field, x, y, 0, 1, 1, 0);
-      const diagA = bandScore(grid, field, x, y, 1, 1, 1, -1);
-      const diagB = bandScore(grid, field, x, y, 1, -1, 1, 1);
-      const directionalRisk = Math.max(horizontal, vertical, diagA, diagB);
-      if (directionalRisk <= 0) continue;
+    const horizontal = bandScore(grid, field, x, y, 1, 0, 0, 1);
+    const vertical = bandScore(grid, field, x, y, 0, 1, 1, 0);
+    const diagA = bandScore(grid, field, x, y, 1, 1, 1, -1);
+    const diagB = bandScore(grid, field, x, y, 1, -1, 1, 1);
+    const directionalRisk = Math.max(horizontal, vertical, diagA, diagB);
+    if (directionalRisk <= 0) return;
 
-      const naturalSink = clamp01(
-        grid.passiveMargin[id] +
-          grid.continentalShelf[id] +
-          grid.continentalRise[id] +
-          grid.sedimentWedge[id] +
-          localAverage8(grid, grid.basin, x, y) * 0.28 +
-          grid.forelandBasin[id] +
-          grid.abyssalPlain[id] * 0.5,
-      );
-      const structuralMemory = clamp01(
-        (grid.inactiveBoundaryRelief?.[id] ?? 0) * 5 +
-          (grid.fractureZoneMemory?.[id] ?? 0) * 2 +
-          (grid.transformMemory?.[id] ?? 0) * 1.2 +
-          Math.max(0, grid.boundaryInfluence[id] - 0.1) * 2,
-      );
-      const suspiciousWeight = Math.max(0.15, structuralMemory) * (1 - naturalSink * 0.65);
-      totalWeight += suspiciousWeight;
-      weightedRisk += directionalRisk * suspiciousWeight;
-      structuralWeight += directionalRisk * structuralMemory;
-      naturalWeight += directionalRisk * naturalSink;
-      axisWeight += Math.max(horizontal, vertical) * suspiciousWeight;
-    }
-  }
+    const naturalSink = clamp01(
+      grid.passiveMargin[id] +
+        grid.continentalShelf[id] +
+        grid.continentalRise[id] +
+        grid.sedimentWedge[id] +
+        localAverage8(grid, grid.basin, x, y) * 0.28 +
+        grid.forelandBasin[id] +
+        grid.abyssalPlain[id] * 0.5,
+    );
+    const structuralMemory = clamp01(
+      (grid.inactiveBoundaryRelief?.[id] ?? 0) * 5 +
+        (grid.fractureZoneMemory?.[id] ?? 0) * 2 +
+        (grid.transformMemory?.[id] ?? 0) * 1.2 +
+        Math.max(0, grid.boundaryInfluence[id] - 0.1) * 2,
+    );
+    const suspiciousWeight = Math.max(0.15, structuralMemory) * (1 - naturalSink * 0.65);
+    totalWeight += suspiciousWeight;
+    weightedRisk += directionalRisk * suspiciousWeight;
+    structuralWeight += directionalRisk * structuralMemory;
+    naturalWeight += directionalRisk * naturalSink;
+    axisWeight += Math.max(horizontal, vertical) * suspiciousWeight;
+  });
   return {
     sedimentStraightnessRisk: totalWeight ? weightedRisk / totalWeight : 0,
     sedimentBoundaryCorrelation: totalWeight ? structuralWeight / totalWeight : 0,
@@ -538,7 +520,9 @@ function measureSedimentStraightnessDiagnostics(grid, field) {
 }
 
 function bandScore(grid, field, x, y, alongDx, alongDy, perpDx, perpDy) {
-  const value = field[y * grid.width + x];
+  const id = indexOf(grid, x, y);
+  if (id < 0) return 0;
+  const value = field[id];
   const along =
     similarity(grid, field, x + alongDx, y + alongDy, value) *
     similarity(grid, field, x - alongDx, y - alongDy, value);
@@ -579,7 +563,7 @@ function smoothstep(edge0, edge1, x) {
 }
 
 function localAverage8(grid, field, x, y) {
-  const id = grid.topology?.kind ? grid.topology.index(x, y) : y * grid.width + x;
+  const id = indexOf(grid, x, y);
   if (id < 0) return 0;
   let total = field[id] * 1.5;
   let weight = 1.5;
