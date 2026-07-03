@@ -6114,7 +6114,7 @@
     "isostaticReliefSupply",
   ];
 
-  export async function runWebGpuIsostasyCandidate(world, options = {}) {
+  async function runWebGpuIsostasyCandidate(world, options = {}) {
     const globalObject = options.globalObject ?? globalThis;
     const capabilities = detectGpuCapabilities(globalObject);
     const gpu = globalObject?.navigator?.gpu;
@@ -6466,7 +6466,7 @@
     "elev",
   ];
 
-  export async function runWebGpuElevationCandidate(world, options = {}) {
+  async function runWebGpuElevationCandidate(world, options = {}) {
     const globalObject = options.globalObject ?? globalThis;
     const capabilities = detectGpuCapabilities(globalObject);
     const gpu = globalObject?.navigator?.gpu;
