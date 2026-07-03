@@ -11,6 +11,7 @@ import {
   deriveSphericalOceanConnectivity,
   distanceFromGraphSources,
 } from "./topologyGraph.js";
+import { createSphericalTopology } from "./topology.js";
 import {
   finiteShare,
   maxFinite,
@@ -27,6 +28,7 @@ export function createSphericalExperimentalWorld({
   steps = 0,
 } = {}) {
   const grid = createCubedSphereGrid(faceSize);
+  const topology = createSphericalTopology(grid);
   const plates = createSphericalPlates({ seedUint32, plateCount, intensity });
   const initialPlates = cloneSphericalPlates(plates);
 
@@ -44,6 +46,7 @@ export function createSphericalExperimentalWorld({
     seedText,
     seedUint32,
     grid,
+    topology,
     plates,
     initialPlates,
     plateAssignment,
@@ -54,6 +57,7 @@ export function createSphericalExperimentalWorld({
     distanceToExternalSea,
     stats: summarizeSphericalExperimentalWorld({
       grid,
+      topology,
       plates,
       initialPlates,
       plateAssignment,
@@ -70,6 +74,7 @@ export function summarizeSphericalExperimentalWorld(world) {
   const grid = world.grid;
   return {
     topologyKind: grid.topologyKind,
+    topologyApiKind: world.topology?.topologyKind ?? null,
     faceSize: grid.faceSize,
     cellCount: grid.size,
     plateCount: world.plates.count,
