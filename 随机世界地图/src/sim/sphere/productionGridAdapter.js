@@ -9,6 +9,7 @@ import {
   finiteShare,
   maxFinite,
   weightedCategoryShares,
+  weightedFieldSummary,
   weightedMean,
   weightedShare,
   weightedSum,
@@ -158,6 +159,7 @@ export function summarizeProductionGridAdapter(grid) {
     fieldCount: FIELD_SPECS.length,
     allFieldsMatchSize: FIELD_SPECS.every(([name]) => grid[name]?.length === grid.size),
     neighborSymmetryValid: measureNeighborSymmetry(grid),
+    fieldSummaries: summarizeAdapterFields(grid),
     statsProbe: {
       weightedSum: weightedSum(grid, synthetic.scalar),
       weightedMean: weightedMean(grid, synthetic.scalar),
@@ -173,6 +175,15 @@ export function summarizeProductionGridAdapter(grid) {
 
 export function productionAdapterFieldNames() {
   return FIELD_SPECS.map(([name]) => name);
+}
+
+export function summarizeAdapterFields(grid, names = productionAdapterFieldNames()) {
+  const summaries = {};
+  for (const name of names) {
+    if (!grid[name] || grid[name].length !== grid.size) continue;
+    summaries[name] = weightedFieldSummary(grid, grid[name]);
+  }
+  return summaries;
 }
 
 function measureNeighborSymmetry(grid) {
