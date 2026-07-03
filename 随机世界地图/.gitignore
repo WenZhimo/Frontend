@@ -1,2 +1,6 @@
 .test-cache/
-
+.harness-active
+harness-progress.txt
+harness-tasks.json
+harness-tasks.json.bak
+harness-tasks.json.tmp
