@@ -3626,9 +3626,7 @@
       queue[tail++] = start;
       while (head < tail) {
         const id = queue[head++];
-        const x = id % width;
-        const y = Math.floor(id / width);
-        visitNeighbor4(grid, x, y, (nid) => {
+        forEachNeighbor4ById(grid, id, (nid) => {
           if (tectonicAxis[nid] <= 0.06 || axisSegmentId[nid]) return;
           axisSegmentId[nid] = segmentId;
           queue[tail++] = nid;
@@ -3670,7 +3668,7 @@
           continue;
         }
         let neighbors = 0;
-        visitNeighbor4(grid, x, y, (nid) => {
+        forEachNeighbor4ById(grid, id, (nid) => {
           if (field[nid] > v * 0.35) neighbors += 1;
         });
         output[id] = neighbors / 4;
@@ -3692,16 +3690,9 @@
     return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
   }
 
-  function visitNeighbor4(grid, x, y, visit) {
-    visit(y * grid.width + wrapX(grid.width, x - 1));
-    visit(y * grid.width + wrapX(grid.width, x + 1));
-    if (y > 0) visit((y - 1) * grid.width + x);
-    if (y < grid.height - 1) visit((y + 1) * grid.width + x);
-  }
-
   function sample(grid, field, x, y) {
     const sy = Math.max(0, Math.min(grid.height - 1, y));
-    return field[sy * grid.width + wrapX(grid.width, x)];
+    return sampleGridWrapped(grid, field, x, sy);
   }
 
 
