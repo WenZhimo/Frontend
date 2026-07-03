@@ -3265,7 +3265,7 @@
 
   function updatePlateBoundariesV2(world) {
     const { grid } = world;
-    const { width, height, size, plate, boundaryDistance, boundaryInfluence, weakness, activeBoundary, boundaryDensity, boundaryCoherence, noisyBoundaryPatch, plateCheckerboard } = grid;
+    const { size, plate, boundaryDistance, boundaryInfluence, weakness, activeBoundary, boundaryDensity, boundaryCoherence, noisyBoundaryPatch, plateCheckerboard } = grid;
     const radius = physicalRadius(grid, 4);
     const q = new Int32Array(size);
     let head = 0;
@@ -3278,31 +3278,25 @@
     noisyBoundaryPatch.fill(0);
     plateCheckerboard.fill(0);
 
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const id = y * width + x;
-        let edge = false;
-        forEachNeighbor4(grid, x, y, (nx, ny) => {
-          if (plate[ny * width + nx] !== plate[id]) edge = true;
-        });
-        if (edge) {
-          boundaryDistance[id] = 0;
-          activeBoundary[id] = 1;
-          q[tail++] = id;
-        }
+    forEachGridCell(grid, (id) => {
+      let edge = false;
+      forEachNeighbor4ById(grid, id, (nid) => {
+        if (plate[nid] !== plate[id]) edge = true;
+      });
+      if (edge) {
+        boundaryDistance[id] = 0;
+        activeBoundary[id] = 1;
+        q[tail++] = id;
       }
-    }
+    });
 
     deriveBoundaryCoherence(grid);
 
     while (head < tail) {
       const id = q[head++];
-      const x = id % width;
-      const y = Math.floor(id / width);
       const nextDistance = boundaryDistance[id] + 1;
       if (nextDistance > radius) continue;
-      forEachNeighbor4(grid, x, y, (nx, ny) => {
-        const nid = ny * width + nx;
+      forEachNeighbor4ById(grid, id, (nid) => {
         if (nextDistance < boundaryDistance[nid]) {
           boundaryDistance[nid] = nextDistance;
           q[tail++] = nid;
@@ -3440,11 +3434,9 @@
   }
 
   function nearestBoundaryKind(grid, id) {
-    const x = id % grid.width;
-    const y = Math.floor(id / grid.width);
     let best = BoundaryType.INTERIOR;
-    forEachNeighbor4(grid, x, y, (nx, ny) => {
-      const kind = grid.boundaryKind[ny * grid.width + nx];
+    forEachNeighbor4ById(grid, id, (nid) => {
+      const kind = grid.boundaryKind[nid];
       if (kind !== BoundaryType.INTERIOR) best = kind;
     });
     return best;
