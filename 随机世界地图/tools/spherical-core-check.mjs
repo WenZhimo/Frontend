@@ -25,7 +25,10 @@ const result = {
 };
 
 if (world.kind !== "spherical-experimental-world") result.valid = false;
+if (world.topology?.topologyKind !== "cubed-sphere") result.valid = false;
+if (world.topology?.size !== world.grid.size) result.valid = false;
 if (stats.topologyKind !== "cubed-sphere") result.valid = false;
+if (stats.topologyApiKind !== "cubed-sphere") result.valid = false;
 if (stats.faceSize !== faceSize) result.valid = false;
 if (stats.cellCount !== 6 * faceSize * faceSize) result.valid = false;
 if (stats.plateCount !== plateCount) result.valid = false;

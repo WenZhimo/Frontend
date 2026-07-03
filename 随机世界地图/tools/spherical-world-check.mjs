@@ -38,12 +38,14 @@ const result = {
     projectionMode: spherical.params.projectionMode,
     hasSphericalGrid: Boolean(spherical.sphericalGrid),
     hasSphericalWorld: Boolean(spherical.sphericalWorld),
+    hasSphericalTopology: Boolean(spherical.sphericalWorld?.topology),
     simulationGridKind: spherical.grid.topology?.kind ?? spherical.grid.kind ?? "cylindrical",
     simulationSize: spherical.grid.size,
     sphericalGridKind: spherical.sphericalGrid?.topologyKind ?? null,
     sphericalGridSize: spherical.sphericalGrid?.size ?? 0,
     sphericalFaceSize: spherical.sphericalGrid?.faceSize ?? 0,
     sphericalWorldKind: spherical.sphericalWorld?.kind ?? null,
+    sphericalWorldTopologyKind: spherical.sphericalWorld?.topology?.topologyKind ?? null,
     sphericalWorldCellCount: spherical.sphericalWorld?.stats?.cellCount ?? 0,
     sphericalWorldActiveBoundaryShare: spherical.sphericalWorld?.stats?.activeBoundaryShare ?? 0,
   },
@@ -62,6 +64,8 @@ if (!result.spherical.hasSphericalWorld) result.valid = false;
 if (result.spherical.sphericalGridKind !== "cubed-sphere") result.valid = false;
 if (result.spherical.sphericalFaceSize !== Math.max(2, Math.trunc(faceSize))) result.valid = false;
 if (result.spherical.sphericalWorldKind !== "spherical-experimental-world") result.valid = false;
+if (!result.spherical.hasSphericalTopology) result.valid = false;
+if (result.spherical.sphericalWorldTopologyKind !== "cubed-sphere") result.valid = false;
 if (result.spherical.sphericalWorldCellCount !== result.spherical.sphericalGridSize) result.valid = false;
 if (result.spherical.simulationSize !== result.cylindrical.simulationSize) result.valid = false;
 
