@@ -225,21 +225,39 @@ export function forEachNeighbor4(grid, x, y, visit) {
 
 export function forEachNeighbor4ById(grid, id, visit) {
   const topology = topologyForGrid(grid);
-  topology.forEachNeighbor4(id, (nid, dx, dy) => {
-    visit(nid, dx, dy);
+  if (topology.forEachNeighbor4) {
+    topology.forEachNeighbor4(id, (nid, dx, dy) => {
+      visit(nid, dx, dy);
+    });
+    return;
+  }
+  topology.forEachNeighbor(id, (nid, slot, edgeLength) => {
+    visit(nid, 0, 0, edgeLength, slot);
   });
 }
 
 export function forEachNeighbor8ById(grid, id, visit) {
   const topology = topologyForGrid(grid);
-  topology.forEachNeighbor8(id, (nid, dx, dy) => {
-    visit(nid, dx, dy);
+  if (topology.forEachNeighbor8) {
+    topology.forEachNeighbor8(id, (nid, dx, dy) => {
+      visit(nid, dx, dy);
+    });
+    return;
+  }
+  topology.forEachNeighbor(id, (nid, slot, edgeLength) => {
+    visit(nid, 0, 0, edgeLength, slot);
   });
 }
 
 export function forEachNeighborRadiusById(grid, id, radius, visit) {
   const topology = topologyForGrid(grid);
-  topology.forEachNeighborRadius(id, radius, (nid, dx, dy) => {
-    visit(nid, dx, dy);
+  if (topology.forEachNeighborRadius) {
+    topology.forEachNeighborRadius(id, radius, (nid, dx, dy) => {
+      visit(nid, dx, dy);
+    });
+    return;
+  }
+  topology.forEachNeighborRing(id, radius, (nid, depth) => {
+    visit(nid, depth, 0);
   });
 }
