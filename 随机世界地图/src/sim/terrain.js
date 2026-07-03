@@ -1,6 +1,6 @@
 import { createValueNoise3D } from "./noise.js";
 import { mixSeed } from "./prng.js";
-import { physicalRadius, resolutionScale, wrapX } from "./grid.js";
+import { forEachNeighborRadiusById, physicalRadius, resolutionScale } from "./grid.js";
 import { spherePointForCell } from "./scale.js";
 
 export function initializeBaseTerrain(world) {
@@ -252,41 +252,31 @@ export function applyErosionAndDeposition(world) {
 }
 
 function smoothInactiveRelief(grid) {
-  const { width, height, relief, boundaryInfluence, isContinental, scratch } = grid;
+  const { size, relief, boundaryInfluence, isContinental, scratch } = grid;
   const radius = physicalRadius(grid, 1);
   const scale = resolutionScale(grid);
   scratch.set(relief);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      const inactive = 1 - Math.min(1, boundaryInfluence[id]);
-      if (inactive < 0.65 || Math.abs(scratch[id]) < 0.002) continue;
-      let total = scratch[id] * 2;
-      let count = 2;
-      for (let dy = -radius; dy <= radius; dy += 1) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= height) continue;
-        for (let dx = -radius; dx <= radius; dx += 1) {
-          if (dx === 0 && dy === 0) continue;
-          const dist = Math.hypot(dx, dy);
-          if (dist > radius + 0.01) continue;
-          const nx = wrapX(width, x + dx);
-          const w = 1 / (1 + dist / scale);
-          total += scratch[ny * width + nx] * w;
-          count += w;
-        }
-      }
-      const smooth = total / count;
-      const lowRelief = Math.abs(scratch[id]) < 0.09 ? 1 : 0;
-      const mix = isContinental[id] ? 0.24 + lowRelief * 0.16 : 0.52;
-      relief[id] = scratch[id] * (1 - mix) + smooth * mix;
-    }
+  for (let id = 0; id < size; id += 1) {
+    const inactive = 1 - Math.min(1, boundaryInfluence[id]);
+    if (inactive < 0.65 || Math.abs(scratch[id]) < 0.002) continue;
+    let total = scratch[id] * 2;
+    let count = 2;
+    forEachNeighborRadiusById(grid, id, radius, (nid, dx, dy) => {
+      const dist = Math.hypot(dx, dy);
+      const w = 1 / (1 + dist / scale);
+      total += scratch[nid] * w;
+      count += w;
+    });
+    const smooth = total / count;
+    const lowRelief = Math.abs(scratch[id]) < 0.09 ? 1 : 0;
+    const mix = isContinental[id] ? 0.24 + lowRelief * 0.16 : 0.52;
+    relief[id] = scratch[id] * (1 - mix) + smooth * mix;
   }
 }
 
 function healInactiveCrust(world) {
   const { grid } = world;
-  const { width, height, size, crust, crustReference, boundaryInfluence, isContinental, scratch } = grid;
+  const { size, crust, crustReference, boundaryInfluence, isContinental, scratch } = grid;
   const dt = world.timeScaleFactor;
   const radius = physicalRadius(grid, 1);
   const scale = resolutionScale(grid);
@@ -301,32 +291,22 @@ function healInactiveCrust(world) {
   }
 
   scratch.set(crust);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const id = y * width + x;
-      const inactive = 1 - Math.min(1, boundaryInfluence[id]);
-      if (inactive < 0.6) continue;
-      const coast = 1 - Math.min(1, Math.abs(scratch[id]) * 3.2);
-      const oceanic = isContinental[id] ? 0 : 1;
-      const mix = Math.min(0.38, inactive * (oceanic ? 0.26 : 0.06) + coast * 0.08);
-      if (mix <= 0.01) continue;
+  for (let id = 0; id < size; id += 1) {
+    const inactive = 1 - Math.min(1, boundaryInfluence[id]);
+    if (inactive < 0.6) continue;
+    const coast = 1 - Math.min(1, Math.abs(scratch[id]) * 3.2);
+    const oceanic = isContinental[id] ? 0 : 1;
+    const mix = Math.min(0.38, inactive * (oceanic ? 0.26 : 0.06) + coast * 0.08);
+    if (mix <= 0.01) continue;
 
-      let total = scratch[id] * 3;
-      let weightSum = 3;
-      for (let dy = -radius; dy <= radius; dy += 1) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= height) continue;
-        for (let dx = -radius; dx <= radius; dx += 1) {
-          if (dx === 0 && dy === 0) continue;
-          const dist = Math.hypot(dx, dy);
-          if (dist > radius + 0.01) continue;
-          const nx = wrapX(width, x + dx);
-          const w = 1 / (1 + dist / scale);
-          total += scratch[ny * width + nx] * w;
-          weightSum += w;
-        }
-      }
-      crust[id] = scratch[id] * (1 - mix) + (total / weightSum) * mix;
-    }
+    let total = scratch[id] * 3;
+    let weightSum = 3;
+    forEachNeighborRadiusById(grid, id, radius, (nid, dx, dy) => {
+      const dist = Math.hypot(dx, dy);
+      const w = 1 / (1 + dist / scale);
+      total += scratch[nid] * w;
+      weightSum += w;
+    });
+    crust[id] = scratch[id] * (1 - mix) + (total / weightSum) * mix;
   }
 }
