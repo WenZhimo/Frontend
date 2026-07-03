@@ -326,7 +326,7 @@ class GpuTempPool {
 - CPU Canvas renderer 仍是默认可靠路径；WebGL2 GPU renderer 仅在 URL 显式 opt-in（`?gpuRender=1` 或 `?renderBackend=webgl2`）且能力探测允许时启用。
 - WebGL2 renderer 当前只读取 `grid.elev` 与 `world.seaLevel` 做基础 elevation coloring，不写回 `world` 或任何模拟字段；板块边界 overlay 暂由 CPU Canvas 完整路径保留。
 - 已新增 `tools/gpu-render-check.mjs`，在 Node/headless 环境下生成 CPU reference PPM，并安全报告 GPU render skipped/fallback。
-- 当前仍没有任何地质、水文、沉积、板块或等静力 GPU compute kernel；下一步建议进入 Phase 2A：`updateIsostasy` GPU experimental，先做 field compare，不默认启用。
+- 当前仍没有任何默认接入主模拟的 GPU compute kernel；Phase 2A 已开始把 `updateIsostasy` 做成显式 experimental compare/profile 路径，CPU 仍是权威模拟路径。
 
 ### Phase 2：GPU 派生高程与等静力
 
@@ -343,6 +343,16 @@ class GpuTempPool {
 - 输入输出字段明确。
 - 误差可数值量化。
 - 失败不会影响拓扑状态，只需回退 CPU。
+
+Phase 2A 当前落地状态：
+
+- 已新增 `src/gpu/kernels/isostasyKernel.js`，以 WGSL compute shader 对齐 CPU `updateIsostasy` 的逐 cell dense formula。
+- 已新增 `src/gpu/isostasyCompute.js`，只在显式 experimental compare/profile 调用时申请 WebGPU device；默认不写回 `world.grid`，只返回 candidate 字段对象。
+- `tools/gpu-field-compare.mjs` 已支持 `--candidate=webgpu-isostasy`；默认不带 candidate 时仍是 CPU-vs-CPU，预期误差为 0。
+- `tools/gpu-perf-profile.mjs` 已支持 `--kernel=isostasy`，并拆分 `uploadMs / kernelMs / downloadMs / totalGpuPathMs`；WebGPU 不可用时安全 `skipped`。
+- CPU `updateIsostasy` 仍是生产路径；`stepWorld`、`runGeologyV2Step`、`rebuildGeologyElevation` 均未接入 GPU isostasy。
+- 当前仍未迁移 `rebuildGeologyElevation`、sediment、rift、hydrology、passive margin、closed basin 或任何图算法。
+- 下一步建议进入 Phase 2B：`rebuildGeologyElevation` GPU experimental，但必须基于 Phase 2A compare/profile 结果决定是否值得继续。
 
 建议阈值：
 

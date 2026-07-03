@@ -5961,6 +5961,375 @@
   }
 
 
+  // ---- src/gpu/kernels/isostasyKernel.js ----
+  const ISOSTASY_WGSL = String.raw`
+  struct Params {
+    size: u32,
+    _pad0: u32,
+    _pad1: u32,
+    _pad2: u32,
+  };
+
+  @group(0) @binding(0) var<uniform> params: Params;
+  @group(0) @binding(1) var<storage, read> input0: array<vec4<f32>>;
+  @group(0) @binding(2) var<storage, read> input1: array<vec4<f32>>;
+  @group(0) @binding(3) var<storage, read> input2: array<vec4<f32>>;
+  @group(0) @binding(4) var<storage, read_write> output0: array<vec4<f32>>;
+  @group(0) @binding(5) var<storage, read_write> output1: array<vec4<f32>>;
+  @group(0) @binding(6) var<storage, read_write> output2: array<vec4<f32>>;
+
+  fn clamp01(value: f32) -> f32 {
+    return clamp(value, 0.0, 1.0);
+  }
+
+  fn smoothstep_local(edge0: f32, edge1: f32, value: f32) -> f32 {
+    let t = clamp01((value - edge0) / max(0.000001, edge1 - edge0));
+    return t * t * (3.0 - 2.0 * t);
+  }
+
+  fn saturating_fill(sediment: f32, fill_max: f32, fill_scale: f32) -> f32 {
+    return fill_max * (1.0 - exp(-max(0.0, sediment) * fill_scale));
+  }
+
+  @compute @workgroup_size(64)
+  fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let i = global_id.x;
+    if (i >= params.size) {
+      return;
+    }
+
+    let a = input0[i];
+    let b = input1[i];
+    let c = input2[i];
+
+    let crust_type = u32(a.x + 0.5);
+    let crust_thickness = a.y;
+    let crust_age = a.z;
+    let crust_density = a.w;
+    let sediment = b.x;
+    let sediment_load_subsidence = b.y;
+    let ridge = b.z;
+    let trench = b.w;
+    let elev = c.x;
+
+    let continental = crust_type == 1u;
+    let transitional = crust_type == 2u;
+    let oceanic = crust_type == 0u;
+    let age_norm = clamp01(crust_age);
+    let sediment_surface_fill = select(
+      select(
+        saturating_fill(sediment, 0.062, 1.7),
+        saturating_fill(sediment, 0.08, 1.9),
+        transitional
+      ),
+      saturating_fill(sediment, 0.03, 1.45),
+      continental
+    );
+    let ridge_uplift = select(select(0.0, ridge * 0.06, oceanic), ridge * 0.018, transitional);
+    let trench_depression = select(
+      select(0.0, -trench * (0.075 + age_norm * 0.035), oceanic),
+      -trench * 0.026,
+      transitional
+    );
+
+    var base_elevation: f32;
+    var thickness_norm: f32;
+    var density_norm: f32;
+    var buoyancy_scale: f32;
+    var density_scale: f32;
+    var cooling_scale: f32;
+    if (continental) {
+      base_elevation = 0.072;
+      thickness_norm = smoothstep_local(0.0, 1.0, (crust_thickness - 0.42) / 0.58);
+      density_norm = clamp01((crust_density - 0.38) / 0.22);
+      buoyancy_scale = 0.105;
+      density_scale = 0.018;
+      cooling_scale = 0.002;
+    } else if (transitional) {
+      base_elevation = 0.018;
+      thickness_norm = smoothstep_local(0.0, 1.0, (crust_thickness - 0.28) / 0.46);
+      density_norm = clamp01((crust_density - 0.5) / 0.32);
+      buoyancy_scale = 0.062;
+      density_scale = 0.038;
+      cooling_scale = 0.028;
+    } else {
+      base_elevation = -0.032;
+      thickness_norm = smoothstep_local(0.0, 1.0, (crust_thickness - 0.12) / 0.3);
+      density_norm = clamp01((crust_density - 0.62) / 0.24);
+      buoyancy_scale = 0.034;
+      density_scale = 0.05;
+      cooling_scale = 0.106;
+    }
+
+    let crust_buoyancy = thickness_norm * buoyancy_scale;
+    let density_subsidence = density_norm * density_scale;
+    let lithosphere_cooling = select(select(0.03, 1.0, oceanic), 0.42, transitional) * sqrt(age_norm) * cooling_scale;
+    let load = sediment_load_subsidence * select(select(0.3, 0.34, transitional), 0.18, continental);
+    let sediment_load = load * (1.0 - clamp01(sediment) * 0.28);
+    let isostatic_base =
+      base_elevation +
+      crust_buoyancy -
+      density_subsidence -
+      lithosphere_cooling -
+      sediment_load +
+      sediment_surface_fill;
+    let age_subsidence = -lithosphere_cooling;
+    let thickness_buoyancy = crust_buoyancy;
+    let ocean_depth_terms =
+      age_subsidence +
+      thickness_buoyancy +
+      sediment_surface_fill +
+      ridge_uplift +
+      trench_depression -
+      density_subsidence -
+      sediment_load;
+    let isostatic_residual = elev - isostatic_base;
+    let isostatic_relief_supply =
+      abs(crust_buoyancy) +
+      abs(density_subsidence) +
+      abs(lithosphere_cooling) +
+      abs(sediment_load);
+
+    output0[i] = vec4<f32>(sediment_surface_fill, ridge_uplift, trench_depression, crust_buoyancy);
+    output1[i] = vec4<f32>(density_subsidence, lithosphere_cooling, isostatic_base, age_subsidence);
+    output2[i] = vec4<f32>(thickness_buoyancy, ocean_depth_terms, isostatic_residual, isostatic_relief_supply);
+  }
+  `;
+
+
+  // ---- src/gpu/isostasyCompute.js ----
+
+  const GPU_ISOSTASY_OUTPUT_FIELDS = [
+    "sedimentFill",
+    "ridgeUplift",
+    "trenchDepression",
+    "crustBuoyancy",
+    "densitySubsidence",
+    "lithosphereCooling",
+    "isostaticBase",
+    "ageSubsidence",
+    "thicknessBuoyancy",
+    "oceanDepthTerms",
+    "isostaticResidual",
+    "isostaticReliefSupply",
+  ];
+
+  export async function runWebGpuIsostasyCandidate(world, options = {}) {
+    const globalObject = options.globalObject ?? globalThis;
+    const capabilities = detectGpuCapabilities(globalObject);
+    const gpu = globalObject?.navigator?.gpu;
+    if (!capabilities.secureContext || !capabilities.webgpuAvailable || !gpu?.requestAdapter) {
+      return skippedResult(capabilities, "WebGPU is not available in this environment.");
+    }
+
+    let adapter;
+    let device;
+    try {
+      adapter = await gpu.requestAdapter();
+      if (!adapter) {
+        return skippedResult(capabilities, "WebGPU adapter request returned null.");
+      }
+      device = await adapter.requestDevice();
+    } catch (error) {
+      return skippedResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
+    }
+
+    try {
+      return await computeIsostasyOnDevice(world, device, capabilities);
+    } catch (error) {
+      return {
+        skipped: true,
+        valid: true,
+        backend: "webgpu-isostasy",
+        gpuCapabilities: capabilities,
+        reason: `WebGPU isostasy candidate failed safely: ${error?.message ?? "unknown error"}`,
+        timings: emptyTimings(),
+        fields: {},
+      };
+    } finally {
+      device?.destroy?.();
+    }
+  }
+
+  async function computeIsostasyOnDevice(world, device, capabilities) {
+    const { grid } = world;
+    const size = grid.size;
+    const input0 = new Float32Array(size * 4);
+    const input1 = new Float32Array(size * 4);
+    const input2 = new Float32Array(size * 4);
+
+    const uploadStartedAt = performance.now();
+    for (let i = 0; i < size; i += 1) {
+      const offset = i * 4;
+      input0[offset] = grid.crustType[i];
+      input0[offset + 1] = grid.crustThickness[i];
+      input0[offset + 2] = grid.crustAge[i];
+      input0[offset + 3] = grid.crustDensity[i];
+      input1[offset] = grid.sediment[i];
+      input1[offset + 1] = grid.sedimentLoadSubsidence[i];
+      input1[offset + 2] = grid.ridge[i];
+      input1[offset + 3] = grid.trench[i];
+      input2[offset] = grid.elev[i];
+    }
+
+    const usage = globalThis.GPUBufferUsage;
+    const mapMode = globalThis.GPUMapMode;
+    if (!usage || !mapMode) {
+      return skippedResult(capabilities, "WebGPU constants are unavailable in this JavaScript runtime.");
+    }
+
+    const paramData = new Uint32Array([size, 0, 0, 0]);
+    const paramBuffer = createBufferWithData(device, paramData, usage.UNIFORM | usage.COPY_DST);
+    const inputBuffer0 = createBufferWithData(device, input0, usage.STORAGE | usage.COPY_DST);
+    const inputBuffer1 = createBufferWithData(device, input1, usage.STORAGE | usage.COPY_DST);
+    const inputBuffer2 = createBufferWithData(device, input2, usage.STORAGE | usage.COPY_DST);
+    const outputBytes = size * 4 * Float32Array.BYTES_PER_ELEMENT;
+    const outputBuffer0 = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
+    const outputBuffer1 = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
+    const outputBuffer2 = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
+    const readBuffer0 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+    const readBuffer1 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+    const readBuffer2 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+    const uploadMs = performance.now() - uploadStartedAt;
+
+    const shaderModule = device.createShaderModule({ code: ISOSTASY_WGSL });
+    const pipeline = device.createComputePipeline({
+      layout: "auto",
+      compute: { module: shaderModule, entryPoint: "main" },
+    });
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: paramBuffer } },
+        { binding: 1, resource: { buffer: inputBuffer0 } },
+        { binding: 2, resource: { buffer: inputBuffer1 } },
+        { binding: 3, resource: { buffer: inputBuffer2 } },
+        { binding: 4, resource: { buffer: outputBuffer0 } },
+        { binding: 5, resource: { buffer: outputBuffer1 } },
+        { binding: 6, resource: { buffer: outputBuffer2 } },
+      ],
+    });
+
+    const kernelStartedAt = performance.now();
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(size / 64));
+    pass.end();
+    encoder.copyBufferToBuffer(outputBuffer0, 0, readBuffer0, 0, outputBytes);
+    encoder.copyBufferToBuffer(outputBuffer1, 0, readBuffer1, 0, outputBytes);
+    encoder.copyBufferToBuffer(outputBuffer2, 0, readBuffer2, 0, outputBytes);
+    device.queue.submit([encoder.finish()]);
+    await device.queue.onSubmittedWorkDone();
+    const kernelMs = performance.now() - kernelStartedAt;
+
+    const downloadStartedAt = performance.now();
+    await Promise.all([
+      readBuffer0.mapAsync(mapMode.READ),
+      readBuffer1.mapAsync(mapMode.READ),
+      readBuffer2.mapAsync(mapMode.READ),
+    ]);
+    const packed0 = new Float32Array(readBuffer0.getMappedRange().slice(0));
+    const packed1 = new Float32Array(readBuffer1.getMappedRange().slice(0));
+    const packed2 = new Float32Array(readBuffer2.getMappedRange().slice(0));
+    readBuffer0.unmap();
+    readBuffer1.unmap();
+    readBuffer2.unmap();
+    const downloadMs = performance.now() - downloadStartedAt;
+
+    const fields = unpackIsostasyFields(size, packed0, packed1, packed2);
+    destroyBuffers([
+      paramBuffer,
+      inputBuffer0,
+      inputBuffer1,
+      inputBuffer2,
+      outputBuffer0,
+      outputBuffer1,
+      outputBuffer2,
+      readBuffer0,
+      readBuffer1,
+      readBuffer2,
+    ]);
+
+    return {
+      skipped: false,
+      valid: true,
+      backend: "webgpu-isostasy",
+      gpuCapabilities: capabilities,
+      reason: null,
+      timings: {
+        uploadMs,
+        kernelMs,
+        downloadMs,
+        totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+      },
+      fields,
+    };
+  }
+
+  function createBufferWithData(device, typedArray, usage) {
+    const buffer = device.createBuffer({
+      size: typedArray.byteLength,
+      usage,
+      mappedAtCreation: true,
+    });
+    new typedArray.constructor(buffer.getMappedRange()).set(typedArray);
+    buffer.unmap();
+    return buffer;
+  }
+
+  function unpackIsostasyFields(size, packed0, packed1, packed2) {
+    const fields = {};
+    for (const name of GPU_ISOSTASY_OUTPUT_FIELDS) {
+      fields[name] = new Float32Array(size);
+    }
+    for (let i = 0; i < size; i += 1) {
+      const offset = i * 4;
+      fields.sedimentFill[i] = packed0[offset];
+      fields.ridgeUplift[i] = packed0[offset + 1];
+      fields.trenchDepression[i] = packed0[offset + 2];
+      fields.crustBuoyancy[i] = packed0[offset + 3];
+      fields.densitySubsidence[i] = packed1[offset];
+      fields.lithosphereCooling[i] = packed1[offset + 1];
+      fields.isostaticBase[i] = packed1[offset + 2];
+      fields.ageSubsidence[i] = packed1[offset + 3];
+      fields.thicknessBuoyancy[i] = packed2[offset];
+      fields.oceanDepthTerms[i] = packed2[offset + 1];
+      fields.isostaticResidual[i] = packed2[offset + 2];
+      fields.isostaticReliefSupply[i] = packed2[offset + 3];
+    }
+    return fields;
+  }
+
+  function destroyBuffers(buffers) {
+    for (const buffer of buffers) {
+      buffer?.destroy?.();
+    }
+  }
+
+  function skippedResult(capabilities, reason) {
+    return {
+      skipped: true,
+      valid: true,
+      backend: "webgpu-isostasy",
+      gpuCapabilities: capabilities,
+      reason,
+      timings: emptyTimings(),
+      fields: {},
+    };
+  }
+
+  function emptyTimings() {
+    return {
+      uploadMs: null,
+      kernelMs: null,
+      downloadMs: null,
+      totalGpuPathMs: null,
+    };
+  }
+
+
   // ---- src/render/cpuMapRenderer.js ----
 
   function createCpuMapRenderer(canvas) {
