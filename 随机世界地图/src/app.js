@@ -666,12 +666,16 @@
   }
 
   function wrapGridParamX(grid, x) {
-    return topologyForGrid(grid).wrapX(x);
+    const topology = topologyForGrid(grid);
+    if (typeof topology.wrapX === "function") return topology.wrapX(x);
+    const width = gridParamWidth(grid);
+    return width ? wrapX(width, x) : 0;
   }
 
   function clampGridParamY(grid, y) {
     const topology = topologyForGrid(grid);
-    return Math.max(0, Math.min(topology.height - 1, y));
+    const height = gridParamHeight(grid);
+    return Math.max(0, Math.min(height - 1, y));
   }
 
   function gridParamToU(grid, x) {
@@ -685,11 +689,22 @@
   }
 
   function indexOf(grid, x, y) {
-    return topologyForGrid(grid).index(x, y);
+    const topology = topologyForGrid(grid);
+    if (typeof topology.index === "function") return topology.index(x, y);
+    const width = gridParamWidth(grid);
+    const height = gridParamHeight(grid);
+    if (!width || !height) return -1;
+    const sx = wrapGridParamX(grid, Math.floor(x));
+    const sy = Math.max(0, Math.min(height - 1, Math.floor(y)));
+    const id = sy * width + sx;
+    return id >= 0 && id < grid.size ? id : -1;
   }
 
   function xyOf(grid, id) {
-    return topologyForGrid(grid).xy(id);
+    const topology = topologyForGrid(grid);
+    if (typeof topology.xy === "function") return topology.xy(id);
+    const width = gridParamWidth(grid);
+    return width ? { x: id % width, y: Math.floor(id / width) } : { x: id, y: 0 };
   }
 
   function sampleGrid(grid, field, x, y) {
@@ -1953,17 +1968,35 @@
     ["baseElev", Float32Array],
     ["relief", Float32Array],
     ["boundaryRelief", Float32Array],
+    ["geologyBroadNoise", Float32Array],
+    ["geologyMicroNoise", Float32Array],
+    ["scratch", Float32Array],
+    ["scratch2", Float32Array],
+    ["scratch3", Float32Array],
+    ["crust", Float32Array],
+    ["crustReference", Float32Array],
     ["crustType", Uint8Array],
     ["crustThickness", Float32Array],
     ["crustAge", Float32Array],
     ["crustDensity", Float32Array],
     ["weakness", Float32Array],
     ["plate", Int32Array],
+    ["pvx", Float32Array],
+    ["pvy", Float32Array],
+    ["btype", Int8Array],
     ["boundaryKind", Int8Array],
     ["boundaryInfluence", Float32Array],
+    ["boundaryDistance", Float32Array],
+    ["boundaryDensity", Float32Array],
+    ["boundaryCoherence", Float32Array],
+    ["noisyBoundaryPatch", Uint8Array],
+    ["plateCheckerboard", Float32Array],
     ["activeBoundary", Uint8Array],
     ["stress", Float32Array],
+    ["uplift", Float32Array],
     ["riftStage", Uint8Array],
+    ["riftAge", Float32Array],
+    ["protoOceanCandidate", Uint8Array],
     ["externalSeaMask", Uint8Array],
     ["oceanConnectivity", Uint8Array],
     ["inlandWaterCandidate", Uint8Array],
@@ -1974,6 +2007,10 @@
     ["continentalRise", Float32Array],
     ["abyssalPlain", Float32Array],
     ["sedimentWedge", Float32Array],
+    ["marginCoastDistance", Float32Array],
+    ["marginContinentalDistance", Float32Array],
+    ["marginOceanDistance", Float32Array],
+    ["marginExternalSeaDistance", Float32Array],
     ["sediment", Float32Array],
     ["sedimentFlux", Float32Array],
     ["sedimentSink", Float32Array],
@@ -1999,11 +2036,15 @@
     ["orogeny", Float32Array],
     ["activeOrogeny", Float32Array],
     ["oldOrogeny", Float32Array],
+    ["orogenyAge", Float32Array],
+    ["orogenyErosion", Float32Array],
     ["forelandBasin", Float32Array],
     ["orogenicSedimentSupply", Float32Array],
     ["mountainBelt", Float32Array],
     ["mountainAxis", Float32Array],
+    ["mountainAxisSeed", Float32Array],
     ["tectonicAxis", Float32Array],
+    ["axisSegmentId", Int32Array],
     ["axisCurvature", Float32Array],
     ["axisContinuity", Float32Array],
     ["axisBoundaryDependency", Float32Array],
@@ -2026,6 +2067,7 @@
     ["sedimentDisplacementSignal", Float32Array],
     ["trenchCapacitySignal", Float32Array],
     ["ridge", Float32Array],
+    ["ridgeDistance", Float32Array],
     ["trench", Float32Array],
     ["rift", Float32Array],
     ["islandArc", Float32Array],
@@ -2037,6 +2079,11 @@
     ["fractureZoneMemory", Float32Array],
     ["inactiveBoundaryRelief", Float32Array],
     ["oldBoundaryCorrelation", Float32Array],
+    ["ageBandStraightnessRisk", Float32Array],
+    ["isContinental", Uint8Array],
+    ["isYoungOcean", Uint8Array],
+    ["tectonicFeature", Int8Array],
+    ["featureIntensity", Float32Array],
     ["diagnosticElevation", Float32Array],
     ["diagnosticSeaCandidate", Uint8Array],
     ["diagnosticRidgeCandidate", Float32Array],
@@ -2773,7 +2820,7 @@
     const threshold = -0.08 + (params.waterLevel / 100 - 0.5) * 0.78;
 
     forEachGridCell(grid, (id, x, y) => {
-      const sphere = spherePointForCell(grid, x, y);
+      const sphere = spherePointForGridCell(grid, id, x, y);
       const continentality = continentNoise(sphere.x * 1.45 + 17, sphere.y * 1.45 - 3, sphere.z * 1.45 + 9, 5, 2, 0.54);
       const ragged = textureNoise(sphere.x * 3.7 - 5, sphere.y * 3.7 + 13, sphere.z * 3.7 + 2, 3, 2, 0.45) * 0.18;
       crust[id] = continentality + ragged - threshold;
@@ -2784,7 +2831,7 @@
     const { grid, textureNoise } = world;
     const { weakness, crust } = grid;
     forEachGridCell(grid, (id, x, y) => {
-      const sphere = spherePointForCell(grid, x, y);
+      const sphere = spherePointForGridCell(grid, id, x, y);
       const broad = textureNoise(sphere.x * 2.1 + 31, sphere.y * 2.1 - 17, sphere.z * 2.1 + 5, 4, 2, 0.52);
       const fine = textureNoise(sphere.x * 8.5 - 7, sphere.y * 8.5 + 3, sphere.z * 8.5 + 23, 3, 2.2, 0.45);
       const coastWeakness = 1 - Math.min(1, Math.abs(crust[id]) * 2.8);
@@ -2799,7 +2846,7 @@
     for (let i = 0; i < size; i += 1) {
       const x = i % width;
       const y = Math.floor(i / width);
-      const sphere = spherePointForCell(grid, x, y);
+      const sphere = spherePointForGridCell(grid, i, x, y);
       const micro = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
       const c = crust[i];
       const continental = c > 0;
@@ -2812,6 +2859,16 @@
         : -0.085 + blend * 0.095 + micro * 0.012;
       elev[i] = baseElev[i] + relief[i] + boundaryRelief[i];
     }
+  }
+
+  function spherePointForGridCell(grid, id, x, y) {
+    const px = grid.positionX?.[id];
+    const py = grid.positionY?.[id];
+    const pz = grid.positionZ?.[id];
+    if (Number.isFinite(px) && Number.isFinite(py) && Number.isFinite(pz)) {
+      return { x: px, y: py, z: pz };
+    }
+    return spherePointForCell(grid, x, y);
   }
 
   function initializeSeaLevel(world) {

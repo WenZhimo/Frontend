@@ -151,12 +151,16 @@ export function gridParamHeight(grid) {
 }
 
 export function wrapGridParamX(grid, x) {
-  return topologyForGrid(grid).wrapX(x);
+  const topology = topologyForGrid(grid);
+  if (typeof topology.wrapX === "function") return topology.wrapX(x);
+  const width = gridParamWidth(grid);
+  return width ? wrapX(width, x) : 0;
 }
 
 export function clampGridParamY(grid, y) {
   const topology = topologyForGrid(grid);
-  return Math.max(0, Math.min(topology.height - 1, y));
+  const height = gridParamHeight(grid);
+  return Math.max(0, Math.min(height - 1, y));
 }
 
 export function gridParamToU(grid, x) {
@@ -170,11 +174,22 @@ export function gridParamToV(grid, y) {
 }
 
 export function indexOf(grid, x, y) {
-  return topologyForGrid(grid).index(x, y);
+  const topology = topologyForGrid(grid);
+  if (typeof topology.index === "function") return topology.index(x, y);
+  const width = gridParamWidth(grid);
+  const height = gridParamHeight(grid);
+  if (!width || !height) return -1;
+  const sx = wrapGridParamX(grid, Math.floor(x));
+  const sy = Math.max(0, Math.min(height - 1, Math.floor(y)));
+  const id = sy * width + sx;
+  return id >= 0 && id < grid.size ? id : -1;
 }
 
 export function xyOf(grid, id) {
-  return topologyForGrid(grid).xy(id);
+  const topology = topologyForGrid(grid);
+  if (typeof topology.xy === "function") return topology.xy(id);
+  const width = gridParamWidth(grid);
+  return width ? { x: id % width, y: Math.floor(id / width) } : { x: id, y: 0 };
 }
 
 export function sampleGrid(grid, field, x, y) {

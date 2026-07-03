@@ -132,7 +132,7 @@ function initializeCrust(world) {
   const threshold = -0.08 + (params.waterLevel / 100 - 0.5) * 0.78;
 
   forEachGridCell(grid, (id, x, y) => {
-    const sphere = spherePointForCell(grid, x, y);
+    const sphere = spherePointForGridCell(grid, id, x, y);
     const continentality = continentNoise(sphere.x * 1.45 + 17, sphere.y * 1.45 - 3, sphere.z * 1.45 + 9, 5, 2, 0.54);
     const ragged = textureNoise(sphere.x * 3.7 - 5, sphere.y * 3.7 + 13, sphere.z * 3.7 + 2, 3, 2, 0.45) * 0.18;
     crust[id] = continentality + ragged - threshold;
@@ -143,7 +143,7 @@ function initializeWeakness(world) {
   const { grid, textureNoise } = world;
   const { weakness, crust } = grid;
   forEachGridCell(grid, (id, x, y) => {
-    const sphere = spherePointForCell(grid, x, y);
+    const sphere = spherePointForGridCell(grid, id, x, y);
     const broad = textureNoise(sphere.x * 2.1 + 31, sphere.y * 2.1 - 17, sphere.z * 2.1 + 5, 4, 2, 0.52);
     const fine = textureNoise(sphere.x * 8.5 - 7, sphere.y * 8.5 + 3, sphere.z * 8.5 + 23, 3, 2.2, 0.45);
     const coastWeakness = 1 - Math.min(1, Math.abs(crust[id]) * 2.8);
@@ -158,7 +158,7 @@ export function rebuildElevation(world) {
   for (let i = 0; i < size; i += 1) {
     const x = i % width;
     const y = Math.floor(i / width);
-    const sphere = spherePointForCell(grid, x, y);
+    const sphere = spherePointForGridCell(grid, i, x, y);
     const micro = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
     const c = crust[i];
     const continental = c > 0;
@@ -171,6 +171,16 @@ export function rebuildElevation(world) {
       : -0.085 + blend * 0.095 + micro * 0.012;
     elev[i] = baseElev[i] + relief[i] + boundaryRelief[i];
   }
+}
+
+function spherePointForGridCell(grid, id, x, y) {
+  const px = grid.positionX?.[id];
+  const py = grid.positionY?.[id];
+  const pz = grid.positionZ?.[id];
+  if (Number.isFinite(px) && Number.isFinite(py) && Number.isFinite(pz)) {
+    return { x: px, y: py, z: pz };
+  }
+  return spherePointForCell(grid, x, y);
 }
 
 export function initializeSeaLevel(world) {
