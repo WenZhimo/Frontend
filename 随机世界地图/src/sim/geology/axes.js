@@ -151,10 +151,10 @@ function measureAxisDiagnostics(grid) {
         continue;
       }
 
-      const left = tectonicAxis[y * width + wrapX(width, x - 1)];
-      const right = tectonicAxis[y * width + wrapX(width, x + 1)];
-      const up = tectonicAxis[Math.max(0, y - 1) * width + x];
-      const down = tectonicAxis[Math.min(height - 1, y + 1) * width + x];
+      const left = sample(grid, tectonicAxis, x - 1, y);
+      const right = sample(grid, tectonicAxis, x + 1, y);
+      const up = sample(grid, tectonicAxis, x, y - 1);
+      const down = sample(grid, tectonicAxis, x, y + 1);
       const dx = Math.abs(left - right);
       const dy = Math.abs(up - down);
       const localMax = Math.max(left, right, up, down);
@@ -194,10 +194,10 @@ function measureFieldBlockiness(grid, field, output) {
         output[id] = 0;
         continue;
       }
-      const left = field[y * width + wrapX(width, x - 1)];
-      const right = field[y * width + wrapX(width, x + 1)];
-      const up = field[Math.max(0, y - 1) * width + x];
-      const down = field[Math.min(height - 1, y + 1) * width + x];
+      const left = sample(grid, field, x - 1, y);
+      const right = sample(grid, field, x + 1, y);
+      const up = sample(grid, field, x, y - 1);
+      const down = sample(grid, field, x, y + 1);
       const cardinal = Math.abs(left - right) + Math.abs(up - down);
       const diagonal = Math.abs(sample(grid, field, x - 1, y - 1) - sample(grid, field, x + 1, y + 1))
         + Math.abs(sample(grid, field, x + 1, y - 1) - sample(grid, field, x - 1, y + 1));
