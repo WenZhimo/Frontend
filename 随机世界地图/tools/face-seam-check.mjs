@@ -13,6 +13,10 @@ let interiorDistanceTotal = 0;
 let interiorEdgeCount = 0;
 let localContinuityRiskTotal = 0;
 let localContinuityRiskMax = 0;
+let seamTangentCount = 0;
+let seamTangentLengthErrorMax = 0;
+let seamTangentRadialDotMax = 0;
+let seamTangentForwardDotMin = Infinity;
 
 for (let id = 0; id < grid.size; id += 1) {
   const start = grid.neighborStart[id];
@@ -32,6 +36,24 @@ for (let id = 0; id < grid.size; id += 1) {
     const localRisk = Math.abs(1 - length / Math.max(localReference, Number.EPSILON));
     localContinuityRiskTotal += localRisk;
     localContinuityRiskMax = Math.max(localContinuityRiskMax, localRisk);
+
+    const offset = start + k;
+    const tx = grid.edgeTangentX[offset];
+    const ty = grid.edgeTangentY[offset];
+    const tz = grid.edgeTangentZ[offset];
+    const ax = grid.positionX[id];
+    const ay = grid.positionY[id];
+    const az = grid.positionZ[id];
+    const bx = grid.positionX[nid];
+    const by = grid.positionY[nid];
+    const bz = grid.positionZ[nid];
+    const tangentLength = Math.hypot(tx, ty, tz);
+    const radialDot = Math.abs(tx * ax + ty * ay + tz * az);
+    const forwardDot = tx * (bx - ax) + ty * (by - ay) + tz * (bz - az);
+    seamTangentLengthErrorMax = Math.max(seamTangentLengthErrorMax, Math.abs(tangentLength - 1));
+    seamTangentRadialDotMax = Math.max(seamTangentRadialDotMax, radialDot);
+    seamTangentForwardDotMin = Math.min(seamTangentForwardDotMin, forwardDot);
+    seamTangentCount += 1;
   }
 }
 
@@ -40,12 +62,18 @@ const interiorDistanceMean = interiorDistanceTotal / Math.max(1, interiorEdgeCou
 const faceEdgeDistanceContinuity = seamDistanceMean / Math.max(interiorDistanceMean, Number.EPSILON);
 const globalDistanceContinuityRisk = Math.abs(1 - faceEdgeDistanceContinuity);
 const faceBoundaryContinuityRisk = localContinuityRiskTotal / Math.max(1, seamEdgeCount);
+const faceEdgeTangentContinuityValid =
+  seamTangentCount === seamEdgeCount &&
+  seamTangentLengthErrorMax < 1e-5 &&
+  seamTangentRadialDotMax < 1e-5 &&
+  seamTangentForwardDotMin > 0;
 const valid =
   seamEdgeCount > 0 &&
   seamMissingReciprocal === 0 &&
   faceBoundaryContinuityRisk < 0.25 &&
   localContinuityRiskMax < 0.3 &&
-  seamDistanceMax < interiorDistanceMean * 1.25;
+  seamDistanceMax < interiorDistanceMean * 1.25 &&
+  faceEdgeTangentContinuityValid;
 
 console.log(
   JSON.stringify(
@@ -63,6 +91,11 @@ console.log(
       globalDistanceContinuityRisk,
       faceBoundaryContinuityRisk,
       localContinuityRiskMax,
+      seamTangentCount,
+      seamTangentLengthErrorMax,
+      seamTangentRadialDotMax,
+      seamTangentForwardDotMin,
+      faceEdgeTangentContinuityValid,
     },
     null,
     2,
