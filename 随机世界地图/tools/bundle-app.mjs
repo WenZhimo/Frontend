@@ -49,7 +49,11 @@ for (const file of files) {
   code = code
     .replace(/^import .*?;\r?\n/gm, "")
     .replace(/^export \{.*?\};\r?\n/gm, "")
+    .replace(/^export async function /gm, "async function ")
+    .replace(/^export class /gm, "class ")
     .replace(/^export const /gm, "const ")
+    .replace(/^export let /gm, "let ")
+    .replace(/^export var /gm, "var ")
     .replace(/^export function /gm, "function ");
   bundled += `// ---- ${file} ----\n${code}\n\n`;
 }
