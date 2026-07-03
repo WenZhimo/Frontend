@@ -4,6 +4,7 @@ import { deriveOceanConnectivity } from "../geology/rift.js";
 import { getGeologicSeaLevelDiagnostics } from "../geology/seaLevel.js";
 import { getSedimentBudgetDiagnostics } from "../geology/sediment.js";
 import { getIsostasyDiagnostics } from "../geology/isostasy.js";
+import { measureTopologyDiagnostics } from "../topology.js";
 
 export function getTerrainDerived(world) {
   const base = buildTerrainBase(world);
@@ -43,6 +44,7 @@ export function getTerrainDerived(world) {
     erosionRate: base.erosionRate,
     sedimentBudgetDiagnostics: base.sedimentBudgetDiagnostics,
     isostasyDiagnostics: base.isostasyDiagnostics,
+    topologyDiagnostics: measureTopologyDiagnostics(world),
     forelandBasin: base.forelandBasin,
     orogenicSedimentSupply: base.orogenicSedimentSupply,
     activeTransform: base.activeTransform,

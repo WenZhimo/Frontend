@@ -915,7 +915,14 @@ topologyForGrid(grid)
 topology.index(x, y)
 topology.xy(i)
 topology.wrapX(x)
+topology.wrapY(y)
+topology.wrapCoord(x, y)
+topology.isValidXY(x, y)
+topology.inBoundsX(x)
 topology.inBoundsY(y)
+topology.forEachNeighbor4(i, fn)
+topology.forEachNeighbor8(i, fn)
+topology.forEachNeighborRadius(i, radius, fn)
 topology.neighbors4(i)
 topology.neighbors8(i)
 topology.neighborsRadius(i, radius)
@@ -923,15 +930,20 @@ topology.distance(a, b)
 topology.distanceXY(ax, ay, bx, by)
 topology.floodFill(seedIndices, passableFn)
 topology.connectedComponents(mask)
+topology.componentIds(mask)
 topology.forEachCell(fn)
-topology.sampleWrapped(x, y, field)
+topology.sample(field, x, y)
+topology.sampleWrapped(field, x, y)
 ```
 
 已迁移：
 
 - `grid.indexOf / forEachNeighbor4`
 - `deriveOceanConnectivity` 的 external sea 与 closed basin connected components
-- `interface-check / long-run-check / resolution-check` 的 topology diagnostics
+- sediment 预算中的 8 邻域搬运 / 平滑访问
+- `interface-check / long-run-check / resolution-check / metrics-summary` 的高风险邻接统计与 topology diagnostics
+- `getTerrainDerived(world).topologyDiagnostics` 只读输出
+- `tools/topology-check.mjs` 的小尺寸自检
 
 新增诊断：
 
@@ -940,9 +952,17 @@ topologyKind
 wrapXEnabled
 wrapYEnabled
 neighborConsistencyValid
+neighbor4SymmetryValid
+neighbor8SymmetryValid
+distanceWrapValid
 floodFillTopologyValid
+connectedComponentTopologyValid
 connectedComponentCount
+seamContinuityRisk
+polarBoundaryRisk
 polarAccessRisk
+topologyManualAccessRisk
+topologyMigrationCoverage
 topologyResolutionDrift
 ```
 

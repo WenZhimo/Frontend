@@ -1,7 +1,7 @@
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
 import { measureIsostasyDiagnostics } from "../src/sim/geology/isostasy.js";
-import { measureTopologyDiagnostics } from "../src/sim/topology.js";
+import { measureTopologyDiagnostics, topologyForGrid } from "../src/sim/topology.js";
 
 const params = {
   seedText: process.argv[2] ?? "榫欓娴?绾厓7",
@@ -575,15 +575,10 @@ function isPlateIslandNoise(grid, id) {
 }
 
 function visitNeighbor8Ids(grid, x, y, visit) {
-  for (let dy = -1; dy <= 1; dy += 1) {
-    const ny = y + dy;
-    if (ny < 0 || ny >= grid.height) continue;
-    for (let dx = -1; dx <= 1; dx += 1) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = ((x + dx) % grid.width + grid.width) % grid.width;
-      visit(ny * grid.width + nx);
-    }
-  }
+  const topology = topologyForGrid(grid);
+  const id = topology.index(x, y);
+  if (id < 0) return;
+  topology.forEachNeighbor8(id, visit);
 }
 
 function coverage(field, threshold) {
@@ -659,11 +654,11 @@ function measureMountainAxisCurvature(grid) {
 }
 
 function axisAt(grid, x, y) {
-  if (y < 0 || y >= grid.height) return 0;
-  return grid.mountainAxis[y * grid.width + wrapX(grid.width, x)];
+  return topologyForGrid(grid).sampleWrapped(grid.mountainAxis, x, y) ?? 0;
 }
 
 function measureCoastDistance(grid, seaLevel) {
+  const topology = topologyForGrid(grid);
   const distance = new Float32Array(grid.size);
   distance.fill(Number.POSITIVE_INFINITY);
   const queue = new Int32Array(grid.size);
@@ -674,7 +669,7 @@ function measureCoastDistance(grid, seaLevel) {
       const id = y * grid.width + x;
       const land = grid.elev[id] >= seaLevel;
       let coast = false;
-      visitNeighbor4Ids(grid, x, y, (nid) => {
+      topology.forEachNeighbor4(id, (nid) => {
         if ((grid.elev[nid] >= seaLevel) !== land) coast = true;
       });
       if (!coast) continue;
@@ -684,10 +679,8 @@ function measureCoastDistance(grid, seaLevel) {
   }
   while (head < tail) {
     const id = queue[head++];
-    const x = id % grid.width;
-    const y = Math.floor(id / grid.width);
     const next = distance[id] + 1;
-    visitNeighbor4Ids(grid, x, y, (nid) => {
+    topology.forEachNeighbor4(id, (nid) => {
       if (next >= distance[nid]) return;
       distance[nid] = next;
       queue[tail++] = nid;
@@ -697,12 +690,11 @@ function measureCoastDistance(grid, seaLevel) {
 }
 
 function localRuggedness(grid, id, seaLevel) {
-  const x = id % grid.width;
-  const y = Math.floor(id / grid.width);
+  const topology = topologyForGrid(grid);
   const center = grid.elev[id] - seaLevel;
   let sum = 0;
   let count = 0;
-  visitNeighbor4Ids(grid, x, y, (nid) => {
+  topology.forEachNeighbor4(id, (nid) => {
     sum += Math.abs(center - (grid.elev[nid] - seaLevel));
     count += 1;
   });
@@ -822,6 +814,7 @@ function measureOldBoundarySeafloorSignal(grid, seaLevel) {
 }
 
 function measureInlandBasinRisk(grid, seaLevel) {
+  const topology = topologyForGrid(grid);
   const visited = new Uint8Array(grid.size);
   const queue = new Int32Array(grid.size);
   let belowSea = 0;
@@ -847,9 +840,7 @@ function measureInlandBasinRisk(grid, seaLevel) {
       count += 1;
       if (grid.basin[id] > 0.12) basinCount += 1;
       if (grid.sediment[id] > 0.08) sedimentCount += 1;
-      const x = id % grid.width;
-      const y = Math.floor(id / grid.width);
-      visitNeighbor4Ids(grid, x, y, (nid) => {
+      topology.forEachNeighbor4(id, (nid) => {
         if (visited[nid] || grid.elev[nid] >= seaLevel) return;
         visited[nid] = 1;
         queue[tail++] = nid;
@@ -956,26 +947,22 @@ function measureAgeBandStraightnessSplit(grid) {
 }
 
 function sameAgeBand(grid, x, y, band) {
-  if (y < 0 || y >= grid.height) return 0;
-  const id = y * grid.width + wrapX(grid.width, x);
+  const id = topologyForGrid(grid).index(x, y);
+  if (id < 0) return 0;
   return grid.crustType[id] === 0 && Math.floor(grid.crustAge[id] * 10) === band ? 1 : 0;
 }
 
 function featureAt(grid, x, y) {
-  if (y < 0 || y >= grid.height) return 0;
-  const id = y * grid.width + wrapX(grid.width, x);
+  const id = topologyForGrid(grid).index(x, y);
+  if (id < 0) return 0;
   return Math.max(grid.mountainBelt[id], grid.ridge[id], grid.trench[id]);
 }
 
 function visitNeighbor4Ids(grid, x, y, visit) {
-  visit(y * grid.width + wrapX(grid.width, x - 1));
-  visit(y * grid.width + wrapX(grid.width, x + 1));
-  if (y > 0) visit((y - 1) * grid.width + x);
-  if (y < grid.height - 1) visit((y + 1) * grid.width + x);
-}
-
-function wrapX(width, x) {
-  return ((x % width) + width) % width;
+  const topology = topologyForGrid(grid);
+  const id = topology.index(x, y);
+  if (id < 0) return;
+  topology.forEachNeighbor4(id, visit);
 }
 
 function share(field) {

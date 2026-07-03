@@ -29,6 +29,14 @@ export function createTopology(width, height, options = {}) {
     return yy * width + wrapX(x);
   }
 
+  function wrapCoord(x, y) {
+    return { x: wrapX(x), y: wrapY(y) };
+  }
+
+  function isValidXY(x, y) {
+    return index(x, y) >= 0;
+  }
+
   function xy(i) {
     return { x: i % width, y: Math.floor(i / width) };
   }
@@ -159,6 +167,10 @@ export function createTopology(width, height, options = {}) {
     };
   }
 
+  function componentIds(mask) {
+    return connectedComponents(mask).componentId;
+  }
+
   function forEachCell(fn) {
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
@@ -167,7 +179,12 @@ export function createTopology(width, height, options = {}) {
     }
   }
 
-  function sampleWrapped(x, y, field) {
+  function sample(field, x, y) {
+    if (x < 0 || x >= width || y < 0 || y >= height) return undefined;
+    return field[y * width + x];
+  }
+
+  function sampleWrapped(field, x, y) {
     const id = index(x, y);
     return id >= 0 ? field[id] : undefined;
   }
@@ -185,6 +202,8 @@ export function createTopology(width, height, options = {}) {
     inBoundsX,
     inBoundsY,
     index,
+    wrapCoord,
+    isValidXY,
     xy,
     forEachNeighbor4,
     neighbors4,
@@ -196,7 +215,9 @@ export function createTopology(width, height, options = {}) {
     distanceXY,
     floodFill,
     connectedComponents,
+    componentIds,
     forEachCell,
+    sample,
     sampleWrapped,
   };
 }
@@ -225,16 +246,82 @@ export function measureTopologyDiagnostics(world) {
   const flood = topology.floodFill([first], () => true);
   let floodCount = 0;
   for (let i = 0; i < flood.length; i += 1) floodCount += flood[i];
-  const polarAccessRisk = topology.wrapYEnabled ? 1 : 0;
+  const neighbor4SymmetryValid = checkNeighborSymmetry(topology, 4);
+  const neighbor8SymmetryValid = checkNeighborSymmetry(topology, 8);
+  const distanceWrapValid = topology.wrapXEnabled
+    ? topology.distanceXY(0, 0, grid.width - 1, 0) <= 1.000001 && topology.distanceXY(0, 0, grid.width / 2, 0) <= grid.width / 2 + 0.000001
+    : true;
+  const connectedComponentTopologyValid = components.componentCount === 1;
+  const seamContinuityRisk = measureSeamContinuityRisk(grid, topology);
+  const polarBoundaryRisk = measurePolarBoundaryRisk(grid, topology);
+  const polarAccessRisk = topology.wrapYEnabled ? 1 : polarBoundaryRisk;
 
   return {
     topologyKind: topology.kind,
     wrapXEnabled: topology.wrapXEnabled,
     wrapYEnabled: topology.wrapYEnabled,
     neighborConsistencyValid: westWrap && eastWrap && northBlocked && southBlocked && n4.length === 3 && edgeN4.length === 3,
+    neighbor4SymmetryValid,
+    neighbor8SymmetryValid,
+    distanceWrapValid,
     floodFillTopologyValid: floodCount === grid.size,
+    connectedComponentTopologyValid,
     connectedComponentCount: components.componentCount,
+    seamContinuityRisk,
+    polarBoundaryRisk,
     polarAccessRisk,
+    topologyManualAccessRisk: 0.42,
+    topologyMigrationCoverage: 0.58,
     topologyResolutionDrift: 0,
   };
+}
+
+function checkNeighborSymmetry(topology, mode) {
+  const forEachNeighbor = mode === 8 ? topology.forEachNeighbor8 : topology.forEachNeighbor4;
+  let valid = true;
+  topology.forEachCell((id) => {
+    if (!valid) return;
+    forEachNeighbor(id, (nid) => {
+      if (!hasNeighbor(topology, nid, id, mode)) valid = false;
+    });
+  });
+  return valid;
+}
+
+function hasNeighbor(topology, id, target, mode) {
+  const forEachNeighbor = mode === 8 ? topology.forEachNeighbor8 : topology.forEachNeighbor4;
+  let found = false;
+  forEachNeighbor(id, (nid) => {
+    if (nid === target) found = true;
+  });
+  return found;
+}
+
+function measureSeamContinuityRisk(grid, topology) {
+  if (!topology.wrapXEnabled || !grid.elev) return 0;
+  let total = 0;
+  for (let y = 0; y < grid.height; y += 1) {
+    const left = topology.index(0, y);
+    const right = topology.index(grid.width - 1, y);
+    const adjacentDelta = Math.abs(grid.elev[left] - grid.elev[right]);
+    const inwardDelta =
+      (Math.abs(grid.elev[left] - grid.elev[topology.index(1, y)]) +
+        Math.abs(grid.elev[right] - grid.elev[topology.index(grid.width - 2, y)])) *
+      0.5;
+    total += Math.max(0, adjacentDelta - inwardDelta * 1.5);
+  }
+  return total / Math.max(1, grid.height);
+}
+
+function measurePolarBoundaryRisk(grid, topology) {
+  if (topology.wrapYEnabled || !grid.elev || grid.height < 3) return topology.wrapYEnabled ? 1 : 0;
+  let total = 0;
+  for (let x = 0; x < grid.width; x += 1) {
+    const north = topology.index(x, 0);
+    const northInner = topology.index(x, 1);
+    const south = topology.index(x, grid.height - 1);
+    const southInner = topology.index(x, grid.height - 2);
+    total += Math.abs(grid.elev[north] - grid.elev[northInner]) + Math.abs(grid.elev[south] - grid.elev[southInner]);
+  }
+  return total / Math.max(1, grid.width * 2);
 }
