@@ -5,7 +5,7 @@ import { getGeologicSeaLevelDiagnostics } from "../geology/seaLevel.js";
 import { getSedimentBudgetDiagnostics } from "../geology/sediment.js";
 import { getIsostasyDiagnostics } from "../geology/isostasy.js";
 import { deriveHydrology } from "../hydrology.js";
-import { measureTopologyDiagnostics } from "../topology.js";
+import { measureTopologyDiagnostics, topologyForGrid } from "../topology.js";
 
 const TERRAIN_BASE_CACHE = Symbol("terrainBaseCache");
 const TERRAIN_DERIVED_CACHE = Symbol("terrainDerivedCache");
@@ -29,6 +29,9 @@ export function getTerrainDerived(world) {
     distanceToOcean: base.distanceToOcean,
     landmassId: base.landmassId,
     islandId: base.islandId,
+    externalSeaMask: base.externalSeaMask,
+    oceanConnectivity: base.oceanConnectivity,
+    closedBasinId: base.closedBasinId,
     inlandWaterCandidate: base.inlandWaterCandidate,
     passiveMargin: base.passiveMargin,
     continentalShelf: base.continentalShelf,
@@ -86,7 +89,6 @@ export function getClimateInputs(world) {
   const { grid } = world;
   const {
     size,
-    height,
     mountainBelt,
     activeOrogeny,
     oldOrogeny,
@@ -102,7 +104,7 @@ export function getClimateInputs(world) {
   const mountainHeight = new Float32Array(size);
 
   forEachGridCell(grid, (id, _x, y) => {
-    const lat = ((y + 0.5) / height - 0.5) * 180;
+    const lat = latitudeDegrees(grid, id, y);
     const rel = base.relativeElevation[id];
     latitude[id] = lat;
     oceanDepth[id] = Math.max(0, -rel);
@@ -443,6 +445,26 @@ function measureTerrainShape(grid, field) {
   const slope = new Float32Array(size);
   const aspect = new Float32Array(size);
   const ruggedness = new Float32Array(size);
+  const topology = topologyForGrid(grid);
+  if (isGraphBackedGrid(grid, topology)) {
+    for (let id = 0; id < size; id += 1) {
+      const center = field[id];
+      let maxDiff = 0;
+      let totalDiff = 0;
+      let count = 0;
+      topology.forEachNeighbor(id, (nid, _slot, edgeLength = 1) => {
+        const diff = field[nid] - center;
+        const scaled = Math.abs(diff) / Math.max(1, edgeLength);
+        if (scaled > maxDiff) maxDiff = scaled;
+        totalDiff += Math.abs(diff);
+        count += 1;
+      });
+      slope[id] = maxDiff;
+      aspect[id] = 0;
+      ruggedness[id] = count ? totalDiff / count : 0;
+    }
+    return { slope, aspect, ruggedness };
+  }
 
   forEachGridCell(grid, (id, x, y) => {
     const center = field[id];
@@ -480,6 +502,10 @@ function distanceFromCoast(grid, landMask) {
 }
 
 function distanceFromSources(grid, sourceMask) {
+  const topology = topologyForGrid(grid);
+  if (isGraphBackedGrid(grid, topology) && topology.shortestDistanceSeeds) {
+    return topology.shortestDistanceSeeds(sourceMask);
+  }
   const { size } = grid;
   const distance = new Float32Array(size);
   distance.fill(Number.POSITIVE_INFINITY);
@@ -599,6 +625,15 @@ function smoothElevation(grid, field, radius) {
 function finiteSample(grid, field, x, y, fallback) {
   const value = sampleGridWrapped(grid, field, x, y);
   return Number.isFinite(value) ? value : fallback;
+}
+
+function latitudeDegrees(grid, id, y) {
+  if (grid.lat && Number.isFinite(grid.lat[id])) return grid.lat[id] * 180 / Math.PI;
+  return ((y + 0.5) / grid.height - 0.5) * 180;
+}
+
+function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+  return Boolean(grid.topologyOptions?.graphBacked || topology?.topologyKind === "cubed-sphere" || grid.topologyKind === "cubed-sphere");
 }
 
 function measureComponentSizes(componentId) {

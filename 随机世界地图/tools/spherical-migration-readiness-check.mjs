@@ -15,12 +15,18 @@ const sphericalProductionPaths = [
   "src/sim/sphere",
 ];
 
-const allowedSphericalMatches = new Set([
-  "src/sim/sphere/productionGridAdapter.js:95:grid.width",
-  "src/sim/sphere/productionGridAdapter.js:96:grid.height",
-  "src/sim/sphere/productionGridAdapter.js:152:grid.width",
-  "src/sim/sphere/productionGridAdapter.js:152:grid.height",
-]);
+const allowedSphericalMatches = [
+  {
+    file: "src/sim/sphere/productionGridAdapter.js",
+    pattern: "grid.width",
+    lineText: "grid.width = sphericalGrid.faceSize;",
+  },
+  {
+    file: "src/sim/sphere/productionGridAdapter.js",
+    pattern: "grid.height",
+    lineText: "grid.height = sphericalGrid.faceCount * sphericalGrid.faceSize;",
+  },
+];
 
 const legacyMigrationScopes = [
   "src/sim/geology",
@@ -36,7 +42,7 @@ const topologyAwareLegacyFiles = new Set([
 ]);
 
 const sphericalMatches = scanPaths(sphericalProductionPaths).filter((match) => {
-  return !allowedSphericalMatches.has(`${match.file}:${match.line}:${match.pattern}`);
+  return !isAllowedSphericalMatch(match);
 });
 const legacyMatches = scanPaths(legacyMigrationScopes).filter((match) => {
   return !topologyAwareLegacyFiles.has(match.file);
@@ -97,12 +103,13 @@ function listJsFiles(dir) {
 function scanFile(file) {
   const text = readFileSync(file, "utf8");
   const relative = path.relative(root, file).replaceAll("\\", "/");
+  const lines = text.split(/\r?\n/);
   const matches = [];
   for (const pattern of forbiddenPatterns) {
     pattern.regex.lastIndex = 0;
     for (const match of text.matchAll(pattern.regex)) {
       const line = lineNumberAt(text, match.index ?? 0);
-      matches.push({ file: relative, line, pattern: pattern.name });
+      matches.push({ file: relative, line, lineText: lines[line - 1] ?? "", pattern: pattern.name });
     }
   }
   return matches;
@@ -128,4 +135,14 @@ function summarizeByFile(matches) {
     delete summary.patternSet;
   }
   return byFile;
+}
+
+function isAllowedSphericalMatch(match) {
+  return allowedSphericalMatches.some((allowed) => {
+    return (
+      match.file === allowed.file &&
+      match.pattern === allowed.pattern &&
+      match.lineText.trim() === allowed.lineText
+    );
+  });
 }
