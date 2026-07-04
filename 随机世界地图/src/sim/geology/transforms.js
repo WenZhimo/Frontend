@@ -1,4 +1,5 @@
 import { forEachGridCell, forEachNeighbor4ById, indexOf } from "../grid.js";
+import { topologyForGrid } from "../topology.js";
 import { BoundaryType } from "../tectonics.js";
 import { CrustType } from "./crust.js";
 
@@ -126,6 +127,12 @@ function diffuseFractureMemory(grid) {
 
 function updateAgeBandRisk(grid) {
   const { crustType, crustAge, ridge, boundaryInfluence, fractureZoneMemory, ageBandStraightnessRisk } = grid;
+  const topology = topologyForGrid(grid);
+  if (isGraphBackedGrid(grid, topology)) {
+    updateGraphAgeBandRisk(grid, topology);
+    return;
+  }
+
   forEachGridCell(grid, (id, x, y) => {
     if (crustType[id] !== CrustType.OCEANIC) return;
     const band = Math.floor(crustAge[id] * 10);
@@ -140,6 +147,38 @@ function updateAgeBandRisk(grid) {
     const inactive = 1 - Math.min(1, boundaryInfluence[id]);
     ageBandStraightnessRisk[id] = Math.max(0, Math.min(1, inactive * (0.4 + fractureZoneMemory[id] * 0.8)));
   });
+}
+
+function updateGraphAgeBandRisk(grid, topology) {
+  const { size, crustType, crustAge, ridge, boundaryInfluence, fractureZoneMemory, ageBandStraightnessRisk } = grid;
+  for (let id = 0; id < size; id += 1) {
+    if (crustType[id] !== CrustType.OCEANIC) continue;
+    const band = Math.floor(crustAge[id] * 10);
+    let sameAdjacent = 0;
+    let oceanicAdjacent = 0;
+    let sameSecondRing = 0;
+
+    topology.forEachNeighbor(id, (nid) => {
+      if (crustType[nid] !== CrustType.OCEANIC) return;
+      oceanicAdjacent += 1;
+      if (Math.floor(crustAge[nid] * 10) === band) sameAdjacent += 1;
+    });
+
+    if (sameAdjacent < 2) continue;
+    if (typeof topology.forEachNeighborRing === "function") {
+      topology.forEachNeighborRing(id, 2, (nid, depth) => {
+        if (depth !== 2 || crustType[nid] !== CrustType.OCEANIC) return;
+        if (Math.floor(crustAge[nid] * 10) === band) sameSecondRing += 1;
+      });
+    }
+
+    const continuity = Math.min(1, (sameAdjacent + sameSecondRing * 0.35) / Math.max(2, oceanicAdjacent * 0.6));
+    if (continuity < 0.72) continue;
+    const nearRidge = ridge[id] > 0.05 || grid.ridgeDistance[id] <= 3;
+    if (nearRidge) continue;
+    const inactive = 1 - Math.min(1, boundaryInfluence[id]);
+    ageBandStraightnessRisk[id] = Math.max(0, Math.min(1, inactive * continuity * (0.28 + fractureZoneMemory[id] * 0.72)));
+  }
 }
 
 function softenInactiveFractureSourceFields(grid, dt) {
@@ -202,6 +241,14 @@ function sameAgeBandAt(grid, x, y, band) {
   const id = indexOf(grid, x, y);
   if (id < 0) return 0;
   return grid.crustType[id] === CrustType.OCEANIC && Math.floor(grid.crustAge[id] * 10) === band ? 1 : 0;
+}
+
+function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+  return Boolean(
+    grid.topologyOptions?.graphBacked ||
+      topology?.topologyKind === "cubed-sphere" ||
+      grid.topologyKind === "cubed-sphere",
+  );
 }
 
 function halfLifeDecay(dt, halfLifeMyr) {
