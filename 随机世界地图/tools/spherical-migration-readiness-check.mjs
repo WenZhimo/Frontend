@@ -71,16 +71,20 @@ const possibleSphericalPathHelperMatches = classifiedLegacyHelperMatches.filter(
 const graphRoutedFallbackMatches = legacyFallbackHelperMatches.filter((match) => match.routeKind === "graphRoutedFile");
 const explicitLegacyWrapperMatches = legacyFallbackHelperMatches.filter((match) => match.routeKind === "explicitLegacyFunction");
 const graphBranchFallbackMatches = legacyFallbackHelperMatches.filter((match) => match.routeKind === "graphBranchFallback");
+const migrationHelperRiskMatches = classifiedLegacyHelperMatches.filter((match) => {
+  return !(match.classification === "legacyFallback" && match.routeKind === "explicitLegacyFunction");
+});
 const legacyFallbackHelperByFile = summarizeByFile(legacyFallbackHelperMatches);
 const guardedHelperByFile = summarizeByFile(guardedHelperMatches);
 const possibleSphericalPathHelperByFile = summarizeByFile(possibleSphericalPathHelperMatches);
 const graphRoutedFallbackByFile = summarizeByFile(graphRoutedFallbackMatches);
 const explicitLegacyWrapperByFile = summarizeByFile(explicitLegacyWrapperMatches);
 const graphBranchFallbackByFile = summarizeByFile(graphBranchFallbackMatches);
+const migrationHelperRiskByFile = summarizeByFile(migrationHelperRiskMatches);
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
-const helperMigrationReady = possibleSphericalPathHelperMatches.length === 0;
+const helperMigrationReady = migrationHelperRiskMatches.length === 0;
 const result = {
   valid: productionAdapterReady && helperMigrationReady,
   productionAdapterReady,
@@ -92,8 +96,12 @@ const result = {
   legacyRiskFiles: Object.keys(legacyByFile).length,
   legacyDirectRectangularRiskCount: legacyMatches.length,
   legacyDirectRectangularRiskFiles: Object.keys(legacyByFile).length,
-  legacyHelperRiskCount: legacyHelperMatches.length,
-  legacyHelperRiskFiles: Object.keys(legacyHelperByFile).length,
+  legacyHelperRawCount: legacyHelperMatches.length,
+  legacyHelperRawFiles: Object.keys(legacyHelperByFile).length,
+  legacyHelperRiskCount: migrationHelperRiskMatches.length,
+  legacyHelperRiskFiles: Object.keys(migrationHelperRiskByFile).length,
+  migrationHelperRiskCount: migrationHelperRiskMatches.length,
+  migrationHelperRiskFiles: Object.keys(migrationHelperRiskByFile).length,
   legacyFallbackHelperCount: legacyFallbackHelperMatches.length,
   legacyFallbackHelperFiles: Object.keys(legacyFallbackHelperByFile).length,
   graphRoutedFallbackCount: graphRoutedFallbackMatches.length,
@@ -111,7 +119,15 @@ const result = {
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 12)
     .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
-  topLegacyHelperRiskFiles: Object.entries(legacyHelperByFile)
+  topLegacyHelperRiskFiles: Object.entries(migrationHelperRiskByFile)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 12)
+    .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
+  topLegacyHelperRawFiles: Object.entries(legacyHelperByFile)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 12)
+    .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
+  topMigrationHelperRiskFiles: Object.entries(migrationHelperRiskByFile)
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 12)
     .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
@@ -145,10 +161,10 @@ const result = {
       ? "fullMigrationReady means scanned legacy migration scopes have no unclassified rectangular-indexing risks"
       : "fullMigrationReady remains false while scanned legacy migration scopes still contain rectangular-indexing risks",
     helperMigrationReady
-      ? "helperMigrationReady means all scanned topology helper usage is classified as guarded or legacy fallback"
-      : "helperMigrationReady is false while possibleSphericalPathHelperCount is non-zero",
-    "legacyHelperRiskCount is diagnostic: topology helpers are migration dependencies, not automatic failures",
-    "possibleSphericalPathHelperCount is the next migration target; legacyFallbackHelperCount is split into graphRoutedFallback, explicitLegacyWrapper, and graphBranchFallback buckets",
+      ? "helperMigrationReady means no non-wrapper or unclassified topology helper usage remains on scanned migration paths"
+      : "helperMigrationReady is false while migrationHelperRiskCount is non-zero",
+    "legacyHelperRawCount tracks all scanned topology helper usage; explicitLegacyWrapperCount tracks legacy compatibility wrappers",
+    "legacyHelperRiskCount and migrationHelperRiskCount exclude explicit legacy wrapper bodies; possibleSphericalPathHelperCount is one risk subtype",
   ],
 };
 
