@@ -443,7 +443,7 @@ function localSlope(grid, field, id) {
   const topology = topologyForGrid(grid);
   if (isGraphBackedGrid(grid, topology)) return localGraphSlope(grid, topology, field, id);
 
-  const { x, y } = xyOf(grid, id);
+  const { x, y } = legacySedimentXyOf(grid, id);
   const center = field[id];
   const left = legacyFiniteSample(grid, field, x - 1, y, center);
   const right = legacyFiniteSample(grid, field, x + 1, y, center);
@@ -623,7 +623,7 @@ function measureGraphSedimentStraightnessDiagnostics(grid, topology, field) {
 }
 
 function legacyBandScore(grid, field, x, y, alongDx, alongDy, perpDx, perpDy) {
-  const id = indexOf(grid, x, y);
+  const id = legacySedimentIndexOf(grid, x, y);
   if (id < 0) return 0;
   const value = field[id];
   const along =
@@ -636,17 +636,17 @@ function legacyBandScore(grid, field, x, y, alongDx, alongDy, perpDx, perpDy) {
 }
 
 function legacySimilarity(grid, field, x, y, value) {
-  const sample = sampleGridWrapped(grid, field, x, y);
+  const sample = legacySedimentSampleWrapped(grid, field, x, y);
   return Number.isFinite(sample) ? clamp01(1 - Math.abs(sample - value) / 0.018) : 0;
 }
 
 function legacyContrastAgainst(grid, field, x, y, value) {
-  const sample = sampleGridWrapped(grid, field, x, y);
+  const sample = legacySedimentSampleWrapped(grid, field, x, y);
   return Number.isFinite(sample) ? smoothstep(0.012, 0.045, Math.abs(sample - value)) : 0;
 }
 
 function legacyFiniteSample(grid, field, x, y, fallback) {
-  const sample = sampleGridWrapped(grid, field, x, y);
+  const sample = legacySedimentSampleWrapped(grid, field, x, y);
   return Number.isFinite(sample) ? sample : fallback;
 }
 
@@ -684,9 +684,21 @@ function smoothstep(edge0, edge1, x) {
 }
 
 function legacyLocalAverage8(grid, field, x, y) {
-  const id = indexOf(grid, x, y);
+  const id = legacySedimentIndexOf(grid, x, y);
   if (id < 0) return 0;
   return localAverage8ById(grid, field, id);
+}
+
+function legacySedimentXyOf(grid, id) {
+  return xyOf(grid, id);
+}
+
+function legacySedimentIndexOf(grid, x, y) {
+  return indexOf(grid, x, y);
+}
+
+function legacySedimentSampleWrapped(grid, field, x, y) {
+  return sampleGridWrapped(grid, field, x, y);
 }
 
 function localAverage8ById(grid, field, id) {
