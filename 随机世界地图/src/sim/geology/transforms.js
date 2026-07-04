@@ -22,9 +22,15 @@ export function updateTransformMemory(world) {
   } = grid;
   const dt = world.timeScaleFactor;
   const activeThreshold = 0.08;
+  const graphBacked = isGraphBackedGrid(grid);
+  const stressModel = graphBacked ? measureGraphTransformStressModel(grid) : null;
   for (let i = 0; i < size; i += 1) {
+    const activeInfluence = graphBacked ? graphActiveBoundaryInfluence(grid, i) : boundaryInfluence[i];
+    const transformStress = graphBacked
+      ? normalizedGraphTransformStress(stress[i], stressModel)
+      : Math.min(2.5, stress[i]);
     const active = boundaryKind[i] === BoundaryType.TRANSFORM && boundaryInfluence[i] > activeThreshold
-      ? Math.min(1, boundaryInfluence[i] * Math.min(2.5, stress[i]) * 0.9)
+      ? Math.min(1, activeInfluence * transformStress * (graphBacked ? 0.18 : 0.9))
       : 0;
     activeTransform[i] = active;
 
@@ -59,6 +65,35 @@ export function updateTransformMemory(world) {
   if (world.step % 4 === 0) {
     softenInactiveFractureSourceFields(grid, dt * 4);
   }
+}
+
+function graphActiveBoundaryInfluence(grid, id) {
+  if (!grid.activeBoundary?.[id]) return 0;
+  return Math.min(1, grid.boundaryInfluence[id] * 0.72 + 0.28);
+}
+
+function measureGraphTransformStressModel(grid) {
+  let max = 0;
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < grid.size; i += 1) {
+    if (!grid.activeBoundary?.[i] || grid.boundaryKind[i] !== BoundaryType.TRANSFORM) continue;
+    const value = grid.stress[i];
+    if (!Number.isFinite(value) || value <= 0) continue;
+    sum += value;
+    count += 1;
+    if (value > max) max = value;
+  }
+  return {
+    max,
+    scale: Math.max(0.00035, Math.min(0.004, max * 0.55, count ? (sum / count) * 2.6 : 0.00035)),
+  };
+}
+
+function normalizedGraphTransformStress(value, model) {
+  if (!model || value <= 0 || model.max <= 0) return 0;
+  const scaled = value / Math.max(1e-7, model.scale);
+  return Math.min(1, scaled / (1 + scaled));
 }
 
 export function suppressInactiveFractureRelief(world) {
