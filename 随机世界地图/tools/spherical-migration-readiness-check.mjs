@@ -27,18 +27,7 @@ const sphericalProductionPaths = [
   "src/sim/sphere",
 ];
 
-const allowedSphericalMatches = [
-  {
-    file: "src/sim/sphere/productionGridAdapter.js",
-    pattern: "grid.width",
-    lineText: "grid.width = sphericalGrid.faceSize;",
-  },
-  {
-    file: "src/sim/sphere/productionGridAdapter.js",
-    pattern: "grid.height",
-    lineText: "grid.height = sphericalGrid.faceCount * sphericalGrid.faceSize;",
-  },
-];
+const allowedSphericalMatches = [];
 
 const legacyMigrationScopes = [
   "src/sim/geology",
