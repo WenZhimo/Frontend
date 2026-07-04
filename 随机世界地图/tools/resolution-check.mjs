@@ -763,18 +763,19 @@ function measureMountainAxisCurvature(grid) {
   let total = 0;
   let bent = 0;
   const topology = topologyForGrid(grid);
+  const threshold = axisDiagnosticThreshold(grid);
   for (let id = 0; id < grid.size; id += 1) {
-    if (grid.mountainAxis[id] <= 0.05) continue;
+    if (grid.mountainAxis[id] <= threshold) continue;
     const area = metricArea(grid, id);
     total += area;
     let connected = 0;
     let strongest = 0;
     forEachAnyNeighbor(topology, id, (nid) => {
-      const v = grid.mountainAxis[nid] > 0.05 ? grid.mountainAxis[nid] : 0;
+      const v = grid.mountainAxis[nid] > threshold ? grid.mountainAxis[nid] : 0;
       connected += v;
       if (v > strongest) strongest = v;
     });
-    if (connected > strongest + 0.05) bent += area;
+    if (connected > strongest + threshold) bent += area;
   }
   return total ? bent / total : 0;
 }

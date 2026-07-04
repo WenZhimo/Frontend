@@ -689,17 +689,18 @@ function mountainAxisCurvature(grid) {
   let total = 0;
   let bent = 0;
   const topology = topologyForGrid(grid);
+  const threshold = axisDiagnosticThreshold(grid);
   for (let id = 0; id < grid.size; id += 1) {
-    if (grid.mountainAxis[id] <= 0.05) continue;
+    if (grid.mountainAxis[id] <= threshold) continue;
     total += 1;
     let connected = 0;
     let strongest = 0;
     forEachAnyNeighbor(topology, id, (nid) => {
-      const v = grid.mountainAxis[nid] > 0.05 ? grid.mountainAxis[nid] : 0;
+      const v = grid.mountainAxis[nid] > threshold ? grid.mountainAxis[nid] : 0;
       connected += v;
       if (v > strongest) strongest = v;
     });
-    if (connected > strongest + 0.05) bent += 1;
+    if (connected > strongest + threshold) bent += 1;
   }
   return total ? bent / total : 0;
 }

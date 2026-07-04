@@ -122,7 +122,7 @@ function measureAgeBandStraightnessSplit(grid) {
     if (aligned <= 0) continue;
     const area = metricArea(grid, id);
     const straight = aligned >= 2;
-    if (grid.ridge[id] > 0.03 || grid.ridgeAxis[id] > 0.05) {
+    if (grid.ridge[id] > 0.03 || grid.ridgeAxis[id] > axisDiagnosticThreshold(grid)) {
       nearTotal += area;
       if (straight) nearStraight += area;
     } else if (grid.boundaryInfluence[id] < 0.12) {
@@ -214,4 +214,8 @@ function totalArea(grid) {
   let total = 0;
   for (let id = 0; id < grid.size; id += 1) total += metricArea(grid, id);
   return total;
+}
+
+function axisDiagnosticThreshold(grid) {
+  return grid?.topologyKind === "cubed-sphere" || grid?.topologyOptions?.graphBacked ? 0.016 : 0.05;
 }
