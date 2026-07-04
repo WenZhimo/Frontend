@@ -138,54 +138,65 @@ function normalizeFaceSize(faceSize, resolution) {
 export function analyzeWorld(world) {
   const { grid } = world;
   const { size, elev, btype, isContinental } = grid;
-  let land = 0;
+  const areaWeighted = isGraphBackedGrid(grid);
+  let landArea = 0;
+  let totalArea = 0;
   let convergentSum = 0;
-  let convergentCount = 0;
+  let convergentWeight = 0;
   let mountainConvergentSum = 0;
-  let mountainConvergentCount = 0;
+  let mountainConvergentWeight = 0;
   let divergentSum = 0;
-  let divergentCount = 0;
+  let divergentWeight = 0;
   let interiorSum = 0;
-  let interiorCount = 0;
+  let interiorWeight = 0;
   let continentalInteriorSum = 0;
-  let continentalInteriorCount = 0;
+  let continentalInteriorWeight = 0;
+  let convergentCount = 0;
+  let mountainConvergentCount = 0;
+  let divergentCount = 0;
   let maxElev = -Infinity;
 
   for (let i = 0; i < size; i += 1) {
     const h = elev[i];
-    if (h >= world.seaLevel) land += 1;
+    const weight = areaWeighted ? grid.area?.[i] ?? 1 : 1;
+    totalArea += weight;
+    if (h >= world.seaLevel) landArea += weight;
     if (h > maxElev) maxElev = h;
     if (btype[i] === 1) {
-      convergentSum += h;
+      convergentSum += h * weight;
+      convergentWeight += weight;
       convergentCount += 1;
       if (isContinental[i]) {
-        mountainConvergentSum += h;
+        mountainConvergentSum += h * weight;
+        mountainConvergentWeight += weight;
         mountainConvergentCount += 1;
       }
     } else if (btype[i] === 2) {
-      divergentSum += h;
+      divergentSum += h * weight;
+      divergentWeight += weight;
       divergentCount += 1;
     } else if (btype[i] === 0) {
-      interiorSum += h;
-      interiorCount += 1;
+      interiorSum += h * weight;
+      interiorWeight += weight;
       if (isContinental[i]) {
-        continentalInteriorSum += h;
-        continentalInteriorCount += 1;
+        continentalInteriorSum += h * weight;
+        continentalInteriorWeight += weight;
       }
     }
   }
 
-  const avgConvergent = convergentCount ? convergentSum / convergentCount : 0;
-  const avgMountainConvergent = mountainConvergentCount ? mountainConvergentSum / mountainConvergentCount : avgConvergent;
-  const avgDivergent = divergentCount ? divergentSum / divergentCount : 0;
-  const avgInterior = interiorCount ? interiorSum / interiorCount : 0;
-  const avgContinentalInterior = continentalInteriorCount ? continentalInteriorSum / continentalInteriorCount : avgInterior;
+  const avgConvergent = convergentWeight ? convergentSum / convergentWeight : 0;
+  const avgMountainConvergent = mountainConvergentWeight ? mountainConvergentSum / mountainConvergentWeight : avgConvergent;
+  const avgDivergent = divergentWeight ? divergentSum / divergentWeight : 0;
+  const avgInterior = interiorWeight ? interiorSum / interiorWeight : 0;
+  const avgContinentalInterior = continentalInteriorWeight ? continentalInteriorSum / continentalInteriorWeight : avgInterior;
   const avgPlateDrift = measurePlateDrift(world);
   const mountainDelta = avgMountainConvergent - avgContinentalInterior;
   const broadDelta = avgMountainConvergent - avgInterior;
+  const landRatio = landArea / Math.max(totalArea, Number.EPSILON);
   return {
-    landRatio: land / size,
-    seaRatio: 1 - land / size,
+    landRatio,
+    seaRatio: 1 - landRatio,
     avgConvergent,
     avgMountainConvergent,
     avgDivergent,
@@ -199,6 +210,10 @@ export function analyzeWorld(world) {
     avgPlateDrift,
     causalityPass: mountainConvergentCount > 0 && (mountainDelta > 0.015 || broadDelta > 0.05),
   };
+}
+
+function isGraphBackedGrid(grid) {
+  return Boolean(grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere");
 }
 
 function measurePlateDrift(world) {
