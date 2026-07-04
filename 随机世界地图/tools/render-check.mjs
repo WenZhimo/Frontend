@@ -2,6 +2,8 @@ import { writeFileSync } from "node:fs";
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
 import { parseOptions, parseTopologyOptions } from "./lib/cli.mjs";
+import { colorForElevation } from "../src/render/cpuMapRenderer.js";
+import { renderSphericalField } from "../src/render/sphericalProjectionRenderer.js";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
 const topologyOptions = parseTopologyOptions(options);
@@ -23,19 +25,13 @@ const output = positional[2] ?? "_render-check.ppm";
 const world = createWorld(params);
 for (let i = 0; i < steps; i += 1) stepWorld(world);
 
-const { width, height, elev } = world.grid;
-const bytes = Buffer.alloc(width * height * 3);
-for (let i = 0; i < world.grid.size; i += 1) {
-  const color = colorForElevation(elev[i] - world.seaLevel);
-  const offset = i * 3;
-  bytes[offset] = color[0];
-  bytes[offset + 1] = color[1];
-  bytes[offset + 2] = color[2];
-}
-
-writeFileSync(output, Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`), bytes]));
+const render = renderElevationReference(world, params);
+writeFileSync(output, Buffer.concat([Buffer.from(`P6\n${render.width} ${render.height}\n255\n`), render.bytes]));
 console.log(JSON.stringify({
   output,
+  outputWidth: render.width,
+  outputHeight: render.height,
+  renderBackend: render.backend,
   steps,
   ageYears: world.ageYears,
   pipelineMode: params.pipelineMode,
@@ -52,6 +48,69 @@ console.log(JSON.stringify({
   avgContinentalInterior: world.stats.avgContinentalInterior,
   featureStats: measureFeatureStats(world.grid),
 }, null, 2));
+
+function renderElevationReference(world, params) {
+  if (isGraphBackedGrid(world.grid)) {
+    const outputResolution = options["output-resolution"] ?? options.outputResolution ?? params.resolution;
+    const { width, height } = parseResolution(outputResolution, 512, 256);
+    const rendered = renderSphericalField(world.grid, world.grid.elev, {
+      width,
+      height,
+      projectionMode: world.params?.projectionMode ?? params.projectionMode ?? "equirectangular",
+      colorRamp: (value) => colorForElevation(value - world.seaLevel),
+    });
+    return {
+      width,
+      height,
+      bytes: rgbaToRgb(rendered.pixels),
+      backend: "cpu-spherical-projection-reference",
+    };
+  }
+  return {
+    width: world.grid.width,
+    height: world.grid.height,
+    bytes: renderRectangularElevationToRgbBytes(world),
+    backend: "cpu-rectangular-reference",
+  };
+}
+
+function renderRectangularElevationToRgbBytes(world) {
+  const { grid } = world;
+  const bytes = Buffer.alloc(grid.width * grid.height * 3);
+  for (let i = 0; i < grid.size; i += 1) {
+    const color = colorForElevation(grid.elev[i] - world.seaLevel);
+    const offset = i * 3;
+    bytes[offset] = color[0];
+    bytes[offset + 1] = color[1];
+    bytes[offset + 2] = color[2];
+  }
+  return bytes;
+}
+
+function rgbaToRgb(pixels) {
+  const bytes = Buffer.alloc((pixels.length / 4) * 3);
+  for (let rgba = 0, rgb = 0; rgba < pixels.length; rgba += 4, rgb += 3) {
+    bytes[rgb] = pixels[rgba];
+    bytes[rgb + 1] = pixels[rgba + 1];
+    bytes[rgb + 2] = pixels[rgba + 2];
+  }
+  return bytes;
+}
+
+function parseResolution(value, fallbackWidth, fallbackHeight) {
+  const match = /^(\d+)x(\d+)$/i.exec(String(value ?? ""));
+  if (!match) {
+    return { width: fallbackWidth, height: fallbackHeight };
+  }
+  return {
+    width: Math.max(1, Number(match[1])),
+    height: Math.max(1, Number(match[2])),
+  };
+}
+
+function isGraphBackedGrid(grid) {
+  return Boolean(grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere");
+}
 
 function measureFeatureStats(grid) {
   const fields = {
@@ -85,23 +144,4 @@ function measureFeatureStats(grid) {
     };
   }
   return result;
-}
-
-function colorForElevation(h) {
-  if (h < -0.22) return [7, 35, 65];
-  if (h < -0.08) return lerpColor([11, 53, 94], [31, 105, 143], (h + 0.22) / 0.14);
-  if (h < 0) return lerpColor([39, 116, 145], [86, 157, 164], (h + 0.08) / 0.08);
-  if (h < 0.12) return lerpColor([86, 132, 72], [143, 163, 88], h / 0.12);
-  if (h < 0.32) return lerpColor([136, 123, 77], [126, 91, 62], (h - 0.12) / 0.2);
-  if (h < 0.56) return lerpColor([116, 94, 79], [188, 182, 163], (h - 0.32) / 0.24);
-  return [236, 240, 229];
-}
-
-function lerpColor(a, b, t) {
-  const k = Math.max(0, Math.min(1, t));
-  return [
-    Math.round(a[0] + (b[0] - a[0]) * k),
-    Math.round(a[1] + (b[1] - a[1]) * k),
-    Math.round(a[2] + (b[2] - a[2]) * k),
-  ];
 }
