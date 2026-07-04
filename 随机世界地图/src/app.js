@@ -2856,11 +2856,9 @@
 
   function rebuildElevation(world) {
     const { grid, textureNoise } = world;
-    const { width, height, size, crust, baseElev, relief, boundaryRelief, elev, isContinental, crustType } = grid;
+    const { crust, baseElev, relief, boundaryRelief, elev, isContinental, crustType } = grid;
 
-    for (let i = 0; i < size; i += 1) {
-      const x = i % width;
-      const y = Math.floor(i / width);
+    forEachGridCell(grid, (i, x, y) => {
       const sphere = spherePointForGridCell(grid, i, x, y);
       const micro = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
       const c = crust[i];
@@ -2873,7 +2871,7 @@
         ? 0.065 + blend * 0.075 + micro * 0.014
         : -0.085 + blend * 0.095 + micro * 0.012;
       elev[i] = baseElev[i] + relief[i] + boundaryRelief[i];
-    }
+    });
   }
 
   function spherePointForGridCell(grid, id, x, y) {
@@ -6635,14 +6633,12 @@
   function ensureGeologyElevationNoise(world) {
     if (world.geologyElevationNoiseInitialized) return;
     const { grid, textureNoise } = world;
-    const { width, size, geologyBroadNoise, geologyMicroNoise } = grid;
-    for (let i = 0; i < size; i += 1) {
-      const x = i % width;
-      const y = Math.floor(i / width);
-      const sphere = spherePointForGridCell(grid, i, x, y);
-      geologyMicroNoise[i] = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
-      geologyBroadNoise[i] = textureNoise(sphere.x * 2.2 + 7, sphere.y * 2.2 - 5, sphere.z * 2.2 + 17, 3, 2, 0.48);
-    }
+    const { geologyBroadNoise, geologyMicroNoise } = grid;
+    forEachGridCell(grid, (id, x, y) => {
+      const sphere = spherePointForGridCell(grid, id, x, y);
+      geologyMicroNoise[id] = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
+      geologyBroadNoise[id] = textureNoise(sphere.x * 2.2 + 7, sphere.y * 2.2 - 5, sphere.z * 2.2 + 17, 3, 2, 0.48);
+    });
     world.geologyElevationNoiseInitialized = true;
   }
 

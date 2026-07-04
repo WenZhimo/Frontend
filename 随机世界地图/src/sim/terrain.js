@@ -153,11 +153,9 @@ function initializeWeakness(world) {
 
 export function rebuildElevation(world) {
   const { grid, textureNoise } = world;
-  const { width, height, size, crust, baseElev, relief, boundaryRelief, elev, isContinental, crustType } = grid;
+  const { crust, baseElev, relief, boundaryRelief, elev, isContinental, crustType } = grid;
 
-  for (let i = 0; i < size; i += 1) {
-    const x = i % width;
-    const y = Math.floor(i / width);
+  forEachGridCell(grid, (i, x, y) => {
     const sphere = spherePointForGridCell(grid, i, x, y);
     const micro = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
     const c = crust[i];
@@ -170,7 +168,7 @@ export function rebuildElevation(world) {
       ? 0.065 + blend * 0.075 + micro * 0.014
       : -0.085 + blend * 0.095 + micro * 0.012;
     elev[i] = baseElev[i] + relief[i] + boundaryRelief[i];
-  }
+  });
 }
 
 function spherePointForGridCell(grid, id, x, y) {
