@@ -30,7 +30,7 @@ const result = {
   fieldNames: productionAdapterFieldNames(),
   firstCellNeighbors,
   notes: [
-    "adapter is intentionally not wired into createWorld yet",
+    "adapter is the authoritative production grid for topologyMode=cubed-sphere",
     "production sphere migration must use cell ids and topology graph access, not y * width + x indexing",
   ],
 };
