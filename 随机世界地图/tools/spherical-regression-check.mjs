@@ -37,6 +37,7 @@ const checks = [
   ["spherical-render-check:normal-motion", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_normal_motion.ppm", "equirectangular", "256", "128", "normal-motion", seedText, "20"]],
   ["spherical-render-check:adapter-diagnostic-elevation", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_adapter_elev.ppm", "equirectangular", "256", "128", "adapter-diagnostic-elevation"]],
   ["spherical-render-check:adapter-closed-basin", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_adapter_closed_basin.ppm", "mollweide", "256", "128", "adapter-closed-basin-id"]],
+  ["spherical-render-gate-check", ["tools/spherical-render-gate-check.mjs", seedText, String(smallFaceSize), "2", "128x64"]],
 ];
 
 const startedAt = Date.now();
@@ -134,6 +135,8 @@ function compactMetrics(parsed) {
     "transformMemoryCoverage",
     "oldBoundaryReliefCorrelation",
     "sedimentStraightnessRisk",
+    "renderBackend",
+    "cpuRenderBackend",
   ]) {
     if (parsed[key] !== undefined) picked[key] = parsed[key];
     else if (parsed.metrics?.[key] !== undefined) picked[key] = parsed.metrics[key];
