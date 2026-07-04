@@ -1,72 +1,155 @@
 import { createCubedSphereGrid } from "../src/sim/sphere/cubedSphere.js";
+import { createSphericalPlates, driftSphericalPlates } from "../src/sim/sphere/plates.js";
 import { lonLatToEquirectangularPixel } from "../src/sim/sphere/projection.js";
-import { lonLatToVec3, rotateAroundAxis, TAU } from "../src/sim/sphere/vector.js";
+import { angularDistance3, lonLatToVec3, rotateAroundAxis, TAU, vec3ToLonLat } from "../src/sim/sphere/vector.js";
+import { hashSeed } from "../src/sim/prng.js";
 import { parseIntOption, parseOptions } from "./lib/cli.mjs";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
-const seedText = positional[0] ?? "龙骨海-纪元7";
-const topology = positional[1] ?? "cubed-sphere";
+const seedText = positional[0] ?? options.seed ?? "龙骨海-纪元7";
+const topologyMode = positional[1] ?? options.topology ?? "cubed-sphere";
 const faceSize = parseIntOption(options, "face-size", Number(positional[2] ?? 64));
 const width = parseIntOption(options, "width", faceSize * 4);
 const height = parseIntOption(options, "height", faceSize * 2);
 
-if (topology !== "cubed-sphere") {
-  console.error(`Unsupported topology for pole crossing check: ${topology}`);
-  process.exit(1);
-}
+const failures = [];
+if (topologyMode !== "cubed-sphere") failures.push("unsupportedTopologyMode");
 
 const grid = createCubedSphereGrid(faceSize);
-const north = tracePoleCrossing(grid, width, height, Math.PI / 2, 0);
-const south = tracePoleCrossing(grid, width, height, -Math.PI / 2, Math.PI / 2);
-const valid = north.halfMapReturnValid && south.halfMapReturnValid && north.maxCellStep < Math.PI / faceSize * 3 && south.maxCellStep < Math.PI / faceSize * 3;
+const northCrossing = measurePoleGreatCircleReturn({
+  startLon: 0,
+  poleLat: Math.PI / 2,
+  width,
+  height,
+});
+const southCrossing = measurePoleGreatCircleReturn({
+  startLon: Math.PI / 2,
+  poleLat: -Math.PI / 2,
+  width,
+  height,
+});
+const gridCrossing = measureGridNearestContinuity(grid, width, height);
+const plateDrift = measurePlateDriftIntegrity(seedText);
 
-console.log(
-  JSON.stringify(
-    {
-      seedText,
-      topology,
-      faceSize,
-      width,
-      height,
-      valid,
-      north,
-      south,
-    },
-    null,
-    2,
-  ),
-);
-if (!valid) process.exit(1);
+const checks = {
+  northHalfMapReturn: Math.abs(northCrossing.returnDx - width / 2) <= 1,
+  southHalfMapReturn: Math.abs(southCrossing.returnDx - width / 2) <= 1,
+  northPoleRowsConverge: northCrossing.maxPoleRowDelta <= 1,
+  southPoleRowsConverge: southCrossing.maxPoleRowDelta <= 1,
+  gridNearestNorthContinuous: gridCrossing.northMaxAngularStep < Math.PI / Math.max(4, faceSize * 0.45),
+  gridNearestSouthContinuous: gridCrossing.southMaxAngularStep < Math.PI / Math.max(4, faceSize * 0.45),
+  plateCentersRemainUnit: plateDrift.maxUnitError < 1e-6,
+  plateDriftNonZero: plateDrift.meanDrift > 0,
+  plateDriftNotExplosive: plateDrift.maxDrift < Math.PI / 4,
+};
 
-function tracePoleCrossing(grid, width, height, poleLat, startLon) {
-  const poleSign = Math.sign(poleLat);
+for (const [name, ok] of Object.entries(checks)) {
+  if (!ok) failures.push(name);
+}
+
+const result = {
+  valid: failures.length === 0,
+  seedText,
+  topologyMode,
+  faceSize,
+  width,
+  height,
+  failures,
+  checks,
+  northCrossing,
+  southCrossing,
+  gridCrossing,
+  plateDrift,
+};
+
+console.log(JSON.stringify(result, null, 2));
+process.exit(result.valid ? 0 : 1);
+
+function measurePoleGreatCircleReturn({ startLon, poleLat, width, height }) {
+  const pole = lonLatToVec3(startLon, poleLat);
   const axis = lonLatToVec3(startLon + Math.PI / 2, 0);
-  const start = lonLatToVec3(startLon, poleSign * (Math.PI / 2 - 0.45));
-  const samples = [];
-  let maxCellStep = 0;
-  let previousCell = null;
-  for (let i = 0; i <= 32; i += 1) {
-    const t = -0.55 + (1.1 * i) / 32;
-    const p = rotateAroundAxis(start, axis, t);
-    const lon = Math.atan2(p.z, p.x) < 0 ? Math.atan2(p.z, p.x) + TAU : Math.atan2(p.z, p.x);
-    const lat = Math.asin(Math.max(-1, Math.min(1, p.y)));
-    const pixel = lonLatToEquirectangularPixel(lon, lat, width, height);
-    const cell = grid.nearestCell(p.x, p.y, p.z);
-    if (previousCell !== null) maxCellStep = Math.max(maxCellStep, grid.distance(previousCell, cell));
-    previousCell = cell;
-    samples.push({ lon, lat, x: pixel.x, y: pixel.y, cell });
-  }
-  const before = samples[0];
-  const after = samples[samples.length - 1];
-  const dx = circularDelta(before.x, after.x, width);
+  const beforePole = rotateAroundAxis(pole, axis, 0.015);
+  const afterPole = rotateAroundAxis(pole, axis, -0.015);
+  const before = vec3ToLonLat(beforePole.x, beforePole.y, beforePole.z);
+  const after = vec3ToLonLat(afterPole.x, afterPole.y, afterPole.z);
+  const beforePixel = lonLatToEquirectangularPixel(before.lon, before.lat, width, height);
+  const afterPixel = lonLatToEquirectangularPixel(after.lon, after.lat, width, height);
+  const poleA = lonLatToEquirectangularPixel(startLon, poleLat, width, height);
+  const poleB = lonLatToEquirectangularPixel(startLon + Math.PI, poleLat, width, height);
   return {
-    sampleCount: samples.length,
-    firstX: before.x,
-    lastX: after.x,
-    halfMapReturnDx: dx,
-    halfMapReturnValid: Math.abs(dx - width / 2) <= Math.max(1, width * 0.02),
-    maxCellStep,
-    poleLatitude: poleLat,
+    beforeLon: before.lon,
+    afterLon: after.lon,
+    beforeX: beforePixel.x,
+    afterX: afterPixel.x,
+    returnDx: circularDelta(beforePixel.x, afterPixel.x, width),
+    poleAntipodalDx: circularDelta(poleA.x, poleB.x, width),
+    maxPoleRowDelta: Math.max(Math.abs(beforePixel.y - poleA.y), Math.abs(afterPixel.y - poleB.y)),
+  };
+}
+
+function measureGridNearestContinuity(grid, width, height) {
+  const north = measureProjectedPoleRing(grid, width, height, Math.PI / 2 - 0.015);
+  const south = measureProjectedPoleRing(grid, width, height, -Math.PI / 2 + 0.015);
+  return {
+    northUniqueCells: north.uniqueCells,
+    southUniqueCells: south.uniqueCells,
+    northMaxAngularStep: north.maxAngularStep,
+    southMaxAngularStep: south.maxAngularStep,
+  };
+}
+
+function measureProjectedPoleRing(grid, width, height, lat) {
+  const ids = [];
+  let maxAngularStep = 0;
+  const steps = Math.max(16, Math.floor(width / 2));
+  for (let s = 0; s <= steps; s += 1) {
+    const lon = (s / steps) * TAU;
+    const p = lonLatToVec3(lon, lat);
+    const id = grid.nearestCell(p.x, p.y, p.z);
+    ids.push(id);
+    if (ids.length <= 1) continue;
+    const prev = ids[ids.length - 2];
+    maxAngularStep = Math.max(
+      maxAngularStep,
+      angularDistance3(
+        grid.positionX[prev],
+        grid.positionY[prev],
+        grid.positionZ[prev],
+        grid.positionX[id],
+        grid.positionY[id],
+        grid.positionZ[id],
+      ),
+    );
+  }
+  return {
+    uniqueCells: new Set(ids).size,
+    maxAngularStep,
+  };
+}
+
+function measurePlateDriftIntegrity(seedText) {
+  const plates = createSphericalPlates({
+    seedUint32: hashSeed(seedText),
+    plateCount: 14,
+    intensity: 1,
+  });
+  const startX = Float32Array.from(plates.centerX);
+  const startY = Float32Array.from(plates.centerY);
+  const startZ = Float32Array.from(plates.centerZ);
+  driftSphericalPlates(plates, 200);
+  let meanDrift = 0;
+  let maxDrift = 0;
+  let maxUnitError = 0;
+  for (let p = 0; p < plates.count; p += 1) {
+    const drift = angularDistance3(startX[p], startY[p], startZ[p], plates.centerX[p], plates.centerY[p], plates.centerZ[p]);
+    meanDrift += drift;
+    maxDrift = Math.max(maxDrift, drift);
+    maxUnitError = Math.max(maxUnitError, Math.abs(Math.hypot(plates.centerX[p], plates.centerY[p], plates.centerZ[p]) - 1));
+  }
+  return {
+    meanDrift: meanDrift / Math.max(1, plates.count),
+    maxDrift,
+    maxUnitError,
   };
 }
 
