@@ -21,6 +21,19 @@ const checks = [
   ["spherical-production-init-check", ["tools/spherical-production-init-check.mjs", seedText, String(smallFaceSize)]],
   ["spherical-production-step-check", ["tools/spherical-production-step-check.mjs", seedText, String(smallFaceSize), "5"]],
   ["spherical-production-create-world-check", ["tools/spherical-production-create-world-check.mjs", seedText, String(smallFaceSize), "1"]],
+  ["interface-check:cubed-sphere-production", [
+    "tools/interface-check.mjs",
+    seedText,
+    "20",
+    "geology-v2",
+    "256x128",
+    "--topology",
+    "cubed-sphere",
+    "--projection",
+    "equirectangular",
+    "--face-size",
+    String(faceSize),
+  ]],
   ["spherical-sidecar-gate-check", ["tools/spherical-sidecar-gate-check.mjs", seedText, String(faceSize)]],
   ["spherical-world-stats-check", ["tools/spherical-world-stats-check.mjs", String(faceSize)]],
   ["spherical-resolution-gate-check", ["tools/spherical-resolution-gate-check.mjs", seedText, "2", `${smallFaceSize},${faceSize}`, "128x64"]],
@@ -697,6 +710,30 @@ function compactMetrics(name, parsed) {
     picked.authoritativeLegacySphericalRequestNormalizedToGeologyV2 =
       parsed.checks?.legacySphericalRequestNormalizedToGeologyV2;
     picked.authoritativeLegacySphericalRequestCanStep = parsed.checks?.legacySphericalRequestCanStep;
+  }
+  if (name === "interface-check:cubed-sphere-production") {
+    picked.interfaceCubedSpherePipelineMode = parsed.pipelineMode;
+    picked.interfaceCubedSphereTopologyMode = parsed.topologyMode;
+    picked.interfaceCubedSphereProjectionMode = parsed.projectionMode;
+    picked.interfaceCubedSphereFaceSize = parsed.faceSize;
+    picked.interfaceCubedSphereGridSize = parsed.gridSize;
+    picked.interfaceCubedSphereSphericalGridSize = parsed.sphericalGridSize;
+    picked.interfaceCubedSphereValidationErrorCount = parsed.validation?.errors?.length ?? 0;
+    picked.interfaceCubedSphereHydrologyValid = parsed.stats?.hydrologyValid;
+    picked.interfaceCubedSphereTopologyKind = parsed.stats?.topologyKind;
+    picked.interfaceCubedSphereNeighborConsistencyValid = parsed.stats?.neighborConsistencyValid;
+    picked.interfaceCubedSphereFloodFillTopologyValid = parsed.stats?.floodFillTopologyValid;
+    picked.interfaceCubedSphereConnectedComponentTopologyValid =
+      parsed.stats?.connectedComponentTopologyValid;
+    picked.interfaceCubedSphereTopologyManualAccessRisk = parsed.stats?.topologyManualAccessRisk;
+    picked.interfaceCubedSphereTopologyMigrationCoverage = parsed.stats?.topologyMigrationCoverage;
+    picked.interfaceCubedSphereLandRatio = parsed.stats?.landRatio;
+    picked.interfaceCubedSphereSeaRatio = parsed.stats?.seaRatio;
+    picked.interfaceCubedSphereExternalSeaShare = parsed.stats?.externalSeaShare;
+    picked.interfaceCubedSphereInlandWaterCandidateShare = parsed.stats?.inlandWaterCandidateShare;
+    picked.interfaceCubedSphereClosedBasinCount = parsed.stats?.closedBasinCount;
+    picked.interfaceCubedSphereSedimentBudgetError = parsed.stats?.sedimentBudgetError;
+    picked.interfaceCubedSpherePlateCheckerboardScore = parsed.stats?.plateCheckerboardScore;
   }
   if (name === "spherical-production-init-check") {
     picked.productionInitStageCount = parsed.stages?.length ?? 0;
