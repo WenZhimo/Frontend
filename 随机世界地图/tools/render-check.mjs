@@ -47,6 +47,7 @@ console.log(JSON.stringify({
   avgMountainConvergent: world.stats.avgMountainConvergent,
   avgContinentalInterior: world.stats.avgContinentalInterior,
   featureStats: measureFeatureStats(world.grid),
+  featureHealth: measureFeatureHealth(world.grid),
 }, null, 2));
 
 function renderElevationReference(world, params) {
@@ -144,4 +145,61 @@ function measureFeatureStats(grid) {
     };
   }
   return result;
+}
+
+function measureFeatureHealth(grid) {
+  const stats = {
+    mountainBelt: measureFeatureField(grid, grid.mountainBelt),
+    trench: measureFeatureField(grid, grid.trench),
+    ridge: measureFeatureField(grid, grid.ridge),
+    rift: measureFeatureField(grid, grid.rift),
+    islandArc: measureFeatureField(grid, grid.islandArc),
+    basin: measureFeatureField(grid, grid.basin),
+    featureIntensity: measureFeatureField(grid, grid.featureIntensity),
+  };
+  const activeTectonicCoverage02 =
+    stats.mountainBelt.coverage02 +
+    stats.trench.coverage02 +
+    stats.ridge.coverage02 +
+    stats.rift.coverage02 +
+    stats.islandArc.coverage02;
+  const activeTectonicMax = Math.max(
+    stats.mountainBelt.max,
+    stats.trench.max,
+    stats.ridge.max,
+    stats.rift.max,
+    stats.islandArc.max,
+  );
+  return {
+    ...stats,
+    activeTectonicCoverage02,
+    activeTectonicMax,
+    activeFeatureMissing: activeTectonicCoverage02 <= 0 && activeTectonicMax <= 0.001,
+    note: "diagnostic only: render output may be valid even when spherical production active features are not yet seeded",
+  };
+}
+
+function measureFeatureField(grid, field) {
+  let sum = 0;
+  let max = 0;
+  let coverage02 = 0;
+  let coverage05 = 0;
+  let boundaryCovered02 = 0;
+  for (let i = 0; i < grid.size; i += 1) {
+    const value = field?.[i] ?? 0;
+    sum += value;
+    if (value > max) max = value;
+    if (value > 0.02) {
+      coverage02 += 1;
+      if (grid.boundaryDistance?.[i] === 0) boundaryCovered02 += 1;
+    }
+    if (value > 0.05) coverage05 += 1;
+  }
+  return {
+    mean: sum / Math.max(1, grid.size),
+    max,
+    coverage02: coverage02 / Math.max(1, grid.size),
+    coverage05: coverage05 / Math.max(1, grid.size),
+    boundaryZeroShare02: coverage02 ? boundaryCovered02 / coverage02 : 0,
+  };
 }
