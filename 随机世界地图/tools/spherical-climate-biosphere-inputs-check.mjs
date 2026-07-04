@@ -92,6 +92,10 @@ const maxInterfaceSeamRatio = Math.max(0, ...activeNonSparseFields.map((metric) 
 const maxInterfaceSeamDelta = Math.max(0, ...activeNonSparseFields.map((metric) => metric.seamRatioDelta ?? 0));
 
 const metrics = {
+  climateBiosphereProbePurpose: "spherical climate/biosphere interface diagnostics; fields are geology/terrain-derived pre-climate inputs, not complete climate, river routing, or biome simulation",
+  climateCompletenessRequired: false,
+  biosphereCompletenessRequired: false,
+  waterAvailabilityCompletenessRequired: false,
   topologyKind: grid.topologyKind ?? null,
   graphBacked: Boolean(grid.topology?.graphBacked || grid.topologyOptions?.graphBacked),
   faceSize,
@@ -132,10 +136,16 @@ const metrics = {
   mountainHeightLandShare: weightedShare(grid, terrain.landMask, {
     predicate: (id) => climate.mountainHeight[id] > 0.002,
   }),
+  waterAvailabilityCoverage: weightedCoverage(grid, biosphere.waterAvailability, 0.001),
   soilDepthCoverage: weightedCoverage(grid, biosphere.soilDepthPotential, 0.05),
   groundwaterCoverage: weightedCoverage(grid, biosphere.groundwaterPotential, 0.01),
   floodplainCoverage: weightedCoverage(grid, biosphere.floodplainPotential, 0.001),
   coastalWetlandCoverage: weightedCoverage(grid, biosphere.coastalWetlandPotential, 0.001),
+  terrainMoistureProxyCoverage: weightedCoverage(
+    grid,
+    maxField(biosphere.groundwaterPotential, biosphere.floodplainPotential, biosphere.coastalWetlandPotential),
+    0.001,
+  ),
   volcanicSoilCoverage: weightedCoverage(grid, biosphere.volcanicSoilPotential, 0.016),
   disturbanceCoverage: weightedCoverage(grid, biosphere.disturbance, 0.016),
   landConnectivityCoverage: weightedCoverage(grid, biosphere.connectivityToLandmass, 0.01),
@@ -158,6 +168,14 @@ const metrics = {
   maxInterfaceSeamRatio,
   maxInterfaceSeamDelta,
 };
+metrics.waterAvailabilityDormantAllowed =
+  metrics.waterAvailabilityCoverage === 0 &&
+  metrics.terrainMoistureProxyCoverage > 0.05 &&
+  !metrics.waterAvailabilityCompletenessRequired;
+metrics.preClimateHydrologyProxyActive =
+  metrics.groundwaterCoverage > 0.01 ||
+  metrics.floodplainCoverage > 0.01 ||
+  metrics.coastalWetlandCoverage > 0.01;
 
 const checks = {
   cubedSphereGrid: metrics.topologyKind === "cubed-sphere",
@@ -176,6 +194,9 @@ const checks = {
   orographicBarrierPresent: metrics.orographicBarrierCoverage > 0.002,
   orographicCoupledToRelief: metrics.orographicMountainCoupling > 0.0003,
   mountainsMostlyLand: metrics.mountainHeightCoverage === 0 || metrics.mountainHeightLandShare > 0.75,
+  climateBiosphereScopeDocumented: !metrics.climateCompletenessRequired && !metrics.biosphereCompletenessRequired,
+  waterAvailabilityDormancyExplained: metrics.waterAvailabilityCoverage > 0.001 || metrics.waterAvailabilityDormantAllowed,
+  terrainMoistureProxyActive: metrics.preClimateHydrologyProxyActive,
   soilDepthPresent: metrics.soilDepthCoverage > 0.05,
   groundwaterPresent: metrics.groundwaterCoverage > 0.05,
   groundwaterFavorsShallowWaterOrSediment: metrics.groundwaterShallowSeaMean >= metrics.groundwaterDeepOceanMean,
@@ -291,6 +312,17 @@ function weightedCoverage(grid, field, threshold) {
     if (Number(field?.[id] ?? 0) > threshold) covered += area;
   }
   return covered / Math.max(total, Number.EPSILON);
+}
+
+function maxField(...fields) {
+  const length = Math.max(0, ...fields.map((field) => field?.length ?? 0));
+  const output = new Float32Array(length);
+  for (let id = 0; id < length; id += 1) {
+    let max = 0;
+    for (const field of fields) max = Math.max(max, field?.[id] ?? 0);
+    output[id] = max;
+  }
+  return output;
 }
 
 function mismatchShare(grid, a, b) {
