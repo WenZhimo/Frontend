@@ -1,4 +1,4 @@
-import { forEachGridCell, forEachNeighborRadiusById, indexOf, physicalRadius, xyOf } from "../grid.js";
+import { forEachGridCell, forEachNeighborRadiusById, indexOf, physicalRadius } from "../grid.js";
 import { topologyForGrid } from "../topology.js";
 import { BoundaryType } from "../tectonics.js";
 import { CrustType } from "./crust.js";
@@ -163,7 +163,6 @@ function diffuseFeatureGraph(grid, topology, source, spread, radius, gain, optio
     const seed = source[id];
     if (seed <= 0.0001) continue;
     const arcOffsetDepth = options.arcOffset ? Math.max(1, Math.round(radius * 0.75)) : 0;
-    const origin = xyOf(grid, id);
     forEachNeighborRadiusById(grid, id, radius + arcOffsetDepth, (nid, dx, _dy) => {
       const edgeDistance = Math.max(0, dx);
       if (edgeDistance > radiusLimit + arcOffsetDepth) return;
@@ -174,8 +173,7 @@ function diffuseFeatureGraph(grid, topology, source, spread, radius, gain, optio
       const weak = weakness[nid];
       if (weak < (options.minWeakness ?? 0) && targetDistance > 1.5) return;
       if (options.segmented) {
-        const point = xyOf(grid, nid);
-        if (weak < 0.38 && segmentMask(point.x, point.y, weak) < 0.8) return;
+        if (weak < 0.38 && graphSegmentMask(id, nid, weak) < 0.8) return;
       }
       if (options.arcOffset && edgeDistance < arcOffsetDepth) return;
       const falloff = Math.max(0, 1 - targetDistance / radiusLimit);
@@ -188,8 +186,6 @@ function diffuseFeatureGraph(grid, topology, source, spread, radius, gain, optio
       if (!options.continentalOnly || crustType[id] === CrustType.CONTINENTAL) {
         spread[id] = Math.max(spread[id], seed * gain * (0.45 + weak * 0.9));
       }
-    } else if (source[id] > 0 && origin.x >= 0) {
-      // Preserve deterministic access to the adapter's parameterized coordinates.
     }
   }
 }
@@ -206,6 +202,13 @@ function segmentMask(x, y, weakness) {
   const sx = Math.floor((x + 5) / 11);
   const sy = Math.floor((y + 3) / 9);
   const n = hash2(sx, sy);
+  return n < 0.58 + weakness * 0.28 ? 1 : 0.65;
+}
+
+function graphSegmentMask(sourceId, targetId, weakness) {
+  const coarse = hash2(Math.floor((targetId + 17) / 19), Math.floor((sourceId + 31) / 23));
+  const fine = hash2(targetId + 11, sourceId + 7);
+  const n = coarse * 0.72 + fine * 0.28;
   return n < 0.58 + weakness * 0.28 ? 1 : 0.65;
 }
 
