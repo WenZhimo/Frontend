@@ -3506,7 +3506,7 @@
     }
     const drift = 0.1 * world.timeScaleFactor * Math.max(0, params.intensity) * resolutionScale(grid);
     for (let p = 0; p < plates.centersX.length; p += 1) {
-      plates.centersX[p] = wrapGridParamX(grid, plates.centersX[p] + plates.vx[p] * drift);
+      plates.centersX[p] = legacyPlateWrapGridParamX(grid, plates.centersX[p] + plates.vx[p] * drift);
       plates.centersY[p] = clampGridParamY(grid, plates.centersY[p] + plates.vy[p] * drift);
       syncPlateCenterUv(grid, plates, p);
     }
@@ -3528,9 +3528,9 @@
     cost.fill(Infinity);
 
     for (let p = 0; p < plates.centersX.length; p += 1) {
-      const x = Math.floor(wrapGridParamX(grid, plates.centersX[p]));
+      const x = Math.floor(legacyPlateWrapGridParamX(grid, plates.centersX[p]));
       const y = Math.floor(clampGridParamY(grid, plates.centersY[p]));
-      const id = indexOf(grid, x, y);
+      const id = legacyPlateIndexOf(grid, x, y);
       if (id < 0) continue;
       plate[id] = p;
       cost[id] = 0;
@@ -3753,7 +3753,7 @@
   }
 
   function sampleBilinear(grid, field, x, y) {
-    return sampleGridBilinear(grid, field, x, y, 0);
+    return legacyPlateSampleBilinear(grid, field, x, y, 0);
   }
 
   function classifyCrustType(thickness, age, previousType) {
@@ -3828,10 +3828,10 @@
       for (let dx = -1; dx <= 0; dx += 1) {
         const x0 = x + dx;
         const x1 = x + dx + 1;
-        const aId = indexOf(grid, x0, y0);
-        const bId = indexOf(grid, x1, y0);
-        const cId = indexOf(grid, x0, y1);
-        const dId = indexOf(grid, x1, y1);
+        const aId = legacyPlateIndexOf(grid, x0, y0);
+        const bId = legacyPlateIndexOf(grid, x1, y0);
+        const cId = legacyPlateIndexOf(grid, x0, y1);
+        const dId = legacyPlateIndexOf(grid, x1, y1);
         if (aId < 0 || bId < 0 || cId < 0 || dId < 0) continue;
         const a = grid.plate[aId];
         const b = grid.plate[bId];
@@ -3845,8 +3845,28 @@
 
   function syncPlateCenterUv(grid, plates, p) {
     if (!plates.centersU || !plates.centersV) return;
-    plates.centersU[p] = gridParamToU(grid, plates.centersX[p]);
-    plates.centersV[p] = gridParamToV(grid, plates.centersY[p]);
+    plates.centersU[p] = legacyPlateGridParamToU(grid, plates.centersX[p]);
+    plates.centersV[p] = legacyPlateGridParamToV(grid, plates.centersY[p]);
+  }
+
+  function legacyPlateWrapGridParamX(grid, x) {
+    return wrapGridParamX(grid, x);
+  }
+
+  function legacyPlateIndexOf(grid, x, y) {
+    return indexOf(grid, x, y);
+  }
+
+  function legacyPlateSampleBilinear(grid, field, x, y, fallback) {
+    return sampleGridBilinear(grid, field, x, y, fallback);
+  }
+
+  function legacyPlateGridParamToU(grid, x) {
+    return gridParamToU(grid, x);
+  }
+
+  function legacyPlateGridParamToV(grid, y) {
+    return gridParamToV(grid, y);
   }
 
   function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
