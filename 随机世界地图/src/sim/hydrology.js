@@ -39,7 +39,9 @@ export function deriveHydrology(world, terrain, options = {}) {
   const prepared = timed(profile, "prepareMasks", () => {
     const landCells = [];
     let landCount = 0;
+    let landArea = 0;
     let coastalLandCount = 0;
+    let coastalLandArea = 0;
     for (let i = 0; i < size; i += 1) {
     if (terrain.externalSeaMask[i]) oceanConnectivity[i] = 2;
     else if (terrain.seaMask[i]) oceanConnectivity[i] = 1;
@@ -65,18 +67,22 @@ export function deriveHydrology(world, terrain, options = {}) {
     if (!terrain.landMask[i]) continue;
     landCells.push(i);
     landCount += 1;
+    landArea += metricWeight(grid, i);
     flowAccumulation[i] = 1;
-    if (touchesMask(topology, i, terrain.externalSeaMask, 8)) coastalLandCount += 1;
+    if (touchesMask(topology, i, terrain.externalSeaMask, 8)) {
+      coastalLandCount += 1;
+      coastalLandArea += metricWeight(grid, i);
+    }
   }
-    return { landCells, landCount, coastalLandCount };
+    return { landCells, landCount, landArea, coastalLandCount, coastalLandArea };
   });
-  const { landCells, landCount, coastalLandCount } = prepared;
+  const { landCells, landCount, landArea, coastalLandCount, coastalLandArea } = prepared;
 
   timed(profile, "assignFlowTargets", () => assignFlowTargets(topology, world.seaLevel, terrain, hydroElevation, flowTarget, flowDirection, flowSlope, depressionMask, landCells));
   landCells.sort((a, b) => hydroElevation[b] - hydroElevation[a]);
   timed(profile, "accumulateFlow", () => accumulateFlow(terrain, flowTarget, flowAccumulation, landCells));
 
-  const drainage = timed(profile, "assignDrainage", () => assignDrainage(topology, terrain, flowTarget, flowAccumulation, drainageBasinId, watershedId, outletId, riverOutlet, endorheicBasin, endorheicSink, depressionMask, lakeCandidate, landCells));
+  const drainage = timed(profile, "assignDrainage", () => assignDrainage(grid, topology, terrain, flowTarget, flowAccumulation, drainageBasinId, watershedId, outletId, riverOutlet, endorheicBasin, endorheicSink, depressionMask, lakeCandidate, landCells));
   const riverThreshold = Math.max(12, landCount * 0.002);
   timed(profile, "buildRivers", () => buildRivers(terrain, flowTarget, flowAccumulation, flowSlope, riverThreshold, riverMask, riverStrength, lakeCandidate, endorheicSink, landCells));
   if (diagnostics !== "none") {
@@ -86,9 +92,12 @@ export function deriveHydrology(world, terrain, options = {}) {
 
   const hydrologyDiagnostics = timed(profile, diagnostics === "full" ? "diagnosticsFull" : "diagnosticsBasic", () => measureHydrologyDiagnostics({
     diagnostics,
+    grid,
     size,
     landCount,
+    landArea,
     coastalLandCount,
+    coastalLandArea,
     flowTarget,
     flowAccumulation,
     drainageBasinId,
@@ -195,17 +204,22 @@ function accumulateFlow(terrain, flowTarget, flowAccumulation, landCells) {
   }
 }
 
-function assignDrainage(topology, terrain, flowTarget, flowAccumulation, drainageBasinId, watershedId, outletId, riverOutlet, endorheicBasin, endorheicSink, depressionMask, lakeCandidate, landCells) {
+function assignDrainage(grid, topology, terrain, flowTarget, flowAccumulation, drainageBasinId, watershedId, outletId, riverOutlet, endorheicBasin, endorheicSink, depressionMask, lakeCandidate, landCells) {
   const outletIds = new Map();
   const sinkIds = new Map();
   const basinSizes = new Map();
+  const basinAreas = new Map();
   let nextOutletId = 1;
   let nextSinkId = ENDORHEIC_BASE_ID;
   let flowCycleCount = 0;
   let orphanCount = 0;
+  let orphanArea = 0;
   let exorheicLand = 0;
+  let exorheicArea = 0;
   let endorheicLand = 0;
+  let endorheicArea = 0;
   let closedBasinDrainage = 0;
+  let closedBasinDrainageArea = 0;
 
   for (const start of landCells) {
     const path = [];
@@ -275,20 +289,28 @@ function assignDrainage(topology, terrain, flowTarget, flowAccumulation, drainag
 
     if (!finalId) {
       orphanCount += path.length || 1;
+      orphanArea += pathArea(grid, path.length ? path : [start]);
       continue;
     }
 
     for (const cell of path) {
+      const area = metricWeight(grid, cell);
       drainageBasinId[cell] = finalId;
       watershedId[cell] = finalId;
       outletId[cell] = finalOutletId;
       basinSizes.set(finalId, (basinSizes.get(finalId) ?? 0) + 1);
+      basinAreas.set(finalId, (basinAreas.get(finalId) ?? 0) + area);
       if (finalType === "external") {
         exorheicLand += 1;
+        exorheicArea += area;
       } else {
         endorheicBasin[cell] = 1;
         endorheicLand += 1;
-        if (finalType === "closed") closedBasinDrainage += 1;
+        endorheicArea += area;
+        if (finalType === "closed") {
+          closedBasinDrainage += 1;
+          closedBasinDrainageArea += area;
+        }
       }
     }
 
@@ -311,12 +333,17 @@ function assignDrainage(topology, terrain, flowTarget, flowAccumulation, drainag
   return {
     flowCycleCount,
     orphanCount,
+    orphanArea,
     exorheicLand,
+    exorheicArea,
     endorheicLand,
+    endorheicArea,
     closedBasinDrainage,
+    closedBasinDrainageArea,
     outletCount: outletIds.size,
     endorheicBasinCount: sinkIds.size,
     largestWatershed: maxIterableValue(basinSizes.values()),
+    largestWatershedArea: maxIterableValue(basinAreas.values()),
   };
 }
 
@@ -368,9 +395,12 @@ function buildWetlands(topology, terrain, flowAccumulation, flowSlope, riverStre
 
 function measureHydrologyDiagnostics({
   diagnostics,
+  grid,
   size,
   landCount,
+  landArea,
   coastalLandCount,
+  coastalLandArea,
   flowTarget,
   flowAccumulation,
   drainageBasinId,
@@ -384,30 +414,63 @@ function measureHydrologyDiagnostics({
   drainage,
 }) {
   let assigned = 0;
+  let assignedArea = 0;
   let depression = 0;
+  let depressionArea = 0;
   let endorheic = 0;
+  let endorheicArea = 0;
   let lake = 0;
+  let lakeArea = 0;
   let river = 0;
+  let riverArea = 0;
   let riverContinuous = 0;
+  let riverOutletArea = 0;
   let external = 0;
+  let externalArea = 0;
   let orphan = drainage.orphanCount;
+  let orphanArea = drainage.orphanArea ?? drainage.orphanCount;
   let max = 0;
   const full = diagnostics === "full";
   const accumulations = full ? [] : null;
+  const graphBacked = isGraphBackedGrid(grid);
+  const totalArea = graphBacked ? totalMetricArea(grid) : size;
+  const landDenominator = graphBacked ? landArea : landCount;
+  const coastalLandDenominator = graphBacked ? coastalLandArea : coastalLandCount;
 
   for (let i = 0; i < size; i += 1) {
+    const area = metricWeight(grid, i);
     if (terrain.landMask[i]) {
-      if (flowTarget[i] >= 0) assigned += 1;
-      if (depressionMask[i]) depression += 1;
-      if (endorheicBasin[i]) endorheic += 1;
-      if (outletId[i] > 0) external += 1;
-      if (!drainageBasinId[i]) orphan += 1;
+      if (flowTarget[i] >= 0) {
+        assigned += 1;
+        assignedArea += area;
+      }
+      if (depressionMask[i]) {
+        depression += 1;
+        depressionArea += area;
+      }
+      if (endorheicBasin[i]) {
+        endorheic += 1;
+        endorheicArea += area;
+      }
+      if (outletId[i] > 0) {
+        external += 1;
+        externalArea += area;
+      }
+      if (!drainageBasinId[i]) {
+        orphan += 1;
+        orphanArea += area;
+      }
       if (flowAccumulation[i] > max) max = flowAccumulation[i];
       if (full) accumulations.push(flowAccumulation[i]);
     }
-    if (lakeCandidate[i]) lake += 1;
+    if (lakeCandidate[i]) {
+      lake += 1;
+      lakeArea += area;
+    }
+    if (riverOutlet[i]) riverOutletArea += area;
     if (riverMask[i]) {
       river += 1;
+      riverArea += area;
       if (full) {
         const target = flowTarget[i];
         if (target >= 0 && (!terrain.landMask[target] || riverMask[target])) riverContinuous += 1;
@@ -425,21 +488,21 @@ function measureHydrologyDiagnostics({
   const riverOutletCount = countMask(riverOutlet);
 
   return {
-    hydrologyValid: drainage.flowCycleCount === 0 && orphan / Math.max(1, landCount) < 0.001,
-    flowAssignedShare: assigned / Math.max(1, landCount),
+    hydrologyValid: drainage.flowCycleCount === 0 && shareValue(graphBacked ? orphanArea : orphan, landDenominator) < 0.001,
+    flowAssignedShare: shareValue(graphBacked ? assignedArea : assigned, landDenominator),
     flowCycleCount: drainage.flowCycleCount,
-    orphanFlowShare: orphan / Math.max(1, landCount),
-    depressionShare: depression / Math.max(1, landCount),
+    orphanFlowShare: shareValue(graphBacked ? orphanArea : orphan, landDenominator),
+    depressionShare: shareValue(graphBacked ? depressionArea : depression, landDenominator),
     endorheicBasinCount: drainage.endorheicBasinCount,
-    endorheicLandShare: endorheic / Math.max(1, landCount),
-    lakeCandidateShare: lake / Math.max(1, size),
-    riverCellShare: river / Math.max(1, landCount),
+    endorheicLandShare: shareValue(graphBacked ? endorheicArea : endorheic, landDenominator),
+    lakeCandidateShare: shareValue(graphBacked ? lakeArea : lake, totalArea),
+    riverCellShare: shareValue(graphBacked ? riverArea : river, landDenominator),
     riverContinuityScore: full ? (river ? riverContinuous / river : 1) : null,
     riverOutletCount,
-    coastalOutletShare: full ? riverOutletCount / Math.max(1, coastalLandCount) : null,
-    externalSeaDrainageShare: external / Math.max(1, landCount),
-    closedBasinDrainageShare: drainage.closedBasinDrainage / Math.max(1, landCount),
-    largestWatershedShare: full ? drainage.largestWatershed / Math.max(1, landCount) : null,
+    coastalOutletShare: full ? shareValue(graphBacked ? riverOutletArea : riverOutletCount, coastalLandDenominator) : null,
+    externalSeaDrainageShare: shareValue(graphBacked ? externalArea : external, landDenominator),
+    closedBasinDrainageShare: shareValue(graphBacked ? (drainage.closedBasinDrainageArea ?? drainage.closedBasinDrainage) : drainage.closedBasinDrainage, landDenominator),
+    largestWatershedShare: full ? shareValue(graphBacked ? (drainage.largestWatershedArea ?? drainage.largestWatershed) : drainage.largestWatershed, landDenominator) : null,
     flowAccumulationP95: full ? p95 : null,
     flowAccumulationMax: max,
     riverResolutionDrift: 0,
@@ -559,6 +622,33 @@ function countMask(mask) {
   let count = 0;
   for (let i = 0; i < mask.length; i += 1) count += mask[i] ? 1 : 0;
   return count;
+}
+
+function metricWeight(grid, id) {
+  if (!isGraphBackedGrid(grid)) return 1;
+  const area = grid.area?.[id];
+  return Number.isFinite(area) && area > 0 ? area : 1;
+}
+
+function totalMetricArea(grid) {
+  if (!isGraphBackedGrid(grid)) return grid.size ?? 0;
+  let total = 0;
+  for (let i = 0; i < grid.size; i += 1) total += metricWeight(grid, i);
+  return total;
+}
+
+function pathArea(grid, path) {
+  let total = 0;
+  for (const id of path) total += metricWeight(grid, id);
+  return total;
+}
+
+function shareValue(value, denominator) {
+  return value / Math.max(Number.EPSILON, denominator);
+}
+
+function isGraphBackedGrid(grid) {
+  return Boolean(grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere");
 }
 
 function clamp01(value) {
