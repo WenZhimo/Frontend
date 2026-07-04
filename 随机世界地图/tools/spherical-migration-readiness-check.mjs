@@ -220,6 +220,9 @@ function classifyHelperMatch(match) {
   if (graphRoutedFile?.patterns.has(match.pattern)) {
     return { ...match, classification: "legacyFallback", routeReason: graphRoutedFile.reason };
   }
+  if (isInsideLegacyFunction(match)) {
+    return { ...match, classification: "legacyFallback", routeReason: "helper call is inside an explicitly named legacy fallback function" };
+  }
   const hasGraphGuard = /isGraphBackedGrid\s*\(|graphBacked|topology\.forEachNeighbor|topology\.shortestDistanceSeeds/.test(context);
   const precededByGraphReturn = /if\s*\([^\n]*(?:isGraphBackedGrid|graphBacked)[^\n]*\)\s*\{[\s\S]{0,2600}\breturn\s*;[\s\S]{0,1600}$/.test(before);
   const precededByGraphBranch = /if\s*\([^\n]*(?:isGraphBackedGrid|graphBacked)[^\n]*\)\s*\{[\s\S]{0,2600}$/.test(before);
@@ -230,6 +233,27 @@ function classifyHelperMatch(match) {
       ? "guardedHelper"
       : "possibleSphericalPath";
   return { ...match, classification };
+}
+
+function isInsideLegacyFunction(match) {
+  const lines = [...match.contextBefore, match.lineText];
+  let depth = 0;
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i];
+    depth += countChar(line, "}") - countChar(line, "{");
+    const fn = line.match(/^\s*function\s+(legacy[A-Za-z0-9_]*)\s*\(/);
+    if (!fn) continue;
+    return depth < countChar(line, "{") || line.includes("{");
+  }
+  return false;
+}
+
+function countChar(text, char) {
+  let count = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === char) count += 1;
+  }
+  return count;
 }
 
 function isAllowedSphericalMatch(match) {

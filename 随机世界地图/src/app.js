@@ -3046,8 +3046,8 @@
       return;
     }
 
-    const width = gridParamWidth(grid);
-    const height = gridParamHeight(grid);
+    const width = legacyTectonicsGridParamWidth(grid);
+    const height = legacyTectonicsGridParamHeight(grid);
     const plateCount = params.plateCount;
     const random = mulberry32(mixSeed(seedUint32, 0x706c6174));
     const centersU = new Float32Array(plateCount);
@@ -3101,7 +3101,7 @@
     const driftScale = plateDriftScale(world);
 
     for (let p = 0; p < plates.centersX.length; p += 1) {
-      plates.centersX[p] = wrapGridParamX(grid, plates.centersX[p] + plates.vx[p] * driftScale);
+      plates.centersX[p] = legacyTectonicsWrapGridParamX(grid, plates.centersX[p] + plates.vx[p] * driftScale);
       plates.centersY[p] = clampGridParamY(grid, plates.centersY[p] + plates.vy[p] * driftScale);
       syncPlateCenterUv(grid, plates, p);
     }
@@ -3113,8 +3113,8 @@
 
   function syncPlateCenterUv(grid, plates, p) {
     if (!plates.centersU || !plates.centersV) return;
-    plates.centersU[p] = gridParamToU(grid, plates.centersX[p]);
-    plates.centersV[p] = gridParamToV(grid, plates.centersY[p]);
+    plates.centersU[p] = legacyTectonicsGridParamToU(grid, plates.centersX[p]);
+    plates.centersV[p] = legacyTectonicsGridParamToV(grid, plates.centersY[p]);
   }
 
   function plateDriftScale(world) {
@@ -3133,9 +3133,9 @@
     cost.fill(Infinity);
 
     for (let p = 0; p < plates.centersX.length; p += 1) {
-      const x = Math.floor(wrapGridParamX(grid, plates.centersX[p]));
+      const x = Math.floor(legacyTectonicsWrapGridParamX(grid, plates.centersX[p]));
       const y = Math.floor(clampGridParamY(grid, plates.centersY[p]));
-      const id = indexOf(grid, x, y);
+      const id = legacyTectonicsIndexOf(grid, x, y);
       if (id < 0) continue;
       plate[id] = p;
       cost[id] = 0;
@@ -3358,7 +3358,7 @@
   }
 
   function sampleBilinear(grid, field, x, y) {
-    return sampleGridBilinear(grid, field, x, y, 0);
+    return legacyTectonicsSampleBilinear(grid, field, x, y, 0);
   }
 
   function spreadBoundaryEffects(grid, strength) {
@@ -3471,10 +3471,42 @@
   }
 
   function warpedNeighborId(grid, id, weak) {
-    const { x, y } = xyOf(grid, id);
+    const { x, y } = legacyTectonicsXyOf(grid, id);
     const bend = Math.round((weak - 0.5) * 2 * resolutionScale(grid));
-    const warped = indexOf(grid, x + bend, y - bend);
+    const warped = legacyTectonicsIndexOf(grid, x + bend, y - bend);
     return warped >= 0 ? warped : id;
+  }
+
+  function legacyTectonicsGridParamWidth(grid) {
+    return gridParamWidth(grid);
+  }
+
+  function legacyTectonicsGridParamHeight(grid) {
+    return gridParamHeight(grid);
+  }
+
+  function legacyTectonicsWrapGridParamX(grid, x) {
+    return wrapGridParamX(grid, x);
+  }
+
+  function legacyTectonicsGridParamToU(grid, x) {
+    return gridParamToU(grid, x);
+  }
+
+  function legacyTectonicsGridParamToV(grid, y) {
+    return gridParamToV(grid, y);
+  }
+
+  function legacyTectonicsIndexOf(grid, x, y) {
+    return indexOf(grid, x, y);
+  }
+
+  function legacyTectonicsSampleBilinear(grid, field, x, y, fallback) {
+    return sampleGridBilinear(grid, field, x, y, fallback);
+  }
+
+  function legacyTectonicsXyOf(grid, id) {
+    return xyOf(grid, id);
   }
 
 
