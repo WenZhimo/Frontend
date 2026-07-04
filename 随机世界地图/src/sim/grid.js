@@ -193,29 +193,36 @@ export function xyOf(grid, id) {
 }
 
 export function sampleGrid(grid, field, x, y) {
-  return topologyForGrid(grid).sample(field, x, y);
+  const topology = topologyForGrid(grid);
+  if (typeof topology.sample === "function") return topology.sample(field, x, y);
+  const id = indexOf(grid, x, y);
+  return id >= 0 ? field[id] : undefined;
 }
 
 export function sampleGridWrapped(grid, field, x, y) {
-  return topologyForGrid(grid).sampleWrapped(field, x, y);
+  const topology = topologyForGrid(grid);
+  if (typeof topology.sampleWrapped === "function") return topology.sampleWrapped(field, x, y);
+  const id = indexOf(grid, x, y);
+  return id >= 0 ? field[id] : undefined;
 }
 
 export function sampleGridBilinear(grid, field, x, y, fallback = 0) {
-  const topology = topologyForGrid(grid);
-  const sx = topology.wrapX(x);
-  const sy = Math.max(0, Math.min(topology.height - 1.001, y));
+  const height = gridParamHeight(grid);
+  if (!height) return fallback;
+  const sx = wrapGridParamX(grid, x);
+  const sy = Math.max(0, Math.min(height - 1.001, y));
   const x0 = Math.floor(sx);
   const y0 = Math.floor(sy);
-  const x1 = topology.wrapX(x0 + 1);
-  const y1 = Math.min(topology.height - 1, y0 + 1);
+  const x1 = wrapGridParamX(grid, x0 + 1);
+  const y1 = Math.min(height - 1, y0 + 1);
   const tx = sx - x0;
   const ty = sy - y0;
-  const i00 = topology.index(x0, y0);
-  const i10 = topology.index(x1, y0);
-  const i01 = topology.index(x0, y1);
-  const i11 = topology.index(x1, y1);
+  const i00 = indexOf(grid, x0, y0);
+  const i10 = indexOf(grid, x1, y0);
+  const i01 = indexOf(grid, x0, y1);
+  const i11 = indexOf(grid, x1, y1);
   if (i00 < 0 || i10 < 0 || i01 < 0 || i11 < 0) {
-    const nearest = topology.sampleWrapped(field, Math.round(x), Math.round(y));
+    const nearest = sampleGridWrapped(grid, field, Math.round(x), Math.round(y));
     return Number.isFinite(nearest) ? nearest : fallback;
   }
   const a = field[i00] * (1 - tx) + field[i10] * tx;
