@@ -10489,6 +10489,8 @@
 
   function withRuntimeFallback(gpuRenderer, cpuRenderer, capabilities) {
     let fallbackReason = null;
+    const sphericalCpuReason =
+      "Graph-backed spherical grids use CPU projection rendering; experimental rectangular WebGL2 rendering is skipped.";
     return {
       ...gpuRenderer,
       capabilities,
@@ -10497,6 +10499,12 @@
         return fallbackReason;
       },
       render(world) {
+        if (isGraphBackedGrid(world.grid)) {
+          cpuRenderer.render(world);
+          world.renderBackend = "cpu-spherical-projection";
+          world.renderFallbackReason = sphericalCpuReason;
+          return;
+        }
         if (!fallbackReason) {
           try {
             gpuRenderer.render(world);
@@ -10512,6 +10520,10 @@
         world.renderFallbackReason = fallbackReason;
       },
     };
+  }
+
+  function isGraphBackedGrid(grid) {
+    return Boolean(grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere");
   }
 
 
