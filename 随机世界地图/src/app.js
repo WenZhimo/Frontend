@@ -8730,6 +8730,15 @@
 
     function render(world) {
       const { grid } = world;
+      if (isGraphBackedGrid(grid)) {
+        renderSphericalWorld(world);
+        return;
+      }
+      renderRectangularWorld(world);
+    }
+
+    function renderRectangularWorld(world) {
+      const { grid } = world;
       const { width, height, elev, btype, activeBoundary } = grid;
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
@@ -8767,6 +8776,38 @@
       ctx.putImageData(imageData, 0, 0);
     }
 
+    function renderSphericalWorld(world) {
+      const { grid } = world;
+      const width = Number.isFinite(world.params?.renderWidth) ? world.params.renderWidth : 512;
+      const height = Number.isFinite(world.params?.renderHeight) ? world.params.renderHeight : 256;
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        imageData = null;
+      }
+      if (!imageData) imageData = ctx.createImageData(width, height);
+      const rendered = renderSphericalField(grid, grid.elev, {
+        width,
+        height,
+        projectionMode: world.params?.projectionMode ?? "equirectangular",
+        colorRamp: (value, cell) => {
+          const color = colorForElevation(value - world.seaLevel);
+          if (world.params.showBoundaries === false || !hasActiveBoundary(grid, cell)) return color;
+          const overlayStrength = boundaryOverlayStrength(grid, cell);
+          if (overlayStrength <= 0) return color;
+          if (grid.btype[cell] === BoundaryType.CONVERGENT) {
+            return blendedColor(color, [231, 86, 66], 0.55 * overlayStrength);
+          }
+          if (grid.btype[cell] === BoundaryType.DIVERGENT) {
+            return blendedColor(color, [77, 195, 215], 0.5 * overlayStrength);
+          }
+          return blendedColor(color, [236, 196, 83], 0.46 * overlayStrength);
+        },
+      });
+      imageData.data.set(rendered.pixels);
+      ctx.putImageData(imageData, 0, 0);
+    }
+
     return {
       kind: "cpu-canvas",
       fallbackReason: null,
@@ -8789,6 +8830,23 @@
     data[offset] = Math.round(data[offset] * (1 - alpha) + color[0] * alpha);
     data[offset + 1] = Math.round(data[offset + 1] * (1 - alpha) + color[1] * alpha);
     data[offset + 2] = Math.round(data[offset + 2] * (1 - alpha) + color[2] * alpha);
+  }
+
+  function blendedColor(base, overlay, alpha) {
+    const k = Math.max(0, Math.min(1, alpha));
+    return [
+      Math.round(base[0] * (1 - k) + overlay[0] * k),
+      Math.round(base[1] * (1 - k) + overlay[1] * k),
+      Math.round(base[2] * (1 - k) + overlay[2] * k),
+    ];
+  }
+
+  function hasActiveBoundary(grid, id) {
+    return grid.btype?.[id] !== BoundaryType.INTERIOR && Boolean(grid.activeBoundary?.[id]);
+  }
+
+  function isGraphBackedGrid(grid) {
+    return Boolean(grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere");
   }
 
   function colorForElevation(h) {
