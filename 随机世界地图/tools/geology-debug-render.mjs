@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
 import { getHydrologyInputs } from "../src/sim/derived/terrain.js";
+import { projectionSampleToVec3 } from "../src/render/sphericalProjectionRenderer.js";
+import { nearestCellByVector } from "../src/sim/sphere/cubedSphere.js";
 import { parseCsv, parseOptions, parseTopologyOptions } from "./lib/cli.mjs";
 import { loadWorldSnapshot } from "./lib/snapshot-cache.mjs";
 
@@ -14,6 +16,7 @@ const outDir = fromSnapshot ? positional[0] ?? "_geology_debug" : positional[2] 
 const pipelineMode = fromSnapshot ? null : positional[3] ?? "geology-v2";
 const resolution = fromSnapshot ? null : positional[4] ?? "512x256";
 const topologyOptions = parseTopologyOptions(options);
+const outputResolution = options["output-resolution"] ?? options.outputResolution ?? resolution ?? worldResolutionFromSnapshotHint(fromSnapshot);
 const requestedLayers = new Set(parseCsv(options.layers, []));
 const hydrologyLayers = new Set([
   "flowDirection",
@@ -184,6 +187,10 @@ console.log(JSON.stringify({
 
 function writePpm(currentWorld, output, colorFn) {
   const { grid } = currentWorld;
+  if (isGraphBackedGrid(grid)) {
+    writeProjectedPpm(currentWorld, output, colorFn);
+    return;
+  }
   const bytes = Buffer.alloc(grid.width * grid.height * 3);
   for (let i = 0; i < grid.size; i += 1) {
     const color = colorFn(currentWorld, i);
@@ -193,6 +200,45 @@ function writePpm(currentWorld, output, colorFn) {
     bytes[offset + 2] = color[2];
   }
   writeFileSync(output, Buffer.concat([Buffer.from(`P6\n${grid.width} ${grid.height}\n255\n`), bytes]));
+}
+
+function writeProjectedPpm(currentWorld, output, colorFn) {
+  const { grid } = currentWorld;
+  const { width, height } = parseResolution(outputResolution, 512, 256);
+  const bytes = Buffer.alloc(width * height * 3);
+  const projectionMode = currentWorld.params?.projectionMode ?? topologyOptions.projectionMode ?? "equirectangular";
+  const background = [18, 20, 24];
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const pixel = y * width + x;
+      const offset = pixel * 3;
+      const sample = projectionSampleToVec3(x, y, width, height, projectionMode);
+      const color = sample.visible
+        ? colorFn(currentWorld, nearestCellByVector(grid, sample.x, sample.y, sample.z))
+        : background;
+      bytes[offset] = color[0];
+      bytes[offset + 1] = color[1];
+      bytes[offset + 2] = color[2];
+    }
+  }
+  writeFileSync(output, Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`), bytes]));
+}
+
+function isGraphBackedGrid(grid) {
+  return Boolean(grid.topologyOptions?.graphBacked || grid.topologyKind === "cubed-sphere");
+}
+
+function parseResolution(value, fallbackWidth, fallbackHeight) {
+  const match = /^(\d+)x(\d+)$/i.exec(String(value ?? ""));
+  if (!match) return { width: fallbackWidth, height: fallbackHeight };
+  return {
+    width: Math.max(1, Number(match[1])),
+    height: Math.max(1, Number(match[2])),
+  };
+}
+
+function worldResolutionFromSnapshotHint(snapshotPath) {
+  return snapshotPath ? "512x256" : null;
 }
 
 function colorCrustType(world, i) {
