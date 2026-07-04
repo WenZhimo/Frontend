@@ -1,4 +1,5 @@
 import { forEachGridCell, forEachNeighbor4ById, forEachNeighbor8ById, indexOf, sampleGridWrapped, xyOf } from "../grid.js";
+import { topologyForGrid } from "../topology.js";
 import { CrustType } from "./crust.js";
 
 const TRANSPORT_PASSES = 4;
@@ -100,7 +101,6 @@ export function updateSedimentBudget(world) {
   });
 
   for (let i = 0; i < size; i += 1) {
-    const { x, y } = xyOf(grid, i);
     const rel = elev[i] - seaLevel;
     const nearOrBelowSea = clamp01((seaLevel + 0.08 - elev[i]) / 0.16);
     const shelfCapacity =
@@ -119,7 +119,7 @@ export function updateSedimentBudget(world) {
         abyssalPlain[i] * 0.12,
     );
     const structuralLine = structuralLineMemory(grid, i);
-    const broadBasin = localAverage8(grid, basin, x, y);
+    const broadBasin = localAverage8ById(grid, basin, i);
     const basinCapacity =
       broadBasin * (0.11 + naturalCapacitySupport * 0.2) +
       basin[i] * (0.035 + naturalCapacitySupport * 0.065) * (1 - structuralLine * 0.55) +
@@ -390,8 +390,7 @@ function softenSedimentCapacity(grid) {
 }
 
 function softDepositionalSink(grid, id) {
-  const { x, y } = xyOf(grid, id);
-  const broadBasin = localAverage8(grid, grid.basin, x, y);
+  const broadBasin = localAverage8ById(grid, grid.basin, id);
   const structuralLine = structuralLineMemory(grid, id);
   const natural =
     grid.passiveMargin[id] * 0.54 +
@@ -439,6 +438,9 @@ function maxSedimentForCell(grid, id, relativeElevation) {
 }
 
 function localSlope(grid, field, id) {
+  const topology = topologyForGrid(grid);
+  if (isGraphBackedGrid(grid, topology)) return localGraphSlope(grid, topology, field, id);
+
   const { x, y } = xyOf(grid, id);
   const center = field[id];
   const left = finiteSample(grid, field, x - 1, y, center);
@@ -449,18 +451,51 @@ function localSlope(grid, field, id) {
 }
 
 function localRelief(grid, field, id) {
+  const topology = topologyForGrid(grid);
   const center = field[id];
   let maxDelta = 0;
-  forEachNeighbor4ById(grid, id, (nid) => {
+  visitNeighbor4(grid, topology, id, (nid) => {
     maxDelta = Math.max(maxDelta, Math.abs(center - field[nid]));
   });
   return maxDelta;
 }
 
 function visitNeighbor8(grid, id, visit) {
+  const topology = topologyForGrid(grid);
+  if (isGraphBackedGrid(grid, topology)) {
+    topology.forEachNeighbor(id, (nid) => {
+      visit(nid, false);
+    });
+    return;
+  }
   forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
     visit(nid, dx !== 0 && dy !== 0);
   });
+}
+
+function visitNeighbor4(grid, topology, id, visit) {
+  if (isGraphBackedGrid(grid, topology)) {
+    topology.forEachNeighbor(id, (nid) => {
+      visit(nid);
+    });
+    return;
+  }
+  forEachNeighbor4ById(grid, id, (nid) => {
+    visit(nid);
+  });
+}
+
+function localGraphSlope(grid, topology, field, id) {
+  const center = field[id];
+  let count = 0;
+  let totalSq = 0;
+  topology.forEachNeighbor(id, (nid, _slot, edgeLength = 1) => {
+    const length = Number.isFinite(edgeLength) && edgeLength > 1e-6 ? edgeLength : 1;
+    const gradient = (field[nid] - center) / length;
+    totalSq += gradient * gradient;
+    count += 1;
+  });
+  return count ? Math.sqrt(totalSq / count) : 0;
 }
 
 function measurePatchiness(grid, field) {
@@ -494,7 +529,7 @@ function measureSedimentStraightnessDiagnostics(grid, field) {
         grid.continentalShelf[id] +
         grid.continentalRise[id] +
         grid.sedimentWedge[id] +
-        localAverage8(grid, grid.basin, x, y) * 0.28 +
+        localAverage8ById(grid, grid.basin, id) * 0.28 +
         grid.forelandBasin[id] +
         grid.abyssalPlain[id] * 0.5,
     );
@@ -565,6 +600,10 @@ function smoothstep(edge0, edge1, x) {
 function localAverage8(grid, field, x, y) {
   const id = indexOf(grid, x, y);
   if (id < 0) return 0;
+  return localAverage8ById(grid, field, id);
+}
+
+function localAverage8ById(grid, field, id) {
   let total = field[id] * 1.5;
   let weight = 1.5;
   visitNeighbor8(grid, id, (nid, diagonal) => {
@@ -573,6 +612,14 @@ function localAverage8(grid, field, x, y) {
     weight += w;
   });
   return weight ? total / weight : 0;
+}
+
+function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+  return Boolean(
+    grid.topologyOptions?.graphBacked ||
+      topology?.topologyKind === "cubed-sphere" ||
+      grid.topologyKind === "cubed-sphere",
+  );
 }
 
 function structuralLineMemory(grid, id) {
