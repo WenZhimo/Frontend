@@ -176,6 +176,7 @@ function rebuildCompatibilityCrust(grid) {
 
 function smoothPassiveCrustFields(grid) {
   const { crustType, crustAge, crustThickness, sediment, basin, boundaryInfluence, weakness, scratch, scratch2, scratch3 } = grid;
+  const topology = topologyForGrid(grid);
   scratch.set(crustAge);
   scratch2.set(crustThickness);
   scratch3.set(sediment);
@@ -189,7 +190,7 @@ function smoothPassiveCrustFields(grid) {
     let thickTotal = scratch2[id] * 2.5;
     let sedTotal = scratch3[id] * 2.5;
     let weightTotal = 2.5;
-    forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
+    visitPassiveCrustNeighbors(grid, topology, id, (nid, dx, dy) => {
       const sameFamily = crustType[nid] === CrustType.OCEANIC || crustType[nid] === CrustType.TRANSITIONAL;
       if (!sameFamily || boundaryInfluence[nid] > 0.55) return;
       const w = dx === 0 || dy === 0 ? 1 : 0.55;
@@ -209,7 +210,6 @@ function smoothPassiveCrustFields(grid) {
   scratch2.set(sediment);
   scratch3.set(basin);
   const radius = Math.max(1, physicalRadius(grid, 2));
-  const topology = topologyForGrid(grid);
   forEachGridCell(grid, (id, x, y) => {
     const inactive = 1 - Math.min(1, boundaryInfluence[id]);
     const passive = crustType[id] === CrustType.OCEANIC || crustType[id] === CrustType.TRANSITIONAL;
@@ -242,6 +242,18 @@ function smoothPassiveCrustFields(grid) {
     if (crustType[id] !== CrustType.OCEANIC) crustAge[id] = scratch[id] * (1 - ageMix) + ageSmooth * ageMix;
     sediment[id] = Math.min(1, scratch2[id] * (1 - fillMix) + sedSmooth * fillMix);
     basin[id] = Math.min(1, scratch3[id] * (1 - fillMix) + basinSmooth * fillMix);
+  });
+}
+
+function visitPassiveCrustNeighbors(grid, topology, id, visit) {
+  if (isGraphBackedGrid(grid, topology)) {
+    topology.forEachNeighbor(id, (nid) => {
+      visit(nid, 1, 0);
+    });
+    return;
+  }
+  forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
+    visit(nid, dx, dy);
   });
 }
 
