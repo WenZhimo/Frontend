@@ -1,7 +1,10 @@
 import { topologyForGrid } from "../../src/sim/topology.js";
 
+let currentGrid = null;
+
 export function compactMetrics(world, timing = {}) {
   const grid = world.grid;
+  currentGrid = grid;
   const coast = measureCoastBoundaryShare(grid, world.seaLevel);
   const ageSplit = measureAgeBandStraightnessSplit(grid);
   const sediment = world.sedimentBudgetDiagnostics ?? {};
@@ -83,22 +86,21 @@ function measureCoastBoundaryShare(grid, seaLevel) {
   let coast = 0;
   let nearBoundary = 0;
   let exactBoundary = 0;
-  for (let y = 0; y < grid.height; y += 1) {
-    for (let x = 0; x < grid.width; x += 1) {
-      const id = y * grid.width + x;
-      const land = grid.elev[id] >= seaLevel;
-      let isCoast = false;
-      visitNeighbor4Ids(grid, x, y, (nid) => {
-        if ((grid.elev[nid] >= seaLevel) !== land) isCoast = true;
-      });
-      if (!isCoast) continue;
-      coast += 1;
-      if (grid.boundaryInfluence[id] > 0.1) nearBoundary += 1;
-      if (grid.boundaryDistance[id] === 0) exactBoundary += 1;
-    }
+  const topology = topologyForGrid(grid);
+  for (let id = 0; id < grid.size; id += 1) {
+    const land = grid.elev[id] >= seaLevel;
+    let isCoast = false;
+    forEachNeighbor4(topology, id, (nid) => {
+      if ((grid.elev[nid] >= seaLevel) !== land) isCoast = true;
+    });
+    if (!isCoast) continue;
+    const area = metricArea(grid, id);
+    coast += area;
+    if (grid.boundaryInfluence[id] > 0.1) nearBoundary += area;
+    if (grid.boundaryDistance[id] === 0) exactBoundary += area;
   }
   return {
-    coastCoverage: coast / grid.size,
+    coastCoverage: coast / Math.max(totalArea(grid), Number.EPSILON),
     nearBoundaryShare: coast ? nearBoundary / coast : 0,
     exactBoundaryShare: coast ? exactBoundary / coast : 0,
   };
@@ -109,21 +111,23 @@ function measureAgeBandStraightnessSplit(grid) {
   let nearStraight = 0;
   let inactiveTotal = 0;
   let inactiveStraight = 0;
-  for (let y = 1; y < grid.height - 1; y += 1) {
-    for (let x = 0; x < grid.width; x += 1) {
-      const id = y * grid.width + x;
-      if (grid.crustType[id] !== 0) continue;
-      const band = Math.floor(grid.crustAge[id] * 12);
-      const horizontal = sameAgeBand(grid, x - 1, y, band) + sameAgeBand(grid, x + 1, y, band);
-      const vertical = sameAgeBand(grid, x, y - 1, band) + sameAgeBand(grid, x, y + 1, band);
-      const straight = Math.max(horizontal, vertical) >= 2;
-      if (grid.ridge[id] > 0.03 || grid.ridgeAxis[id] > 0.05) {
-        nearTotal += 1;
-        if (straight) nearStraight += 1;
-      } else if (grid.boundaryInfluence[id] < 0.12) {
-        inactiveTotal += 1;
-        if (straight) inactiveStraight += 1;
-      }
+  const topology = topologyForGrid(grid);
+  for (let id = 0; id < grid.size; id += 1) {
+    if (grid.crustType[id] !== 0) continue;
+    const band = Math.floor(grid.crustAge[id] * 12);
+    let aligned = 0;
+    forEachAnyNeighbor(topology, id, (nid) => {
+      if (grid.crustType[nid] === 0 && Math.floor(grid.crustAge[nid] * 12) === band) aligned += 1;
+    });
+    if (aligned <= 0) continue;
+    const area = metricArea(grid, id);
+    const straight = aligned >= 2;
+    if (grid.ridge[id] > 0.03 || grid.ridgeAxis[id] > 0.05) {
+      nearTotal += area;
+      if (straight) nearStraight += area;
+    } else if (grid.boundaryInfluence[id] < 0.12) {
+      inactiveTotal += area;
+      if (straight) inactiveStraight += area;
     }
   }
   return {
@@ -132,43 +136,41 @@ function measureAgeBandStraightnessSplit(grid) {
   };
 }
 
-function sameAgeBand(grid, x, y, band) {
-  const id = topologyForGrid(grid).index(x, y);
-  if (id < 0) return 0;
-  return grid.crustType[id] === 0 && Math.floor(grid.crustAge[id] * 12) === band ? 1 : 0;
-}
-
-function visitNeighbor4Ids(grid, x, y, visit) {
-  const topology = topologyForGrid(grid);
-  const id = topology.index(x, y);
-  if (id < 0) return;
-  topology.forEachNeighbor4(id, visit);
-}
-
 function average(field) {
   if (!field || !field.length) return 0;
   let total = 0;
-  for (let i = 0; i < field.length; i += 1) total += field[i];
-  return total / field.length;
+  let weight = 0;
+  for (let i = 0; i < field.length; i += 1) {
+    const area = metricAreaForField(field, i);
+    total += field[i] * area;
+    weight += area;
+  }
+  return total / Math.max(weight, Number.EPSILON);
 }
 
 function averageWhere(field, include) {
   if (!field) return 0;
   let total = 0;
-  let count = 0;
+  let weight = 0;
   for (let i = 0; i < field.length; i += 1) {
     if (!include(i)) continue;
-    total += field[i];
-    count += 1;
+    const area = metricAreaForField(field, i);
+    total += field[i] * area;
+    weight += area;
   }
-  return count ? total / count : 0;
+  return weight ? total / weight : 0;
 }
 
 function share(field) {
   if (!field || !field.length) return 0;
-  let count = 0;
-  for (let i = 0; i < field.length; i += 1) if (field[i]) count += 1;
-  return count / field.length;
+  let covered = 0;
+  let total = 0;
+  for (let i = 0; i < field.length; i += 1) {
+    const area = metricAreaForField(field, i);
+    total += area;
+    if (field[i]) covered += area;
+  }
+  return covered / Math.max(total, Number.EPSILON);
 }
 
 function maxInt(field) {
@@ -180,4 +182,36 @@ function maxInt(field) {
 
 function formatValue(value) {
   return typeof value === "number" ? Number(value.toFixed(6)) : String(value);
+}
+
+function forEachNeighbor4(topology, id, visit) {
+  if (typeof topology.forEachNeighbor4 === "function") {
+    topology.forEachNeighbor4(id, visit);
+    return;
+  }
+  if (typeof topology.forEachNeighbor === "function") topology.forEachNeighbor(id, visit);
+}
+
+function forEachAnyNeighbor(topology, id, visit) {
+  if (typeof topology.forEachNeighbor8 === "function") {
+    topology.forEachNeighbor8(id, visit);
+    return;
+  }
+  if (typeof topology.forEachNeighbor === "function") topology.forEachNeighbor(id, visit);
+}
+
+function metricAreaForField(field, id) {
+  const grid = field?.length === currentGrid?.size ? currentGrid : null;
+  return metricArea(grid, id);
+}
+
+function metricArea(grid, id) {
+  const area = grid?.area?.[id];
+  return Number.isFinite(area) && area > 0 ? area : 1;
+}
+
+function totalArea(grid) {
+  let total = 0;
+  for (let id = 0; id < grid.size; id += 1) total += metricArea(grid, id);
+  return total;
 }
