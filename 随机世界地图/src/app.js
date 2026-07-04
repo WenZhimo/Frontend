@@ -4592,7 +4592,20 @@
     const { size, crustType, weakness } = grid;
     const radius = Math.max(1, Math.min(physicalRadius(grid, referenceRadius), physicalRadius(grid, 8)));
     const spread = new Float32Array(size);
+    const topology = topologyForGrid(grid);
+    if (isGraphBackedGrid(grid, topology)) {
+      diffuseFeatureGraph(grid, topology, source, spread, radius, gain, options);
+    } else {
+      diffuseFeatureRaster(grid, source, spread, radius, gain, options);
+    }
 
+    for (let i = 0; i < size; i += 1) {
+      if (spread[i] > 0) target[i] = Math.min(1, target[i] + spread[i]);
+    }
+  }
+
+  function diffuseFeatureRaster(grid, source, spread, radius, gain, options) {
+    const { crustType, weakness } = grid;
     forEachGridCell(grid, (id, x, y) => {
       const seed = source[id];
       if (seed <= 0.0001) return;
@@ -4618,10 +4631,52 @@
         }
       }
     });
+  }
 
-    for (let i = 0; i < size; i += 1) {
-      if (spread[i] > 0) target[i] = Math.min(1, target[i] + spread[i]);
+  function diffuseFeatureGraph(grid, topology, source, spread, radius, gain, options) {
+    const { size, crustType, weakness } = grid;
+    const radiusLimit = radius + 0.5;
+    for (let id = 0; id < size; id += 1) {
+      const seed = source[id];
+      if (seed <= 0.0001) continue;
+      const arcOffsetDepth = options.arcOffset ? Math.max(1, Math.round(radius * 0.75)) : 0;
+      const origin = xyOf(grid, id);
+      forEachNeighborRadiusById(grid, id, radius + arcOffsetDepth, (nid, dx, _dy) => {
+        const edgeDistance = Math.max(0, dx);
+        if (edgeDistance > radiusLimit + arcOffsetDepth) return;
+        const targetDistance = Math.max(0, edgeDistance - arcOffsetDepth);
+        if (targetDistance > radiusLimit) return;
+        if (options.continentalOnly && crustType[nid] !== CrustType.CONTINENTAL) return;
+        if (options.oceanicBias && crustType[nid] !== CrustType.OCEANIC && targetDistance > radius * 0.45) return;
+        const weak = weakness[nid];
+        if (weak < (options.minWeakness ?? 0) && targetDistance > 1.5) return;
+        if (options.segmented) {
+          const point = xyOf(grid, nid);
+          if (weak < 0.38 && segmentMask(point.x, point.y, weak) < 0.8) return;
+        }
+        if (options.arcOffset && edgeDistance < arcOffsetDepth) return;
+        const falloff = Math.max(0, 1 - targetDistance / radiusLimit);
+        const weakWeight = 0.45 + weak * 0.9;
+        const addition = seed * gain * falloff * weakWeight;
+        if (addition > spread[nid]) spread[nid] = addition;
+      });
+      if (!options.arcOffset) {
+        const weak = weakness[id];
+        if (!options.continentalOnly || crustType[id] === CrustType.CONTINENTAL) {
+          spread[id] = Math.max(spread[id], seed * gain * (0.45 + weak * 0.9));
+        }
+      } else if (source[id] > 0 && origin.x >= 0) {
+        // Preserve deterministic access to the adapter's parameterized coordinates.
+      }
     }
+  }
+
+  function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+    return Boolean(
+      grid.topologyOptions?.graphBacked ||
+        topology?.topologyKind === "cubed-sphere" ||
+        grid.topologyKind === "cubed-sphere",
+    );
   }
 
   function segmentMask(x, y, weakness) {
