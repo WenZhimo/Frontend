@@ -4835,6 +4835,7 @@
   function broadenOldOrogeny(grid) {
     const { width, oldOrogeny, orogeny, orogenyAge, weakness, crustType, boundaryInfluence, scratch, scratch2, scratch3 } = grid;
     const radius = Math.max(2, physicalRadius(grid, 5));
+    const topology = topologyForGrid(grid);
     scratch.set(oldOrogeny);
     scratch2.set(orogenyAge);
     scratch3.set(orogeny);
@@ -4848,25 +4849,21 @@
       let total = rootMemory * 3.5;
       let ageTotal = scratch2[id] * 3.5;
       let weight = 3.5;
-      for (let dy = -radius; dy <= radius; dy += 1) {
-        for (let dx = -radius; dx <= radius; dx += 1) {
-          const dist = Math.hypot(dx, dy);
-          if (dist < 0.01 || dist > radius + 0.01) continue;
-          const nid = indexOf(grid, x + dx + bend, y + dy);
-          if (nid < 0 || crustType[nid] === CrustType.OCEANIC) continue;
-          const falloff = (1 - dist / (radius + 0.5)) * (0.55 + weakness[nid] * 0.65);
-          if (falloff <= 0) continue;
-          const neighborInactive = 1 - Math.min(1, boundaryInfluence[nid]);
-          const neighborSource = Math.max(scratch[nid], scratch3[nid] * neighborInactive * 0.85);
-          const neighborMemory = neighborSource + Math.max(0, scratch2[nid] - 0.35) * neighborSource * 0.45;
-          total += neighborMemory * falloff;
-          ageTotal += scratch2[nid] * falloff;
-          weight += falloff;
-        }
-      }
+      visitOrogenyNeighborhood(grid, topology, id, x, y, radius, bend, (nid, dist) => {
+        if (crustType[nid] === CrustType.OCEANIC) return;
+        const falloff = (1 - dist / (radius + 0.5)) * (0.55 + weakness[nid] * 0.65);
+        if (falloff <= 0) return;
+        const neighborInactive = 1 - Math.min(1, boundaryInfluence[nid]);
+        const neighborSource = Math.max(scratch[nid], scratch3[nid] * neighborInactive * 0.85);
+        const neighborMemory = neighborSource + Math.max(0, scratch2[nid] - 0.35) * neighborSource * 0.45;
+        total += neighborMemory * falloff;
+        ageTotal += scratch2[nid] * falloff;
+        weight += falloff;
+      });
       const smooth = total / weight;
       const ageSmooth = ageTotal / weight;
-      const segment = segmentMask(x, y, width, weakness[id]);
+      const point = xyOf(grid, id);
+      const segment = segmentMask(point.x ?? x, point.y ?? y, width ?? grid.faceSize ?? 1, weakness[id]);
       const mix = Math.min(0.42, 0.1 + inactive * 0.26);
       oldOrogeny[id] = Math.min(1, Math.max(sourceMemory, scratch[id] * (1 - mix) + smooth * mix) * segment);
       orogenyAge[id] = Math.max(scratch2[id], ageSmooth * 0.98);
@@ -4876,26 +4873,21 @@
   function updateForelandBasins(grid) {
     const { activeOrogeny, oldOrogeny, forelandBasin, crustType, elev, ridge, trench, basin, sediment, scratch } = grid;
     const radius = Math.max(1, physicalRadius(grid, 5));
+    const topology = topologyForGrid(grid);
     scratch.fill(0);
 
     forEachGridCell(grid, (id, x, y) => {
       const source = Math.max(activeOrogeny[id], oldOrogeny[id] * 0.55);
       if (source < 0.04) return;
-      for (let dy = -radius; dy <= radius; dy += 1) {
-        for (let dx = -radius; dx <= radius; dx += 1) {
-          const dist = Math.hypot(dx, dy);
-          if (dist < 1 || dist > radius + 0.01) continue;
-          const nid = indexOf(grid, x + dx, y + dy);
-          if (nid < 0) continue;
-          const continentalFamily = crustType[nid] === CrustType.CONTINENTAL || crustType[nid] === CrustType.TRANSITIONAL;
-          if (!continentalFamily) continue;
-          const lowRelief = Math.max(0, 1 - Math.max(0, elev[nid]) * 5.5);
-          const activeMarginPenalty = Math.max(ridge[nid], trench[nid]) > 0.08 ? 0.25 : 1;
-          const falloff = Math.max(0, 1 - dist / (radius + 0.5));
-          const value = source * falloff * lowRelief * activeMarginPenalty * 0.32;
-          if (value > scratch[nid]) scratch[nid] = value;
-        }
-      }
+      visitForelandNeighborhood(grid, topology, id, x, y, radius, (nid, dist) => {
+        const continentalFamily = crustType[nid] === CrustType.CONTINENTAL || crustType[nid] === CrustType.TRANSITIONAL;
+        if (!continentalFamily) return;
+        const lowRelief = Math.max(0, 1 - Math.max(0, elev[nid]) * 5.5);
+        const activeMarginPenalty = Math.max(ridge[nid], trench[nid]) > 0.08 ? 0.25 : 1;
+        const falloff = Math.max(0, 1 - dist / (radius + 0.5));
+        const value = source * falloff * lowRelief * activeMarginPenalty * 0.32;
+        if (value > scratch[nid]) scratch[nid] = value;
+      });
     });
 
     for (let i = 0; i < forelandBasin.length; i += 1) {
@@ -4936,6 +4928,53 @@
     const noise = hash2(sx, sy);
     const keep = weakness > 0.54 ? 0.9 : weakness > 0.38 ? 0.78 : 0.66;
     return noise <= keep ? 1 : 0.82;
+  }
+
+  function visitOrogenyNeighborhood(grid, topology, id, x, y, radius, bend, visit) {
+    if (isGraphBackedGrid(grid, topology)) {
+      const bendDepth = Math.max(0, Math.min(radius, Math.abs(Math.round(bend))));
+      forEachNeighborRadiusById(grid, id, radius + bendDepth, (nid, depth) => {
+        if (nid === id || depth <= bendDepth || depth > radius + bendDepth + 0.01) return;
+        visit(nid, Math.max(0.01, depth - bendDepth));
+      });
+      return;
+    }
+
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        const dist = Math.hypot(dx, dy);
+        if (dist < 0.01 || dist > radius + 0.01) continue;
+        const nid = indexOf(grid, x + dx + bend, y + dy);
+        if (nid >= 0) visit(nid, dist);
+      }
+    }
+  }
+
+  function visitForelandNeighborhood(grid, topology, id, x, y, radius, visit) {
+    if (isGraphBackedGrid(grid, topology)) {
+      forEachNeighborRadiusById(grid, id, radius, (nid, depth) => {
+        if (nid === id || depth < 1 || depth > radius + 0.01) return;
+        visit(nid, depth);
+      });
+      return;
+    }
+
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        const dist = Math.hypot(dx, dy);
+        if (dist < 1 || dist > radius + 0.01) continue;
+        const nid = indexOf(grid, x + dx, y + dy);
+        if (nid >= 0) visit(nid, dist);
+      }
+    }
+  }
+
+  function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+    return Boolean(
+      grid.topologyOptions?.graphBacked ||
+        topology?.topologyKind === "cubed-sphere" ||
+        grid.topologyKind === "cubed-sphere",
+    );
   }
 
   function hash2(x, y) {
