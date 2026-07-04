@@ -1,6 +1,8 @@
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
 import { hashSeed, mixSeed, mulberry32 } from "../src/sim/prng.js";
+import { topologyForGrid } from "../src/sim/topology.js";
+import { parseOptions, parseTopologyOptions } from "./lib/cli.mjs";
 
 const options = parseArgs(process.argv.slice(2));
 const random = mulberry32(hashSeed(options.baseSeed));
@@ -37,6 +39,7 @@ for (let seedIndex = 0; seedIndex < options.seedCount; seedIndex += 1) {
     timeScale: 1_000_000,
     pipelineMode: options.pipelineMode,
     resolution: options.resolution,
+    ...options.topologyOptions,
   });
 
   const seedPeaks = createEmptyPeaks();
@@ -73,14 +76,15 @@ console.log(JSON.stringify(summary, null, 2));
 if (!summary.ok) process.exitCode = 1;
 
 function parseArgs(args) {
-  const values = args.filter((arg) => !arg.startsWith("--"));
+  const { positional, options } = parseOptions(args);
   return {
-    seedCount: Math.max(1, Number(values[0] ?? 8)),
-    steps: Math.max(0, Number(values[1] ?? 300)),
-    pipelineMode: values[2] ?? "geology-v2",
-    resolution: values[3] ?? "256x128",
-    baseSeed: values[4] ?? `boundary-random-${Date.now().toString(36)}`,
-    failFast: args.includes("--fail-fast"),
+    seedCount: Math.max(1, Number(positional[0] ?? 8)),
+    steps: Math.max(0, Number(positional[1] ?? 300)),
+    pipelineMode: positional[2] ?? "geology-v2",
+    resolution: positional[3] ?? "256x128",
+    baseSeed: positional[4] ?? `boundary-random-${Date.now().toString(36)}`,
+    failFast: options["fail-fast"] === true,
+    topologyOptions: parseTopologyOptions(options),
   };
 }
 
@@ -99,34 +103,37 @@ function measureBoundaryGridRisk(grid) {
   let densitySum = 0;
   let active = 0;
   let islandNoise = 0;
+  let totalAreaValue = 0;
 
   for (let i = 0; i < grid.size; i += 1) {
+    const area = metricArea(grid, i);
+    totalAreaValue += area;
     const checkerValue = grid.plateCheckerboard[i] ?? 0;
     const density = grid.boundaryDensity[i] ?? 0;
     if (checkerValue > 0.4) {
       checkerMask[i] = 1;
-      checker += 1;
+      checker += area;
     }
     if (density > 0.66) {
       denseMask[i] = 1;
-      dense += 1;
+      dense += area;
     }
-    if (grid.noisyBoundaryPatch[i]) noisy += 1;
-    if (grid.activeBoundary[i]) active += 1;
-    if ((density > 0.2 || grid.activeBoundary[i]) && isPlateIslandNoise(grid, i)) islandNoise += 1;
-    densitySum += density;
+    if (grid.noisyBoundaryPatch[i]) noisy += area;
+    if (grid.activeBoundary[i]) active += area;
+    if ((density > 0.2 || grid.activeBoundary[i]) && isPlateIslandNoise(grid, i)) islandNoise += area;
+    densitySum += density * area;
   }
 
   const checkerStats = maxComponentStats(grid, checkerMask);
   const denseStats = maxComponentStats(grid, denseMask);
   return {
-    plateCheckerboardScore: checker / grid.size,
+    plateCheckerboardScore: checker / Math.max(totalAreaValue, Number.EPSILON),
     maxPlateCheckerboardComponent: checkerStats.area,
-    activeBoundaryCoverage: active / grid.size,
-    localBoundaryDensityMean: densitySum / grid.size,
-    noisyBoundaryPatchCoverage: noisy / grid.size,
-    plateIslandNoiseShare: islandNoise / grid.size,
-    denseBoundaryShare: dense / grid.size,
+    activeBoundaryCoverage: active / Math.max(totalAreaValue, Number.EPSILON),
+    localBoundaryDensityMean: densitySum / Math.max(totalAreaValue, Number.EPSILON),
+    noisyBoundaryPatchCoverage: noisy / Math.max(totalAreaValue, Number.EPSILON),
+    plateIslandNoiseShare: islandNoise / Math.max(totalAreaValue, Number.EPSILON),
+    denseBoundaryShare: dense / Math.max(totalAreaValue, Number.EPSILON),
     maxDenseBoundaryArea: denseStats.area,
     maxDenseBoundaryFill: denseStats.fill,
   };
@@ -150,74 +157,83 @@ function maxComponentStats(grid, mask) {
   const queue = new Int32Array(grid.size);
   let bestArea = 0;
   let bestFill = 0;
+  const topology = topologyForGrid(grid);
   for (let start = 0; start < grid.size; start += 1) {
     if (!mask[start] || visited[start]) continue;
-    let count = 0;
+    let areaSum = 0;
     let head = 0;
     let tail = 0;
-    let minX = grid.width;
-    let maxX = -1;
-    let minY = grid.height;
-    let maxY = -1;
     visited[start] = 1;
     queue[tail++] = start;
     while (head < tail) {
       const id = queue[head++];
-      count += 1;
-      const x = id % grid.width;
-      const y = Math.floor(id / grid.width);
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-      visitNeighbor4Ids(grid, x, y, (nid) => {
+      areaSum += metricArea(grid, id);
+      forEachNeighbor4(topology, id, (nid) => {
         if (!mask[nid] || visited[nid]) return;
         visited[nid] = 1;
         queue[tail++] = nid;
       });
     }
-    if (count > bestArea) {
-      const bboxArea = Math.max(1, (maxX - minX + 1) * (maxY - minY + 1));
-      bestArea = count;
-      bestFill = count / bboxArea;
+    const equivalentCells = equivalentCellCount(grid, areaSum);
+    if (equivalentCells > bestArea) {
+      bestArea = equivalentCells;
+      bestFill = componentFillProxy(grid, mask, topology, areaSum, queue, tail);
     }
   }
   return { area: bestArea, fill: bestFill };
 }
 
 function isPlateIslandNoise(grid, id) {
-  const x = id % grid.width;
-  const y = Math.floor(id / grid.width);
+  const topology = topologyForGrid(grid);
   const current = grid.plate[id];
   let same = 0;
   let different = 0;
-  visitNeighbor8Ids(grid, x, y, (nid) => {
+  forEachAnyNeighbor(topology, id, (nid) => {
     if (grid.plate[nid] === current) same += 1;
     else different += 1;
   });
   return same <= 2 && different >= 5;
 }
 
-function visitNeighbor4Ids(grid, x, y, visit) {
-  visit(y * grid.width + wrapX(grid.width, x - 1));
-  visit(y * grid.width + wrapX(grid.width, x + 1));
-  if (y > 0) visit((y - 1) * grid.width + x);
-  if (y < grid.height - 1) visit((y + 1) * grid.width + x);
-}
-
-function visitNeighbor8Ids(grid, x, y, visit) {
-  for (let dy = -1; dy <= 1; dy += 1) {
-    const ny = y + dy;
-    if (ny < 0 || ny >= grid.height) continue;
-    for (let dx = -1; dx <= 1; dx += 1) {
-      if (dx === 0 && dy === 0) continue;
-      visit(ny * grid.width + wrapX(grid.width, x + dx));
-    }
+function componentFillProxy(grid, mask, topology, areaSum, componentQueue, componentLength) {
+  let edgeArea = 0;
+  for (let i = 0; i < componentLength; i += 1) {
+    const id = componentQueue[i];
+    let touchesOutside = false;
+    forEachNeighbor4(topology, id, (nid) => {
+      if (!mask[nid]) touchesOutside = true;
+    });
+    if (touchesOutside) edgeArea += metricArea(grid, id);
   }
+  return areaSum / Math.max(areaSum + edgeArea, Number.EPSILON);
 }
 
-function wrapX(width, x) {
-  return ((x % width) + width) % width;
+function forEachNeighbor4(topology, id, visit) {
+  if (typeof topology.forEachNeighbor4 === "function") {
+    topology.forEachNeighbor4(id, visit);
+    return;
+  }
+  if (typeof topology.forEachNeighbor === "function") topology.forEachNeighbor(id, visit);
+}
+
+function forEachAnyNeighbor(topology, id, visit) {
+  if (typeof topology.forEachNeighbor8 === "function") {
+    topology.forEachNeighbor8(id, visit);
+    return;
+  }
+  if (typeof topology.forEachNeighbor === "function") topology.forEachNeighbor(id, visit);
+}
+
+function metricArea(grid, id) {
+  const area = grid?.area?.[id];
+  return Number.isFinite(area) && area > 0 ? area : 1;
+}
+
+function equivalentCellCount(grid, areaSum) {
+  if (!grid?.area) return areaSum;
+  let total = 0;
+  for (let i = 0; i < grid.size; i += 1) total += metricArea(grid, i);
+  return areaSum / Math.max(total / Math.max(1, grid.size), Number.EPSILON);
 }
 
 function createEmptyPeaks() {
