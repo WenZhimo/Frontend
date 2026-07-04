@@ -6754,6 +6754,9 @@
   }
 
   function localSlope(grid, id) {
+    const topology = topologyForGrid(grid);
+    if (isGraphBackedGrid(grid, topology)) return localGraphSlope(grid, topology, id);
+
     const { x, y } = xyOf(grid, id);
     const left = sampleGridWrapped(grid, grid.elev, x - 1, y);
     const right = sampleGridWrapped(grid, grid.elev, x + 1, y);
@@ -6765,14 +6768,40 @@
   }
 
   function localRelief4(grid, id) {
+    const topology = topologyForGrid(grid);
     let min = grid.elev[id];
     let max = grid.elev[id];
-    forEachNeighbor4ById(grid, id, (nid) => {
+    visitLocalReliefNeighbors(grid, topology, id, (nid) => {
       const value = grid.elev[nid];
       if (value < min) min = value;
       if (value > max) max = value;
     });
     return max - min;
+  }
+
+  function localGraphSlope(grid, topology, id) {
+    const center = grid.elev[id];
+    let count = 0;
+    let totalSq = 0;
+    topology.forEachNeighbor(id, (nid, _slot, edgeLength = 1) => {
+      const length = Number.isFinite(edgeLength) && edgeLength > 1e-6 ? edgeLength : 1;
+      const gradient = (grid.elev[nid] - center) / length;
+      totalSq += gradient * gradient;
+      count += 1;
+    });
+    return count ? Math.sqrt(totalSq / count) : 0;
+  }
+
+  function visitLocalReliefNeighbors(grid, topology, id, visit) {
+    if (isGraphBackedGrid(grid, topology)) {
+      topology.forEachNeighbor(id, (nid) => {
+        visit(nid);
+      });
+      return;
+    }
+    forEachNeighbor4ById(grid, id, (nid) => {
+      visit(nid);
+    });
   }
 
   function shareLand(grid, seaLevel) {
@@ -6801,6 +6830,14 @@
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+  }
+
+  function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+    return Boolean(
+      grid.topologyOptions?.graphBacked ||
+        topology?.topologyKind === "cubed-sphere" ||
+        grid.topologyKind === "cubed-sphere",
+    );
   }
 
 
