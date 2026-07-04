@@ -11,6 +11,18 @@ const forbiddenPatterns = [
   { name: "id_div_grid_width", regex: /Math\.floor\(\s*\w+\s*\/\s*grid\.width\s*\)/g },
 ];
 
+const helperDependencyPatterns = [
+  { name: "indexOf", regex: /\bindexOf\s*\(/g },
+  { name: "xyOf", regex: /\bxyOf\s*\(/g },
+  { name: "sampleGridWrapped", regex: /\bsampleGridWrapped\s*\(/g },
+  { name: "sampleGridBilinear", regex: /\bsampleGridBilinear\s*\(/g },
+  { name: "gridParamWidth", regex: /\bgridParamWidth\s*\(/g },
+  { name: "gridParamHeight", regex: /\bgridParamHeight\s*\(/g },
+  { name: "wrapGridParamX", regex: /\bwrapGridParamX\s*\(/g },
+  { name: "gridParamToU", regex: /\bgridParamToU\s*\(/g },
+  { name: "gridParamToV", regex: /\bgridParamToV\s*\(/g },
+];
+
 const sphericalProductionPaths = [
   "src/sim/sphere",
 ];
@@ -47,8 +59,12 @@ const sphericalMatches = scanPaths(sphericalProductionPaths).filter((match) => {
 const legacyMatches = scanPaths(legacyMigrationScopes).filter((match) => {
   return !topologyAwareLegacyFiles.has(match.file);
 });
+const legacyHelperMatches = scanPaths(legacyMigrationScopes, helperDependencyPatterns).filter((match) => {
+  return !topologyAwareLegacyFiles.has(match.file);
+});
 const sphericalByFile = summarizeByFile(sphericalMatches);
 const legacyByFile = summarizeByFile(legacyMatches);
+const legacyHelperByFile = summarizeByFile(legacyHelperMatches);
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -60,8 +76,16 @@ const result = {
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
   legacyRiskFiles: Object.keys(legacyByFile).length,
+  legacyDirectRectangularRiskCount: legacyMatches.length,
+  legacyDirectRectangularRiskFiles: Object.keys(legacyByFile).length,
+  legacyHelperRiskCount: legacyHelperMatches.length,
+  legacyHelperRiskFiles: Object.keys(legacyHelperByFile).length,
   topologyAwareLegacyFiles: Array.from(topologyAwareLegacyFiles).sort(),
   topLegacyRiskFiles: Object.entries(legacyByFile)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 12)
+    .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
+  topLegacyHelperRiskFiles: Object.entries(legacyHelperByFile)
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 12)
     .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
@@ -70,20 +94,21 @@ const result = {
     fullMigrationReady
       ? "fullMigrationReady means scanned legacy migration scopes have no unclassified rectangular-indexing risks"
       : "fullMigrationReady remains false while scanned legacy migration scopes still contain rectangular-indexing risks",
+    "legacyHelperRiskCount is diagnostic: topology helpers are migration dependencies, not automatic failures",
   ],
 };
 
 console.log(JSON.stringify(result, null, 2));
 process.exit(result.valid ? 0 : 1);
 
-function scanPaths(paths) {
+function scanPaths(paths, patterns = forbiddenPatterns) {
   const matches = [];
   for (const relativePath of paths) {
     const absolutePath = path.join(root, relativePath);
     if (!existsSync(absolutePath)) continue;
     const stat = statSync(absolutePath);
     const files = stat.isDirectory() ? listJsFiles(absolutePath) : [absolutePath];
-    for (const file of files) matches.push(...scanFile(file));
+    for (const file of files) matches.push(...scanFile(file, patterns));
   }
   return matches;
 }
@@ -102,12 +127,12 @@ function listJsFiles(dir) {
   return files;
 }
 
-function scanFile(file) {
+function scanFile(file, patterns = forbiddenPatterns) {
   const text = readFileSync(file, "utf8");
   const relative = path.relative(root, file).replaceAll("\\", "/");
   const lines = text.split(/\r?\n/);
   const matches = [];
-  for (const pattern of forbiddenPatterns) {
+  for (const pattern of patterns) {
     pattern.regex.lastIndex = 0;
     for (const match of text.matchAll(pattern.regex)) {
       const line = lineNumberAt(text, match.index ?? 0);
