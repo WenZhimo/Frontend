@@ -68,7 +68,7 @@ export function deriveHydrology(world, terrain, options = {}) {
     landCells.push(i);
     landCount += 1;
     landArea += metricWeight(grid, i);
-    flowAccumulation[i] = 1;
+    flowAccumulation[i] = metricWeight(grid, i);
     if (touchesMask(topology, i, terrain.externalSeaMask, 8)) {
       coastalLandCount += 1;
       coastalLandArea += metricWeight(grid, i);
@@ -77,13 +77,14 @@ export function deriveHydrology(world, terrain, options = {}) {
     return { landCells, landCount, landArea, coastalLandCount, coastalLandArea };
   });
   const { landCells, landCount, landArea, coastalLandCount, coastalLandArea } = prepared;
+  const flowUnit = hydrologyFlowUnit(grid, landArea, landCount);
 
   timed(profile, "assignFlowTargets", () => assignFlowTargets(topology, world.seaLevel, terrain, hydroElevation, flowTarget, flowDirection, flowSlope, depressionMask, landCells));
   landCells.sort((a, b) => hydroElevation[b] - hydroElevation[a]);
   timed(profile, "accumulateFlow", () => accumulateFlow(terrain, flowTarget, flowAccumulation, landCells));
 
-  const drainage = timed(profile, "assignDrainage", () => assignDrainage(grid, topology, terrain, flowTarget, flowAccumulation, drainageBasinId, watershedId, outletId, riverOutlet, endorheicBasin, endorheicSink, depressionMask, lakeCandidate, landCells));
-  const riverThreshold = Math.max(12, landCount * 0.002);
+  const drainage = timed(profile, "assignDrainage", () => assignDrainage(grid, topology, terrain, flowTarget, flowAccumulation, drainageBasinId, watershedId, outletId, riverOutlet, endorheicBasin, endorheicSink, depressionMask, lakeCandidate, landCells, flowUnit, landArea));
+  const riverThreshold = Math.max(12 * flowUnit, landArea * 0.002);
   timed(profile, "buildRivers", () => buildRivers(terrain, flowTarget, flowAccumulation, flowSlope, riverThreshold, riverMask, riverStrength, lakeCandidate, endorheicSink, landCells));
   if (diagnostics !== "none") {
     timed(profile, "assignRiverOrder", () => assignRiverOrder(terrain, flowTarget, flowAccumulation, riverMask, riverOrder, landCells));
@@ -204,7 +205,7 @@ function accumulateFlow(terrain, flowTarget, flowAccumulation, landCells) {
   }
 }
 
-function assignDrainage(grid, topology, terrain, flowTarget, flowAccumulation, drainageBasinId, watershedId, outletId, riverOutlet, endorheicBasin, endorheicSink, depressionMask, lakeCandidate, landCells) {
+function assignDrainage(grid, topology, terrain, flowTarget, flowAccumulation, drainageBasinId, watershedId, outletId, riverOutlet, endorheicBasin, endorheicSink, depressionMask, lakeCandidate, landCells, flowUnit, landArea) {
   const outletIds = new Map();
   const sinkIds = new Map();
   const basinSizes = new Map();
@@ -319,11 +320,11 @@ function assignDrainage(grid, topology, terrain, flowTarget, flowAccumulation, d
         endorheicSink[finalSink] = 1;
         depressionMask[finalSink] = 1;
       }
-      if (flowAccumulation[finalSink] >= Math.max(10, landCells.length * 0.0012) || terrain.inlandWaterCandidate[finalSink]) {
+      if (flowAccumulation[finalSink] >= Math.max(10 * flowUnit, landArea * 0.0012) || terrain.inlandWaterCandidate[finalSink]) {
         lakeCandidate[finalSink] = 1;
         if (terrain.landMask[finalSink]) {
           forEachHydrologyNeighbor8(topology, finalSink, (nid) => {
-            if (terrain.landMask[nid] && flowAccumulation[nid] >= Math.max(6, flowAccumulation[finalSink] * 0.35)) lakeCandidate[nid] = 1;
+            if (terrain.landMask[nid] && flowAccumulation[nid] >= Math.max(6 * flowUnit, flowAccumulation[finalSink] * 0.35)) lakeCandidate[nid] = 1;
           });
         }
       }
@@ -641,6 +642,11 @@ function pathArea(grid, path) {
   let total = 0;
   for (const id of path) total += metricWeight(grid, id);
   return total;
+}
+
+function hydrologyFlowUnit(grid, landArea, landCount) {
+  if (!isGraphBackedGrid(grid)) return 1;
+  return landArea / Math.max(1, landCount);
 }
 
 function shareValue(value, denominator) {
