@@ -6,6 +6,9 @@ export function readParams(elements) {
     plateCount: Number(elements.plateCount.value),
     timeScale: Number(elements.timeScale.value),
     resolution: elements.resolution.value,
+    topologyMode: elements.topologyMode?.value,
+    projectionMode: elements.projectionMode?.value,
+    faceSize: optionalNumber(elements.faceSize?.value),
     showBoundaries: elements.showBoundaries.checked,
     pipelineMode: elements.pipelineMode?.value ?? "geology-v2",
     ...readUrlOnlyParams(),
@@ -17,10 +20,14 @@ export function bindControlLabels(elements) {
     elements.waterLabel.textContent = `${elements.waterLevel.value}%`;
     elements.intensityLabel.textContent = `${Number(elements.intensity.value).toFixed(2)}x`;
     elements.platesLabel.textContent = elements.plateCount.value;
+    if (elements.faceSizeLabel) {
+      elements.faceSizeLabel.textContent = elements.faceSize?.value ? elements.faceSize.value : "自动";
+    }
   };
   elements.waterLevel.addEventListener("input", update);
   elements.intensity.addEventListener("input", update);
   elements.plateCount.addEventListener("input", update);
+  elements.faceSize?.addEventListener("change", update);
   update();
 }
 
@@ -74,4 +81,10 @@ function assignStringParam(target, key, value) {
 function assignNumberParam(target, key, value) {
   const numeric = Number(value);
   if (Number.isFinite(numeric)) target[key] = numeric;
+}
+
+function optionalNumber(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
 }
