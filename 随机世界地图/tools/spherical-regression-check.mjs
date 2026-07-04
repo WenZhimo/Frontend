@@ -42,6 +42,7 @@ const checks = [
   ["spherical-render-check:adapter-closed-basin", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_adapter_closed_basin.ppm", "mollweide", "256", "128", "adapter-closed-basin-id"]],
   ["spherical-render-backend-check", ["tools/spherical-render-backend-check.mjs"]],
   ["spherical-render-gate-check", ["tools/spherical-render-gate-check.mjs", seedText, String(smallFaceSize), "2", "128x64"]],
+  ["spherical-toolchain-smoke-check", ["tools/spherical-toolchain-smoke-check.mjs"]],
 ];
 
 const startedAt = Date.now();
@@ -149,6 +150,8 @@ function compactMetrics(parsed) {
     "sphericalRenderBackend",
     "rectangularRenderBackend",
     "webglDrawCalls",
+    "artifactScanValid",
+    "perfProfileValid",
     "baselineFaceSize",
     "maxLandMismatch",
     "maxPlateMismatch",
