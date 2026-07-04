@@ -47,6 +47,18 @@ const checks = [
     "--face-size",
     String(faceSize),
   ]],
+  ["resolution-check:cubed-sphere-production", [
+    "tools/resolution-check.mjs",
+    seedText,
+    "200",
+    "geology-v2",
+    "--topology",
+    "cubed-sphere",
+    "--projection",
+    "equirectangular",
+    "--face-size",
+    String(faceSize),
+  ]],
   ["spherical-sidecar-gate-check", ["tools/spherical-sidecar-gate-check.mjs", seedText, String(faceSize)]],
   ["spherical-world-stats-check", ["tools/spherical-world-stats-check.mjs", String(faceSize)]],
   ["spherical-resolution-gate-check", ["tools/spherical-resolution-gate-check.mjs", seedText, "2", `${smallFaceSize},${faceSize}`, "128x64"]],
@@ -792,6 +804,58 @@ function compactMetrics(name, parsed) {
       parsed.oceanAgeDiagnostics?.ridgeAgeResetShare;
     picked.longRunCubedSphereActiveVsInactiveBoundaryReliefRatio =
       parsed.transformDiagnostics?.activeVsInactiveBoundaryReliefRatio;
+  }
+  if (name === "resolution-check:cubed-sphere-production") {
+    const comparisons = parsed.comparisons ?? {};
+    const comparisonKeys = Object.keys(comparisons);
+    const comparisonValues = comparisonKeys.map((key) => comparisons[key]).filter(Boolean);
+    const maxComparisonMetric = (metric) => {
+      let max = 0;
+      for (const comparison of comparisonValues) {
+        const value = comparison?.[metric];
+        if (Number.isFinite(value)) max = Math.max(max, value);
+      }
+      return max;
+    };
+    const baseline = comparisons[parsed.baselineResolution] ?? comparisonValues[0] ?? null;
+    picked.resolutionCubedSpherePipelineMode = parsed.pipelineMode;
+    picked.resolutionCubedSphereTopologyMode = parsed.topologyMode;
+    picked.resolutionCubedSphereProjectionMode = parsed.projectionMode;
+    picked.resolutionCubedSphereFaceSize = parsed.faceSize;
+    picked.resolutionCubedSphereSteps = parsed.steps;
+    picked.resolutionCubedSphereSampleResolution = parsed.sampleResolution;
+    picked.resolutionCubedSphereBaselineResolution = parsed.baselineResolution;
+    picked.resolutionCubedSphereComparisonCount = comparisonKeys.length;
+    picked.resolutionCubedSphereMaxLandMismatch = maxComparisonMetric("landMismatchVsBaseline");
+    picked.resolutionCubedSphereMaxPlateMismatch = maxComparisonMetric("plateMismatchVsBaseline");
+    picked.resolutionCubedSphereMaxElevationRmse = maxComparisonMetric("elevationRmseVsBaseline");
+    picked.resolutionCubedSphereLandRatio = baseline?.landRatio;
+    picked.resolutionCubedSphereSeaRatio = baseline?.seaRatio;
+    picked.resolutionCubedSphereSeaLevel = baseline?.seaLevel;
+    picked.resolutionCubedSphereTopologyKind = baseline?.topologyDiagnostics?.topologyKind;
+    picked.resolutionCubedSphereNeighborConsistencyValid =
+      baseline?.topologyDiagnostics?.neighborConsistencyValid;
+    picked.resolutionCubedSphereFloodFillTopologyValid =
+      baseline?.topologyDiagnostics?.floodFillTopologyValid;
+    picked.resolutionCubedSphereConnectedComponentTopologyValid =
+      baseline?.topologyDiagnostics?.connectedComponentTopologyValid;
+    picked.resolutionCubedSphereTopologyManualAccessRisk =
+      baseline?.topologyDiagnostics?.topologyManualAccessRisk;
+    picked.resolutionCubedSphereTopologyMigrationCoverage =
+      baseline?.topologyDiagnostics?.topologyMigrationCoverage;
+    picked.resolutionCubedSphereHydrologyValid = baseline?.hydrologyDiagnostics?.hydrologyValid;
+    picked.resolutionCubedSphereSedimentBudgetError =
+      baseline?.sedimentBudgetDiagnostics?.sedimentBudgetError;
+    picked.resolutionCubedSphereSedimentStraightnessRisk =
+      baseline?.sedimentBudgetDiagnostics?.sedimentStraightnessRisk;
+    picked.resolutionCubedSpherePlateCheckerboardScore =
+      baseline?.boundaryDiagnostics?.plateCheckerboardScore;
+    picked.resolutionCubedSphereDepthAgeCorrelation =
+      baseline?.oceanAgeDiagnostics?.depthAgeCorrelation;
+    picked.resolutionCubedSphereRidgeAgeResetShare =
+      baseline?.oceanAgeDiagnostics?.ridgeAgeResetShare;
+    picked.resolutionCubedSphereActiveVsInactiveBoundaryReliefRatio =
+      baseline?.transformDiagnostics?.activeVsInactiveBoundaryReliefRatio;
   }
   if (name === "spherical-production-init-check") {
     picked.productionInitStageCount = parsed.stages?.length ?? 0;
