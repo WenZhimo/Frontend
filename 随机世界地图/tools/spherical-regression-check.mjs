@@ -577,5 +577,41 @@ function compactMetrics(parsed) {
     picked.climateOceanDepthFiniteShare = parsed.climate.oceanDepthFiniteShare;
     picked.climateOrographicBarrierFiniteShare = parsed.climate.orographicBarrierFiniteShare;
   }
+  if (parsed.defaultProduction) {
+    picked.defaultProductionTopologyMode = parsed.defaultProduction.topologyMode;
+    picked.defaultProductionProductionTopologyMode = parsed.defaultProduction.productionTopologyMode;
+    picked.defaultProductionGridKind = parsed.defaultProduction.gridKind;
+    picked.defaultProductionTopologyKind = parsed.defaultProduction.topologyKind;
+    picked.defaultProductionGraphBacked = parsed.defaultProduction.graphBacked;
+    picked.defaultProductionGridSize = parsed.defaultProduction.gridSize;
+    picked.defaultProductionFaceSize = parsed.defaultProduction.faceSize;
+    picked.defaultProductionHasDiagnosticSphericalWorld = parsed.defaultProduction.hasDiagnosticSphericalWorld;
+    picked.defaultProductionDiagnosticSidecarRole = parsed.defaultProduction.diagnosticSidecarRole;
+    picked.defaultProductionDiagnosticSidecarAuthoritative = parsed.defaultProduction.diagnosticSidecarAuthoritative;
+    picked.defaultProductionDiagnosticSidecarWritesProductionState = parsed.defaultProduction.diagnosticSidecarWritesProductionState;
+    picked.defaultProductionDiagnosticSidecarNonAuthoritative = parsed.defaultProduction.diagnosticSidecarNonAuthoritative;
+  }
+  if (parsed.adapterProduction) {
+    picked.adapterProductionTopologyMode = parsed.adapterProduction.topologyMode;
+    picked.adapterProductionProductionTopologyMode = parsed.adapterProduction.productionTopologyMode;
+    picked.adapterProductionGridKind = parsed.adapterProduction.gridKind;
+    picked.adapterProductionTopologyKind = parsed.adapterProduction.topologyKind;
+    picked.adapterProductionGraphBacked = parsed.adapterProduction.graphBacked;
+    picked.adapterProductionGridSize = parsed.adapterProduction.gridSize;
+    picked.adapterProductionFaceSize = parsed.adapterProduction.faceSize;
+    picked.adapterProductionStep = parsed.adapterProduction.step;
+    picked.adapterProductionLandRatio = parsed.adapterProduction.landRatio;
+    picked.adapterProductionSeaRatio = parsed.adapterProduction.seaRatio;
+  }
+  if (parsed.checks) {
+    picked.defaultCubedSphereProductionGridIsCubedSphere = parsed.checks.defaultCubedSphereProductionGridIsCubedSphere;
+    picked.defaultCubedSphereProductionGridGraphBacked = parsed.checks.defaultCubedSphereProductionGridGraphBacked;
+    picked.defaultCubedSphereHasNoLegacyDimensions = parsed.checks.defaultCubedSphereHasNoLegacyDimensions;
+    picked.defaultCubedSphereSidecarNonAuthoritative = parsed.checks.defaultCubedSphereSidecarNonAuthoritative;
+    picked.adapterProductionGridIsCubedSphere = parsed.checks.adapterProductionGridIsCubedSphere;
+    picked.adapterProductionGridGraphBacked = parsed.checks.adapterProductionGridGraphBacked;
+    picked.adapterHasNoLegacyDimensions = parsed.checks.adapterHasNoLegacyDimensions;
+    picked.adapterStatsFinite = parsed.checks.adapterStatsFinite;
+  }
   return picked;
 }
