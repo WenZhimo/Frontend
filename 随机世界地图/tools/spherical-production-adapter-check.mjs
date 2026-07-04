@@ -7,6 +7,10 @@ import { measureTopologyDiagnostics } from "../src/sim/topology.js";
 
 const faceSize = Math.max(2, Math.trunc(Number(process.argv[2] ?? 64)));
 const grid = createCubedSphereProductionGridAdapter({ faceSize });
+const legacyDimensionAttempt = createCubedSphereProductionGridAdapter({
+  faceSize,
+  includeLegacyDimensions: true,
+});
 const summary = summarizeProductionGridAdapter(grid);
 const topologyDiagnostics = measureTopologyDiagnostics({ grid });
 const firstCellNeighbors = [];
@@ -18,6 +22,11 @@ const result = {
   valid: true,
   ...summary,
   topologyDiagnostics,
+  legacyDimensionAttempt: {
+    hasWidth: Object.hasOwn(legacyDimensionAttempt, "width"),
+    hasHeight: Object.hasOwn(legacyDimensionAttempt, "height"),
+    rectangularIndexing: Boolean(legacyDimensionAttempt.topologyOptions?.rectangularIndexing),
+  },
   fieldNames: productionAdapterFieldNames(),
   firstCellNeighbors,
   notes: [
@@ -34,6 +43,8 @@ if (summary.cellCount !== summary.size) result.valid = false;
 if (summary.faceSize !== faceSize) result.valid = false;
 if (summary.faceCount !== 6) result.valid = false;
 if (summary.hasLegacyDimensions) result.valid = false;
+if (result.legacyDimensionAttempt.hasWidth || result.legacyDimensionAttempt.hasHeight) result.valid = false;
+if (result.legacyDimensionAttempt.rectangularIndexing) result.valid = false;
 if (summary.rectangularIndexing) result.valid = false;
 if (!summary.graphBacked) result.valid = false;
 if (summary.areaTotalError > 1e-5) result.valid = false;

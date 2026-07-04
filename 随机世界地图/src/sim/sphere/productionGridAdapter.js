@@ -150,7 +150,6 @@ const FIELD_SPECS = [
 
 export function createCubedSphereProductionGridAdapter({
   faceSize = 64,
-  includeLegacyDimensions = false,
   seedUint32 = 0,
 } = {}) {
   const sphericalGrid = createCubedSphereGrid(faceSize);
@@ -188,11 +187,6 @@ export function createCubedSphereProductionGridAdapter({
     edgeTangentY: sphericalGrid.edgeTangentY,
     edgeTangentZ: sphericalGrid.edgeTangentZ,
   };
-
-  if (includeLegacyDimensions) {
-    grid.width = sphericalGrid.faceSize;
-    grid.height = sphericalGrid.faceCount * sphericalGrid.faceSize;
-  }
 
   for (const [name, Type] of FIELD_SPECS) {
     grid[name] = new Type(sphericalGrid.size);
