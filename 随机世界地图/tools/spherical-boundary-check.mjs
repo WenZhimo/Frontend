@@ -58,16 +58,21 @@ function measureBoundaryTypeContinuity(grid, boundaryType) {
     for (let k = 0; k < count; k += 1) {
       const nid = grid.neighbors[start + k];
       if (boundaryType[nid] === 0) continue;
-      total += 1;
-      if (boundaryType[nid] === boundaryType[id]) same += 1;
+      const weight = edgeAreaWeight(grid, id, nid);
+      total += weight;
+      if (boundaryType[nid] === boundaryType[id]) same += weight;
       if (grid.face[nid] !== grid.face[id]) {
-        seamTotal += 1;
-        if (boundaryType[nid] === boundaryType[id]) seamSame += 1;
+        seamTotal += weight;
+        if (boundaryType[nid] === boundaryType[id]) seamSame += weight;
       }
     }
   }
   return {
-    sameTypeNeighborShare: same / Math.max(1, total),
-    faceSeamSameTypeNeighborShare: seamSame / Math.max(1, seamTotal),
+    sameTypeNeighborShare: same / Math.max(Number.EPSILON, total),
+    faceSeamSameTypeNeighborShare: seamSame / Math.max(Number.EPSILON, seamTotal),
   };
+}
+
+function edgeAreaWeight(grid, a, b) {
+  return ((grid.area?.[a] ?? 1) + (grid.area?.[b] ?? 1)) * 0.5;
 }
