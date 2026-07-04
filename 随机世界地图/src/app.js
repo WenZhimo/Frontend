@@ -3827,15 +3827,20 @@
     }
 
     if (rebuildDistance) {
-      while (head < tail) {
-        const id = queue[head++];
-        const nextDistance = ridgeDistance[id] + 1;
-        forEachNeighbor4ById(grid, id, (nid) => {
-          if (crustType[nid] !== CrustType.OCEANIC) return;
-          if (nextDistance >= ridgeDistance[nid]) return;
-          ridgeDistance[nid] = nextDistance;
-          queue[tail++] = nid;
-        });
+      const topology = topologyForGrid(grid);
+      if (isGraphBackedGrid(grid, topology)) {
+        rebuildGraphRidgeDistance(grid, topology, ridgeMask);
+      } else {
+        while (head < tail) {
+          const id = queue[head++];
+          const nextDistance = ridgeDistance[id] + 1;
+          forEachNeighbor4ById(grid, id, (nid) => {
+            if (crustType[nid] !== CrustType.OCEANIC) return;
+            if (nextDistance >= ridgeDistance[nid]) return;
+            ridgeDistance[nid] = nextDistance;
+            queue[tail++] = nid;
+          });
+        }
       }
       world.geologyV2RidgeDistanceInitialized = true;
     }
@@ -3866,6 +3871,96 @@
       });
       crustAge[id] = Math.min(1, total / weight);
     });
+  }
+
+  function rebuildGraphRidgeDistance(grid, topology, ridgeMask) {
+    const { size, crustType, ridgeDistance } = grid;
+    const heap = new CrustDistanceHeap(Math.max(16, size));
+    ridgeDistance.fill(Number.POSITIVE_INFINITY);
+
+    for (let id = 0; id < size; id += 1) {
+      if (!ridgeMask[id] || crustType[id] !== CrustType.OCEANIC) continue;
+      ridgeDistance[id] = 0;
+      heap.push(id, 0);
+    }
+
+    while (heap.length > 0) {
+      const current = heap.pop();
+      const id = current.id;
+      if (current.distance > ridgeDistance[id] + 1e-7) continue;
+      topology.forEachNeighbor(id, (nid, _slot, edgeLength = 1) => {
+        if (crustType[nid] !== CrustType.OCEANIC) return;
+        const next = ridgeDistance[id] + Math.max(1e-6, edgeLength);
+        if (next >= ridgeDistance[nid]) return;
+        ridgeDistance[nid] = next;
+        heap.push(nid, next);
+      });
+    }
+  }
+
+  function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+    return Boolean(
+      grid.topologyOptions?.graphBacked ||
+        topology?.topologyKind === "cubed-sphere" ||
+        grid.topologyKind === "cubed-sphere",
+    );
+  }
+
+  class CrustDistanceHeap {
+    constructor(capacity) {
+      this.ids = new Int32Array(capacity);
+      this.distances = new Float64Array(capacity);
+      this.length = 0;
+    }
+
+    push(id, distance) {
+      this.ensureCapacity(this.length + 1);
+      let index = this.length++;
+      while (index > 0) {
+        const parent = (index - 1) >> 1;
+        if (this.distances[parent] <= distance) break;
+        this.ids[index] = this.ids[parent];
+        this.distances[index] = this.distances[parent];
+        index = parent;
+      }
+      this.ids[index] = id;
+      this.distances[index] = distance;
+    }
+
+    pop() {
+      const id = this.ids[0];
+      const distance = this.distances[0];
+      const lastId = this.ids[--this.length];
+      const lastDistance = this.distances[this.length];
+      let index = 0;
+      while (true) {
+        const left = index * 2 + 1;
+        const right = left + 1;
+        if (left >= this.length) break;
+        let child = left;
+        if (right < this.length && this.distances[right] < this.distances[left]) child = right;
+        if (this.distances[child] >= lastDistance) break;
+        this.ids[index] = this.ids[child];
+        this.distances[index] = this.distances[child];
+        index = child;
+      }
+      if (this.length > 0) {
+        this.ids[index] = lastId;
+        this.distances[index] = lastDistance;
+      }
+      return { id, distance };
+    }
+
+    ensureCapacity(required) {
+      if (required <= this.ids.length) return;
+      const nextCapacity = Math.max(required, this.ids.length * 2);
+      const ids = new Int32Array(nextCapacity);
+      const distances = new Float64Array(nextCapacity);
+      ids.set(this.ids);
+      distances.set(this.distances);
+      this.ids = ids;
+      this.distances = distances;
+    }
   }
 
   function rebuildCrustCompatibilityFields(grid) {
