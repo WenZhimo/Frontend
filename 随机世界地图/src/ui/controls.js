@@ -79,6 +79,7 @@ function assignStringParam(target, key, value) {
 }
 
 function assignNumberParam(target, key, value) {
+  if (value === null || value === undefined || value === "") return;
   const numeric = Number(value);
   if (Number.isFinite(numeric)) target[key] = numeric;
 }

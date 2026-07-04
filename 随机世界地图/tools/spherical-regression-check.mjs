@@ -21,6 +21,7 @@ const checks = [
   ["spherical-production-init-check", ["tools/spherical-production-init-check.mjs", seedText, String(smallFaceSize)]],
   ["spherical-production-step-check", ["tools/spherical-production-step-check.mjs", seedText, String(smallFaceSize), "5"]],
   ["spherical-production-create-world-check", ["tools/spherical-production-create-world-check.mjs", seedText, String(smallFaceSize), "1"]],
+  ["ui-topology-controls-check", ["tools/ui-topology-controls-check.mjs"]],
   ["interface-check:cubed-sphere-production", [
     "tools/interface-check.mjs",
     seedText,
@@ -564,6 +565,15 @@ function compactMetrics(name, parsed) {
     "sphericalRenderBackend",
     "rectangularRenderBackend",
     "webglDrawCalls",
+    "uiTopologyControlsValid",
+    "uiSelectedTopologyMode",
+    "uiSelectedProjectionMode",
+    "uiSelectedFaceSize",
+    "uiSelectedGridKind",
+    "uiSelectedGraphBacked",
+    "uiDefaultTopologyMode",
+    "uiDefaultGridKind",
+    "uiDefaultGraphBacked",
     "artifactScanValid",
     "perfProfileValid",
     "baselineFaceSize",
@@ -701,6 +711,21 @@ function compactMetrics(name, parsed) {
       parsed.topologyDiagnostics?.connectedComponentTopologyValid;
     picked.productionAdapterTopologyManualAccessRisk = parsed.topologyDiagnostics?.topologyManualAccessRisk;
     picked.productionAdapterTopologyMigrationCoverage = parsed.topologyDiagnostics?.topologyMigrationCoverage;
+  }
+  if (name === "ui-topology-controls-check") {
+    picked.uiTopologyControlsValid = parsed.valid;
+    picked.uiSelectedTopologyMode = parsed.selectedWorld?.topologyMode;
+    picked.uiSelectedProjectionMode = parsed.selectedWorld?.projectionMode;
+    picked.uiSelectedFaceSize = parsed.selectedWorld?.faceSize;
+    picked.uiSelectedGridKind = parsed.selectedWorld?.gridKind;
+    picked.uiSelectedGraphBacked = parsed.selectedWorld?.graphBacked;
+    picked.uiSelectedGridSize = parsed.selectedWorld?.gridSize;
+    picked.uiDefaultTopologyMode = parsed.defaultWorld?.topologyMode;
+    picked.uiDefaultGridKind = parsed.defaultWorld?.gridKind;
+    picked.uiDefaultGraphBacked = parsed.defaultWorld?.graphBacked;
+    picked.uiControlTopologyPresent = parsed.controlsPresent?.topologyMode;
+    picked.uiControlProjectionPresent = parsed.controlsPresent?.projectionMode;
+    picked.uiControlFaceSizePresent = parsed.controlsPresent?.faceSize;
   }
   if (name === "spherical-authoritative-core-check") {
     picked.authoritativeProductionGridKind = parsed.before?.spherical?.productionGridKind;
