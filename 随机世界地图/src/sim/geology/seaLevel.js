@@ -249,14 +249,26 @@ function localSlope(grid, id) {
 }
 
 function legacyLocalSlope(grid, id) {
-  const { x, y } = xyOf(grid, id);
-  const left = sampleGridWrapped(grid, grid.elev, x - 1, y);
-  const right = sampleGridWrapped(grid, grid.elev, x + 1, y);
-  const upId = indexOf(grid, x, y - 1);
-  const downId = indexOf(grid, x, y + 1);
+  const { x, y } = legacySeaLevelXyOf(grid, id);
+  const left = legacySeaLevelSampleWrapped(grid, grid.elev, x - 1, y);
+  const right = legacySeaLevelSampleWrapped(grid, grid.elev, x + 1, y);
+  const upId = legacySeaLevelIndexOf(grid, x, y - 1);
+  const downId = legacySeaLevelIndexOf(grid, x, y + 1);
   const up = upId >= 0 ? grid.elev[upId] : grid.elev[id];
   const down = downId >= 0 ? grid.elev[downId] : grid.elev[id];
   return Math.hypot((right - left) * 0.5, (down - up) * 0.5);
+}
+
+function legacySeaLevelXyOf(grid, id) {
+  return xyOf(grid, id);
+}
+
+function legacySeaLevelIndexOf(grid, x, y) {
+  return indexOf(grid, x, y);
+}
+
+function legacySeaLevelSampleWrapped(grid, field, x, y) {
+  return sampleGridWrapped(grid, field, x, y);
 }
 
 function localRelief4(grid, id) {
