@@ -623,6 +623,47 @@ function compactMetrics(name, parsed) {
     picked.createWorldResourcesSized = parsed.checks.resourcesSized;
     picked.createWorldHydrologyValid = parsed.checks.hydrologyValid;
   }
+  if (name === "spherical-production-adapter-check") {
+    picked.productionAdapterKind = parsed.kind;
+    picked.productionAdapterTopologyApiKind = parsed.topologyApiKind;
+    picked.productionAdapterSize = parsed.size;
+    picked.productionAdapterFaceCount = parsed.faceCount;
+    picked.productionAdapterHasLegacyDimensions = parsed.hasLegacyDimensions;
+    picked.productionAdapterRectangularIndexing = parsed.rectangularIndexing;
+    picked.productionAdapterAllFieldsMatchSize = parsed.allFieldsMatchSize;
+    picked.productionAdapterFieldCount = parsed.fieldCount;
+    picked.productionAdapterNeighborSymmetryValid = parsed.neighborSymmetryValid;
+    picked.productionAdapterFirstCellNeighborCount = parsed.firstCellNeighbors?.length ?? 0;
+    picked.productionAdapterAreaMin = parsed.areaStats?.areaMin;
+    picked.productionAdapterAreaMax = parsed.areaStats?.areaMax;
+    picked.productionAdapterNorthAreaShare = parsed.hemisphereAreaStats?.northAreaShare;
+    picked.productionAdapterSouthAreaShare = parsed.hemisphereAreaStats?.southAreaShare;
+    picked.productionAdapterStatsWeightedMean = parsed.statsProbe?.weightedMean;
+    picked.productionAdapterStatsNorthShare = parsed.statsProbe?.northShare;
+    picked.productionAdapterStatsCategoryShareTotal = parsed.statsProbe?.categoryShareTotal;
+    picked.productionAdapterLegacyDimensionAttemptHasWidth = parsed.legacyDimensionAttempt?.hasWidth;
+    picked.productionAdapterLegacyDimensionAttemptHasHeight = parsed.legacyDimensionAttempt?.hasHeight;
+    picked.productionAdapterLegacyDimensionAttemptRectangularIndexing =
+      parsed.legacyDimensionAttempt?.rectangularIndexing;
+    picked.productionAdapterExternalSeaShare = parsed.connectivityProbe?.externalSeaShare;
+    picked.productionAdapterInlandWaterCandidateShare = parsed.connectivityProbe?.inlandWaterCandidateShare;
+    picked.productionAdapterClosedBasinCount = parsed.connectivityProbe?.closedBasinCount;
+    picked.productionAdapterDistanceFiniteShare = parsed.connectivityProbe?.distanceFiniteShare;
+    picked.productionAdapterLargestComponentIsExternal = parsed.connectivityProbe?.largestComponentIsExternal;
+    picked.productionAdapterDiagnosticSeaCandidateShare = parsed.diagnosticTerrainProbe?.seaCandidateShare;
+    picked.productionAdapterDiagnosticExternalSeaShare = parsed.diagnosticTerrainProbe?.externalSeaShare;
+    picked.productionAdapterDiagnosticInlandWaterCandidateShare =
+      parsed.diagnosticTerrainProbe?.inlandWaterCandidateShare;
+    picked.productionAdapterDiagnosticDistanceFiniteShare = parsed.diagnosticTerrainProbe?.distanceFiniteShare;
+    picked.productionAdapterDiagnosticElevationMean = parsed.diagnosticTerrainProbe?.elevationMean;
+    picked.productionAdapterTopologyNeighborConsistencyValid =
+      parsed.topologyDiagnostics?.neighborConsistencyValid;
+    picked.productionAdapterTopologyFloodFillValid = parsed.topologyDiagnostics?.floodFillTopologyValid;
+    picked.productionAdapterTopologyConnectedComponentValid =
+      parsed.topologyDiagnostics?.connectedComponentTopologyValid;
+    picked.productionAdapterTopologyManualAccessRisk = parsed.topologyDiagnostics?.topologyManualAccessRisk;
+    picked.productionAdapterTopologyMigrationCoverage = parsed.topologyDiagnostics?.topologyMigrationCoverage;
+  }
   if (name === "spherical-production-init-check") {
     picked.productionInitStageCount = parsed.stages?.length ?? 0;
     picked.productionInitFailedStageName = parsed.stages?.find((stage) => !stage.ok)?.name ?? null;
