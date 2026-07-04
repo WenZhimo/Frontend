@@ -56,7 +56,9 @@ const result = {
   checks: {
     cylindricalHasNoSphericalWorld: before.cylindrical.hasSphericalWorld === false,
     cubedSphereHasDiagnosticWorld: before.spherical.hasSphericalWorld === true,
-    productionGridStillCylindrical: before.spherical.productionGridKind === "cylindrical",
+    productionGridIsCubedSphere: before.spherical.productionGridIsCubedSphere === true,
+    productionGridGraphBacked: before.spherical.hasProductionGraphTopology === true,
+    productionGridMatchesSphericalSize: before.spherical.productionGridMatchesSphericalSize === true,
     adapterProductionGridIsCubedSphere: before.adapter.productionGridIsCubedSphere === true,
     adapterProductionGridGraphBacked: before.adapter.hasProductionGraphTopology === true,
     adapterProductionGridMatchesSphericalSize: before.adapter.productionGridMatchesSphericalSize === true,
@@ -65,9 +67,9 @@ const result = {
     diagnosticSphericalWorldAdvanced: after.spherical.sphericalMeanPlateDriftRadians > before.spherical.sphericalMeanPlateDriftRadians,
     adapterStatsStillPresent: Number.isFinite(after.adapter.landRatio) && Number.isFinite(after.adapter.seaRatio),
     productionStatsStillPresent: Number.isFinite(after.spherical.landRatio) && Number.isFinite(after.spherical.seaRatio),
-    diagnosticModeCorrectlyIdentified: gate.expectedDiagnosticMode === true,
+    authoritativeModeCorrectlyIdentified: gate.authoritativeCoreReady === true,
     experimentalAdapterCorrectlyIdentified: gate.expectedExperimentalAdapterMode === true,
-    authoritativeCoreNotPrematurelyClaimed: gate.authoritativeCoreReady === false,
+    noAuthoritativeBlockers: gate.blockers.length === 0,
   },
   authorityChecks: gate.authorityChecks,
 };
@@ -147,7 +149,6 @@ function evaluateAuthoritativeGate(before, after) {
     authorityChecks.diagnosticWorldAdvanced;
 
   const expectedExperimentalAdapterMode =
-    expectedDiagnosticMode &&
     authorityChecks.adapterProductionModeExplicit &&
     authorityChecks.adapterUsesCubedSphereGrid &&
     authorityChecks.adapterGridMatchesSphericalSize &&
