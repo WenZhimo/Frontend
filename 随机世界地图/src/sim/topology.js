@@ -1,3 +1,5 @@
+import { createSphericalTopology } from "./sphere/topology.js";
+
 export function createTopology(width, height, options = {}) {
   const kind = options.kind ?? "cylindrical";
   const wrapXEnabled = options.wrapX ?? true;
@@ -224,7 +226,9 @@ export function createTopology(width, height, options = {}) {
 
 export function topologyForGrid(grid) {
   if (!grid.topology) {
-    grid.topology = createTopology(grid.width, grid.height, grid.topologyOptions);
+    grid.topology = grid.topologyKind === "cubed-sphere"
+      ? createSphericalTopology(grid)
+      : createTopology(grid.width, grid.height, grid.topologyOptions);
   }
   return grid.topology;
 }

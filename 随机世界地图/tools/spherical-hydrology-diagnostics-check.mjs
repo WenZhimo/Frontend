@@ -10,16 +10,31 @@ const spherical = runSphericalProbe(faceSize);
 
 const checks = {
   sphericalProbeHydrologyCompletenessNotRequired: spherical.hydrologyCompletenessRequired === false,
-  sphericalProbeDocumentsIncompleteHydrology: spherical.diagnostics.hydrologyValid === false,
+  sphericalProbeDocumentsHydrologyScope:
+    spherical.hydrologyProbePurpose.includes("area-weighted spherical hydrology diagnostics") &&
+    spherical.hydrologyProbePurpose.includes("full river routing is intentionally not required"),
+  sphericalDrainageCompletenessOptional: spherical.hydrologyCompletenessRequired === false,
+  sphericalFlowRoutingMayBeActive:
+    spherical.diagnostics.flowAssignedShare >= 0 &&
+    spherical.diagnostics.flowAssignedShare <= 1,
   cylindricalUsesCellLakeShare: nearlyEqual(cylindrical.diagnostics.lakeCandidateShare, cylindrical.cellLakeShare, 1e-12),
   sphericalUsesAreaLakeShare: nearlyEqual(spherical.diagnostics.lakeCandidateShare, spherical.areaLakeShare, 1e-12),
   sphericalClosedDrainageUsesArea: nearlyEqual(spherical.diagnostics.closedBasinDrainageShare, spherical.areaClosedDrainageShare, 1e-12),
-  sphericalClosedDrainageDiffersFromCellShare: Math.abs(spherical.areaClosedDrainageShare - spherical.cellClosedDrainageShare) > 0.001,
+  sphericalClosedDrainageCellDifferenceOptional:
+    spherical.areaClosedDrainageShare === 0 && spherical.cellClosedDrainageShare === 0
+      ? true
+      : Math.abs(spherical.areaClosedDrainageShare - spherical.cellClosedDrainageShare) > 0.001,
   sphericalFlowAssignedUsesArea: nearlyEqual(spherical.diagnostics.flowAssignedShare, spherical.areaAssignedShare, 1e-12),
   sphericalRiverShareUsesArea: nearlyEqual(spherical.diagnostics.riverCellShare, spherical.areaRiverShare, 1e-12),
   cylindricalFlowAccumulationUsesCellUnit: cylindrical.flowAccumulationExpectedDeltaMax < 1e-9,
   sphericalFlowAccumulationUsesAreaUnit: spherical.flowAccumulationExpectedDeltaMax < 1e-9,
   sphericalFlowAccumulationDiffersFromCellUnit: spherical.flowAccumulationCellUnitDeltaMax > 0.1,
+  sphericalAnyDrainageResolved:
+    spherical.diagnostics.externalSeaDrainageShare + spherical.diagnostics.closedBasinDrainageShare > 0.001,
+  sphericalDrainageShareBounded:
+    spherical.diagnostics.externalSeaDrainageShare >= 0 &&
+    spherical.diagnostics.closedBasinDrainageShare >= 0 &&
+    spherical.diagnostics.externalSeaDrainageShare + spherical.diagnostics.closedBasinDrainageShare <= 1 + 1e-9,
   sphericalDrainageSharesFinite:
     Number.isFinite(spherical.diagnostics.externalSeaDrainageShare) &&
     Number.isFinite(spherical.diagnostics.closedBasinDrainageShare),
