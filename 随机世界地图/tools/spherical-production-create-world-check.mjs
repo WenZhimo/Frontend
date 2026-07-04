@@ -47,6 +47,8 @@ const checks = {
   defaultCubedSphereHasNoLegacyDimensions: !Object.hasOwn(defaultCubedSphere.grid, "width")
     && !Object.hasOwn(defaultCubedSphere.grid, "height"),
   defaultCubedSphereKeepsDiagnosticSidecar: defaultCubedSphere.sphericalWorld?.kind === "spherical-experimental-world",
+  defaultCubedSphereSidecarNonAuthoritative: defaultCubedSphere.grid.kind !== defaultCubedSphere.sphericalWorld?.kind
+    && defaultCubedSphere.grid.size === defaultCubedSphere.sphericalGrid?.size,
   adapterProductionGridIsCubedSphere: adapter.grid.topologyKind === "cubed-sphere",
   adapterProductionGridGraphBacked: adapter.grid.topologyOptions?.graphBacked === true,
   adapterHasNoLegacyDimensions: !Object.hasOwn(adapter.grid, "width") && !Object.hasOwn(adapter.grid, "height"),
@@ -74,6 +76,8 @@ const result = {
     gridSize: defaultCubedSphere.grid.size,
     faceSize: defaultCubedSphere.grid.faceSize,
     hasDiagnosticSphericalWorld: Boolean(defaultCubedSphere.sphericalWorld),
+    diagnosticSidecarKind: defaultCubedSphere.sphericalWorld?.kind ?? null,
+    diagnosticSidecarNonAuthoritative: checks.defaultCubedSphereSidecarNonAuthoritative,
   },
   adapterProduction: {
     topologyMode: adapter.params.topologyMode,
