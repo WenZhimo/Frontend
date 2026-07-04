@@ -84,6 +84,11 @@ export function createExperimentalWebGlMapRenderer(canvas) {
 
   function render(world) {
     const { grid } = world;
+    if (isGraphBackedGrid(grid)) {
+      throw new Error(
+        "Experimental WebGL2 renderer only accepts rectangular grids; graph-backed spherical grids must use CPU/projection rendering.",
+      );
+    }
     ensureSize(grid.width, grid.height);
     elevationUpload.set(grid.elev);
     writeBoundaryOverlay(world, boundaryUpload);
@@ -156,6 +161,10 @@ function writeOverlayPixel(upload, offset, r, g, b, alpha) {
   upload[offset + 1] = g;
   upload[offset + 2] = b;
   upload[offset + 3] = Math.round(Math.max(0, Math.min(1, alpha)) * 255);
+}
+
+function isGraphBackedGrid(grid) {
+  return Boolean(grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere");
 }
 
 function getWebGl2Context(canvas) {
