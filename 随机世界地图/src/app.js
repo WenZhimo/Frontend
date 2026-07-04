@@ -5241,6 +5241,7 @@
       scratch2,
       scratch3,
     } = grid;
+    const topology = topologyForGrid(grid);
 
     const refreshDistance = !world.geologyV2MarginDistanceInitialized || world.step % 4 === 0;
     if (refreshDistance) {
@@ -5252,7 +5253,7 @@
 
       forEachGridCell(grid, (id) => {
         let coast = false;
-        forEachNeighbor4ById(grid, id, (nid) => {
+        visitMarginNeighbors(grid, topology, id, (nid) => {
           if (landMask[nid] !== landMask[id]) coast = true;
         });
         if (coast) coastMask[id] = 1;
@@ -5368,18 +5369,31 @@
       grid.abyssalPlain,
     ];
     const { scratch } = grid;
+    const topology = topologyForGrid(grid);
     for (const field of fields) {
       scratch.set(field);
       forEachGridCell(grid, (id) => {
         let total = scratch[id] * 2.5;
         let weight = 2.5;
-        forEachNeighbor4ById(grid, id, (nid) => {
+        visitMarginNeighbors(grid, topology, id, (nid) => {
           total += scratch[nid];
           weight += 1;
         });
         field[id] = Math.max(0, Math.min(1, total / weight));
       });
     }
+  }
+
+  function visitMarginNeighbors(grid, topology, id, visit) {
+    if (isGraphBackedGrid(grid, topology)) {
+      topology.forEachNeighbor(id, (nid) => {
+        visit(nid);
+      });
+      return;
+    }
+    forEachNeighbor4ById(grid, id, (nid) => {
+      visit(nid);
+    });
   }
 
   function clampMarginFields(grid) {
