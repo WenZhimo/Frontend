@@ -1,4 +1,5 @@
 import { getClimateInputs, getHydrologyInputs, getResourceInputs, getTerrainDerived } from "../src/sim/derived/terrain.js";
+import { stepWorld } from "../src/sim/evolution.js";
 import { updatePlateBoundaries } from "../src/sim/geology/boundaries.js";
 import { rasterizePlatesV2 } from "../src/sim/geology/plates.js";
 import { hashSeed } from "../src/sim/prng.js";
@@ -50,6 +51,9 @@ runStage("updateSeaLevel", () => updateSeaLevel(world));
 runStage("analyzeWorld", () => {
   world.stats = analyzeWorld(world);
 });
+runStage("stepWorld:1", () => {
+  stepWorld(world);
+});
 
 let terrain = null;
 let climate = null;
@@ -71,6 +75,7 @@ runStage("getResourceInputs", () => {
 const checks = {
   gridIsCubedSphere: grid.topologyKind === "cubed-sphere",
   graphBacked: grid.topologyOptions?.graphBacked === true,
+  stepAdvanced: world.step === 1,
   landRatioFinite: Number.isFinite(world.stats.landRatio),
   seaLevelFinite: Number.isFinite(world.seaLevel),
   terrainSized: terrain?.relativeElevation?.length === grid.size,

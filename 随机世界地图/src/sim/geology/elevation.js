@@ -107,9 +107,19 @@ function ensureGeologyElevationNoise(world) {
   for (let i = 0; i < size; i += 1) {
     const x = i % width;
     const y = Math.floor(i / width);
-    const sphere = spherePointForCell(grid, x, y);
+    const sphere = spherePointForGridCell(grid, i, x, y);
     geologyMicroNoise[i] = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
     geologyBroadNoise[i] = textureNoise(sphere.x * 2.2 + 7, sphere.y * 2.2 - 5, sphere.z * 2.2 + 17, 3, 2, 0.48);
   }
   world.geologyElevationNoiseInitialized = true;
+}
+
+function spherePointForGridCell(grid, id, x, y) {
+  const px = grid.positionX?.[id];
+  const py = grid.positionY?.[id];
+  const pz = grid.positionZ?.[id];
+  if (Number.isFinite(px) && Number.isFinite(py) && Number.isFinite(pz)) {
+    return { x: px, y: py, z: pz };
+  }
+  return spherePointForCell(grid, x, y);
 }
