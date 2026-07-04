@@ -53,7 +53,7 @@ export function updateGeologicSeaLevel(world) {
     geologicSeaLevelOffset: offset,
     targetGeologicSeaLevelOffset: diagnostics.targetGeologicSeaLevelOffset,
     seaLevelChangeRate: change,
-    coastalSensitivityMean: average(world.grid.coastalSensitivity),
+    coastalSensitivityMean: average(world.grid.coastalSensitivity, world.grid),
     landShareAfterGeologicOffset: landAfter,
     geologicSeaLevelLandShareDelta: landAfter - diagnostics.landShareBeforeGeologicOffset,
   };
@@ -98,8 +98,11 @@ function computeGeologicSeaLevelSignals(world, baseSeaLevel) {
   let oldCapacitySum = 0;
   let sedimentSum = 0;
   let trenchSum = 0;
+  let totalAreaValue = 0;
 
   for (let i = 0; i < grid.size; i += 1) {
+    const area = metricArea(grid, i);
+    totalAreaValue += area;
     const oceanic = grid.crustType[i] === CrustType.OCEANIC;
     const age = grid.crustAge[i];
     const youngOcean = oceanic && age < 0.18;
@@ -136,15 +139,15 @@ function computeGeologicSeaLevelSignals(world, baseSeaLevel) {
     grid.trenchCapacitySignal[i] = trenchCapacity;
 
     if (oceanic) {
-      oceanicCount += 1;
-      if (youngOcean) youngOceanCount += 1;
-      if (oldOcean) oldOceanCount += 1;
-      ridgeSum += ridgeSignal;
-      oldCapacitySum += oldCapacity;
-      trenchSum += trenchCapacity;
+      oceanicCount += area;
+      if (youngOcean) youngOceanCount += area;
+      if (oldOcean) oldOceanCount += area;
+      ridgeSum += ridgeSignal * area;
+      oldCapacitySum += oldCapacity * area;
+      trenchSum += trenchCapacity * area;
     }
     if (grid.elev[i] < baseSeaLevel || grid.continentalShelf[i] > 0.01 || grid.sedimentWedge[i] > 0.01) {
-      sedimentSum += sedimentDisplacement;
+      sedimentSum += sedimentDisplacement * area;
     }
   }
 
@@ -154,7 +157,7 @@ function computeGeologicSeaLevelSignals(world, baseSeaLevel) {
   const ridgeMean = ridgeSum * invOceanic;
   const oldCapacityMean = oldCapacitySum * invOceanic;
   const trenchMean = trenchSum * invOceanic;
-  const sedimentMean = sedimentSum / grid.size;
+  const sedimentMean = sedimentSum / Math.max(totalAreaValue, Number.EPSILON);
   const ridgeN = normalizeCentered(ridgeMean, BASELINES.ridge, BASELINES.ridgeScale);
   const youngN = normalizeCentered(youngOceanShare, BASELINES.young, BASELINES.youngScale);
   const oldN = normalizeCentered(oldCapacityMean, BASELINES.old, BASELINES.oldScale);
@@ -229,11 +232,14 @@ function writeCoastalSensitivity(world, seaLevel) {
 function coastalFlipRisk(grid, seaLevel, change) {
   const baseBand = 0.018;
   let sum = 0;
+  let weight = 0;
   for (let i = 0; i < grid.size; i += 1) {
+    const area = metricArea(grid, i);
     const potential = clamp01((Math.abs(change) * 8 + baseBand - Math.abs(grid.elev[i] - seaLevel)) / baseBand);
-    sum += grid.coastalSensitivity[i] * potential;
+    sum += grid.coastalSensitivity[i] * potential * area;
+    weight += area;
   }
-  return sum / grid.size;
+  return sum / Math.max(weight, Number.EPSILON);
 }
 
 function localSlope(grid, id) {
@@ -289,14 +295,29 @@ function visitLocalReliefNeighbors(grid, topology, id, visit) {
 
 function shareLand(grid, seaLevel) {
   let land = 0;
-  for (let i = 0; i < grid.size; i += 1) if (grid.elev[i] >= seaLevel) land += 1;
-  return land / grid.size;
+  let total = 0;
+  for (let i = 0; i < grid.size; i += 1) {
+    const area = metricArea(grid, i);
+    total += area;
+    if (grid.elev[i] >= seaLevel) land += area;
+  }
+  return land / Math.max(total, Number.EPSILON);
 }
 
-function average(field) {
+function average(field, grid = null) {
   let sum = 0;
-  for (let i = 0; i < field.length; i += 1) sum += field[i];
-  return sum / field.length;
+  let weight = 0;
+  for (let i = 0; i < field.length; i += 1) {
+    const area = metricArea(grid, i);
+    sum += field[i] * area;
+    weight += area;
+  }
+  return sum / Math.max(weight, Number.EPSILON);
+}
+
+function metricArea(grid, id) {
+  const area = grid?.area?.[id];
+  return Number.isFinite(area) && area > 0 ? area : 1;
 }
 
 function normalizeCentered(value, baseline, scale) {
