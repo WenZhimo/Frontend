@@ -43,13 +43,25 @@ const maxOrogenySeamDelta = Math.max(0, ...activeFields.map((metric) => metric.s
 const nonFiniteFields = Object.entries(fieldMetrics)
   .filter(([, metric]) => metric.finiteShare !== 1)
   .map(([name]) => name);
+const orogenyCoreField = maxField(grid.activeOrogeny, grid.oldOrogeny, grid.orogeny);
+const mountainLifecycleField = maxField(
+  grid.activeOrogeny,
+  grid.oldOrogeny,
+  grid.orogeny,
+  grid.mountainBelt,
+  grid.mountainAxis,
+);
 
 const metrics = {
+  orogenyProbePurpose: "spherical mountain/orogeny lifecycle diagnostics; strong core orogeny may be dormant in weak short-run samples when mountain proxy fields are active",
+  orogenyCoreStrongPresenceRequired: false,
   topologyKind: grid.topologyKind ?? null,
   graphBacked: Boolean(grid.topology?.graphBacked || grid.topologyOptions?.graphBacked),
   faceSize,
   steps,
   cellCount: grid.size,
+  orogenyCoreCoverage: weightedCoverage(grid, orogenyCoreField, 0.016),
+  orogenyCoreTraceCoverage: weightedCoverage(grid, orogenyCoreField, 0.00005),
   activeOrogenyCoverage: weightedCoverage(grid, grid.activeOrogeny, 0.016),
   oldOrogenyCoverage: weightedCoverage(grid, grid.oldOrogeny, 0.016),
   orogenyCoverage: weightedCoverage(grid, grid.orogeny, 0.016),
@@ -58,7 +70,8 @@ const metrics = {
   mountainHeightCoverage: weightedCoverage(grid, grid.mountainHeight, 0.002),
   forelandBasinCoverage: weightedCoverage(grid, grid.forelandBasin, 0.016),
   orogenicSedimentSupplyCoverage: weightedCoverage(grid, grid.orogenicSedimentSupply, 0.0002),
-  mountainSystemCoverage: weightedCoverage(grid, maxField(grid.activeOrogeny, grid.oldOrogeny, grid.orogeny, grid.mountainBelt, grid.mountainAxis), 0.016),
+  mountainLifecycleProxyCoverage: weightedCoverage(grid, mountainLifecycleField, 0.016),
+  mountainSystemCoverage: weightedCoverage(grid, mountainLifecycleField, 0.016),
   activeLifecycleCoverage: weightedCoverage(grid, maxField(grid.activeOrogeny, grid.orogeny), 0.00005),
   oldLifecycleCoverage: weightedCoverage(grid, grid.oldOrogeny, 0.00005),
   oldReliefComparisonCoverage: weightedCoverage(grid, grid.oldOrogeny, 0.016),
@@ -81,15 +94,25 @@ const metrics = {
   orogenicSedimentBudget: weightedMean(grid, grid.orogenicSedimentSupply) / Math.max(0.000001, weightedMean(grid, grid.sediment)),
   maxOrogenySeamRatio,
   maxOrogenySeamDelta,
+  mountainLifecycleFieldCount: activeFields.length,
   activeOrogenyFieldCount: activeFields.length,
   nonFiniteFields,
 };
+metrics.orogenyCoreDormantAllowed =
+  metrics.orogenyCoreCoverage < 0.001 &&
+  metrics.orogenyCoreTraceCoverage > 0.0005 &&
+  metrics.mountainLifecycleProxyCoverage > 0.02;
+metrics.orogenyLifecycleUsesMountainProxy =
+  metrics.mountainLifecycleProxyCoverage > Math.max(metrics.orogenyCoreCoverage, 0.02);
 
 const checks = {
   cubedSphereGrid: metrics.topologyKind === "cubed-sphere",
   graphBacked: metrics.graphBacked,
   finiteOrogenyFields: metrics.nonFiniteFields.length === 0,
-  orogenyFieldsActive: metrics.activeOrogenyFieldCount >= 4,
+  mountainLifecycleFieldsActive: metrics.mountainLifecycleFieldCount >= 4,
+  orogenyCoreDormancyExplained: metrics.orogenyCoreCoverage > 0.001 || metrics.orogenyCoreDormantAllowed,
+  strongOrogenyCoreOptional: !metrics.orogenyCoreStrongPresenceRequired || metrics.orogenyCoreCoverage > 0.001,
+  orogenyFieldsActive: metrics.mountainLifecycleFieldCount >= 4,
   mountainSystemPresent: metrics.mountainSystemCoverage > 0.02,
   activeLifecycleTracePresent: metrics.activeLifecycleCoverage > 0.0005,
   mountainInterfacePresent: metrics.mountainAxisCoverage > 0.005 && metrics.mountainHeightCoverage > 0.001,
