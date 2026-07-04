@@ -7703,10 +7703,10 @@
 
     const { x, y } = xyOf(grid, id);
     const center = field[id];
-    const left = finiteSample(grid, field, x - 1, y, center);
-    const right = finiteSample(grid, field, x + 1, y, center);
-    const up = finiteSample(grid, field, x, y - 1, center);
-    const down = finiteSample(grid, field, x, y + 1, center);
+    const left = legacyFiniteSample(grid, field, x - 1, y, center);
+    const right = legacyFiniteSample(grid, field, x + 1, y, center);
+    const up = legacyFiniteSample(grid, field, x, y - 1, center);
+    const down = legacyFiniteSample(grid, field, x, y + 1, center);
     return Math.hypot((right - left) * 0.5, (down - up) * 0.5);
   }
 
@@ -7783,10 +7783,10 @@
       const contrast = localRelief(grid, field, id);
       if (contrast < 0.012) return;
 
-      const horizontal = bandScore(grid, field, x, y, 1, 0, 0, 1);
-      const vertical = bandScore(grid, field, x, y, 0, 1, 1, 0);
-      const diagA = bandScore(grid, field, x, y, 1, 1, 1, -1);
-      const diagB = bandScore(grid, field, x, y, 1, -1, 1, 1);
+      const horizontal = legacyBandScore(grid, field, x, y, 1, 0, 0, 1);
+      const vertical = legacyBandScore(grid, field, x, y, 0, 1, 1, 0);
+      const diagA = legacyBandScore(grid, field, x, y, 1, 1, 1, -1);
+      const diagB = legacyBandScore(grid, field, x, y, 1, -1, 1, 1);
       const directionalRisk = Math.max(horizontal, vertical, diagA, diagB);
       if (directionalRisk <= 0) return;
 
@@ -7880,30 +7880,30 @@
     };
   }
 
-  function bandScore(grid, field, x, y, alongDx, alongDy, perpDx, perpDy) {
+  function legacyBandScore(grid, field, x, y, alongDx, alongDy, perpDx, perpDy) {
     const id = indexOf(grid, x, y);
     if (id < 0) return 0;
     const value = field[id];
     const along =
-      similarity(grid, field, x + alongDx, y + alongDy, value) *
-      similarity(grid, field, x - alongDx, y - alongDy, value);
+      legacySimilarity(grid, field, x + alongDx, y + alongDy, value) *
+      legacySimilarity(grid, field, x - alongDx, y - alongDy, value);
     const cross =
-      contrastAgainst(grid, field, x + perpDx, y + perpDy, value) *
-      contrastAgainst(grid, field, x - perpDx, y - perpDy, value);
+      legacyContrastAgainst(grid, field, x + perpDx, y + perpDy, value) *
+      legacyContrastAgainst(grid, field, x - perpDx, y - perpDy, value);
     return along * cross;
   }
 
-  function similarity(grid, field, x, y, value) {
+  function legacySimilarity(grid, field, x, y, value) {
     const sample = sampleGridWrapped(grid, field, x, y);
     return Number.isFinite(sample) ? clamp01(1 - Math.abs(sample - value) / 0.018) : 0;
   }
 
-  function contrastAgainst(grid, field, x, y, value) {
+  function legacyContrastAgainst(grid, field, x, y, value) {
     const sample = sampleGridWrapped(grid, field, x, y);
     return Number.isFinite(sample) ? smoothstep(0.012, 0.045, Math.abs(sample - value)) : 0;
   }
 
-  function finiteSample(grid, field, x, y, fallback) {
+  function legacyFiniteSample(grid, field, x, y, fallback) {
     const sample = sampleGridWrapped(grid, field, x, y);
     return Number.isFinite(sample) ? sample : fallback;
   }
@@ -7941,7 +7941,7 @@
     return t * t * (3 - 2 * t);
   }
 
-  function localAverage8(grid, field, x, y) {
+  function legacyLocalAverage8(grid, field, x, y) {
     const id = indexOf(grid, x, y);
     if (id < 0) return 0;
     return localAverage8ById(grid, field, id);
