@@ -12,8 +12,10 @@ export function createMapRenderer(canvas, options = {}) {
     },
     render(world) {
       backend.render(world);
-      world.renderBackend = backend.kind;
-      if (backend.fallbackReason) world.renderFallbackReason = backend.fallbackReason;
+      if (!world.renderBackend) world.renderBackend = backend.kind;
+      if (backend.fallbackReason && !world.renderFallbackReason) {
+        world.renderFallbackReason = backend.fallbackReason;
+      }
     },
   };
 }
