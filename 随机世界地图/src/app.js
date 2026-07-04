@@ -8701,6 +8701,7 @@
 
   function normalizeProductionTopologyMode(params) {
     if (
+      params.topologyMode === TopologyMode.CUBED_SPHERE ||
       params.productionTopologyMode === ProductionTopologyMode.CUBED_SPHERE_ADAPTER ||
       params.useSphericalProductionGrid === true
     ) {
