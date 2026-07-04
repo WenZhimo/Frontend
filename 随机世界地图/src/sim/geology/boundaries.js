@@ -154,7 +154,7 @@ function visitBoundaryCoherenceNeighbors(grid, topology, id, visit) {
 }
 
 function legacyCheckerboardRiskAt(grid, id) {
-  const { x, y } = xyOf(grid, id);
+  const { x, y } = legacyBoundaryXyOf(grid, id);
   let risk = 0;
   for (let dy = -1; dy <= 0; dy += 1) {
     const y0 = y + dy;
@@ -162,10 +162,10 @@ function legacyCheckerboardRiskAt(grid, id) {
     for (let dx = -1; dx <= 0; dx += 1) {
       const x0 = x + dx;
       const x1 = x + dx + 1;
-      const aId = indexOf(grid, x0, y0);
-      const bId = indexOf(grid, x1, y0);
-      const cId = indexOf(grid, x0, y1);
-      const dId = indexOf(grid, x1, y1);
+      const aId = legacyBoundaryIndexOf(grid, x0, y0);
+      const bId = legacyBoundaryIndexOf(grid, x1, y0);
+      const cId = legacyBoundaryIndexOf(grid, x0, y1);
+      const dId = legacyBoundaryIndexOf(grid, x1, y1);
       if (aId < 0 || bId < 0 || cId < 0 || dId < 0) continue;
       const a = grid.plate[aId];
       const b = grid.plate[bId];
@@ -175,6 +175,14 @@ function legacyCheckerboardRiskAt(grid, id) {
     }
   }
   return risk;
+}
+
+function legacyBoundaryXyOf(grid, id) {
+  return xyOf(grid, id);
+}
+
+function legacyBoundaryIndexOf(grid, x, y) {
+  return indexOf(grid, x, y);
 }
 
 function graphCheckerboardRiskAt(grid, topology, id) {
