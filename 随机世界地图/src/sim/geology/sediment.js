@@ -54,7 +54,7 @@ export function updateSedimentBudget(world) {
     scratch3,
   } = grid;
   const dt = world.timeScaleFactor;
-  const massBefore = sumField(sediment);
+  const massBefore = sumField(grid, sediment);
 
   erosionSource.fill(0);
   sedimentFlux.fill(0);
@@ -240,9 +240,9 @@ export function updateSedimentBudget(world) {
   }
   softenSedimentDeposits(grid, seaLevel);
 
-  const massAfter = sumField(sediment);
+  const massAfter = sumField(grid, sediment);
   const massDelta = massAfter - massBefore;
-  const residualFlux = sumField(scratch);
+  const residualFlux = sumField(grid, scratch);
   const budgetErrorValue = produced
     ? Math.abs(produced - deposited - dissipated - residualFlux) / Math.max(0.000001, produced)
     : 0;
@@ -266,15 +266,15 @@ export function updateSedimentBudget(world) {
 
 export function getSedimentBudgetDiagnostics(world) {
   return world.sedimentBudgetDiagnostics ?? measureSedimentBudget(world, {
-    produced: sumField(world.grid.erosionSource),
-    deposited: sumField(world.grid.sedimentSink),
+    produced: sumField(world.grid, world.grid.erosionSource),
+    deposited: sumField(world.grid, world.grid.sedimentSink),
     dissipated: 0,
-    compactionTotal: sumField(world.grid.sedimentCompaction),
-    residualFlux: sumField(world.grid.sedimentFlux),
-    massBefore: sumField(world.grid.sediment),
-    massAfter: sumField(world.grid.sediment),
+    compactionTotal: sumField(world.grid, world.grid.sedimentCompaction),
+    residualFlux: sumField(world.grid, world.grid.sedimentFlux),
+    massBefore: sumField(world.grid, world.grid.sediment),
+    massAfter: sumField(world.grid, world.grid.sediment),
     massDelta: 0,
-    budgetErrorValue: averageField(world.grid.sedimentBudgetError),
+    budgetErrorValue: averageField(world.grid, world.grid.sedimentBudgetError),
   });
 }
 
@@ -304,6 +304,7 @@ function measureSedimentBudget(world, totals) {
     mountainBelt,
   } = grid;
 
+  const totalAreaValue = totalArea(grid);
   let mountainErosion = 0;
   let passiveMarginDeposition = 0;
   let basinDeposition = 0;
@@ -316,6 +317,7 @@ function measureSedimentBudget(world, totals) {
   let shallowSea = 0;
 
   for (let i = 0; i < size; i += 1) {
+    const area = metricArea(grid, i);
     const sink = sedimentSink[i];
     const mountainMask = Math.max(activeOrogeny[i], oldOrogeny[i], mountainBelt[i]);
     mountainErosion += erosionSource[i] * clamp01(mountainMask * 3.2);
@@ -325,22 +327,22 @@ function measureSedimentBudget(world, totals) {
     inlandBasinDeposition += sink * (inlandWaterCandidate[i] ? 1 : 0);
     shelfDeposition += sink * clamp01(continentalShelf[i] + continentalRise[i] + sedimentWedge[i]);
     abyssalDeposition += sink * clamp01(abyssalPlain[i]);
-    if (sediment[i] > maxSedimentForCell(grid, i, grid.elev[i] - world.seaLevel) * 0.92) overfilled += 1;
+    if (sediment[i] > maxSedimentForCell(grid, i, grid.elev[i] - world.seaLevel) * 0.92) overfilled += area;
     if (grid.elev[i] < world.seaLevel && world.seaLevel - grid.elev[i] < 0.05) {
-      shallowSea += 1;
-      if (sediment[i] > 0.38) shallowSeaHighSediment += 1;
+      shallowSea += area;
+      if (sediment[i] > 0.38) shallowSeaHighSediment += area;
     }
   }
 
   return {
-    erosionSourceMean: averageField(erosionSource),
+    erosionSourceMean: averageField(grid, erosionSource),
     erosionSourceTotal: totals.produced,
     depositionTotal: totals.deposited,
-    sedimentFluxMean: averageField(sedimentFlux),
-    sedimentSinkMean: averageField(sedimentSink),
-    sedimentCapacityMean: averageField(sedimentCapacity),
-    sedimentCompactionMean: averageField(sedimentCompaction),
-    sedimentLoadSubsidenceMean: averageField(sedimentLoadSubsidence),
+    sedimentFluxMean: averageField(grid, sedimentFlux),
+    sedimentSinkMean: averageField(grid, sedimentSink),
+    sedimentCapacityMean: averageField(grid, sedimentCapacity),
+    sedimentCompactionMean: averageField(grid, sedimentCompaction),
+    sedimentLoadSubsidenceMean: averageField(grid, sedimentLoadSubsidence),
     sedimentBudgetError: totals.budgetErrorValue,
     sedimentMassBefore: totals.massBefore,
     sedimentMassAfter: totals.massAfter,
@@ -350,7 +352,7 @@ function measureSedimentBudget(world, totals) {
     basinDepositionShare: totals.deposited ? basinDeposition / totals.deposited : 0,
     trenchForearcDepositionShare: totals.deposited ? trenchForearcDeposition / totals.deposited : 0,
     inlandBasinDepositionShare: totals.deposited ? inlandBasinDeposition / totals.deposited : 0,
-    sedimentOverfillShare: overfilled / size,
+    sedimentOverfillShare: overfilled / Math.max(totalAreaValue, Number.EPSILON),
     sedimentPatchiness: measurePatchiness(grid, sediment),
     ...measureSedimentStraightnessDiagnostics(grid, sediment),
     sedimentSeaFillRisk: shallowSea ? shallowSeaHighSediment / shallowSea : 0,
@@ -500,10 +502,13 @@ function localGraphSlope(grid, topology, field, id) {
 
 function measurePatchiness(grid, field) {
   let total = 0;
+  let weight = 0;
   forEachGridCell(grid, (id) => {
-    total += localRelief(grid, field, id);
+    const area = metricArea(grid, id);
+    total += localRelief(grid, field, id) * area;
+    weight += area;
   });
-  return total / grid.size;
+  return total / Math.max(weight, Number.EPSILON);
 }
 
 function measureSedimentStraightnessDiagnostics(grid, field) {
@@ -645,14 +650,32 @@ function finiteSample(grid, field, x, y, fallback) {
   return Number.isFinite(sample) ? sample : fallback;
 }
 
-function sumField(field) {
+function sumField(grid, field) {
   let sum = 0;
-  for (let i = 0; i < field.length; i += 1) sum += field[i];
+  for (let i = 0; i < field.length; i += 1) sum += field[i] * metricArea(grid, i);
   return sum;
 }
 
-function averageField(field) {
-  return field.length ? sumField(field) / field.length : 0;
+function averageField(grid, field) {
+  let sum = 0;
+  let weight = 0;
+  for (let i = 0; i < field.length; i += 1) {
+    const area = metricArea(grid, i);
+    sum += field[i] * area;
+    weight += area;
+  }
+  return sum / Math.max(weight, Number.EPSILON);
+}
+
+function totalArea(grid) {
+  let total = 0;
+  for (let i = 0; i < grid.size; i += 1) total += metricArea(grid, i);
+  return total;
+}
+
+function metricArea(grid, id) {
+  const area = grid?.area?.[id];
+  return Number.isFinite(area) && area > 0 ? area : 1;
 }
 
 function smoothstep(edge0, edge1, x) {

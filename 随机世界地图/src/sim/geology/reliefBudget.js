@@ -17,9 +17,10 @@ export function updateReliefBudgetDiagnostics(world) {
   let erosionSum = 0;
   let smoothingSum = 0;
   let slopeLandSum = 0;
-  let landCount = 0;
+  let landArea = 0;
   let orographicPotential = 0;
   let seaSensitivityWeightSum = 0;
+  let totalAreaValue = 0;
 
   const target = targetReliefForWorld(params, stats);
   const deficit =
@@ -29,6 +30,8 @@ export function updateReliefBudgetDiagnostics(world) {
   const normalizedDeficit = Math.min(1, deficit / 0.18);
 
   forEachGridCell(grid, (i) => {
+      const area = metricArea(grid, i);
+      totalAreaValue += area;
       const relative = grid.elev[i] - seaLevel;
       const land = relative >= 0;
       const local = localRelief(grid, i, radius);
@@ -71,24 +74,25 @@ export function updateReliefBudgetDiagnostics(world) {
       grid.flatLandMask[i] = plain;
       grid.largePlainMask[i] = broadPlain;
 
-      flatLand += plain;
-      largePlain += broadPlain;
-      sensitive += seaSensitive;
-      tectonicSum += tectonic;
-      isostaticSum += isostatic;
-      erosionSum += erosion;
-      smoothingSum += smoothing;
-      seaSensitivityWeightSum += grid.seaLevelSensitivity[i];
+      flatLand += plain * area;
+      largePlain += broadPlain * area;
+      sensitive += seaSensitive * area;
+      tectonicSum += tectonic * area;
+      isostaticSum += isostatic * area;
+      erosionSum += erosion * area;
+      smoothingSum += smoothing * area;
+      seaSensitivityWeightSum += grid.seaLevelSensitivity[i] * area;
       if (land) {
-        slopeLandSum += slope;
-        landCount += 1;
+        slopeLandSum += slope * area;
+        landArea += area;
       }
       if (grid.orographicBarrier[i] > orographicPotential) orographicPotential = grid.orographicBarrier[i];
   });
 
-  const flatLandShare = flatLand / grid.size;
-  const largePlainShare = largePlain / grid.size;
-  const seaLevelSensitivityShare = sensitive / grid.size;
+  const areaDenominator = Math.max(totalAreaValue, Number.EPSILON);
+  const flatLandShare = flatLand / areaDenominator;
+  const largePlainShare = largePlain / areaDenominator;
+  const seaLevelSensitivityShare = sensitive / areaDenominator;
   const inverseSpread = 1 - Math.min(1, stats.hypsometricSpread / 0.34);
   const coastInstabilityRisk = seaLevelSensitivityShare * (0.45 + inverseSpread * 0.55);
   world.reliefDiagnostics = {
@@ -96,24 +100,29 @@ export function updateReliefBudgetDiagnostics(world) {
     flatLandShare,
     largePlainShare,
     seaLevelSensitivity: seaLevelSensitivityShare,
-    seaLevelSensitivityMean: seaSensitivityWeightSum / grid.size,
+    seaLevelSensitivityMean: seaSensitivityWeightSum / areaDenominator,
     coastInstabilityRisk,
     reliefDeficit: deficit,
     normalizedReliefDeficit: normalizedDeficit,
     targetHypsometricSpread: target.hypsometricSpread,
     targetLandReliefSpread: target.landReliefSpread,
     targetGlobalElevationStd: target.globalElevationStd,
-    tectonicReliefSupplyMean: tectonicSum / grid.size,
-    isostaticReliefSupplyMean: isostaticSum / grid.size,
-    erosionFlatteningPressureMean: erosionSum / grid.size,
-    sedimentSmoothingPressureMean: smoothingSum / grid.size,
-    drainageGradientPotential: landCount ? slopeLandSum / landCount * stats.landReliefSpread : 0,
+    tectonicReliefSupplyMean: tectonicSum / areaDenominator,
+    isostaticReliefSupplyMean: isostaticSum / areaDenominator,
+    erosionFlatteningPressureMean: erosionSum / areaDenominator,
+    sedimentSmoothingPressureMean: smoothingSum / areaDenominator,
+    drainageGradientPotential: landArea ? slopeLandSum / landArea * stats.landReliefSpread : 0,
     orographicReliefPotential: orographicPotential,
     flatWorldRisk: stats.globalElevationStd < target.globalElevationStd * 0.72 &&
       stats.hypsometricSpread < target.hypsometricSpread * 0.72 &&
       largePlainShare > 0.38,
   };
   return world.reliefDiagnostics;
+}
+
+function metricArea(grid, id) {
+  const area = grid?.area?.[id];
+  return Number.isFinite(area) && area > 0 ? area : 1;
 }
 
 export function getReliefDiagnostics(world) {

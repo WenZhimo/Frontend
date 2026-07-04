@@ -6567,9 +6567,10 @@
     let erosionSum = 0;
     let smoothingSum = 0;
     let slopeLandSum = 0;
-    let landCount = 0;
+    let landArea = 0;
     let orographicPotential = 0;
     let seaSensitivityWeightSum = 0;
+    let totalAreaValue = 0;
 
     const target = targetReliefForWorld(params, stats);
     const deficit =
@@ -6579,6 +6580,8 @@
     const normalizedDeficit = Math.min(1, deficit / 0.18);
 
     forEachGridCell(grid, (i) => {
+        const area = metricArea(grid, i);
+        totalAreaValue += area;
         const relative = grid.elev[i] - seaLevel;
         const land = relative >= 0;
         const local = localRelief(grid, i, radius);
@@ -6621,24 +6624,25 @@
         grid.flatLandMask[i] = plain;
         grid.largePlainMask[i] = broadPlain;
 
-        flatLand += plain;
-        largePlain += broadPlain;
-        sensitive += seaSensitive;
-        tectonicSum += tectonic;
-        isostaticSum += isostatic;
-        erosionSum += erosion;
-        smoothingSum += smoothing;
-        seaSensitivityWeightSum += grid.seaLevelSensitivity[i];
+        flatLand += plain * area;
+        largePlain += broadPlain * area;
+        sensitive += seaSensitive * area;
+        tectonicSum += tectonic * area;
+        isostaticSum += isostatic * area;
+        erosionSum += erosion * area;
+        smoothingSum += smoothing * area;
+        seaSensitivityWeightSum += grid.seaLevelSensitivity[i] * area;
         if (land) {
-          slopeLandSum += slope;
-          landCount += 1;
+          slopeLandSum += slope * area;
+          landArea += area;
         }
         if (grid.orographicBarrier[i] > orographicPotential) orographicPotential = grid.orographicBarrier[i];
     });
 
-    const flatLandShare = flatLand / grid.size;
-    const largePlainShare = largePlain / grid.size;
-    const seaLevelSensitivityShare = sensitive / grid.size;
+    const areaDenominator = Math.max(totalAreaValue, Number.EPSILON);
+    const flatLandShare = flatLand / areaDenominator;
+    const largePlainShare = largePlain / areaDenominator;
+    const seaLevelSensitivityShare = sensitive / areaDenominator;
     const inverseSpread = 1 - Math.min(1, stats.hypsometricSpread / 0.34);
     const coastInstabilityRisk = seaLevelSensitivityShare * (0.45 + inverseSpread * 0.55);
     world.reliefDiagnostics = {
@@ -6646,24 +6650,29 @@
       flatLandShare,
       largePlainShare,
       seaLevelSensitivity: seaLevelSensitivityShare,
-      seaLevelSensitivityMean: seaSensitivityWeightSum / grid.size,
+      seaLevelSensitivityMean: seaSensitivityWeightSum / areaDenominator,
       coastInstabilityRisk,
       reliefDeficit: deficit,
       normalizedReliefDeficit: normalizedDeficit,
       targetHypsometricSpread: target.hypsometricSpread,
       targetLandReliefSpread: target.landReliefSpread,
       targetGlobalElevationStd: target.globalElevationStd,
-      tectonicReliefSupplyMean: tectonicSum / grid.size,
-      isostaticReliefSupplyMean: isostaticSum / grid.size,
-      erosionFlatteningPressureMean: erosionSum / grid.size,
-      sedimentSmoothingPressureMean: smoothingSum / grid.size,
-      drainageGradientPotential: landCount ? slopeLandSum / landCount * stats.landReliefSpread : 0,
+      tectonicReliefSupplyMean: tectonicSum / areaDenominator,
+      isostaticReliefSupplyMean: isostaticSum / areaDenominator,
+      erosionFlatteningPressureMean: erosionSum / areaDenominator,
+      sedimentSmoothingPressureMean: smoothingSum / areaDenominator,
+      drainageGradientPotential: landArea ? slopeLandSum / landArea * stats.landReliefSpread : 0,
       orographicReliefPotential: orographicPotential,
       flatWorldRisk: stats.globalElevationStd < target.globalElevationStd * 0.72 &&
         stats.hypsometricSpread < target.hypsometricSpread * 0.72 &&
         largePlainShare > 0.38,
     };
     return world.reliefDiagnostics;
+  }
+
+  function metricArea(grid, id) {
+    const area = grid?.area?.[id];
+    return Number.isFinite(area) && area > 0 ? area : 1;
   }
 
   function getReliefDiagnostics(world) {
@@ -6851,7 +6860,7 @@
       geologicSeaLevelOffset: offset,
       targetGeologicSeaLevelOffset: diagnostics.targetGeologicSeaLevelOffset,
       seaLevelChangeRate: change,
-      coastalSensitivityMean: average(world.grid.coastalSensitivity),
+      coastalSensitivityMean: average(world.grid.coastalSensitivity, world.grid),
       landShareAfterGeologicOffset: landAfter,
       geologicSeaLevelLandShareDelta: landAfter - diagnostics.landShareBeforeGeologicOffset,
     };
@@ -6896,8 +6905,11 @@
     let oldCapacitySum = 0;
     let sedimentSum = 0;
     let trenchSum = 0;
+    let totalAreaValue = 0;
 
     for (let i = 0; i < grid.size; i += 1) {
+      const area = metricArea(grid, i);
+      totalAreaValue += area;
       const oceanic = grid.crustType[i] === CrustType.OCEANIC;
       const age = grid.crustAge[i];
       const youngOcean = oceanic && age < 0.18;
@@ -6934,15 +6946,15 @@
       grid.trenchCapacitySignal[i] = trenchCapacity;
 
       if (oceanic) {
-        oceanicCount += 1;
-        if (youngOcean) youngOceanCount += 1;
-        if (oldOcean) oldOceanCount += 1;
-        ridgeSum += ridgeSignal;
-        oldCapacitySum += oldCapacity;
-        trenchSum += trenchCapacity;
+        oceanicCount += area;
+        if (youngOcean) youngOceanCount += area;
+        if (oldOcean) oldOceanCount += area;
+        ridgeSum += ridgeSignal * area;
+        oldCapacitySum += oldCapacity * area;
+        trenchSum += trenchCapacity * area;
       }
       if (grid.elev[i] < baseSeaLevel || grid.continentalShelf[i] > 0.01 || grid.sedimentWedge[i] > 0.01) {
-        sedimentSum += sedimentDisplacement;
+        sedimentSum += sedimentDisplacement * area;
       }
     }
 
@@ -6952,7 +6964,7 @@
     const ridgeMean = ridgeSum * invOceanic;
     const oldCapacityMean = oldCapacitySum * invOceanic;
     const trenchMean = trenchSum * invOceanic;
-    const sedimentMean = sedimentSum / grid.size;
+    const sedimentMean = sedimentSum / Math.max(totalAreaValue, Number.EPSILON);
     const ridgeN = normalizeCentered(ridgeMean, BASELINES.ridge, BASELINES.ridgeScale);
     const youngN = normalizeCentered(youngOceanShare, BASELINES.young, BASELINES.youngScale);
     const oldN = normalizeCentered(oldCapacityMean, BASELINES.old, BASELINES.oldScale);
@@ -7027,11 +7039,14 @@
   function coastalFlipRisk(grid, seaLevel, change) {
     const baseBand = 0.018;
     let sum = 0;
+    let weight = 0;
     for (let i = 0; i < grid.size; i += 1) {
+      const area = metricArea(grid, i);
       const potential = clamp01((Math.abs(change) * 8 + baseBand - Math.abs(grid.elev[i] - seaLevel)) / baseBand);
-      sum += grid.coastalSensitivity[i] * potential;
+      sum += grid.coastalSensitivity[i] * potential * area;
+      weight += area;
     }
-    return sum / grid.size;
+    return sum / Math.max(weight, Number.EPSILON);
   }
 
   function localSlope(grid, id) {
@@ -7087,14 +7102,29 @@
 
   function shareLand(grid, seaLevel) {
     let land = 0;
-    for (let i = 0; i < grid.size; i += 1) if (grid.elev[i] >= seaLevel) land += 1;
-    return land / grid.size;
+    let total = 0;
+    for (let i = 0; i < grid.size; i += 1) {
+      const area = metricArea(grid, i);
+      total += area;
+      if (grid.elev[i] >= seaLevel) land += area;
+    }
+    return land / Math.max(total, Number.EPSILON);
   }
 
-  function average(field) {
+  function average(field, grid = null) {
     let sum = 0;
-    for (let i = 0; i < field.length; i += 1) sum += field[i];
-    return sum / field.length;
+    let weight = 0;
+    for (let i = 0; i < field.length; i += 1) {
+      const area = metricArea(grid, i);
+      sum += field[i] * area;
+      weight += area;
+    }
+    return sum / Math.max(weight, Number.EPSILON);
+  }
+
+  function metricArea(grid, id) {
+    const area = grid?.area?.[id];
+    return Number.isFinite(area) && area > 0 ? area : 1;
   }
 
   function normalizeCentered(value, baseline, scale) {
@@ -7176,7 +7206,7 @@
       scratch3,
     } = grid;
     const dt = world.timeScaleFactor;
-    const massBefore = sumField(sediment);
+    const massBefore = sumField(grid, sediment);
 
     erosionSource.fill(0);
     sedimentFlux.fill(0);
@@ -7362,9 +7392,9 @@
     }
     softenSedimentDeposits(grid, seaLevel);
 
-    const massAfter = sumField(sediment);
+    const massAfter = sumField(grid, sediment);
     const massDelta = massAfter - massBefore;
-    const residualFlux = sumField(scratch);
+    const residualFlux = sumField(grid, scratch);
     const budgetErrorValue = produced
       ? Math.abs(produced - deposited - dissipated - residualFlux) / Math.max(0.000001, produced)
       : 0;
@@ -7388,15 +7418,15 @@
 
   function getSedimentBudgetDiagnostics(world) {
     return world.sedimentBudgetDiagnostics ?? measureSedimentBudget(world, {
-      produced: sumField(world.grid.erosionSource),
-      deposited: sumField(world.grid.sedimentSink),
+      produced: sumField(world.grid, world.grid.erosionSource),
+      deposited: sumField(world.grid, world.grid.sedimentSink),
       dissipated: 0,
-      compactionTotal: sumField(world.grid.sedimentCompaction),
-      residualFlux: sumField(world.grid.sedimentFlux),
-      massBefore: sumField(world.grid.sediment),
-      massAfter: sumField(world.grid.sediment),
+      compactionTotal: sumField(world.grid, world.grid.sedimentCompaction),
+      residualFlux: sumField(world.grid, world.grid.sedimentFlux),
+      massBefore: sumField(world.grid, world.grid.sediment),
+      massAfter: sumField(world.grid, world.grid.sediment),
       massDelta: 0,
-      budgetErrorValue: averageField(world.grid.sedimentBudgetError),
+      budgetErrorValue: averageField(world.grid, world.grid.sedimentBudgetError),
     });
   }
 
@@ -7426,6 +7456,7 @@
       mountainBelt,
     } = grid;
 
+    const totalAreaValue = totalArea(grid);
     let mountainErosion = 0;
     let passiveMarginDeposition = 0;
     let basinDeposition = 0;
@@ -7438,6 +7469,7 @@
     let shallowSea = 0;
 
     for (let i = 0; i < size; i += 1) {
+      const area = metricArea(grid, i);
       const sink = sedimentSink[i];
       const mountainMask = Math.max(activeOrogeny[i], oldOrogeny[i], mountainBelt[i]);
       mountainErosion += erosionSource[i] * clamp01(mountainMask * 3.2);
@@ -7447,22 +7479,22 @@
       inlandBasinDeposition += sink * (inlandWaterCandidate[i] ? 1 : 0);
       shelfDeposition += sink * clamp01(continentalShelf[i] + continentalRise[i] + sedimentWedge[i]);
       abyssalDeposition += sink * clamp01(abyssalPlain[i]);
-      if (sediment[i] > maxSedimentForCell(grid, i, grid.elev[i] - world.seaLevel) * 0.92) overfilled += 1;
+      if (sediment[i] > maxSedimentForCell(grid, i, grid.elev[i] - world.seaLevel) * 0.92) overfilled += area;
       if (grid.elev[i] < world.seaLevel && world.seaLevel - grid.elev[i] < 0.05) {
-        shallowSea += 1;
-        if (sediment[i] > 0.38) shallowSeaHighSediment += 1;
+        shallowSea += area;
+        if (sediment[i] > 0.38) shallowSeaHighSediment += area;
       }
     }
 
     return {
-      erosionSourceMean: averageField(erosionSource),
+      erosionSourceMean: averageField(grid, erosionSource),
       erosionSourceTotal: totals.produced,
       depositionTotal: totals.deposited,
-      sedimentFluxMean: averageField(sedimentFlux),
-      sedimentSinkMean: averageField(sedimentSink),
-      sedimentCapacityMean: averageField(sedimentCapacity),
-      sedimentCompactionMean: averageField(sedimentCompaction),
-      sedimentLoadSubsidenceMean: averageField(sedimentLoadSubsidence),
+      sedimentFluxMean: averageField(grid, sedimentFlux),
+      sedimentSinkMean: averageField(grid, sedimentSink),
+      sedimentCapacityMean: averageField(grid, sedimentCapacity),
+      sedimentCompactionMean: averageField(grid, sedimentCompaction),
+      sedimentLoadSubsidenceMean: averageField(grid, sedimentLoadSubsidence),
       sedimentBudgetError: totals.budgetErrorValue,
       sedimentMassBefore: totals.massBefore,
       sedimentMassAfter: totals.massAfter,
@@ -7472,7 +7504,7 @@
       basinDepositionShare: totals.deposited ? basinDeposition / totals.deposited : 0,
       trenchForearcDepositionShare: totals.deposited ? trenchForearcDeposition / totals.deposited : 0,
       inlandBasinDepositionShare: totals.deposited ? inlandBasinDeposition / totals.deposited : 0,
-      sedimentOverfillShare: overfilled / size,
+      sedimentOverfillShare: overfilled / Math.max(totalAreaValue, Number.EPSILON),
       sedimentPatchiness: measurePatchiness(grid, sediment),
       ...measureSedimentStraightnessDiagnostics(grid, sediment),
       sedimentSeaFillRisk: shallowSea ? shallowSeaHighSediment / shallowSea : 0,
@@ -7622,10 +7654,13 @@
 
   function measurePatchiness(grid, field) {
     let total = 0;
+    let weight = 0;
     forEachGridCell(grid, (id) => {
-      total += localRelief(grid, field, id);
+      const area = metricArea(grid, id);
+      total += localRelief(grid, field, id) * area;
+      weight += area;
     });
-    return total / grid.size;
+    return total / Math.max(weight, Number.EPSILON);
   }
 
   function measureSedimentStraightnessDiagnostics(grid, field) {
@@ -7767,14 +7802,32 @@
     return Number.isFinite(sample) ? sample : fallback;
   }
 
-  function sumField(field) {
+  function sumField(grid, field) {
     let sum = 0;
-    for (let i = 0; i < field.length; i += 1) sum += field[i];
+    for (let i = 0; i < field.length; i += 1) sum += field[i] * metricArea(grid, i);
     return sum;
   }
 
-  function averageField(field) {
-    return field.length ? sumField(field) / field.length : 0;
+  function averageField(grid, field) {
+    let sum = 0;
+    let weight = 0;
+    for (let i = 0; i < field.length; i += 1) {
+      const area = metricArea(grid, i);
+      sum += field[i] * area;
+      weight += area;
+    }
+    return sum / Math.max(weight, Number.EPSILON);
+  }
+
+  function totalArea(grid) {
+    let total = 0;
+    for (let i = 0; i < grid.size; i += 1) total += metricArea(grid, i);
+    return total;
+  }
+
+  function metricArea(grid, id) {
+    const area = grid?.area?.[id];
+    return Number.isFinite(area) && area > 0 ? area : 1;
   }
 
   function smoothstep(edge0, edge1, x) {
