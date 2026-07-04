@@ -476,10 +476,10 @@ function measureTerrainShape(grid, field) {
 
   forEachGridCell(grid, (id, x, y) => {
     const center = field[id];
-    const left = finiteSample(grid, field, x - 1, y, center);
-    const right = finiteSample(grid, field, x + 1, y, center);
-    const up = finiteSample(grid, field, x, y - 1, center);
-    const down = finiteSample(grid, field, x, y + 1, center);
+    const left = legacyFiniteSample(grid, field, x - 1, y, center);
+    const right = legacyFiniteSample(grid, field, x + 1, y, center);
+    const up = legacyFiniteSample(grid, field, x, y - 1, center);
+    const down = legacyFiniteSample(grid, field, x, y + 1, center);
     const dx = (right - left) * 0.5;
     const dy = (down - up) * 0.5;
     slope[id] = Math.hypot(dx, dy);
@@ -672,13 +672,17 @@ function visitTerrainRadiusNeighbor(grid, topology, id, radius, graphBacked, vis
   });
 }
 
-function finiteSample(grid, field, x, y, fallback) {
+function legacyFiniteSample(grid, field, x, y, fallback) {
   const value = sampleGridWrapped(grid, field, x, y);
   return Number.isFinite(value) ? value : fallback;
 }
 
 function latitudeDegrees(grid, id, y) {
   if (grid.lat && Number.isFinite(grid.lat[id])) return grid.lat[id] * 180 / Math.PI;
+  return legacyLatitudeDegrees(grid, y);
+}
+
+function legacyLatitudeDegrees(grid, y) {
   const height = gridParamHeight(grid);
   return height ? ((y + 0.5) / height - 0.5) * 180 : 0;
 }
