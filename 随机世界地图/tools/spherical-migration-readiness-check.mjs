@@ -53,6 +53,16 @@ const topologyAwareLegacyFiles = new Set([
   "src/sim/scale.js",
 ]);
 
+const graphRoutedLegacyFiles = new Map([
+  [
+    "src/sim/tectonics.js",
+    {
+      reason: "assignPlates routes graph-backed worlds to spherical plates before the legacy raster tectonics helpers",
+      patterns: new Set(["indexOf", "sampleGridBilinear", "xyOf"]),
+    },
+  ],
+]);
+
 const sphericalMatches = scanPaths(sphericalProductionPaths).filter((match) => {
   return !isAllowedSphericalMatch(match);
 });
@@ -201,6 +211,10 @@ function classifyHelperMatch(match) {
   const before = match.contextBefore.join("\n");
   const after = match.contextAfter.join("\n");
   const context = `${before}\n${match.lineText}\n${after}`;
+  const graphRoutedFile = graphRoutedLegacyFiles.get(match.file);
+  if (graphRoutedFile?.patterns.has(match.pattern)) {
+    return { ...match, classification: "legacyFallback", routeReason: graphRoutedFile.reason };
+  }
   const hasGraphGuard = /isGraphBackedGrid\s*\(|graphBacked|topology\.forEachNeighbor|topology\.shortestDistanceSeeds/.test(context);
   const precededByGraphReturn = /if\s*\([^\n]*(?:isGraphBackedGrid|graphBacked)[^\n]*\)\s*\{[\s\S]{0,2600}\breturn\s*;[\s\S]{0,1600}$/.test(before);
   const precededByGraphBranch = /if\s*\([^\n]*(?:isGraphBackedGrid|graphBacked)[^\n]*\)\s*\{[\s\S]{0,2600}$/.test(before);
