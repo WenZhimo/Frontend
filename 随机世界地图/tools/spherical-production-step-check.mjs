@@ -84,6 +84,8 @@ const checks = {
   hydrologySized: last?.hydrologySized === true,
   resourcesSized: last?.resourcesSized === true,
   hydrologyValid: last?.hydrologyValid === true,
+  activeFeaturesPresent: featureHealth.activeFeatureMissing === false,
+  activeFeatureCoveragePresent: featureHealth.activeTectonicCoverage02 > 0.002,
 };
 
 const result = {
@@ -193,7 +195,6 @@ function measureFeatureHealth(grid) {
     activeTectonicCoverage02,
     activeTectonicMax,
     activeFeatureMissing: activeTectonicCoverage02 <= 0 && activeTectonicMax <= 0.001,
-    note: "diagnostic only: low values flag spherical production feature seeding gaps without failing this smoke check",
   };
 }
 
