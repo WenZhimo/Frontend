@@ -277,11 +277,12 @@ function hash2(x, y) {
 
 function smoothAxisField(grid, source, target) {
   const { size, scratch2 } = grid;
+  const topology = topologyForGrid(grid);
   scratch2.set(source);
   for (let id = 0; id < size; id += 1) {
     let total = scratch2[id] * 2.2;
     let weight = 2.2;
-    forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
+    visitMountainInterfaceNeighbors(grid, topology, id, (nid, dx, dy) => {
       const w = dx === 0 || dy === 0 ? 0.72 : 0.38;
       total += scratch2[nid] * w;
       weight += w;
@@ -292,6 +293,7 @@ function smoothAxisField(grid, source, target) {
 
 function smoothMountainHeightField(grid, source, target) {
   const { size, mountainAxis, scratch2 } = grid;
+  const topology = topologyForGrid(grid);
   scratch2.set(source);
   for (let id = 0; id < size; id += 1) {
     if (scratch2[id] <= 0.0001 && mountainAxis[id] <= 0.025) {
@@ -300,7 +302,7 @@ function smoothMountainHeightField(grid, source, target) {
     }
     let total = scratch2[id] * 2.8;
     let weight = 2.8;
-    forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
+    visitMountainInterfaceNeighbors(grid, topology, id, (nid, dx, dy) => {
       const axisWeight = 0.3 + Math.min(1, Math.max(mountainAxis[id], mountainAxis[nid]) * 1.4);
       const w = (dx === 0 || dy === 0 ? 0.68 : 0.36) * axisWeight;
       total += scratch2[nid] * w;
@@ -312,6 +314,7 @@ function smoothMountainHeightField(grid, source, target) {
 
 function smoothBarrierField(grid, source, target) {
   const { size, mountainAxis, scratch2 } = grid;
+  const topology = topologyForGrid(grid);
   scratch2.set(source);
   for (let id = 0; id < size; id += 1) {
     if (source[id] <= 0.0001 && mountainAxis[id] <= 0.03) {
@@ -320,13 +323,25 @@ function smoothBarrierField(grid, source, target) {
     }
     let total = source[id] * 2.4;
     let weight = 2.4;
-    forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
+    visitMountainInterfaceNeighbors(grid, topology, id, (nid, dx, dy) => {
       const w = (dx === 0 || dy === 0 ? 0.8 : 0.45) * (0.35 + Math.min(1, mountainAxis[nid] * 1.2));
       total += scratch2[nid] * w;
       weight += w;
     });
     target[id] = total / weight;
   }
+}
+
+function visitMountainInterfaceNeighbors(grid, topology, id, visit) {
+  if (isGraphBackedGrid(grid, topology)) {
+    topology.forEachNeighbor(id, (nid) => {
+      visit(nid, 1, 0);
+    });
+    return;
+  }
+  forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
+    visit(nid, dx, dy);
+  });
 }
 
 function smoothstep(edge0, edge1, x) {
