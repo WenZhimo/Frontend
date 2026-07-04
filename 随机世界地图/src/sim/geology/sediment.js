@@ -507,6 +507,9 @@ function measurePatchiness(grid, field) {
 }
 
 function measureSedimentStraightnessDiagnostics(grid, field) {
+  const topology = topologyForGrid(grid);
+  if (isGraphBackedGrid(grid, topology)) return measureGraphSedimentStraightnessDiagnostics(grid, topology, field);
+
   let totalWeight = 0;
   let weightedRisk = 0;
   let structuralWeight = 0;
@@ -550,6 +553,66 @@ function measureSedimentStraightnessDiagnostics(grid, field) {
     sedimentStraightnessRisk: totalWeight ? weightedRisk / totalWeight : 0,
     sedimentBoundaryCorrelation: totalWeight ? structuralWeight / totalWeight : 0,
     sedimentGridAlignment: totalWeight ? axisWeight / totalWeight : 0,
+    sedimentNaturalSinkShare: totalWeight ? naturalWeight / totalWeight : 0,
+  };
+}
+
+function measureGraphSedimentStraightnessDiagnostics(grid, topology, field) {
+  let totalWeight = 0;
+  let weightedRisk = 0;
+  let structuralWeight = 0;
+  let naturalWeight = 0;
+  let gridLikeWeight = 0;
+  forEachGridCell(grid, (id) => {
+    if (field[id] < 0.05) return;
+    const contrast = localRelief(grid, field, id);
+    if (contrast < 0.012) return;
+
+    let neighborCount = 0;
+    let similarCount = 0;
+    let crossContrast = 0;
+    let maxNeighborDelta = 0;
+    topology.forEachNeighbor(id, (nid) => {
+      const delta = Math.abs(field[nid] - field[id]);
+      neighborCount += 1;
+      if (delta < 0.018) similarCount += 1;
+      else crossContrast += smoothstep(0.012, 0.045, delta);
+      if (delta > maxNeighborDelta) maxNeighborDelta = delta;
+    });
+    if (!neighborCount) return;
+
+    const continuity = similarCount / neighborCount;
+    const edgeContrast = crossContrast / neighborCount;
+    const patchEdge = smoothstep(0.012, 0.055, maxNeighborDelta);
+    const directionalRisk = clamp01((continuity * 0.46 + edgeContrast * 0.36 + patchEdge * 0.18) * 0.85);
+    if (directionalRisk <= 0) return;
+
+    const naturalSink = clamp01(
+      grid.passiveMargin[id] +
+        grid.continentalShelf[id] +
+        grid.continentalRise[id] +
+        grid.sedimentWedge[id] +
+        localAverage8ById(grid, grid.basin, id) * 0.28 +
+        grid.forelandBasin[id] +
+        grid.abyssalPlain[id] * 0.5,
+    );
+    const structuralMemory = clamp01(
+      (grid.inactiveBoundaryRelief?.[id] ?? 0) * 5 +
+        (grid.fractureZoneMemory?.[id] ?? 0) * 2 +
+        (grid.transformMemory?.[id] ?? 0) * 1.2 +
+        Math.max(0, grid.boundaryInfluence[id] - 0.1) * 2,
+    );
+    const suspiciousWeight = Math.max(0.15, structuralMemory) * (1 - naturalSink * 0.65);
+    totalWeight += suspiciousWeight;
+    weightedRisk += directionalRisk * suspiciousWeight;
+    structuralWeight += directionalRisk * structuralMemory;
+    naturalWeight += directionalRisk * naturalSink;
+    gridLikeWeight += directionalRisk * structuralMemory * (1 - naturalSink);
+  });
+  return {
+    sedimentStraightnessRisk: totalWeight ? weightedRisk / totalWeight : 0,
+    sedimentBoundaryCorrelation: totalWeight ? structuralWeight / totalWeight : 0,
+    sedimentGridAlignment: totalWeight ? gridLikeWeight / totalWeight : 0,
     sedimentNaturalSinkShare: totalWeight ? naturalWeight / totalWeight : 0,
   };
 }
