@@ -25,9 +25,9 @@ for (let i = 0; i < steps; i += 1) driftSphericalPlates(plates, 1);
 const finalAssignment = assignNearestSphericalPlates(grid, plates);
 const centerUnitErrorMax = measureCenterUnitError(plates);
 const meanDriftRadians = measureSphericalPlateDrift(initial, plates);
-const assignmentChangedShare = measureAssignmentChangedShare(initialAssignment.plate, finalAssignment.plate);
+const assignmentChangedShare = measureAssignmentChangedShare(grid, initialAssignment.plate, finalAssignment.plate);
 const velocityStats = measureVelocityStats(grid, plates, finalAssignment.plate);
-const coverageStats = measurePlateCoverage(finalAssignment.plate, plates.count);
+const coverageStats = measurePlateCoverage(grid, finalAssignment.plate, plates.count);
 const centerSpacing = measureCenterSpacing(plates);
 
 const result = {
@@ -85,18 +85,23 @@ function measureCenterUnitError(plates) {
   return max;
 }
 
-function measureAssignmentChangedShare(before, after) {
+function measureAssignmentChangedShare(grid, before, after) {
   let changed = 0;
+  let total = 0;
   for (let i = 0; i < before.length; i += 1) {
-    if (before[i] !== after[i]) changed += 1;
+    const area = grid.area?.[i] ?? 1;
+    total += area;
+    if (before[i] !== after[i]) changed += area;
   }
-  return changed / Math.max(1, before.length);
+  return changed / Math.max(Number.EPSILON, total);
 }
 
 function measureVelocityStats(grid, plates, plate) {
   let total = 0;
+  let areaTotal = 0;
   let max = 0;
   for (let id = 0; id < grid.size; id += 1) {
+    const area = grid.area?.[id] ?? 1;
     const v = sphericalPlateVelocityAt(
       plates,
       plate[id],
@@ -105,25 +110,31 @@ function measureVelocityStats(grid, plates, plate) {
       grid.positionZ[id],
     );
     const speed = Math.hypot(v.x, v.y, v.z);
-    total += speed;
+    total += speed * area;
+    areaTotal += area;
     if (speed > max) max = speed;
   }
-  return { mean: total / Math.max(1, grid.size), max };
+  return { mean: total / Math.max(Number.EPSILON, areaTotal), max };
 }
 
-function measurePlateCoverage(plate, plateCount) {
-  const counts = new Int32Array(plateCount);
-  for (let i = 0; i < plate.length; i += 1) counts[plate[i]] += 1;
+function measurePlateCoverage(grid, plate, plateCount) {
+  const areas = new Float64Array(plateCount);
+  let areaTotal = 0;
+  for (let i = 0; i < plate.length; i += 1) {
+    const area = grid.area?.[i] ?? 1;
+    areas[plate[i]] += area;
+    areaTotal += area;
+  }
   let min = Infinity;
   let max = 0;
   let total = 0;
   let emptyCount = 0;
   for (let p = 0; p < plateCount; p += 1) {
-    const share = counts[p] / Math.max(1, plate.length);
+    const share = areas[p] / Math.max(Number.EPSILON, areaTotal);
     min = Math.min(min, share);
     max = Math.max(max, share);
     total += share;
-    if (counts[p] === 0) emptyCount += 1;
+    if (areas[p] <= 0) emptyCount += 1;
   }
   return { min, max, mean: total / Math.max(1, plateCount), emptyCount };
 }
