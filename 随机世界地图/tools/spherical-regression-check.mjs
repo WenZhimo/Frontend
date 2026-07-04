@@ -21,6 +21,7 @@ const checks = [
   ["spherical-production-step-check", ["tools/spherical-production-step-check.mjs", seedText, String(smallFaceSize), "5"]],
   ["spherical-production-create-world-check", ["tools/spherical-production-create-world-check.mjs", seedText, String(smallFaceSize), "1"]],
   ["spherical-world-stats-check", ["tools/spherical-world-stats-check.mjs", String(faceSize)]],
+  ["spherical-hydrology-diagnostics-check", ["tools/spherical-hydrology-diagnostics-check.mjs", String(smallFaceSize)]],
   ["spherical-derived-adapter-check", ["tools/spherical-derived-adapter-check.mjs", String(smallFaceSize)]],
   ["spherical-migration-readiness-check", ["tools/spherical-migration-readiness-check.mjs"]],
   ["spherical-connectivity-check", ["tools/spherical-connectivity-check.mjs", String(faceSize)]],
@@ -140,6 +141,11 @@ function compactMetrics(parsed) {
   ]) {
     if (parsed[key] !== undefined) picked[key] = parsed[key];
     else if (parsed.metrics?.[key] !== undefined) picked[key] = parsed.metrics[key];
+  }
+  if (parsed.spherical?.diagnostics) {
+    picked.sphericalHydrology = parsed.spherical.diagnostics;
+    picked.sphericalAreaClosedDrainageShare = parsed.spherical.areaClosedDrainageShare;
+    picked.sphericalCellClosedDrainageShare = parsed.spherical.cellClosedDrainageShare;
   }
   return picked;
 }
