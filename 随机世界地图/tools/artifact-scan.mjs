@@ -76,6 +76,8 @@ function updateWorst(worst, metrics, seedText) {
   const keys = [
     "plateCheckerboardScore",
     "coastBoundaryShare",
+    "coastHardBoundaryShare",
+    "coastInactiveBoundaryShare",
     "sedimentStraightnessRisk",
     "sedimentOverfillShare",
     "sedimentSeaFillRisk",

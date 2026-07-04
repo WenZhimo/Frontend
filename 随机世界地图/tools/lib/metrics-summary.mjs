@@ -19,6 +19,8 @@ export function compactMetrics(world, timing = {}) {
     plateCheckerboardScore: average(grid.plateCheckerboard),
     coastBoundaryShare: coast.nearBoundaryShare,
     exactCoastBoundaryShare: coast.exactBoundaryShare,
+    coastHardBoundaryShare: coast.hardBoundaryShare,
+    coastInactiveBoundaryShare: coast.inactiveBoundaryShare,
     inlandWaterCandidateShare: share(grid.inlandWaterCandidate),
     closedBasinCount: maxInt(grid.closedBasinId),
     sedimentBudgetError: sediment.sedimentBudgetError ?? average(grid.sedimentBudgetError),
@@ -54,7 +56,8 @@ export function summarizeScenario({ seedText, pipelineMode, resolution, checkpoi
 export function assessArtifactRisk(metrics) {
   const failures = [];
   if (metrics.plateCheckerboardScore > 0.025) failures.push(["plateCheckerboardScore", metrics.plateCheckerboardScore, 0.025]);
-  if (metrics.coastBoundaryShare > 0.35) failures.push(["coastBoundaryShare", metrics.coastBoundaryShare, 0.35]);
+  if (metrics.coastHardBoundaryShare > 0.45) failures.push(["coastHardBoundaryShare", metrics.coastHardBoundaryShare, 0.45]);
+  if (metrics.coastInactiveBoundaryShare > 0.18) failures.push(["coastInactiveBoundaryShare", metrics.coastInactiveBoundaryShare, 0.18]);
   if (
     metrics.sedimentStraightnessRisk > 0.35 &&
     (metrics.sedimentBoundaryCorrelation > 0.18 || metrics.sedimentGridAlignment > 0.28 || metrics.sedimentNaturalSinkShare < 0.28)
@@ -86,6 +89,8 @@ function measureCoastBoundaryShare(grid, seaLevel) {
   let coast = 0;
   let nearBoundary = 0;
   let exactBoundary = 0;
+  let hardBoundary = 0;
+  let inactiveBoundary = 0;
   const topology = topologyForGrid(grid);
   for (let id = 0; id < grid.size; id += 1) {
     const land = grid.elev[id] >= seaLevel;
@@ -97,12 +102,18 @@ function measureCoastBoundaryShare(grid, seaLevel) {
     const area = metricArea(grid, id);
     coast += area;
     if (grid.boundaryInfluence[id] > 0.1) nearBoundary += area;
-    if (grid.boundaryDistance[id] === 0) exactBoundary += area;
+    const exact = grid.boundaryDistance[id] === 0;
+    if (exact) exactBoundary += area;
+    const activeFeature = (grid.ridge?.[id] ?? 0) > 0.05 || (grid.trench?.[id] ?? 0) > 0.05 || (grid.activeTransform?.[id] ?? 0) > 0.03;
+    if (exact && !activeFeature) hardBoundary += area;
+    if ((grid.boundaryInfluence[id] ?? 0) < 0.08 && (grid.boundaryDistance[id] ?? Infinity) <= 2) inactiveBoundary += area;
   }
   return {
     coastCoverage: coast / Math.max(totalArea(grid), Number.EPSILON),
     nearBoundaryShare: coast ? nearBoundary / coast : 0,
     exactBoundaryShare: coast ? exactBoundary / coast : 0,
+    hardBoundaryShare: coast ? hardBoundary / coast : 0,
+    inactiveBoundaryShare: coast ? inactiveBoundary / coast : 0,
   };
 }
 
