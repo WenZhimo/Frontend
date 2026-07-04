@@ -1,4 +1,4 @@
-import { forEachGridCell, forEachNeighbor8ById, forEachNeighborRadiusById, indexOf, physicalRadius, xyOf } from "../grid.js";
+import { forEachGridCell, forEachNeighbor8ById, forEachNeighborRadiusById, indexOf, physicalRadius } from "../grid.js";
 import { topologyForGrid } from "../topology.js";
 import { BoundaryType } from "../tectonics.js";
 import { CrustType } from "./crust.js";
@@ -127,6 +127,7 @@ function broadenOldOrogeny(grid) {
   const { width, oldOrogeny, orogeny, orogenyAge, weakness, crustType, boundaryInfluence, scratch, scratch2, scratch3 } = grid;
   const radius = Math.max(2, physicalRadius(grid, 5));
   const topology = topologyForGrid(grid);
+  const graphBacked = isGraphBackedGrid(grid, topology);
   scratch.set(oldOrogeny);
   scratch2.set(orogenyAge);
   scratch3.set(orogeny);
@@ -153,8 +154,9 @@ function broadenOldOrogeny(grid) {
     });
     const smooth = total / weight;
     const ageSmooth = ageTotal / weight;
-    const point = xyOf(grid, id);
-    const segment = segmentMask(point.x ?? x, point.y ?? y, width ?? grid.faceSize ?? 1, weakness[id]);
+    const segment = graphBacked
+      ? graphSegmentMask(id, weakness[id])
+      : segmentMask(x, y, width ?? grid.faceSize ?? 1, weakness[id]);
     const mix = Math.min(0.42, 0.1 + inactive * 0.26);
     oldOrogeny[id] = Math.min(1, Math.max(sourceMemory, scratch[id] * (1 - mix) + smooth * mix) * segment);
     orogenyAge[id] = Math.max(scratch2[id], ageSmooth * 0.98);
@@ -217,6 +219,14 @@ function segmentMask(x, y, width, weakness) {
   const sx = Math.floor((x + width * 0.17) / 11);
   const sy = Math.floor((y + 7) / 7);
   const noise = hash2(sx, sy);
+  const keep = weakness > 0.54 ? 0.9 : weakness > 0.38 ? 0.78 : 0.66;
+  return noise <= keep ? 1 : 0.82;
+}
+
+function graphSegmentMask(id, weakness) {
+  const coarse = hash2(Math.floor((id + 29) / 17), Math.floor((id + 71) / 31));
+  const fine = hash2(id + 13, id * 3 + 5);
+  const noise = coarse * 0.7 + fine * 0.3;
   const keep = weakness > 0.54 ? 0.9 : weakness > 0.38 ? 0.78 : 0.66;
   return noise <= keep ? 1 : 0.82;
 }
