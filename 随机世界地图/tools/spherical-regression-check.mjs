@@ -48,6 +48,19 @@ const checks = [
     "--face-size",
     String(faceSize),
   ]],
+  ["long-run-check:cubed-sphere-production:739", [
+    "tools/long-run-check.mjs",
+    seedText,
+    "739",
+    "geology-v2",
+    "256x128",
+    "--topology",
+    "cubed-sphere",
+    "--projection",
+    "equirectangular",
+    "--face-size",
+    String(faceSize),
+  ]],
   ["resolution-check:cubed-sphere-production", [
     "tools/resolution-check.mjs",
     seedText,
@@ -148,6 +161,48 @@ function runNodeCheck(name, args) {
     metrics: compactMetrics(name, parsed),
     stderr: stderr ? stderr.slice(0, 1200) : undefined,
   };
+}
+
+function addLongRunCubedSphereMetrics(picked, parsed, prefix) {
+  picked[`${prefix}PipelineMode`] = parsed.pipelineMode;
+  picked[`${prefix}TopologyMode`] = parsed.topologyMode;
+  picked[`${prefix}ProjectionMode`] = parsed.projectionMode;
+  picked[`${prefix}FaceSize`] = parsed.faceSize;
+  picked[`${prefix}SphericalGridSize`] = parsed.sphericalGridSize;
+  picked[`${prefix}Steps`] = parsed.steps;
+  picked[`${prefix}AverageStepMs`] = parsed.averageStepMs;
+  picked[`${prefix}LandRatio`] = parsed.landRatio;
+  picked[`${prefix}SeaRatio`] = parsed.seaRatio;
+  picked[`${prefix}SeaLevel`] = parsed.seaLevel;
+  picked[`${prefix}AveragePlateDriftCells`] = parsed.averagePlateDriftCells;
+  picked[`${prefix}MinElevation`] = parsed.minElevation;
+  picked[`${prefix}MaxElevation`] = parsed.maxElevation;
+  picked[`${prefix}ExtremeHighRatio`] = parsed.extremeHighRatio;
+  picked[`${prefix}ExtremeLowRatio`] = parsed.extremeLowRatio;
+  picked[`${prefix}CausalityPass`] = parsed.causalityPass;
+  picked[`${prefix}TopologyKind`] = parsed.topologyDiagnostics?.topologyKind;
+  picked[`${prefix}NeighborConsistencyValid`] = parsed.topologyDiagnostics?.neighborConsistencyValid;
+  picked[`${prefix}FloodFillTopologyValid`] = parsed.topologyDiagnostics?.floodFillTopologyValid;
+  picked[`${prefix}ConnectedComponentTopologyValid`] =
+    parsed.topologyDiagnostics?.connectedComponentTopologyValid;
+  picked[`${prefix}TopologyManualAccessRisk`] = parsed.topologyDiagnostics?.topologyManualAccessRisk;
+  picked[`${prefix}TopologyMigrationCoverage`] = parsed.topologyDiagnostics?.topologyMigrationCoverage;
+  picked[`${prefix}HydrologyValid`] = parsed.hydrologyDiagnostics?.hydrologyValid;
+  picked[`${prefix}ExternalSeaDrainageShare`] = parsed.hydrologyDiagnostics?.externalSeaDrainageShare;
+  picked[`${prefix}ClosedBasinDrainageShare`] = parsed.hydrologyDiagnostics?.closedBasinDrainageShare;
+  picked[`${prefix}SedimentBudgetError`] = parsed.sedimentBudgetDiagnostics?.sedimentBudgetError;
+  picked[`${prefix}SedimentStraightnessRisk`] =
+    parsed.sedimentBudgetDiagnostics?.sedimentStraightnessRisk;
+  picked[`${prefix}PlateCheckerboardScore`] = parsed.boundaryDiagnostics?.plateCheckerboardScore;
+  picked[`${prefix}DepthAgeCorrelation`] = parsed.oceanAgeDiagnostics?.depthAgeCorrelation;
+  picked[`${prefix}RidgeAgeResetShare`] = parsed.oceanAgeDiagnostics?.ridgeAgeResetShare;
+  picked[`${prefix}AgeBandStraightness`] = parsed.oceanAgeDiagnostics?.ageBandStraightness;
+  picked[`${prefix}OldBoundaryReliefCorrelation`] =
+    parsed.transformDiagnostics?.oldBoundaryReliefCorrelation;
+  picked[`${prefix}AgeBandStraightnessInactive`] =
+    parsed.transformDiagnostics?.ageBandStraightnessInactive;
+  picked[`${prefix}ActiveVsInactiveBoundaryReliefRatio`] =
+    parsed.transformDiagnostics?.activeVsInactiveBoundaryReliefRatio;
 }
 
 function compactMetrics(name, parsed) {
@@ -788,49 +843,10 @@ function compactMetrics(name, parsed) {
     picked.interfaceCubedSpherePlateCheckerboardScore = parsed.stats?.plateCheckerboardScore;
   }
   if (name === "long-run-check:cubed-sphere-production") {
-    picked.longRunCubedSpherePipelineMode = parsed.pipelineMode;
-    picked.longRunCubedSphereTopologyMode = parsed.topologyMode;
-    picked.longRunCubedSphereProjectionMode = parsed.projectionMode;
-    picked.longRunCubedSphereFaceSize = parsed.faceSize;
-    picked.longRunCubedSphereSphericalGridSize = parsed.sphericalGridSize;
-    picked.longRunCubedSphereSteps = parsed.steps;
-    picked.longRunCubedSphereAverageStepMs = parsed.averageStepMs;
-    picked.longRunCubedSphereLandRatio = parsed.landRatio;
-    picked.longRunCubedSphereSeaRatio = parsed.seaRatio;
-    picked.longRunCubedSphereSeaLevel = parsed.seaLevel;
-    picked.longRunCubedSphereAveragePlateDriftCells = parsed.averagePlateDriftCells;
-    picked.longRunCubedSphereMinElevation = parsed.minElevation;
-    picked.longRunCubedSphereMaxElevation = parsed.maxElevation;
-    picked.longRunCubedSphereExtremeHighRatio = parsed.extremeHighRatio;
-    picked.longRunCubedSphereExtremeLowRatio = parsed.extremeLowRatio;
-    picked.longRunCubedSphereCausalityPass = parsed.causalityPass;
-    picked.longRunCubedSphereTopologyKind = parsed.topologyDiagnostics?.topologyKind;
-    picked.longRunCubedSphereNeighborConsistencyValid =
-      parsed.topologyDiagnostics?.neighborConsistencyValid;
-    picked.longRunCubedSphereFloodFillTopologyValid = parsed.topologyDiagnostics?.floodFillTopologyValid;
-    picked.longRunCubedSphereConnectedComponentTopologyValid =
-      parsed.topologyDiagnostics?.connectedComponentTopologyValid;
-    picked.longRunCubedSphereTopologyManualAccessRisk =
-      parsed.topologyDiagnostics?.topologyManualAccessRisk;
-    picked.longRunCubedSphereTopologyMigrationCoverage =
-      parsed.topologyDiagnostics?.topologyMigrationCoverage;
-    picked.longRunCubedSphereHydrologyValid = parsed.hydrologyDiagnostics?.hydrologyValid;
-    picked.longRunCubedSphereExternalSeaDrainageShare =
-      parsed.hydrologyDiagnostics?.externalSeaDrainageShare;
-    picked.longRunCubedSphereClosedBasinDrainageShare =
-      parsed.hydrologyDiagnostics?.closedBasinDrainageShare;
-    picked.longRunCubedSphereSedimentBudgetError =
-      parsed.sedimentBudgetDiagnostics?.sedimentBudgetError;
-    picked.longRunCubedSphereSedimentStraightnessRisk =
-      parsed.sedimentBudgetDiagnostics?.sedimentStraightnessRisk;
-    picked.longRunCubedSpherePlateCheckerboardScore =
-      parsed.boundaryDiagnostics?.plateCheckerboardScore;
-    picked.longRunCubedSphereDepthAgeCorrelation =
-      parsed.oceanAgeDiagnostics?.depthAgeCorrelation;
-    picked.longRunCubedSphereRidgeAgeResetShare =
-      parsed.oceanAgeDiagnostics?.ridgeAgeResetShare;
-    picked.longRunCubedSphereActiveVsInactiveBoundaryReliefRatio =
-      parsed.transformDiagnostics?.activeVsInactiveBoundaryReliefRatio;
+    addLongRunCubedSphereMetrics(picked, parsed, "longRunCubedSphere");
+  }
+  if (name === "long-run-check:cubed-sphere-production:739") {
+    addLongRunCubedSphereMetrics(picked, parsed, "longRunCubedSphere739");
   }
   if (name === "resolution-check:cubed-sphere-production") {
     const comparisons = parsed.comparisons ?? {};
