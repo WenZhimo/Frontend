@@ -168,6 +168,7 @@ function compactMetrics(parsed) {
     "ridgeDistanceSeamDiffToInteriorRatio",
     "productionAdapterReady",
     "fullMigrationReady",
+    "helperMigrationReady",
     "authoritativeCoreReady",
     "expectedDiagnosticMode",
     "currentStage",

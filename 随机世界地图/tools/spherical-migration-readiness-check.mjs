@@ -85,10 +85,12 @@ const possibleSphericalPathHelperByFile = summarizeByFile(possibleSphericalPathH
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
+const helperMigrationReady = possibleSphericalPathHelperMatches.length === 0;
 const result = {
-  valid: productionAdapterReady,
+  valid: productionAdapterReady && helperMigrationReady,
   productionAdapterReady,
   fullMigrationReady,
+  helperMigrationReady,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -125,10 +127,13 @@ const result = {
     .slice(0, 12)
     .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
   notes: [
-    "valid only means the spherical production adapter boundary is clean",
+    "valid means the spherical production adapter boundary is clean and no unclassified possible spherical-path helpers remain",
     fullMigrationReady
       ? "fullMigrationReady means scanned legacy migration scopes have no unclassified rectangular-indexing risks"
       : "fullMigrationReady remains false while scanned legacy migration scopes still contain rectangular-indexing risks",
+    helperMigrationReady
+      ? "helperMigrationReady means all scanned topology helper usage is classified as guarded or legacy fallback"
+      : "helperMigrationReady is false while possibleSphericalPathHelperCount is non-zero",
     "legacyHelperRiskCount is diagnostic: topology helpers are migration dependencies, not automatic failures",
     "possibleSphericalPathHelperCount is the next migration target; legacyFallbackHelperCount tracks helpers guarded by graph-backed branches",
   ],
