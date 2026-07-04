@@ -490,17 +490,17 @@ function measureOrogenyDiagnostics(world) {
 function measureAxisDiagnostics(world) {
   const { grid } = world;
   return {
-    axisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.tectonicAxis[i] > 0.05),
-    axisNoisyBoundaryShare: conditionalShare(grid.tectonicAxis, (i) => grid.tectonicAxis[i] > 0.05, (i) => grid.noisyBoundaryPatch[i]),
+    axisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.tectonicAxis[i] > axisDiagnosticThreshold(grid)),
+    axisNoisyBoundaryShare: conditionalShare(grid.tectonicAxis, (i) => grid.tectonicAxis[i] > axisDiagnosticThreshold(grid), (i) => grid.noisyBoundaryPatch[i]),
     axisSegmentLengthMean: axisSegmentLengthMean(grid),
-    axisCurvatureMean: averageWhere(grid.axisCurvature, (i) => grid.tectonicAxis[i] > 0.05),
-    axisContinuityMean: averageWhere(grid.axisContinuity, (i) => grid.tectonicAxis[i] > 0.05),
+    axisCurvatureMean: averageWhere(grid.axisCurvature, (i) => grid.tectonicAxis[i] > axisDiagnosticThreshold(grid)),
+    axisContinuityMean: averageWhere(grid.axisContinuity, (i) => grid.tectonicAxis[i] > axisDiagnosticThreshold(grid)),
     mountainHeightBlockiness: averageWhere(grid.mountainHeightBlockiness, (i) => grid.mountainHeight[i] > 0.02),
     orographicBarrierContinuity: averageWhere(grid.orographicBarrierContinuity, (i) => grid.orographicBarrier[i] > 0.02),
     activeFeatureOnNoisyBoundaryShare: measureBoundaryDiagnostics(grid).featureOnNoisyBoundaryShare,
-    ridgeAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.ridgeAxis[i] > 0.05),
-    trenchAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.trenchAxis[i] > 0.05),
-    riftAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.riftAxis[i] > 0.05),
+    ridgeAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.ridgeAxis[i] > axisDiagnosticThreshold(grid)),
+    trenchAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.trenchAxis[i] > axisDiagnosticThreshold(grid)),
+    riftAxisBoundaryDependency: averageWhere(grid.axisBoundaryDependency, (i) => grid.riftAxis[i] > axisDiagnosticThreshold(grid)),
   };
 }
 
@@ -573,6 +573,10 @@ function axisSegmentLengthMean(grid) {
   let total = 0;
   for (const count of counts.values()) total += count;
   return total / counts.size;
+}
+
+function axisDiagnosticThreshold(grid) {
+  return grid.topologyKind === "cubed-sphere" || grid.topologyOptions?.graphBacked ? 0.016 : 0.05;
 }
 
 function isPlateIslandNoise(grid, id) {
