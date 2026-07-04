@@ -4019,16 +4019,21 @@
 
     deriveBoundaryCoherence(grid);
 
-    while (head < tail) {
-      const id = q[head++];
-      const nextDistance = boundaryDistance[id] + 1;
-      if (nextDistance > radius) continue;
-      forEachNeighbor4ById(grid, id, (nid) => {
-        if (nextDistance < boundaryDistance[nid]) {
-          boundaryDistance[nid] = nextDistance;
-          q[tail++] = nid;
-        }
-      });
+    const topology = topologyForGrid(grid);
+    if (isGraphBackedGrid(grid, topology)) {
+      rebuildGraphBoundaryDistance(grid, topology, activeBoundary, radius);
+    } else {
+      while (head < tail) {
+        const id = q[head++];
+        const nextDistance = boundaryDistance[id] + 1;
+        if (nextDistance > radius) continue;
+        forEachNeighbor4ById(grid, id, (nid) => {
+          if (nextDistance < boundaryDistance[nid]) {
+            boundaryDistance[nid] = nextDistance;
+            q[tail++] = nid;
+          }
+        });
+      }
     }
 
     for (let i = 0; i < size; i += 1) {
@@ -4151,6 +4156,95 @@
       if (kind !== BoundaryType.INTERIOR) best = kind;
     });
     return best;
+  }
+
+  function rebuildGraphBoundaryDistance(grid, topology, sourceMask, radius) {
+    const { size, boundaryDistance } = grid;
+    const heap = new BoundaryDistanceHeap(Math.max(16, size));
+    boundaryDistance.fill(9999);
+
+    for (let id = 0; id < size; id += 1) {
+      if (!sourceMask[id]) continue;
+      boundaryDistance[id] = 0;
+      heap.push(id, 0);
+    }
+
+    while (heap.length > 0) {
+      const current = heap.pop();
+      const id = current.id;
+      if (current.distance > boundaryDistance[id] + 1e-7) continue;
+      topology.forEachNeighbor(id, (nid, _slot, edgeLength = 1) => {
+        const next = boundaryDistance[id] + Math.max(1e-6, edgeLength);
+        if (next > radius || next >= boundaryDistance[nid]) return;
+        boundaryDistance[nid] = next;
+        heap.push(nid, next);
+      });
+    }
+  }
+
+  function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+    return Boolean(
+      grid.topologyOptions?.graphBacked ||
+        topology?.topologyKind === "cubed-sphere" ||
+        grid.topologyKind === "cubed-sphere",
+    );
+  }
+
+  class BoundaryDistanceHeap {
+    constructor(capacity) {
+      this.ids = new Int32Array(capacity);
+      this.distances = new Float64Array(capacity);
+      this.length = 0;
+    }
+
+    push(id, distance) {
+      this.ensureCapacity(this.length + 1);
+      let index = this.length++;
+      while (index > 0) {
+        const parent = (index - 1) >> 1;
+        if (this.distances[parent] <= distance) break;
+        this.ids[index] = this.ids[parent];
+        this.distances[index] = this.distances[parent];
+        index = parent;
+      }
+      this.ids[index] = id;
+      this.distances[index] = distance;
+    }
+
+    pop() {
+      const id = this.ids[0];
+      const distance = this.distances[0];
+      const lastId = this.ids[--this.length];
+      const lastDistance = this.distances[this.length];
+      let index = 0;
+      while (true) {
+        const left = index * 2 + 1;
+        const right = left + 1;
+        if (left >= this.length) break;
+        let child = left;
+        if (right < this.length && this.distances[right] < this.distances[left]) child = right;
+        if (this.distances[child] >= lastDistance) break;
+        this.ids[index] = this.ids[child];
+        this.distances[index] = this.distances[child];
+        index = child;
+      }
+      if (this.length > 0) {
+        this.ids[index] = lastId;
+        this.distances[index] = lastDistance;
+      }
+      return { id, distance };
+    }
+
+    ensureCapacity(required) {
+      if (required <= this.ids.length) return;
+      const nextCapacity = Math.max(required, this.ids.length * 2);
+      const ids = new Int32Array(nextCapacity);
+      const distances = new Float64Array(nextCapacity);
+      ids.set(this.ids);
+      distances.set(this.distances);
+      this.ids = ids;
+      this.distances = distances;
+    }
   }
 
 
