@@ -146,6 +146,9 @@ function compactMetrics(parsed) {
     picked.sphericalHydrology = parsed.spherical.diagnostics;
     picked.sphericalAreaClosedDrainageShare = parsed.spherical.areaClosedDrainageShare;
     picked.sphericalCellClosedDrainageShare = parsed.spherical.cellClosedDrainageShare;
+    picked.sphericalFlowAccumulationMean = parsed.spherical.flowAccumulationMean;
+    picked.sphericalFlowAccumulationExpectedDeltaMax = parsed.spherical.flowAccumulationExpectedDeltaMax;
+    picked.sphericalFlowAccumulationCellUnitDeltaMax = parsed.spherical.flowAccumulationCellUnitDeltaMax;
   }
   return picked;
 }
