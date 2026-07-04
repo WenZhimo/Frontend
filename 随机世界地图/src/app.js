@@ -8252,13 +8252,16 @@
       });
       return;
     }
+    legacyVisitSmoothingNeighborhood(grid, x, y, radius, visit);
+  }
 
+  function legacyVisitSmoothingNeighborhood(grid, x, y, radius, visit) {
     for (let dy = -radius; dy <= radius; dy += 1) {
       for (let dx = -radius; dx <= radius; dx += 1) {
         if (dx === 0 && dy === 0) continue;
         const dist = Math.hypot(dx, dy);
         if (dist > radius + 0.01) continue;
-        const nid = indexOf(grid, x + dx, y + dy);
+        const nid = legacyPipelineIndexOf(grid, x + dx, y + dy);
         if (nid >= 0) visit(nid, dist);
       }
     }
@@ -8273,15 +8276,22 @@
       });
       return;
     }
+    legacyVisitBentSmoothingNeighborhood(grid, x, y, radius, bendX, bendY, visit);
+  }
 
+  function legacyVisitBentSmoothingNeighborhood(grid, x, y, radius, bendX, bendY, visit) {
     for (let dy = -radius; dy <= radius; dy += 1) {
       for (let dx = -radius; dx <= radius; dx += 1) {
         const dist = Math.hypot(dx, dy);
         if (dist < 0.01 || dist > radius + 0.01) continue;
-        const nid = indexOf(grid, x + dx + bendX, y + dy + bendY);
+        const nid = legacyPipelineIndexOf(grid, x + dx + bendX, y + dy + bendY);
         if (nid >= 0) visit(nid, dist);
       }
     }
+  }
+
+  function legacyPipelineIndexOf(grid, x, y) {
+    return indexOf(grid, x, y);
   }
 
   function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
