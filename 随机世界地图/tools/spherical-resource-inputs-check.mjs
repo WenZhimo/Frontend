@@ -88,8 +88,11 @@ const maxResourceSeamDelta = Math.max(0, ...activeResourceFields.map((metric) =>
 
 const riftStageHistogram = weightedHistogram(grid, resources.riftStage, 6);
 const crustTypeHistogram = weightedHistogram(grid, resources.crustType, 3);
+const orogenicResourceField = maxField(resources.orogenicBelt, resources.metamorphicBelt);
 
 const metrics = {
+  resourceProbePurpose: "spherical resource interface diagnostics; strong metamorphic/orogenic resource signals may be dormant in weak short-run samples when trace orogenic fields are wired",
+  metamorphicStrongPresenceRequired: false,
   topologyKind: grid.topologyKind ?? null,
   graphBacked: Boolean(grid.topology?.graphBacked || grid.topologyOptions?.graphBacked),
   faceSize,
@@ -107,6 +110,8 @@ const metrics = {
   volcanicArcCoverage: weightedCoverage(grid, resources.volcanicArc, 0.016),
   passiveMarginCoverage: weightedCoverage(grid, resources.passiveMargin, 0.016),
   sedimentaryBasinCoverage: weightedCoverage(grid, resources.sedimentaryBasin, 0.05),
+  orogenicResourceCoreCoverage: weightedCoverage(grid, orogenicResourceField, 0.016),
+  orogenicResourceTraceCoverage: weightedCoverage(grid, orogenicResourceField, 0.00005),
   metamorphicBeltCoverage: weightedCoverage(grid, resources.metamorphicBelt, 0.016),
   igneousProvinceCoverage: weightedCoverage(grid, resources.igneousProvince, 0.016),
   hydrothermalPotentialCoverage: weightedCoverage(grid, resources.hydrothermalPotential, 0.016),
@@ -146,6 +151,12 @@ const metrics = {
   maxResourceSeamRatio,
   maxResourceSeamDelta,
 };
+metrics.metamorphicResourceDormantAllowed =
+  metrics.orogenicResourceCoreCoverage < 0.001 &&
+  metrics.orogenicResourceTraceCoverage > 0.0005 &&
+  metrics.tectonicAxisCoverage > 0.002;
+metrics.resourceInterfaceUsesTraceOrogeny =
+  metrics.orogenicResourceTraceCoverage > Math.max(metrics.orogenicResourceCoreCoverage, 0.0005);
 
 const checks = {
   cubedSphereGrid: metrics.topologyKind === "cubed-sphere",
@@ -164,6 +175,8 @@ const checks = {
   volcanicArcCoupledToIslandArc: metrics.volcanicArcCoverage === 0 || metrics.volcanicArcIslandArcCoupling > 0.02,
   passiveMarginCoupledToTerrain: metrics.passiveMarginTerrainCoupling > 0.02,
   sedimentaryBasinCoupledToSediment: metrics.sedimentaryBasinSedimentCoupling > 0.04,
+  metamorphicDormancyExplained: metrics.orogenicResourceCoreCoverage > 0.001 || metrics.metamorphicResourceDormantAllowed,
+  strongMetamorphicResourceOptional: !metrics.metamorphicStrongPresenceRequired || metrics.metamorphicBeltCoverage > 0.0005,
   metamorphicBeltDormantOrPresent: metrics.orogenicBeltCoverage < 0.0005 || metrics.metamorphicBeltCoverage > 0.0005,
   metamorphicBeltCoupledToOrogeny: metrics.orogenicBeltCoverage < 0.0005 || metrics.metamorphicOrogenyCoupling > 0.02,
   igneousProvinceCoupledToTectonics: metrics.igneousRidgeArcRiftCoupling > 0.02,
@@ -278,6 +291,17 @@ function weightedHistogram(grid, field, buckets) {
     total += area;
   }
   return counts.map((value) => value / Math.max(total, Number.EPSILON));
+}
+
+function maxField(...fields) {
+  const length = Math.max(0, ...fields.map((field) => field?.length ?? 0));
+  const output = new Float32Array(length);
+  for (let id = 0; id < length; id += 1) {
+    let max = 0;
+    for (const field of fields) max = Math.max(max, field?.[id] ?? 0);
+    output[id] = max;
+  }
+  return output;
 }
 
 function metricArea(grid, id) {
