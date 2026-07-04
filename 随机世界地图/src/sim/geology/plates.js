@@ -9,6 +9,7 @@ import {
   sampleGridBilinear,
   wrapGridParamX,
 } from "../grid.js";
+import { topologyForGrid } from "../topology.js";
 import { CrustType } from "./crust.js";
 
 export function advectCrust(world) {
@@ -156,6 +157,14 @@ function classifyCrustType(thickness, age, previousType) {
 }
 
 function forEachNeighbor8Local(grid, id, visit) {
+  const topology = topologyForGrid(grid);
+  if (isGraphBackedGrid(grid, topology)) {
+    topology.forEachNeighbor(id, (nid, _slot, edgeLength = 1) => {
+      const weight = Number.isFinite(edgeLength) && edgeLength > 1e-6 ? edgeLength : 1;
+      visit(nid, weight);
+    });
+    return;
+  }
   forEachNeighbor8ById(grid, id, (nid, dx, dy) => {
     visit(nid, dx === 0 || dy === 0 ? 1 : Math.SQRT2);
   });
@@ -163,6 +172,8 @@ function forEachNeighbor8Local(grid, id, visit) {
 
 function cleanupPlateCheckerboards(grid) {
   const { size, plate } = grid;
+  const topology = topologyForGrid(grid);
+  const graphBacked = isGraphBackedGrid(grid, topology);
   const next = new Int32Array(plate);
   let maxPlate = 0;
   for (let i = 0; i < size; i += 1) if (plate[i] > maxPlate) maxPlate = plate[i];
@@ -186,7 +197,7 @@ function cleanupPlateCheckerboards(grid) {
       }
     });
 
-    const checker = isCheckerboardCell(grid, x, y);
+    const checker = graphBacked ? false : isCheckerboardCell(grid, x, y);
     if ((majorityCount >= 5 && same <= 2) || (checker && majorityCount >= 4 && same <= 3)) {
       next[id] = majorityPlate;
     }
@@ -221,4 +232,12 @@ function syncPlateCenterUv(grid, plates, p) {
   if (!plates.centersU || !plates.centersV) return;
   plates.centersU[p] = gridParamToU(grid, plates.centersX[p]);
   plates.centersV[p] = gridParamToV(grid, plates.centersY[p]);
+}
+
+function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+  return Boolean(
+    grid.topologyOptions?.graphBacked ||
+      topology?.topologyKind === "cubed-sphere" ||
+      grid.topologyKind === "cubed-sphere",
+  );
 }
