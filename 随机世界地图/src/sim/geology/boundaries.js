@@ -67,6 +67,7 @@ export function updatePlateBoundariesV2(world) {
 export function classifyBoundaryKindV2(world) {
   const { grid } = world;
   const { size, plate, btype, boundaryKind, stress, activeBoundary, boundaryCoherence, noisyBoundaryPatch } = grid;
+  const topology = topologyForGrid(grid);
   btype.fill(BoundaryType.INTERIOR);
   boundaryKind.fill(BoundaryType.INTERIOR);
   stress.fill(0);
@@ -78,8 +79,8 @@ export function classifyBoundaryKindV2(world) {
     let shear = 0;
     let touches = false;
 
-    forEachNeighbor4ById(grid, id, (nid, dx, dy) => {
-      inspectBoundaryNeighbor(grid, id, nid, dx, dy, currentPlate, (normal, tangent) => {
+    visitBoundaryClassificationNeighbors(grid, topology, id, (nid, dx, dy, slot) => {
+      inspectBoundaryNeighbor(grid, id, nid, dx, dy, currentPlate, slot, (normal, tangent) => {
         touches = true;
         if (normal > 0.02) convergent += normal;
         else if (normal < -0.02) divergent += -normal;
@@ -194,7 +195,34 @@ function graphCheckerboardRiskAt(grid, topology, id) {
   return Math.min(1, (different - same) / Math.max(1, different));
 }
 
-function inspectBoundaryNeighbor(grid, id, nid, dx, dy, currentPlate, visit) {
+function visitBoundaryClassificationNeighbors(grid, topology, id, visit) {
+  if (isGraphBackedGrid(grid, topology)) {
+    topology.forEachNeighbor(id, (nid, slot) => {
+      const direction = graphBoundaryDirection(grid, id, nid, slot);
+      visit(nid, direction.dx, direction.dy, slot);
+    });
+    return;
+  }
+  forEachNeighbor4ById(grid, id, (nid, dx, dy) => {
+    visit(nid, dx, dy, -1);
+  });
+}
+
+function graphBoundaryDirection(grid, id, nid, slot) {
+  const start = grid.neighborStart?.[id] ?? -1;
+  const offset = start >= 0 ? start + slot : -1;
+  let dx = offset >= 0 && grid.edgeTangentX ? grid.edgeTangentX[offset] : 0;
+  let dy = offset >= 0 && grid.edgeTangentY ? grid.edgeTangentY[offset] : 0;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) < 1e-6) {
+    dx = (grid.positionX?.[nid] ?? 0) - (grid.positionX?.[id] ?? 0);
+    dy = (grid.positionY?.[nid] ?? 0) - (grid.positionY?.[id] ?? 0);
+  }
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-6) return { dx: 1, dy: 0 };
+  return { dx: dx / length, dy: dy / length };
+}
+
+function inspectBoundaryNeighbor(grid, id, nid, dx, dy, currentPlate, _slot, visit) {
   if (grid.plate[nid] === currentPlate) return;
   const rvx = grid.pvx[id] - grid.pvx[nid];
   const rvy = grid.pvy[id] - grid.pvy[nid];
