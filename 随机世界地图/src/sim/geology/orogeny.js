@@ -240,12 +240,15 @@ function visitOrogenyNeighborhood(grid, topology, id, x, y, radius, bend, visit)
     });
     return;
   }
+  legacyVisitOrogenyNeighborhood(grid, x, y, radius, bend, visit);
+}
 
+function legacyVisitOrogenyNeighborhood(grid, x, y, radius, bend, visit) {
   for (let dy = -radius; dy <= radius; dy += 1) {
     for (let dx = -radius; dx <= radius; dx += 1) {
       const dist = Math.hypot(dx, dy);
       if (dist < 0.01 || dist > radius + 0.01) continue;
-      const nid = indexOf(grid, x + dx + bend, y + dy);
+      const nid = legacyOrogenyIndexOf(grid, x + dx + bend, y + dy);
       if (nid >= 0) visit(nid, dist);
     }
   }
@@ -259,15 +262,22 @@ function visitForelandNeighborhood(grid, topology, id, x, y, radius, visit) {
     });
     return;
   }
+  legacyVisitForelandNeighborhood(grid, x, y, radius, visit);
+}
 
+function legacyVisitForelandNeighborhood(grid, x, y, radius, visit) {
   for (let dy = -radius; dy <= radius; dy += 1) {
     for (let dx = -radius; dx <= radius; dx += 1) {
       const dist = Math.hypot(dx, dy);
       if (dist < 1 || dist > radius + 0.01) continue;
-      const nid = indexOf(grid, x + dx, y + dy);
+      const nid = legacyOrogenyIndexOf(grid, x + dx, y + dy);
       if (nid >= 0) visit(nid, dist);
     }
   }
+}
+
+function legacyOrogenyIndexOf(grid, x, y) {
+  return indexOf(grid, x, y);
 }
 
 function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
