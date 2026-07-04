@@ -1,4 +1,5 @@
 import { spherePointForCell } from "../scale.js";
+import { forEachGridCell } from "../grid.js";
 import { CrustType } from "./crust.js";
 import { refreshIsostaticResidual, updateIsostasy } from "./isostasy.js";
 
@@ -103,14 +104,12 @@ export function rebuildGeologyElevationV2(world) {
 function ensureGeologyElevationNoise(world) {
   if (world.geologyElevationNoiseInitialized) return;
   const { grid, textureNoise } = world;
-  const { width, size, geologyBroadNoise, geologyMicroNoise } = grid;
-  for (let i = 0; i < size; i += 1) {
-    const x = i % width;
-    const y = Math.floor(i / width);
-    const sphere = spherePointForGridCell(grid, i, x, y);
-    geologyMicroNoise[i] = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
-    geologyBroadNoise[i] = textureNoise(sphere.x * 2.2 + 7, sphere.y * 2.2 - 5, sphere.z * 2.2 + 17, 3, 2, 0.48);
-  }
+  const { geologyBroadNoise, geologyMicroNoise } = grid;
+  forEachGridCell(grid, (id, x, y) => {
+    const sphere = spherePointForGridCell(grid, id, x, y);
+    geologyMicroNoise[id] = textureNoise(sphere.x * 7.5 - 11, sphere.y * 7.5 + 19, sphere.z * 7.5 - 7, 3, 2.15, 0.42);
+    geologyBroadNoise[id] = textureNoise(sphere.x * 2.2 + 7, sphere.y * 2.2 - 5, sphere.z * 2.2 + 17, 3, 2, 0.48);
+  });
   world.geologyElevationNoiseInitialized = true;
 }
 
