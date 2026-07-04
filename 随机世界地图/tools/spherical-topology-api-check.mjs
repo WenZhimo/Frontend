@@ -1,5 +1,6 @@
 import { createCubedSphereGrid } from "../src/sim/sphere/cubedSphere.js";
 import { createSphericalTopology } from "../src/sim/sphere/topology.js";
+import { forEachNeighborRadiusById } from "../src/sim/grid.js";
 import { parseIntOption, parseOptions } from "./lib/cli.mjs";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
@@ -16,6 +17,7 @@ for (let id = 0; id < grid.size; id += 1) sampleField[id] = id;
 const cellVisitCount = countCells(topology);
 const neighborParity = measureNeighborParity(grid, topology);
 const ringStats = measureRingStats(topology);
+const ringContract = measureRingContract(grid, topology);
 const flood = topology.floodFill([0], () => true);
 const components = topology.connectedComponents(allMask);
 const distance = topology.shortestDistanceSeeds(seedMask);
@@ -31,6 +33,7 @@ const result = {
   cellVisitCount,
   ...neighborParity,
   ...ringStats,
+  ...ringContract,
   floodFillCount: countMask(flood),
   componentCount: components.componentCount,
   componentArea: components.componentAreas[1] ?? 0,
@@ -48,6 +51,8 @@ const result = {
 if (cellVisitCount !== grid.size) result.valid = false;
 if (!neighborParity.neighborParityValid) result.valid = false;
 if (ringStats.ringRadius2Count <= ringStats.ringRadius1Count) result.valid = false;
+if (!ringContract.ringDepthContractValid) result.valid = false;
+if (!ringContract.gridRadiusWrapperUsesGraphDepth) result.valid = false;
 if (result.floodFillCount !== grid.size) result.valid = false;
 if (components.componentCount !== 1) result.valid = false;
 if (result.distanceFiniteShare !== 1) result.valid = false;
@@ -99,6 +104,60 @@ function measureRingStats(topology) {
     ringRadius1Count: radius1,
     ringRadius2Count: radius2,
   };
+}
+
+function measureRingContract(grid, topology) {
+  const sampleId = Math.floor(grid.size * 0.41);
+  const radius = 3;
+  let ringVisited = 0;
+  let ringInvalidDepth = 0;
+  let ringMissingNearestDepth = 0;
+  let wrapperVisited = 0;
+  let wrapperInvalidDepth = 0;
+  let wrapperNonZeroDy = 0;
+  let wrapperMismatch = 0;
+  const ringDepth = new Int16Array(grid.size);
+  ringDepth.fill(-1);
+
+  topology.forEachNeighborRing(sampleId, radius, (id, depth) => {
+    ringVisited += 1;
+    ringDepth[id] = depth;
+    if (!Number.isInteger(depth) || depth < 1 || depth > radius) ringInvalidDepth += 1;
+    if (depth === 1 && !isDirectNeighbor(grid, sampleId, id)) ringMissingNearestDepth += 1;
+  });
+
+  forEachNeighborRadiusById(grid, sampleId, radius, (id, depth, dy) => {
+    wrapperVisited += 1;
+    if (!Number.isInteger(depth) || depth < 1 || depth > radius) wrapperInvalidDepth += 1;
+    if (dy !== 0) wrapperNonZeroDy += 1;
+    if (ringDepth[id] !== depth) wrapperMismatch += 1;
+  });
+
+  return {
+    ringContractSampleId: sampleId,
+    ringContractRadius: radius,
+    ringDepthVisited: ringVisited,
+    ringDepthInvalidCount: ringInvalidDepth,
+    ringDepthMissingNearestCount: ringMissingNearestDepth,
+    gridRadiusWrapperVisited: wrapperVisited,
+    gridRadiusWrapperInvalidDepthCount: wrapperInvalidDepth,
+    gridRadiusWrapperNonZeroDyCount: wrapperNonZeroDy,
+    gridRadiusWrapperMismatchCount: wrapperMismatch,
+    ringDepthContractValid: ringVisited > 0 && ringInvalidDepth === 0 && ringMissingNearestDepth === 0,
+    gridRadiusWrapperUsesGraphDepth:
+      wrapperVisited === ringVisited &&
+      wrapperInvalidDepth === 0 &&
+      wrapperNonZeroDy === 0 &&
+      wrapperMismatch === 0,
+  };
+}
+
+function isDirectNeighbor(grid, id, target) {
+  const start = grid.neighborStart[id];
+  for (let k = 0; k < grid.neighborCount[id]; k += 1) {
+    if (grid.neighbors[start + k] === target) return true;
+  }
+  return false;
 }
 
 function countMask(mask) {
