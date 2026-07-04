@@ -195,17 +195,30 @@ function rebuildOceanicAgeFromRidges(world) {
     crustThickness[i] = Math.max(0.14, Math.min(0.42, 0.18 + crustAge[i] * 0.16 + Math.max(0, crustThickness[i] - 0.18) * 0.28));
   }
 
+  const topology = topologyForGrid(grid);
   scratch2.set(crustAge);
   forEachGridCell(grid, (id) => {
     if (crustType[id] !== CrustType.OCEANIC || ridgeDistance[id] <= 1) return;
     let total = scratch2[id] * 2.5;
     let weight = 2.5;
-    forEachNeighbor4ById(grid, id, (nid) => {
+    visitRidgeAgeSmoothingNeighbors(grid, topology, id, (nid) => {
       if (crustType[nid] !== CrustType.OCEANIC || Math.abs(ridgeDistance[nid] - ridgeDistance[id]) > 3) return;
       total += scratch2[nid];
       weight += 1;
     });
     crustAge[id] = Math.min(1, total / weight);
+  });
+}
+
+function visitRidgeAgeSmoothingNeighbors(grid, topology, id, visit) {
+  if (isGraphBackedGrid(grid, topology)) {
+    topology.forEachNeighbor(id, (nid) => {
+      visit(nid);
+    });
+    return;
+  }
+  forEachNeighbor4ById(grid, id, (nid) => {
+    visit(nid);
   });
 }
 
