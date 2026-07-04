@@ -62,9 +62,16 @@ const legacyMatches = scanPaths(legacyMigrationScopes).filter((match) => {
 const legacyHelperMatches = scanPaths(legacyMigrationScopes, helperDependencyPatterns).filter((match) => {
   return !topologyAwareLegacyFiles.has(match.file);
 });
+const classifiedLegacyHelperMatches = legacyHelperMatches.map(classifyHelperMatch);
 const sphericalByFile = summarizeByFile(sphericalMatches);
 const legacyByFile = summarizeByFile(legacyMatches);
 const legacyHelperByFile = summarizeByFile(legacyHelperMatches);
+const legacyFallbackHelperMatches = classifiedLegacyHelperMatches.filter((match) => match.classification === "legacyFallback");
+const guardedHelperMatches = classifiedLegacyHelperMatches.filter((match) => match.classification === "guardedHelper");
+const possibleSphericalPathHelperMatches = classifiedLegacyHelperMatches.filter((match) => match.classification === "possibleSphericalPath");
+const legacyFallbackHelperByFile = summarizeByFile(legacyFallbackHelperMatches);
+const guardedHelperByFile = summarizeByFile(guardedHelperMatches);
+const possibleSphericalPathHelperByFile = summarizeByFile(possibleSphericalPathHelperMatches);
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -80,6 +87,12 @@ const result = {
   legacyDirectRectangularRiskFiles: Object.keys(legacyByFile).length,
   legacyHelperRiskCount: legacyHelperMatches.length,
   legacyHelperRiskFiles: Object.keys(legacyHelperByFile).length,
+  legacyFallbackHelperCount: legacyFallbackHelperMatches.length,
+  legacyFallbackHelperFiles: Object.keys(legacyFallbackHelperByFile).length,
+  guardedHelperCount: guardedHelperMatches.length,
+  guardedHelperFiles: Object.keys(guardedHelperByFile).length,
+  possibleSphericalPathHelperCount: possibleSphericalPathHelperMatches.length,
+  possibleSphericalPathHelperFiles: Object.keys(possibleSphericalPathHelperByFile).length,
   topologyAwareLegacyFiles: Array.from(topologyAwareLegacyFiles).sort(),
   topLegacyRiskFiles: Object.entries(legacyByFile)
     .sort((a, b) => b[1].count - a[1].count)
@@ -89,12 +102,25 @@ const result = {
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 12)
     .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
+  topPossibleSphericalPathHelperFiles: Object.entries(possibleSphericalPathHelperByFile)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 12)
+    .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
+  topLegacyFallbackHelperFiles: Object.entries(legacyFallbackHelperByFile)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 12)
+    .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
+  topGuardedHelperFiles: Object.entries(guardedHelperByFile)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 12)
+    .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
   notes: [
     "valid only means the spherical production adapter boundary is clean",
     fullMigrationReady
       ? "fullMigrationReady means scanned legacy migration scopes have no unclassified rectangular-indexing risks"
       : "fullMigrationReady remains false while scanned legacy migration scopes still contain rectangular-indexing risks",
     "legacyHelperRiskCount is diagnostic: topology helpers are migration dependencies, not automatic failures",
+    "possibleSphericalPathHelperCount is the next migration target; legacyFallbackHelperCount tracks helpers guarded by graph-backed branches",
   ],
 };
 
@@ -136,7 +162,14 @@ function scanFile(file, patterns = forbiddenPatterns) {
     pattern.regex.lastIndex = 0;
     for (const match of text.matchAll(pattern.regex)) {
       const line = lineNumberAt(text, match.index ?? 0);
-      matches.push({ file: relative, line, lineText: lines[line - 1] ?? "", pattern: pattern.name });
+      matches.push({
+        file: relative,
+        line,
+        lineText: lines[line - 1] ?? "",
+        contextBefore: lines.slice(Math.max(0, line - 80), Math.max(0, line - 1)),
+        contextAfter: lines.slice(line, Math.min(lines.length, line + 24)),
+        pattern: pattern.name,
+      });
     }
   }
   return matches;
@@ -162,6 +195,22 @@ function summarizeByFile(matches) {
     delete summary.patternSet;
   }
   return byFile;
+}
+
+function classifyHelperMatch(match) {
+  const before = match.contextBefore.join("\n");
+  const after = match.contextAfter.join("\n");
+  const context = `${before}\n${match.lineText}\n${after}`;
+  const hasGraphGuard = /isGraphBackedGrid\s*\(|graphBacked|topology\.forEachNeighbor|topology\.shortestDistanceSeeds/.test(context);
+  const precededByGraphReturn = /if\s*\([^\n]*(?:isGraphBackedGrid|graphBacked)[^\n]*\)\s*\{[\s\S]{0,2600}\breturn\s*;[\s\S]{0,1600}$/.test(before);
+  const precededByGraphBranch = /if\s*\([^\n]*(?:isGraphBackedGrid|graphBacked)[^\n]*\)\s*\{[\s\S]{0,2600}$/.test(before);
+  const followedByFallbackReturn = /\breturn\b/.test(after.slice(0, 260));
+  const classification = precededByGraphReturn || (precededByGraphBranch && followedByFallbackReturn)
+    ? "legacyFallback"
+    : hasGraphGuard
+      ? "guardedHelper"
+      : "possibleSphericalPath";
+  return { ...match, classification };
 }
 
 function isAllowedSphericalMatch(match) {
