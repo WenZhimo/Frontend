@@ -137,14 +137,14 @@ function naturalizeAxis(grid, source, target, referenceRadius, gain, options = {
     const pull = weakness[id] - 0.5 + oldOrogeny[id] * 0.18 + (riftStage[id] > 0 ? 0.12 : 0) + transformMemory[id] * 0.08 - fractureZoneMemory[id] * 0.04;
     const bendX = Math.round(pull * radius * 1.15 + (hash2(Math.floor(x / 13), Math.floor(y / 9)) - 0.5) * radius * 0.8);
     const bendY = Math.round((hash2(Math.floor((x + 5) / 17), Math.floor((y + 3) / 11)) - 0.5) * radius * 0.7);
-    const segment = segmentMask(x, y, weakness[id], options.segmented);
+    const segment = legacyAxisSegmentMask(x, y, weakness[id], options.segmented);
     const arcShift = options.arcBend ? Math.max(1, Math.round(radius * 0.55)) : 0;
 
     for (let dy = -radius; dy <= radius; dy += 1) {
       for (let dx = -radius; dx <= radius; dx += 1) {
         const dist = Math.hypot(dx, dy);
         if (dist > radius + 0.01) continue;
-        const nid = indexOf(grid, x + dx + bendX, y + dy + bendY + arcShift);
+        const nid = legacyAxisIndexOf(grid, x + dx + bendX, y + dy + bendY + arcShift);
         if (nid < 0) continue;
         if (noisyBoundaryPatch[nid] && dist <= 1.5) continue;
         if ((plateCheckerboard[nid] ?? 0) > 0.32) continue;
@@ -256,13 +256,13 @@ function measureFieldBlockiness(grid, field, output) {
       output[id] = 0;
       return;
     }
-    const left = sample(grid, field, x - 1, y);
-    const right = sample(grid, field, x + 1, y);
-    const up = sample(grid, field, x, y - 1);
-    const down = sample(grid, field, x, y + 1);
+    const left = legacyAxisSample(grid, field, x - 1, y);
+    const right = legacyAxisSample(grid, field, x + 1, y);
+    const up = legacyAxisSample(grid, field, x, y - 1);
+    const down = legacyAxisSample(grid, field, x, y + 1);
     const cardinal = Math.abs(left - right) + Math.abs(up - down);
-    const diagonal = Math.abs(sample(grid, field, x - 1, y - 1) - sample(grid, field, x + 1, y + 1))
-      + Math.abs(sample(grid, field, x + 1, y - 1) - sample(grid, field, x - 1, y + 1));
+    const diagonal = Math.abs(legacyAxisSample(grid, field, x - 1, y - 1) - legacyAxisSample(grid, field, x + 1, y + 1))
+      + Math.abs(legacyAxisSample(grid, field, x + 1, y - 1) - legacyAxisSample(grid, field, x - 1, y + 1));
     output[id] = Math.min(1, Math.abs(cardinal - diagonal) * 2.8);
   });
 }
@@ -286,10 +286,10 @@ function measureFieldContinuity(grid, field, output) {
 }
 
 function sampleLegacyAxisDiagnostic(grid, field, x, y) {
-  const left = sample(grid, field, x - 1, y);
-  const right = sample(grid, field, x + 1, y);
-  const up = sample(grid, field, x, y - 1);
-  const down = sample(grid, field, x, y + 1);
+  const left = legacyAxisSample(grid, field, x - 1, y);
+  const right = legacyAxisSample(grid, field, x + 1, y);
+  const up = legacyAxisSample(grid, field, x, y - 1);
+  const down = legacyAxisSample(grid, field, x, y + 1);
   const dx = Math.abs(left - right);
   const dy = Math.abs(up - down);
   const localMax = Math.max(left, right, up, down);
@@ -359,7 +359,7 @@ function visitAxisSegmentNeighbors(grid, topology, id, visit) {
   });
 }
 
-function segmentMask(x, y, weakness, forceSegmented) {
+function legacyAxisSegmentMask(x, y, weakness, forceSegmented) {
   const coarse = hash2(Math.floor((x + 3) / 19), Math.floor((y + 5) / 13));
   const fine = hash2(Math.floor((x + 11) / 7), Math.floor((y + 2) / 7));
   const keep = forceSegmented ? 0.62 + weakness * 0.28 : 0.76 + weakness * 0.2;
@@ -380,8 +380,12 @@ function hash2(x, y) {
   return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
 }
 
-function sample(grid, field, x, y) {
-  const id = indexOf(grid, x, y);
+function legacyAxisIndexOf(grid, x, y) {
+  return indexOf(grid, x, y);
+}
+
+function legacyAxisSample(grid, field, x, y) {
+  const id = legacyAxisIndexOf(grid, x, y);
   if (id < 0) return 0;
   return sampleGridWrapped(grid, field, x, y);
 }
