@@ -1903,6 +1903,8 @@
   function createSphericalTopology(grid) {
     return {
       topologyKind: grid.topologyKind,
+      width: grid.faceSize,
+      height: grid.faceCount * grid.faceSize,
       size: grid.size,
       grid,
       forEachCell: (visit) => {
