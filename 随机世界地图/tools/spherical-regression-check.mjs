@@ -484,6 +484,10 @@ function compactMetrics(parsed) {
   }
   if (parsed.spherical?.diagnostics) {
     picked.sphericalHydrology = parsed.spherical.diagnostics;
+    picked.sphericalHydrologyCompletenessRequired = parsed.spherical.hydrologyCompletenessRequired;
+    picked.sphericalHydrologyProbePurpose = parsed.spherical.hydrologyProbePurpose;
+    picked.sphericalProbeHydrologyCompletenessNotRequired = parsed.checks?.sphericalProbeHydrologyCompletenessNotRequired;
+    picked.sphericalProbeDocumentsIncompleteHydrology = parsed.checks?.sphericalProbeDocumentsIncompleteHydrology;
     picked.sphericalAreaClosedDrainageShare = parsed.spherical.areaClosedDrainageShare;
     picked.sphericalCellClosedDrainageShare = parsed.spherical.cellClosedDrainageShare;
     picked.sphericalFlowAccumulationMean = parsed.spherical.flowAccumulationMean;

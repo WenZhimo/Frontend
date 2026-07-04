@@ -9,6 +9,8 @@ const cylindrical = runCylindricalProbe();
 const spherical = runSphericalProbe(faceSize);
 
 const checks = {
+  sphericalProbeHydrologyCompletenessNotRequired: spherical.hydrologyCompletenessRequired === false,
+  sphericalProbeDocumentsIncompleteHydrology: spherical.diagnostics.hydrologyValid === false,
   cylindricalUsesCellLakeShare: nearlyEqual(cylindrical.diagnostics.lakeCandidateShare, cylindrical.cellLakeShare, 1e-12),
   sphericalUsesAreaLakeShare: nearlyEqual(spherical.diagnostics.lakeCandidateShare, spherical.areaLakeShare, 1e-12),
   sphericalClosedDrainageUsesArea: nearlyEqual(spherical.diagnostics.closedBasinDrainageShare, spherical.areaClosedDrainageShare, 1e-12),
@@ -133,9 +135,14 @@ function createProbeTerrain(grid, landPredicate) {
 
 function summarizeProbe(grid, terrain, hydrology) {
   const diagnostics = hydrology.hydrologyDiagnostics;
+  const graphBacked = Boolean(grid.topologyOptions?.graphBacked || grid.topologyKind === "cubed-sphere");
   return {
     topologyKind: grid.topologyKind ?? "cylindrical",
-    graphBacked: Boolean(grid.topologyOptions?.graphBacked || grid.topologyKind === "cubed-sphere"),
+    graphBacked,
+    hydrologyCompletenessRequired: !graphBacked,
+    hydrologyProbePurpose: graphBacked
+      ? "area-weighted spherical hydrology diagnostics; full river routing is intentionally not required here"
+      : "legacy cylindrical hydrology completeness probe",
     cellLakeShare: cellShare(hydrology.lakeCandidate),
     areaLakeShare: areaShare(grid, hydrology.lakeCandidate),
     areaAssignedShare: areaConditionalShare(grid, terrain.landMask, (id) => hydrology.flowTarget[id] >= 0),
