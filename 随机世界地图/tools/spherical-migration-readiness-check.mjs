@@ -67,7 +67,9 @@ const result = {
     .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
   notes: [
     "valid only means the spherical production adapter boundary is clean",
-    "fullMigrationReady remains false while legacy geology modules still use rectangular indexing",
+    fullMigrationReady
+      ? "fullMigrationReady means scanned legacy migration scopes have no unclassified rectangular-indexing risks"
+      : "fullMigrationReady remains false while scanned legacy migration scopes still contain rectangular-indexing risks",
   ],
 };
 
