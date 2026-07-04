@@ -10731,6 +10731,9 @@
       plateCount: Number(elements.plateCount.value),
       timeScale: Number(elements.timeScale.value),
       resolution: elements.resolution.value,
+      topologyMode: elements.topologyMode?.value,
+      projectionMode: elements.projectionMode?.value,
+      faceSize: optionalNumber(elements.faceSize?.value),
       showBoundaries: elements.showBoundaries.checked,
       pipelineMode: elements.pipelineMode?.value ?? "geology-v2",
       ...readUrlOnlyParams(),
@@ -10742,10 +10745,14 @@
       elements.waterLabel.textContent = `${elements.waterLevel.value}%`;
       elements.intensityLabel.textContent = `${Number(elements.intensity.value).toFixed(2)}x`;
       elements.platesLabel.textContent = elements.plateCount.value;
+      if (elements.faceSizeLabel) {
+        elements.faceSizeLabel.textContent = elements.faceSize?.value ? elements.faceSize.value : "自动";
+      }
     };
     elements.waterLevel.addEventListener("input", update);
     elements.intensity.addEventListener("input", update);
     elements.plateCount.addEventListener("input", update);
+    elements.faceSize?.addEventListener("change", update);
     update();
   }
 
@@ -10801,6 +10808,12 @@
     if (Number.isFinite(numeric)) target[key] = numeric;
   }
 
+  function optionalNumber(value) {
+    if (value === undefined || value === null || value === "") return undefined;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : undefined;
+  }
+
 
   // ---- src/main.js ----
 
@@ -10815,6 +10828,10 @@
     platesLabel: document.querySelector("#platesLabel"),
     timeScale: document.querySelector("#timeScale"),
     resolution: document.querySelector("#resolution"),
+    topologyMode: document.querySelector("#topologyMode"),
+    projectionMode: document.querySelector("#projectionMode"),
+    faceSize: document.querySelector("#faceSize"),
+    faceSizeLabel: document.querySelector("#faceSizeLabel"),
     pipelineMode: document.querySelector("#pipelineMode"),
     showBoundaries: document.querySelector("#showBoundaries"),
     playPause: document.querySelector("#playPause"),
@@ -10871,6 +10888,9 @@
     elements.plateCount,
     elements.timeScale,
     elements.resolution,
+    elements.topologyMode,
+    elements.projectionMode,
+    elements.faceSize,
     elements.pipelineMode,
   ]) {
     if (element) element.addEventListener("change", rebuildWorld);

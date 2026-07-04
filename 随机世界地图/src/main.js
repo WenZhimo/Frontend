@@ -15,6 +15,10 @@ const elements = {
   platesLabel: document.querySelector("#platesLabel"),
   timeScale: document.querySelector("#timeScale"),
   resolution: document.querySelector("#resolution"),
+  topologyMode: document.querySelector("#topologyMode"),
+  projectionMode: document.querySelector("#projectionMode"),
+  faceSize: document.querySelector("#faceSize"),
+  faceSizeLabel: document.querySelector("#faceSizeLabel"),
   pipelineMode: document.querySelector("#pipelineMode"),
   showBoundaries: document.querySelector("#showBoundaries"),
   playPause: document.querySelector("#playPause"),
@@ -71,6 +75,9 @@ for (const element of [
   elements.plateCount,
   elements.timeScale,
   elements.resolution,
+  elements.topologyMode,
+  elements.projectionMode,
+  elements.faceSize,
   elements.pipelineMode,
 ]) {
   if (element) element.addEventListener("change", rebuildWorld);

@@ -55,6 +55,34 @@
             </select>
           </label>
 
+          <label class="field">
+            <span>拓扑核心</span>
+            <select id="topologyMode">
+              <option value="cylindrical" selected>圆柱展开 legacy</option>
+              <option value="cubed-sphere">真实球面 cubed-sphere</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>投影显示</span>
+            <select id="projectionMode">
+              <option value="equirectangular" selected>等距圆柱</option>
+              <option value="mollweide">Mollweide</option>
+              <option value="orthographic">正射球面</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>球面面尺寸 <output id="faceSizeLabel">自动</output></span>
+            <select id="faceSize">
+              <option value="" selected>随分辨率自动</option>
+              <option value="24">24 调试</option>
+              <option value="64">64 预览</option>
+              <option value="128">128 默认</option>
+              <option value="192">192 高质</option>
+            </select>
+          </label>
+
           <label class="check-field">
             <input id="showBoundaries" type="checkbox" checked>
             <span>显示活动板块边界</span>
