@@ -47,6 +47,9 @@ const checks = {
   defaultCubedSphereHasNoLegacyDimensions: !Object.hasOwn(defaultCubedSphere.grid, "width")
     && !Object.hasOwn(defaultCubedSphere.grid, "height"),
   defaultCubedSphereKeepsDiagnosticSidecar: defaultCubedSphere.sphericalWorld?.kind === "spherical-experimental-world",
+  defaultCubedSphereDiagnosticSidecarExplicit: defaultCubedSphere.sphericalWorld?.role === "diagnostic-sidecar"
+    && defaultCubedSphere.sphericalWorld?.authoritative === false
+    && defaultCubedSphere.sphericalWorld?.writesProductionState === false,
   defaultCubedSphereSidecarNonAuthoritative: defaultCubedSphere.grid.kind !== defaultCubedSphere.sphericalWorld?.kind
     && defaultCubedSphere.grid.size === defaultCubedSphere.sphericalGrid?.size,
   adapterProductionGridIsCubedSphere: adapter.grid.topologyKind === "cubed-sphere",
@@ -77,6 +80,9 @@ const result = {
     faceSize: defaultCubedSphere.grid.faceSize,
     hasDiagnosticSphericalWorld: Boolean(defaultCubedSphere.sphericalWorld),
     diagnosticSidecarKind: defaultCubedSphere.sphericalWorld?.kind ?? null,
+    diagnosticSidecarRole: defaultCubedSphere.sphericalWorld?.role ?? null,
+    diagnosticSidecarAuthoritative: defaultCubedSphere.sphericalWorld?.authoritative ?? null,
+    diagnosticSidecarWritesProductionState: defaultCubedSphere.sphericalWorld?.writesProductionState ?? null,
     diagnosticSidecarNonAuthoritative: checks.defaultCubedSphereSidecarNonAuthoritative,
   },
   adapterProduction: {

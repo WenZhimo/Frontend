@@ -2428,6 +2428,10 @@
     const geometricSeaMask = createDiagnosticSeaMask(grid);
     const world = {
       kind: "spherical-experimental-world",
+      role: "diagnostic-sidecar",
+      authoritative: false,
+      writesProductionState: false,
+      diagnosticPurpose: "legacy spherical probes only; production geology reads world.grid",
       seedText,
       seedUint32,
       grid,

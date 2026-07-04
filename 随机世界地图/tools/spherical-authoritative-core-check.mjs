@@ -123,6 +123,9 @@ function summarizeWorld(world) {
     hasSphericalGrid: Boolean(world.sphericalGrid),
     hasSphericalWorld: Boolean(world.sphericalWorld),
     diagnosticSidecarAttached: Boolean(world.sphericalWorld),
+    diagnosticSidecarRole: world.sphericalWorld?.role ?? null,
+    diagnosticSidecarAuthoritative: world.sphericalWorld?.authoritative ?? null,
+    diagnosticSidecarWritesProductionState: world.sphericalWorld?.writesProductionState ?? null,
     productionGridIsAuthoritative: productionGridIsCubedSphere,
     sphericalGridKind: world.sphericalGrid?.topologyKind ?? null,
     sphericalGridSize: world.sphericalGrid?.size ?? 0,
@@ -145,6 +148,9 @@ function evaluateAuthoritativeGate(before, after) {
     productionGridMatchesSphericalSize: sphericalBefore.productionGridMatchesSphericalSize === true,
     productionHasGraphTopology: sphericalBefore.hasProductionGraphTopology === true,
     diagnosticWorldAttached: sphericalBefore.hasSphericalWorld === true,
+    diagnosticWorldExplicitlySidecar: sphericalBefore.diagnosticSidecarRole === "diagnostic-sidecar",
+    diagnosticWorldNonAuthoritative: sphericalBefore.diagnosticSidecarAuthoritative === false,
+    diagnosticWorldReadOnlyForProduction: sphericalBefore.diagnosticSidecarWritesProductionState === false,
     diagnosticWorldAdvanced: sphericalAfter.sphericalMeanPlateDriftRadians > sphericalBefore.sphericalMeanPlateDriftRadians,
     adapterUsesCubedSphereGrid: adapterBefore.productionGridIsCubedSphere === true,
     adapterGridMatchesSphericalSize: adapterBefore.productionGridMatchesSphericalSize === true,
@@ -176,6 +182,9 @@ function evaluateAuthoritativeGate(before, after) {
   const diagnosticSidecarNonAuthoritative =
     authoritativeCoreReady &&
     authorityChecks.diagnosticWorldAttached &&
+    authorityChecks.diagnosticWorldExplicitlySidecar &&
+    authorityChecks.diagnosticWorldNonAuthoritative &&
+    authorityChecks.diagnosticWorldReadOnlyForProduction &&
     sphericalBefore.productionGridKind !== sphericalBefore.sphericalWorldKind &&
     sphericalBefore.productionGridSize === sphericalBefore.sphericalGridSize;
 
