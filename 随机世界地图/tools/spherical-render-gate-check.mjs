@@ -9,6 +9,8 @@ const outputResolution = process.argv[5] ?? "128x64";
 const renderOutput = "_spherical_render_gate.ppm";
 const gpuOutputPrefix = "_spherical_gpu_render_gate";
 const gpuOutput = `${gpuOutputPrefix}_cpu.ppm`;
+const debugOutputDir = "_spherical_debug_render_gate";
+const debugOutput = `${debugOutputDir}/flowAccumulation.ppm`;
 
 cleanup();
 
@@ -46,6 +48,25 @@ const gpuRenderCheck = runJsonCheck("gpu-render-check", [
   outputResolution,
 ]);
 
+const debugRenderCheck = runJsonCheck("geology-debug-render", [
+  "tools/geology-debug-render.mjs",
+  seedText,
+  String(steps),
+  debugOutputDir,
+  "geology-v2",
+  "256x128",
+  "--topology",
+  "cubed-sphere",
+  "--projection",
+  "equirectangular",
+  "--face-size",
+  String(faceSize),
+  "--output-resolution",
+  outputResolution,
+  "--layers",
+  "flowAccumulation",
+]);
+
 const checks = {
   renderCheckValid: renderCheck.status === 0 && renderCheck.parsed !== null,
   renderUsesSphericalProjection: renderCheck.parsed?.renderBackend === "cpu-spherical-projection-reference",
@@ -55,6 +76,12 @@ const checks = {
   gpuUsesSphericalCpuReference: gpuRenderCheck.parsed?.cpuRenderBackend === "cpu-spherical-projection-reference",
   gpuRectangularPathSkipped: gpuRenderCheck.parsed?.experimentalGpuRender?.skipped === true,
   gpuOutputExists: existsSync(gpuOutput),
+  debugCheckValid: debugRenderCheck.status === 0 && debugRenderCheck.parsed !== null,
+  debugTopologyCubedSphere: debugRenderCheck.parsed?.topologyMode === "cubed-sphere",
+  debugLayerRestricted:
+    Array.isArray(debugRenderCheck.parsed?.requestedLayers) &&
+    debugRenderCheck.parsed.requestedLayers.includes("flowAccumulation"),
+  debugOutputExists: existsSync(debugOutput),
 };
 
 const failures = Object.entries(checks)
@@ -71,6 +98,7 @@ const result = {
   checks,
   renderCheck: compactRenderResult(renderCheck),
   gpuRenderCheck: compactGpuResult(gpuRenderCheck),
+  debugRenderCheck: compactDebugResult(debugRenderCheck),
 };
 
 cleanup();
@@ -127,8 +155,22 @@ function compactGpuResult(result) {
   };
 }
 
+function compactDebugResult(result) {
+  const parsed = result.parsed ?? {};
+  return {
+    status: result.status,
+    topologyMode: parsed.topologyMode ?? null,
+    projectionMode: parsed.projectionMode ?? null,
+    faceSize: parsed.faceSize ?? null,
+    requestedLayers: parsed.requestedLayers ?? null,
+    outputCount: Array.isArray(parsed.outputs) ? parsed.outputs.length : null,
+    stderr: result.stderr,
+  };
+}
+
 function cleanup() {
-  for (const path of [renderOutput, gpuOutput]) {
+  for (const path of [renderOutput, gpuOutput, debugOutput]) {
     if (existsSync(path)) rmSync(path, { force: true });
   }
+  if (existsSync(debugOutputDir)) rmSync(debugOutputDir, { recursive: true, force: true });
 }
