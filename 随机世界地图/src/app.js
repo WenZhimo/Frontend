@@ -6285,6 +6285,19 @@
 
   function localSlope(grid, id, seaLevel) {
     const center = grid.elev[id] - seaLevel;
+    const topology = topologyForGrid(grid);
+    if (isGraphBackedGrid(grid, topology)) {
+      let sumSq = 0;
+      let count = 0;
+      topology.forEachNeighbor(id, (nid, _slot, edgeLength = 1) => {
+        const scale = Math.max(0.25, edgeLength || 1);
+        const gradient = (grid.elev[nid] - seaLevel - center) / scale;
+        sumSq += gradient * gradient;
+        count += 1;
+      });
+      return count ? Math.sqrt(sumSq / count) : 0;
+    }
+
     let left = center;
     let right = center;
     let up = center;
@@ -6297,6 +6310,14 @@
       else if (dy > 0) down = value;
     });
     return Math.hypot((right - left) * 0.5, (down - up) * 0.5);
+  }
+
+  function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+    return Boolean(
+      grid.topologyOptions?.graphBacked ||
+        topology?.topologyKind === "cubed-sphere" ||
+        grid.topologyKind === "cubed-sphere",
+    );
   }
 
   function std(values) {
