@@ -462,6 +462,7 @@ function compactMetrics(parsed) {
   ]) {
     if (parsed[key] !== undefined) picked[key] = parsed[key];
     else if (parsed.metrics?.[key] !== undefined) picked[key] = parsed.metrics[key];
+    else if (parsed.checks?.[key] !== undefined) picked[key] = parsed.checks[key];
   }
   if (parsed.spherical?.diagnostics) {
     picked.sphericalHydrology = parsed.spherical.diagnostics;
