@@ -664,6 +664,40 @@ function compactMetrics(name, parsed) {
     picked.productionAdapterTopologyManualAccessRisk = parsed.topologyDiagnostics?.topologyManualAccessRisk;
     picked.productionAdapterTopologyMigrationCoverage = parsed.topologyDiagnostics?.topologyMigrationCoverage;
   }
+  if (name === "spherical-authoritative-core-check") {
+    picked.authoritativeProductionGridKind = parsed.before?.spherical?.productionGridKind;
+    picked.authoritativeProductionTopologyKind = parsed.before?.spherical?.productionTopologyKind;
+    picked.authoritativeProductionTopologyMode = parsed.before?.spherical?.topologyMode;
+    picked.authoritativeProductionGridSize = parsed.before?.spherical?.productionGridSize;
+    picked.authoritativeSphericalGridSize = parsed.before?.spherical?.sphericalGridSize;
+    picked.authoritativeProductionGridMatchesSphericalSize =
+      parsed.before?.spherical?.productionGridMatchesSphericalSize;
+    picked.authoritativeProductionHasGraphTopology = parsed.before?.spherical?.hasProductionGraphTopology;
+    picked.authoritativeProductionGridIsCubedSphere = parsed.checks?.productionGridIsCubedSphere;
+    picked.authoritativeProductionGridGraphBacked = parsed.checks?.productionGridGraphBacked;
+    picked.authoritativeProductionStepAdvanced = parsed.checks?.productionStepAdvanced;
+    picked.authoritativeProductionStatsStillPresent = parsed.checks?.productionStatsStillPresent;
+    picked.authoritativeModeCorrectlyIdentified = parsed.checks?.authoritativeModeCorrectlyIdentified;
+    picked.authoritativeNoBlockers = parsed.checks?.noAuthoritativeBlockers;
+    picked.authoritativeDiagnosticWorldAttached = parsed.authorityChecks?.diagnosticWorldAttached;
+    picked.authoritativeDiagnosticWorldExplicitlySidecar =
+      parsed.authorityChecks?.diagnosticWorldExplicitlySidecar;
+    picked.authoritativeDiagnosticWorldNonAuthoritative =
+      parsed.authorityChecks?.diagnosticWorldNonAuthoritative;
+    picked.authoritativeDiagnosticWorldReadOnlyForProduction =
+      parsed.authorityChecks?.diagnosticWorldReadOnlyForProduction;
+    picked.authoritativeDiagnosticWorldAdvanced = parsed.authorityChecks?.diagnosticWorldAdvanced;
+    picked.authoritativeAdapterUsesCubedSphereGrid = parsed.authorityChecks?.adapterUsesCubedSphereGrid;
+    picked.authoritativeAdapterGridMatchesSphericalSize =
+      parsed.authorityChecks?.adapterGridMatchesSphericalSize;
+    picked.authoritativeAdapterHasGraphTopology = parsed.authorityChecks?.adapterHasGraphTopology;
+    picked.authoritativeAdapterStatsAdvance = parsed.authorityChecks?.adapterStatsAdvance;
+    picked.authoritativeCylindricalReferenceStillAvailable =
+      parsed.authorityChecks?.cylindricalReferenceStillAvailable;
+    picked.authoritativeLegacySphericalRequestNormalizedToGeologyV2 =
+      parsed.checks?.legacySphericalRequestNormalizedToGeologyV2;
+    picked.authoritativeLegacySphericalRequestCanStep = parsed.checks?.legacySphericalRequestCanStep;
+  }
   if (name === "spherical-production-init-check") {
     picked.productionInitStageCount = parsed.stages?.length ?? 0;
     picked.productionInitFailedStageName = parsed.stages?.find((stage) => !stage.ok)?.name ?? null;
