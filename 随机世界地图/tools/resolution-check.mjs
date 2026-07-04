@@ -241,22 +241,22 @@ function measureCrustStats(grid) {
   let inactiveOrogeny = 0;
   let totalAreaValue = 0;
   const fields = {
-    crustThickness: measureFieldStats(grid.crustThickness, grid.size),
-    crustAge: measureFieldStats(grid.crustAge, grid.size),
-    orogeny: measureFieldStats(grid.orogeny, grid.size),
-    sediment: measureFieldStats(grid.sediment, grid.size),
-    erosionSource: measureFieldStats(grid.erosionSource, grid.size),
-    sedimentFlux: measureFieldStats(grid.sedimentFlux, grid.size),
-    sedimentSink: measureFieldStats(grid.sedimentSink, grid.size),
-    sedimentCapacity: measureFieldStats(grid.sedimentCapacity, grid.size),
-    sedimentCompaction: measureFieldStats(grid.sedimentCompaction, grid.size),
-    sedimentLoadSubsidence: measureFieldStats(grid.sedimentLoadSubsidence, grid.size),
-    isostaticBase: measureFieldStats(grid.isostaticBase, grid.size),
-    crustBuoyancy: measureFieldStats(grid.crustBuoyancy, grid.size),
-    densitySubsidence: measureFieldStats(grid.densitySubsidence, grid.size),
-    lithosphereCooling: measureFieldStats(grid.lithosphereCooling, grid.size),
-    isostaticResidual: measureFieldStats(grid.isostaticResidual, grid.size),
-    basin: measureFieldStats(grid.basin, grid.size),
+    crustThickness: measureFieldStats(grid, grid.crustThickness),
+    crustAge: measureFieldStats(grid, grid.crustAge),
+    orogeny: measureFieldStats(grid, grid.orogeny),
+    sediment: measureFieldStats(grid, grid.sediment),
+    erosionSource: measureFieldStats(grid, grid.erosionSource),
+    sedimentFlux: measureFieldStats(grid, grid.sedimentFlux),
+    sedimentSink: measureFieldStats(grid, grid.sedimentSink),
+    sedimentCapacity: measureFieldStats(grid, grid.sedimentCapacity),
+    sedimentCompaction: measureFieldStats(grid, grid.sedimentCompaction),
+    sedimentLoadSubsidence: measureFieldStats(grid, grid.sedimentLoadSubsidence),
+    isostaticBase: measureFieldStats(grid, grid.isostaticBase),
+    crustBuoyancy: measureFieldStats(grid, grid.crustBuoyancy),
+    densitySubsidence: measureFieldStats(grid, grid.densitySubsidence),
+    lithosphereCooling: measureFieldStats(grid, grid.lithosphereCooling),
+    isostaticResidual: measureFieldStats(grid, grid.isostaticResidual),
+    basin: measureFieldStats(grid, grid.basin),
   };
   for (let i = 0; i < grid.size; i += 1) {
     const area = metricArea(grid, i);
@@ -310,32 +310,33 @@ function measureOceanAgeDiagnostics(world) {
 
   for (let i = 0; i < grid.size; i += 1) {
     if (grid.crustType[i] !== 0) continue;
+    const area = metricArea(grid, i);
     const age = grid.crustAge[i];
     const depth = Math.max(0, seaLevel - grid.elev[i]);
-    count += 1;
-    ageSum += age;
-    depthSum += depth;
-    ageSq += age * age;
-    depthSq += depth * depth;
-    ageDepth += age * depth;
+    count += area;
+    ageSum += age * area;
+    depthSum += depth * area;
+    ageSq += age * age * area;
+    depthSq += depth * depth * area;
+    ageDepth += age * depth * area;
     if (age < 0.18) {
-      youngCount += 1;
-      youngDepthSum += depth;
+      youngCount += area;
+      youngDepthSum += depth * area;
     }
     if (age > 0.72) {
-      oldCount += 1;
-      oldDepthSum += depth;
+      oldCount += area;
+      oldDepthSum += depth * area;
     }
     if (grid.ridge[i] > 0.08 || grid.ridgeDistance[i] === 0) {
-      ridgeOcean += 1;
-      if (age < 0.08) ridgeReset += 1;
+      ridgeOcean += area;
+      if (age < 0.08) ridgeReset += area;
     }
-    termCount += 1;
-    ageSubsidenceSum += grid.ageSubsidence[i];
-    thicknessBuoyancySum += grid.thicknessBuoyancy[i];
-    sedimentFillSum += grid.sedimentFill[i];
-    ridgeUpliftSum += grid.ridgeUplift[i];
-    trenchDepressionSum += grid.trenchDepression[i];
+    termCount += area;
+    ageSubsidenceSum += grid.ageSubsidence[i] * area;
+    thicknessBuoyancySum += grid.thicknessBuoyancy[i] * area;
+    sedimentFillSum += grid.sedimentFill[i] * area;
+    ridgeUpliftSum += grid.ridgeUplift[i] * area;
+    trenchDepressionSum += grid.trenchDepression[i] * area;
   }
 
   const covariance = count ? ageDepth / count - (ageSum / count) * (depthSum / count) : 0;
@@ -435,50 +436,53 @@ function measureMarginDiagnostics(world) {
   let wedge = 0;
   let closedBasin = 0;
   let closedBasinMargin = 0;
+  let totalAreaValue = 0;
 
   for (let i = 0; i < grid.size; i += 1) {
+    const area = metricArea(grid, i);
+    totalAreaValue += area;
     const pm = grid.passiveMargin[i] ?? 0;
     if (pm > 0.05) {
-      passive += 1;
-      if (grid.boundaryInfluence[i] > 0.25) passiveBoundary += 1;
-      if (grid.boundaryInfluence[i] > 0.35 || grid.ridge[i] > 0.2 || grid.trench[i] > 0.2) passiveActive += 1;
+      passive += area;
+      if (grid.boundaryInfluence[i] > 0.25) passiveBoundary += area;
+      if (grid.boundaryInfluence[i] > 0.35 || grid.ridge[i] > 0.2 || grid.trench[i] > 0.2) passiveActive += area;
     }
     if (grid.elev[i] < seaLevel && coastDistance[i] <= 8) {
-      nearCoastSea += 1;
-      if (seaLevel - grid.elev[i] < 0.08) nearCoastShallow += 1;
+      nearCoastSea += area;
+      if (seaLevel - grid.elev[i] < 0.08) nearCoastShallow += area;
     }
     if ((grid.continentalShelf[i] ?? 0) > 0.05) {
-      shelfSum += grid.continentalShelf[i];
-      shelfCount += 1;
+      shelfSum += grid.continentalShelf[i] * area;
+      shelfCount += area;
     }
     if (coastDistance[i] <= 3) {
-      coastGradientSum += localRuggedness(grid, i, seaLevel);
-      coastGradientCount += 1;
+      coastGradientSum += localRuggedness(grid, i, seaLevel) * area;
+      coastGradientCount += area;
     }
-    if ((grid.continentalSlope[i] ?? 0) > 0.05) slope += 1;
-    if ((grid.continentalRise[i] ?? 0) > 0.05) rise += 1;
-    if ((grid.sedimentWedge[i] ?? 0) > 0.05) wedge += 1;
+    if ((grid.continentalSlope[i] ?? 0) > 0.05) slope += area;
+    if ((grid.continentalRise[i] ?? 0) > 0.05) rise += area;
+    if ((grid.sedimentWedge[i] ?? 0) > 0.05) wedge += area;
     if ((grid.abyssalPlain[i] ?? 0) > 0.05) {
-      abyssal += 1;
-      abyssalRuggedness += localRuggedness(grid, i, seaLevel);
+      abyssal += area;
+      abyssalRuggedness += localRuggedness(grid, i, seaLevel) * area;
     }
     if (grid.inlandWaterCandidate[i]) {
-      closedBasin += 1;
-      if (pm > 0.05) closedBasinMargin += 1;
+      closedBasin += area;
+      if (pm > 0.05) closedBasinMargin += area;
     }
   }
 
   return {
-    passiveMarginCoverage: passive / grid.size,
+    passiveMarginCoverage: passive / Math.max(totalAreaValue, Number.EPSILON),
     passiveMarginBoundaryShare: passive ? passiveBoundary / passive : 0,
     nearCoastShallowSeaShare: nearCoastSea ? nearCoastShallow / nearCoastSea : 0,
     shelfWidthMean: shelfCount ? shelfSum / shelfCount : 0,
     coastDepthGradient: coastGradientCount ? coastGradientSum / coastGradientCount : 0,
-    continentalSlopeCoverage: slope / grid.size,
-    continentalRiseCoverage: rise / grid.size,
-    abyssalPlainCoverage: abyssal / grid.size,
+    continentalSlopeCoverage: slope / Math.max(totalAreaValue, Number.EPSILON),
+    continentalRiseCoverage: rise / Math.max(totalAreaValue, Number.EPSILON),
+    abyssalPlainCoverage: abyssal / Math.max(totalAreaValue, Number.EPSILON),
     abyssalPlainFlatness: abyssal ? abyssalRuggedness / abyssal : 0,
-    sedimentWedgeCoverage: wedge / grid.size,
+    sedimentWedgeCoverage: wedge / Math.max(totalAreaValue, Number.EPSILON),
     closedBasinMisclassifiedAsMarginShare: closedBasin ? closedBasinMargin / closedBasin : 0,
     activeBoundaryMisclassifiedAsPassiveMarginShare: passive ? passiveActive / passive : 0,
   };
@@ -501,29 +505,30 @@ function measureTransformDiagnostics(world) {
   let inactiveOceanicCount = 0;
 
   for (let i = 0; i < grid.size; i += 1) {
+    const area = metricArea(grid, i);
     if (grid.activeTransform[i] > transformDiagnosticThreshold(grid)) {
-      activeSignalSum += grid.activeTransform[i];
-      activeSignalCount += 1;
+      activeSignalSum += grid.activeTransform[i] * area;
+      activeSignalCount += area;
     }
     if (grid.transformMemory[i] > transformDiagnosticThreshold(grid) && grid.activeTransform[i] <= transformDiagnosticThreshold(grid) * 0.2) {
-      inactiveSignalSum += grid.inactiveBoundaryRelief[i];
-      inactiveSignalCount += 1;
+      inactiveSignalSum += grid.inactiveBoundaryRelief[i] * area;
+      inactiveSignalCount += area;
     }
     if (grid.fractureZoneMemory[i] > 0.05) {
-      fractureContribution += Math.abs(grid.oldBoundaryCorrelation[i]);
-      fractureCount += 1;
+      fractureContribution += Math.abs(grid.oldBoundaryCorrelation[i]) * area;
+      fractureCount += area;
     }
     if (grid.ageBandStraightnessRisk[i] > 0.05) {
-      straightRisk += grid.ageBandStraightnessRisk[i];
-      straightRiskCount += 1;
+      straightRisk += grid.ageBandStraightnessRisk[i] * area;
+      straightRiskCount += area;
     }
     if (grid.fractureZoneMemory[i] > 0.05 && grid.abyssalPlain[i] > 0.05) {
-      abyssalSuppression += grid.oldBoundaryCorrelation[i];
-      abyssalCount += 1;
+      abyssalSuppression += grid.oldBoundaryCorrelation[i] * area;
+      abyssalCount += area;
     }
     if (grid.crustType[i] === 0 && grid.boundaryInfluence[i] < 0.12 && grid.transformMemory[i] > transformDiagnosticThreshold(grid)) {
-      inactiveOceanicMemory += grid.inactiveBoundaryRelief[i];
-      inactiveOceanicCount += 1;
+      inactiveOceanicMemory += grid.inactiveBoundaryRelief[i] * area;
+      inactiveOceanicCount += area;
     }
   }
 
@@ -554,24 +559,27 @@ function measureBoundaryDiagnostics(grid) {
   let islandNoise = 0;
   let featureOnNoisy = 0;
   let featureCount = 0;
+  let totalAreaValue = 0;
   for (let i = 0; i < grid.size; i += 1) {
-    if (grid.activeBoundary[i]) active += 1;
-    densitySum += grid.boundaryDensity[i] ?? 0;
-    if (grid.noisyBoundaryPatch[i]) noisy += 1;
-    checker += grid.plateCheckerboard[i] ?? 0;
-    if (isPlateIslandNoise(grid, i)) islandNoise += 1;
+    const area = metricArea(grid, i);
+    totalAreaValue += area;
+    if (grid.activeBoundary[i]) active += area;
+    densitySum += (grid.boundaryDensity[i] ?? 0) * area;
+    if (grid.noisyBoundaryPatch[i]) noisy += area;
+    checker += (grid.plateCheckerboard[i] ?? 0) * area;
+    if (isPlateIslandNoise(grid, i)) islandNoise += area;
     const feature = Math.max(grid.mountainBelt[i], grid.trench[i], grid.ridge[i], grid.rift[i], grid.basin[i], grid.islandArc[i]);
     if (feature > 0.05) {
-      featureCount += 1;
-      if (grid.noisyBoundaryPatch[i]) featureOnNoisy += 1;
+      featureCount += area;
+      if (grid.noisyBoundaryPatch[i]) featureOnNoisy += area;
     }
   }
   return {
-    plateCheckerboardScore: checker / grid.size,
-    activeBoundaryCoverage: active / grid.size,
-    localBoundaryDensityMean: densitySum / grid.size,
-    noisyBoundaryPatchCoverage: noisy / grid.size,
-    plateIslandNoiseShare: islandNoise / grid.size,
+    plateCheckerboardScore: checker / Math.max(totalAreaValue, Number.EPSILON),
+    activeBoundaryCoverage: active / Math.max(totalAreaValue, Number.EPSILON),
+    localBoundaryDensityMean: densitySum / Math.max(totalAreaValue, Number.EPSILON),
+    noisyBoundaryPatchCoverage: noisy / Math.max(totalAreaValue, Number.EPSILON),
+    plateIslandNoiseShare: islandNoise / Math.max(totalAreaValue, Number.EPSILON),
     featureOnNoisyBoundaryShare: featureCount ? featureOnNoisy / featureCount : 0,
   };
 }
@@ -825,19 +833,27 @@ function localRuggedness(grid, id, seaLevel) {
   return count ? sum / count : 0;
 }
 
-function measureFieldStats(field, size) {
+function measureFieldStats(grid, field) {
   let sum = 0;
   let min = Infinity;
   let max = -Infinity;
   let coverage = 0;
-  for (let i = 0; i < size; i += 1) {
+  let weight = 0;
+  for (let i = 0; i < grid.size; i += 1) {
+    const area = metricArea(grid, i);
     const v = field[i];
-    sum += v;
+    sum += v * area;
+    weight += area;
     if (v < min) min = v;
     if (v > max) max = v;
-    if (v > 0.05) coverage += 1;
+    if (v > 0.05) coverage += area;
   }
-  return { average: sum / size, min, max, coverage: coverage / size };
+  return {
+    average: sum / Math.max(weight, Number.EPSILON),
+    min,
+    max,
+    coverage: coverage / Math.max(weight, Number.EPSILON),
+  };
 }
 
 function measureGeologyRisks(world) {
@@ -926,12 +942,13 @@ function measureOldBoundarySeafloorSignal(grid, seaLevel) {
   for (let i = 0; i < grid.size; i += 1) {
     const relative = grid.elev[i] - seaLevel;
     if (relative >= 0) continue;
-    sea += 1;
-    oldFeatureSum += Math.max(grid.orogeny[i], grid.sediment[i], grid.basin[i]);
+    const area = metricArea(grid, i);
+    sea += area;
+    oldFeatureSum += Math.max(grid.orogeny[i], grid.sediment[i], grid.basin[i]) * area;
     const inactiveBoundary = grid.boundaryInfluence[i] < 0.08 && grid.boundaryDistance[i] <= 2;
     if (!inactiveBoundary) continue;
-    inactiveBoundarySea += 1;
-    if (relative > -0.08) shallowInactiveBoundary += 1;
+    inactiveBoundarySea += area;
+    if (relative > -0.08) shallowInactiveBoundary += area;
   }
   return {
     inactiveBoundarySeaShare: sea ? inactiveBoundarySea / sea : 0,
@@ -951,6 +968,7 @@ function measureInlandBasinRisk(grid, seaLevel) {
   let basinCandidates = 0;
   let sedimentedCandidates = 0;
   const smallLimit = Math.max(24, Math.floor(grid.size * 0.0025));
+  const totalAreaValue = totalArea(grid);
 
   for (let start = 0; start < grid.size; start += 1) {
     if (visited[start] || grid.elev[start] >= seaLevel) continue;
@@ -958,37 +976,49 @@ function measureInlandBasinRisk(grid, seaLevel) {
     let head = 0;
     let tail = 0;
     let count = 0;
+    let areaCount = 0;
     let basinCount = 0;
     let sedimentCount = 0;
     visited[start] = 1;
     queue[tail++] = start;
     while (head < tail) {
       const id = queue[head++];
+      const area = metricArea(grid, id);
       count += 1;
-      if (grid.basin[id] > 0.12) basinCount += 1;
-      if (grid.sediment[id] > 0.08) sedimentCount += 1;
+      areaCount += area;
+      if (grid.basin[id] > 0.12) basinCount += area;
+      if (grid.sediment[id] > 0.08) sedimentCount += area;
       forEachNeighbor4(topology, id, (nid) => {
         if (visited[nid] || grid.elev[nid] >= seaLevel) return;
         visited[nid] = 1;
         queue[tail++] = nid;
       });
     }
-    belowSea += count;
+    belowSea += areaCount;
     if (count <= smallLimit) {
       smallComponentCount += 1;
-      inlandCandidates += count;
+      inlandCandidates += areaCount;
       basinCandidates += basinCount;
       sedimentedCandidates += sedimentCount;
     }
   }
   return {
-    belowSeaRatio: belowSea / grid.size,
+    belowSeaCellRatio: belowSeaCellRatio(grid, seaLevel),
+    belowSeaRatio: belowSea / Math.max(totalAreaValue, Number.EPSILON),
     waterComponentCount: componentCount,
     smallWaterComponentCount: smallComponentCount,
-    inlandBelowSeaCandidateRatio: inlandCandidates / grid.size,
+    inlandBelowSeaCandidateRatio: inlandCandidates / Math.max(totalAreaValue, Number.EPSILON),
     basinCandidateShare: inlandCandidates ? basinCandidates / inlandCandidates : 0,
     sedimentedCandidateShare: inlandCandidates ? sedimentedCandidates / inlandCandidates : 0,
   };
+}
+
+function belowSeaCellRatio(grid, seaLevel) {
+  let belowSea = 0;
+  for (let i = 0; i < grid.size; i += 1) {
+    if (grid.elev[i] < seaLevel) belowSea += 1;
+  }
+  return belowSea / grid.size;
 }
 
 function measureLongStraightFeatureSignal(grid) {
