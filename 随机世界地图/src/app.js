@@ -3587,6 +3587,11 @@
     const { grid } = world;
     const interval = 4;
     if (world.step > 0 && world.step % interval !== 0) return;
+    const topology = topologyForGrid(grid);
+    if (isGraphBackedGrid(grid, topology)) {
+      advectCrustBySphericalPlateMotion(world, interval);
+      return;
+    }
 
     const {
       size,
@@ -3630,6 +3635,109 @@
     });
 
     // Keep legacy compatibility fields coherent without making them the source of truth.
+    syncLegacyCrustCompatibilityFields(grid);
+  }
+
+  function advectCrustBySphericalPlateMotion(world, interval) {
+    const { grid } = world;
+    const {
+      size,
+      pvx,
+      pvy,
+      pvz,
+      crustType,
+      crustThickness,
+      crustAge,
+      orogeny,
+      oldOrogeny,
+      orogenyAge,
+      forelandBasin,
+      sediment,
+      scratch,
+      scratch2,
+      scratch3,
+    } = grid;
+    const drift = world.timeScaleFactor * Math.max(0, world.params.intensity) * interval;
+    if (drift <= 0) return;
+
+    scratch.set(crustThickness);
+    scratch2.set(crustAge);
+    scratch3.set(orogeny);
+    const sedimentSource = new Float32Array(sediment);
+    const oldOrogenySource = new Float32Array(oldOrogeny);
+    const orogenyAgeSource = new Float32Array(orogenyAge);
+    const forelandSource = new Float32Array(forelandBasin);
+
+    for (let id = 0; id < size; id += 1) {
+      const previousType = crustType[id];
+      const source = backtrackSphericalPosition(grid, id, pvx[id], pvy[id], pvz?.[id] ?? 0, drift);
+      crustThickness[id] = sampleSphericalField(grid, scratch, source.x, source.y, source.z, scratch[id]);
+      if (previousType !== CrustType.OCEANIC) {
+        crustAge[id] = sampleSphericalField(grid, scratch2, source.x, source.y, source.z, scratch2[id]);
+      }
+      orogeny[id] = sampleSphericalField(grid, scratch3, source.x, source.y, source.z, scratch3[id]) * 0.992;
+      oldOrogeny[id] = sampleSphericalField(grid, oldOrogenySource, source.x, source.y, source.z, oldOrogenySource[id]) * 0.996;
+      orogenyAge[id] = sampleSphericalField(grid, orogenyAgeSource, source.x, source.y, source.z, orogenyAgeSource[id]);
+      forelandBasin[id] = sampleSphericalField(grid, forelandSource, source.x, source.y, source.z, forelandSource[id]) * 0.998;
+      sediment[id] = sampleSphericalField(grid, sedimentSource, source.x, source.y, source.z, sedimentSource[id]) * 0.998;
+      crustType[id] = classifyCrustType(crustThickness[id], crustAge[id], crustType[id]);
+    }
+
+    syncLegacyCrustCompatibilityFields(grid);
+  }
+
+  function backtrackSphericalPosition(grid, id, vx, vy, vz, drift) {
+    const x = grid.positionX?.[id] ?? 0;
+    const y = grid.positionY?.[id] ?? 0;
+    const z = grid.positionZ?.[id] ?? 1;
+    if (!Number.isFinite(vx) || !Number.isFinite(vy) || !Number.isFinite(vz)) return normalize3(x, y, z);
+    return normalize3(x - vx * drift, y - vy * drift, z - vz * drift);
+  }
+
+  function sampleSphericalField(grid, field, x, y, z, fallback = 0) {
+    const nearest = nearestSphericalCell(grid, x, y, z);
+    if (nearest < 0 || nearest >= grid.size) return fallback;
+    let total = 0;
+    let weight = 0;
+
+    const add = (id) => {
+      const value = field[id];
+      if (!Number.isFinite(value)) return;
+      const dot = Math.max(
+        -1,
+        Math.min(1, (grid.positionX?.[id] ?? 0) * x + (grid.positionY?.[id] ?? 0) * y + (grid.positionZ?.[id] ?? 0) * z),
+      );
+      const distance = Math.acos(dot);
+      const w = 1 / (1e-7 + distance * distance);
+      total += value * w;
+      weight += w;
+    };
+
+    add(nearest);
+    const start = grid.neighborStart?.[nearest] ?? 0;
+    const count = grid.neighborCount?.[nearest] ?? 0;
+    for (let k = 0; k < count; k += 1) add(grid.neighbors[start + k]);
+
+    return weight > 0 ? total / weight : fallback;
+  }
+
+  function nearestSphericalCell(grid, x, y, z) {
+    if (typeof grid.nearestCell === "function") return grid.nearestCell(x, y, z);
+    if (typeof grid.sphericalGrid?.nearestCell === "function") return grid.sphericalGrid.nearestCell(x, y, z);
+    let best = 0;
+    let bestDot = -Infinity;
+    for (let id = 0; id < grid.size; id += 1) {
+      const d = (grid.positionX?.[id] ?? 0) * x + (grid.positionY?.[id] ?? 0) * y + (grid.positionZ?.[id] ?? 0) * z;
+      if (d > bestDot) {
+        bestDot = d;
+        best = id;
+      }
+    }
+    return best;
+  }
+
+  function syncLegacyCrustCompatibilityFields(grid) {
+    const { size, crustType, crustThickness, crustAge } = grid;
     for (let i = 0; i < size; i += 1) {
       if (crustType[i] === CrustType.CONTINENTAL) {
         grid.crust[i] = (crustThickness[i] - 0.52) * 1.85;
