@@ -55,6 +55,7 @@ const result = {
   currentStage: gate.currentStage,
   authoritativeCoreReady: gate.authoritativeCoreReady,
   expectedDiagnosticMode: gate.expectedDiagnosticMode,
+  diagnosticSidecarNonAuthoritative: gate.diagnosticSidecarNonAuthoritative,
   status: gate.status,
   diagnosticStage: gate.diagnosticStage,
   adapterStage: gate.adapterStage,
@@ -78,6 +79,7 @@ const result = {
     adapterStatsStillPresent: Number.isFinite(after.adapter.landRatio) && Number.isFinite(after.adapter.seaRatio),
     productionStatsStillPresent: Number.isFinite(after.spherical.landRatio) && Number.isFinite(after.spherical.seaRatio),
     authoritativeModeCorrectlyIdentified: gate.authoritativeCoreReady === true,
+    diagnosticSidecarNonAuthoritative: gate.diagnosticSidecarNonAuthoritative === true,
     experimentalAdapterCorrectlyIdentified: gate.expectedExperimentalAdapterMode === true,
     legacySphericalRequestNormalizedToGeologyV2: before.legacyRequestedSpherical.pipelineMode === "geology-v2",
     legacySphericalRequestCanStep: after.legacyRequestedSpherical.step === Math.min(2, steps),
@@ -105,6 +107,7 @@ function summarizeWorldSet(cylindricalWorld, sphericalWorld, adapterWorld, legac
 function summarizeWorld(world) {
   const productionGridKind = world.grid.topology?.kind ?? world.grid.kind ?? "cylindrical";
   const productionTopologyKind = world.grid.topologyKind ?? world.grid.topologyOptions?.kind ?? productionGridKind;
+  const productionGridIsCubedSphere = productionTopologyKind === "cubed-sphere" || productionGridKind.includes("cubed-sphere");
   return {
     step: world.step,
     pipelineMode: world.params.pipelineMode,
@@ -113,12 +116,14 @@ function summarizeWorld(world) {
     productionTopologyMode: world.params.productionTopologyMode ?? null,
     productionGridKind,
     productionTopologyKind,
-    productionGridIsCubedSphere: productionTopologyKind === "cubed-sphere" || productionGridKind.includes("cubed-sphere"),
+    productionGridIsCubedSphere,
     productionGridSize: world.grid.size,
     productionGridMatchesSphericalSize: world.grid.size === (world.sphericalGrid?.size ?? -1),
     hasProductionGraphTopology: Boolean(world.grid.topology?.graphBacked || world.grid.topologyOptions?.graphBacked),
     hasSphericalGrid: Boolean(world.sphericalGrid),
     hasSphericalWorld: Boolean(world.sphericalWorld),
+    diagnosticSidecarAttached: Boolean(world.sphericalWorld),
+    productionGridIsAuthoritative: productionGridIsCubedSphere,
     sphericalGridKind: world.sphericalGrid?.topologyKind ?? null,
     sphericalGridSize: world.sphericalGrid?.size ?? 0,
     sphericalWorldKind: world.sphericalWorld?.kind ?? null,
@@ -168,6 +173,11 @@ function evaluateAuthoritativeGate(before, after) {
     authorityChecks.adapterGridMatchesSphericalSize &&
     authorityChecks.adapterHasGraphTopology &&
     authorityChecks.adapterStatsAdvance;
+  const diagnosticSidecarNonAuthoritative =
+    authoritativeCoreReady &&
+    authorityChecks.diagnosticWorldAttached &&
+    sphericalBefore.productionGridKind !== sphericalBefore.sphericalWorldKind &&
+    sphericalBefore.productionGridSize === sphericalBefore.sphericalGridSize;
 
   const blockers = [];
   if (!authorityChecks.productionUsesCubedSphereGrid) {
@@ -185,6 +195,7 @@ function evaluateAuthoritativeGate(before, after) {
     authoritativeCoreReady,
     expectedDiagnosticMode,
     expectedExperimentalAdapterMode,
+    diagnosticSidecarNonAuthoritative,
     diagnosticStage: expectedDiagnosticMode ? "diagnostic-cubed-sphere-sidecar" : "unknown",
     adapterStage: expectedExperimentalAdapterMode ? "experimental-cubed-sphere-production-adapter" : "unavailable",
     currentStage: authoritativeCoreReady
@@ -193,7 +204,7 @@ function evaluateAuthoritativeGate(before, after) {
         ? "experimental-cubed-sphere-production-adapter"
         : "diagnostic-cubed-sphere-sidecar",
     status: authoritativeCoreReady
-      ? "cubed-sphere production grid is authoritative"
+      ? "cubed-sphere production grid is authoritative; sphericalWorld remains a diagnostic sidecar only"
       : expectedExperimentalAdapterMode
         ? "cubed-sphere production adapter is available only through explicit opt-in; default topology remains diagnostic"
         : "cubed-sphere remains diagnostic; production geology-v2 still advances the cylindrical grid",
