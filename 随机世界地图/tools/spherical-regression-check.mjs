@@ -541,5 +541,27 @@ function compactMetrics(parsed) {
     picked.sphericalFlowAccumulationExpectedDeltaMax = parsed.spherical.flowAccumulationExpectedDeltaMax;
     picked.sphericalFlowAccumulationCellUnitDeltaMax = parsed.spherical.flowAccumulationCellUnitDeltaMax;
   }
+  if (parsed.terrain) {
+    picked.terrainLandShare = parsed.terrain.landShare;
+    picked.terrainSeaShare = parsed.terrain.seaShare;
+    picked.terrainExternalSeaShare = parsed.terrain.externalSeaShare;
+    picked.terrainInlandWaterCandidateShare = parsed.terrain.inlandWaterCandidateShare;
+    picked.terrainSlopeFiniteShare = parsed.terrain.slopeFiniteShare;
+    picked.terrainRuggednessFiniteShare = parsed.terrain.ruggednessFiniteShare;
+    picked.terrainCoastDistanceFiniteShare = parsed.terrain.coastDistanceFiniteShare;
+    picked.terrainDistanceToOceanFiniteShare = parsed.terrain.distanceToOceanFiniteShare;
+    picked.terrainMarginCoastDistanceFiniteShare = parsed.terrain.marginCoastDistanceFiniteShare;
+    picked.terrainMarginExternalSeaDistanceFiniteShare = parsed.terrain.marginExternalSeaDistanceFiniteShare;
+    picked.terrainMarginExternalSeaGraphDistanceMaxDelta = parsed.terrain.marginExternalSeaGraphDistanceMaxDelta;
+    picked.terrainLandmassCount = parsed.terrain.landmassCount;
+    picked.terrainIslandCount = parsed.terrain.islandCount;
+  }
+  if (parsed.climate) {
+    picked.climateLatitudeFiniteShare = parsed.climate.latitudeFiniteShare;
+    picked.climateLatitudeMin = parsed.climate.latitudeMin;
+    picked.climateLatitudeMax = parsed.climate.latitudeMax;
+    picked.climateOceanDepthFiniteShare = parsed.climate.oceanDepthFiniteShare;
+    picked.climateOrographicBarrierFiniteShare = parsed.climate.orographicBarrierFiniteShare;
+  }
   return picked;
 }
