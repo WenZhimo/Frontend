@@ -52,10 +52,13 @@ const metrics = {
   sedimentBudgetError: terrain.sedimentBudgetDiagnostics?.sedimentBudgetError ?? weightedMean(grid, terrain.sedimentBudgetError),
   sedimentSinkCoverage: weightedCoverage(grid, terrain.sedimentSink, 0.18),
   riftStageHistogram: weightedHistogram(grid, resources.riftStage, 6),
+  naturalRiftStageActiveShare: 0,
+  naturalRiftStagePresenceRequired: false,
   hydrologyValid: hydrology.hydrologyDiagnostics?.hydrologyValid === true,
   neighborGraphValid: graphSymmetryValid(grid),
   landSeaComplementError: Math.abs(weightedShare(grid, terrain.landMask) + weightedShare(grid, terrain.seaMask) - 1),
 };
+metrics.naturalRiftStageActiveShare = 1 - (metrics.riftStageHistogram[0] ?? 1);
 
 const checks = {
   cubedSphereGrid: metrics.topologyKind === "cubed-sphere",
@@ -73,6 +76,7 @@ const checks = {
   inactiveReliefSuppressed: metrics.oldBoundaryReliefCorrelation < 0.08,
   sedimentBudgetFinite: Number.isFinite(metrics.sedimentBudgetError) && Math.abs(metrics.sedimentBudgetError) < 0.02,
   sedimentStraightnessBounded: metrics.sedimentStraightnessRisk < 0.45,
+  naturalRiftAbsenceAllowed: metrics.naturalRiftStagePresenceRequired === false || metrics.naturalRiftStageActiveShare > 0.001,
 };
 
 const failures = Object.entries(checks)
