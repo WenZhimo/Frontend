@@ -7173,6 +7173,7 @@
   function broadenLongTermMemory(grid) {
     const { orogeny, oldOrogeny, sediment, basin, boundaryInfluence, crustType, scratch, scratch2, scratch3 } = grid;
     const radius = physicalRadius(grid, 2);
+    const topology = topologyForGrid(grid);
     scratch.set(orogeny);
     scratch2.set(sediment);
     scratch3.set(basin);
@@ -7188,25 +7189,18 @@
       let sedWeight = 2.2;
       let basinWeight = 2.2;
 
-      for (let dy = -radius; dy <= radius; dy += 1) {
-        for (let dx = -radius; dx <= radius; dx += 1) {
-          if (dx === 0 && dy === 0) continue;
-          const dist = Math.hypot(dx, dy);
-          if (dist > radius + 0.01) continue;
-          const nid = indexOf(grid, x + dx, y + dy);
-          if (nid < 0) continue;
-          const falloff = 1 / (1 + dist);
-          if (crustType[nid] === CrustType.CONTINENTAL || crustType[id] === CrustType.CONTINENTAL) {
-            oroTotal += scratch[nid] * falloff;
-            oroWeight += falloff;
-          }
-          const sedWeightLocal = falloff * (crustType[nid] === CrustType.TRANSITIONAL ? 1.35 : 1);
-          sedTotal += scratch2[nid] * sedWeightLocal;
-          sedWeight += sedWeightLocal;
-          basinTotal += scratch3[nid] * falloff;
-          basinWeight += falloff;
+      visitSmoothingNeighborhood(grid, topology, id, x, y, radius, (nid, dist) => {
+        const falloff = 1 / (1 + dist);
+        if (crustType[nid] === CrustType.CONTINENTAL || crustType[id] === CrustType.CONTINENTAL) {
+          oroTotal += scratch[nid] * falloff;
+          oroWeight += falloff;
         }
-      }
+        const sedWeightLocal = falloff * (crustType[nid] === CrustType.TRANSITIONAL ? 1.35 : 1);
+        sedTotal += scratch2[nid] * sedWeightLocal;
+        sedWeight += sedWeightLocal;
+        basinTotal += scratch3[nid] * falloff;
+        basinWeight += falloff;
+      });
 
       const oroSmooth = oroTotal / oroWeight;
       const sedSmooth = sedTotal / sedWeight;
@@ -7272,6 +7266,7 @@
     scratch2.set(sediment);
     scratch3.set(basin);
     const radius = Math.max(1, physicalRadius(grid, 2));
+    const topology = topologyForGrid(grid);
     forEachGridCell(grid, (id, x, y) => {
       const inactive = 1 - Math.min(1, boundaryInfluence[id]);
       const passive = crustType[id] === CrustType.OCEANIC || crustType[id] === CrustType.TRANSITIONAL;
@@ -7285,22 +7280,16 @@
       let ageWeight = 3;
       let fillWeight = 2;
 
-      for (let dy = -radius; dy <= radius; dy += 1) {
-        for (let dx = -radius; dx <= radius; dx += 1) {
-          const dist = Math.hypot(dx, dy);
-          if (dist < 0.01 || dist > radius + 0.01) continue;
-          const nid = indexOf(grid, x + dx + bendX, y + dy + bendY);
-          if (nid < 0) continue;
-          const samePassive = crustType[nid] === CrustType.OCEANIC || crustType[nid] === CrustType.TRANSITIONAL;
-          if (!samePassive || boundaryInfluence[nid] > 0.52) continue;
-          const falloff = 1 / (1 + dist);
-          ageTotal += scratch[nid] * falloff;
-          sedTotal += scratch2[nid] * falloff;
-          basinTotal += scratch3[nid] * falloff;
-          ageWeight += falloff;
-          fillWeight += falloff;
-        }
-      }
+      visitBentSmoothingNeighborhood(grid, topology, id, x, y, radius, bendX, bendY, (nid, dist) => {
+        const samePassive = crustType[nid] === CrustType.OCEANIC || crustType[nid] === CrustType.TRANSITIONAL;
+        if (!samePassive || boundaryInfluence[nid] > 0.52) return;
+        const falloff = 1 / (1 + dist);
+        ageTotal += scratch[nid] * falloff;
+        sedTotal += scratch2[nid] * falloff;
+        basinTotal += scratch3[nid] * falloff;
+        ageWeight += falloff;
+        fillWeight += falloff;
+      });
 
       const ageSmooth = ageTotal / ageWeight;
       const sedSmooth = sedTotal / fillWeight;
@@ -7311,6 +7300,54 @@
       sediment[id] = Math.min(1, scratch2[id] * (1 - fillMix) + sedSmooth * fillMix);
       basin[id] = Math.min(1, scratch3[id] * (1 - fillMix) + basinSmooth * fillMix);
     });
+  }
+
+  function visitSmoothingNeighborhood(grid, topology, id, x, y, radius, visit) {
+    if (isGraphBackedGrid(grid, topology)) {
+      forEachNeighborRadiusById(grid, id, radius, (nid, depth) => {
+        if (nid === id || depth <= 0 || depth > radius + 0.01) return;
+        visit(nid, depth);
+      });
+      return;
+    }
+
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        if (dx === 0 && dy === 0) continue;
+        const dist = Math.hypot(dx, dy);
+        if (dist > radius + 0.01) continue;
+        const nid = indexOf(grid, x + dx, y + dy);
+        if (nid >= 0) visit(nid, dist);
+      }
+    }
+  }
+
+  function visitBentSmoothingNeighborhood(grid, topology, id, x, y, radius, bendX, bendY, visit) {
+    if (isGraphBackedGrid(grid, topology)) {
+      const bendDepth = Math.max(0, Math.min(radius, Math.round(Math.hypot(bendX, bendY))));
+      forEachNeighborRadiusById(grid, id, radius + bendDepth, (nid, depth) => {
+        if (nid === id || depth <= bendDepth || depth > radius + bendDepth + 0.01) return;
+        visit(nid, Math.max(0.01, depth - bendDepth));
+      });
+      return;
+    }
+
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        const dist = Math.hypot(dx, dy);
+        if (dist < 0.01 || dist > radius + 0.01) continue;
+        const nid = indexOf(grid, x + dx + bendX, y + dy + bendY);
+        if (nid >= 0) visit(nid, dist);
+      }
+    }
+  }
+
+  function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+    return Boolean(
+      grid.topologyOptions?.graphBacked ||
+        topology?.topologyKind === "cubed-sphere" ||
+        grid.topologyKind === "cubed-sphere",
+    );
   }
 
 
