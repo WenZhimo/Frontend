@@ -1,4 +1,9 @@
 import {
+  assignNearestSphericalPlates,
+  driftSphericalPlates,
+  sphericalPlateVelocityAt,
+} from "../sphere/plates.js";
+import {
   clampGridParamY,
   forEachGridCell,
   forEachNeighbor8ById,
@@ -22,6 +27,11 @@ export function advectCrust(world) {
 export function advectPlatesV2(world) {
   const { grid, plates, params } = world;
   if (!plates) return;
+  if (plates.kind === "spherical-plates" && isGraphBackedGrid(grid)) {
+    const drift = world.timeScaleFactor * Math.max(0, params.intensity);
+    driftSphericalPlates(plates, drift);
+    return;
+  }
   const drift = 0.1 * world.timeScaleFactor * Math.max(0, params.intensity) * resolutionScale(grid);
   for (let p = 0; p < plates.centersX.length; p += 1) {
     plates.centersX[p] = wrapGridParamX(grid, plates.centersX[p] + plates.vx[p] * drift);
@@ -33,6 +43,10 @@ export function advectPlatesV2(world) {
 export function rasterizePlatesV2(world) {
   const { grid, plates } = world;
   if (!plates) return;
+  if (plates.kind === "spherical-plates" && isGraphBackedGrid(grid)) {
+    rasterizeSphericalPlatesV2(world);
+    return;
+  }
   const { size, plate, pvx, pvy, weakness, crustThickness } = grid;
   const cost = new Float32Array(size);
   const q = new Int32Array(size * 8);
@@ -73,6 +87,27 @@ export function rasterizePlatesV2(world) {
     plate[i] = p;
     pvx[i] = plates.vx[p];
     pvy[i] = plates.vy[p];
+  }
+}
+
+function rasterizeSphericalPlatesV2(world) {
+  const { grid, plates } = world;
+  const assignment = assignNearestSphericalPlates(grid, plates);
+  grid.plate.set(assignment.plate);
+  world.plateAssignment = assignment;
+  for (let id = 0; id < grid.size; id += 1) {
+    const p = grid.plate[id] < 0 ? 0 : grid.plate[id];
+    grid.plate[id] = p;
+    const v = sphericalPlateVelocityAt(
+      plates,
+      p,
+      grid.positionX[id],
+      grid.positionY[id],
+      grid.positionZ[id],
+    );
+    grid.pvx[id] = v.x;
+    grid.pvy[id] = v.y;
+    if (grid.pvz) grid.pvz[id] = v.z;
   }
 }
 
