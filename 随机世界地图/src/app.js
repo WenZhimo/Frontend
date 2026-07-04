@@ -608,6 +608,7 @@
       plate: new Int32Array(size),
       pvx: new Float32Array(size),
       pvy: new Float32Array(size),
+      pvz: new Float32Array(size),
       btype: new Int8Array(size),
       stress: new Float32Array(size),
       uplift: new Float32Array(size),
@@ -1992,6 +1993,7 @@
     ["plate", Int32Array],
     ["pvx", Float32Array],
     ["pvy", Float32Array],
+    ["pvz", Float32Array],
     ["btype", Int8Array],
     ["boundaryKind", Int8Array],
     ["boundaryInfluence", Float32Array],
@@ -2135,6 +2137,9 @@
       neighborCount: sphericalGrid.neighborCount,
       neighbors: sphericalGrid.neighbors,
       edgeLength: sphericalGrid.edgeLength,
+      edgeTangentX: sphericalGrid.edgeTangentX,
+      edgeTangentY: sphericalGrid.edgeTangentY,
+      edgeTangentZ: sphericalGrid.edgeTangentZ,
     };
 
     if (includeLegacyDimensions) {
@@ -3026,6 +3031,21 @@
 
   function assignPlates(world) {
     const { grid, params, seedUint32 } = world;
+    if (isGraphBackedGrid(grid)) {
+      const plates = createSphericalPlates({
+        seedUint32,
+        plateCount: params.plateCount,
+        intensity: params.intensity,
+      });
+      world.plates = plates;
+      world.initialSphericalPlates = cloneSphericalPlates(plates);
+      world.initialPlateCentersU = null;
+      world.initialPlateCentersV = null;
+      world.initialPlateCentersX = null;
+      world.initialPlateCentersY = null;
+      return;
+    }
+
     const width = gridParamWidth(grid);
     const height = gridParamHeight(grid);
     const plateCount = params.plateCount;
@@ -3055,6 +3075,24 @@
     world.initialPlateCentersX = new Float32Array(centersX);
     world.initialPlateCentersY = new Float32Array(centersY);
     rasterizePlates(world);
+  }
+
+  function cloneSphericalPlates(plates) {
+    return {
+      kind: plates.kind,
+      count: plates.count,
+      centerX: new Float32Array(plates.centerX),
+      centerY: new Float32Array(plates.centerY),
+      centerZ: new Float32Array(plates.centerZ),
+      angularVelocityX: new Float32Array(plates.angularVelocityX),
+      angularVelocityY: new Float32Array(plates.angularVelocityY),
+      angularVelocityZ: new Float32Array(plates.angularVelocityZ),
+      speed: new Float32Array(plates.speed),
+    };
+  }
+
+  function isGraphBackedGrid(grid) {
+    return Boolean(grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere");
   }
 
   function driftPlates(world) {
@@ -3461,6 +3499,11 @@
   function advectPlatesV2(world) {
     const { grid, plates, params } = world;
     if (!plates) return;
+    if (plates.kind === "spherical-plates" && isGraphBackedGrid(grid)) {
+      const drift = world.timeScaleFactor * Math.max(0, params.intensity);
+      driftSphericalPlates(plates, drift);
+      return;
+    }
     const drift = 0.1 * world.timeScaleFactor * Math.max(0, params.intensity) * resolutionScale(grid);
     for (let p = 0; p < plates.centersX.length; p += 1) {
       plates.centersX[p] = wrapGridParamX(grid, plates.centersX[p] + plates.vx[p] * drift);
@@ -3472,6 +3515,10 @@
   function rasterizePlatesV2(world) {
     const { grid, plates } = world;
     if (!plates) return;
+    if (plates.kind === "spherical-plates" && isGraphBackedGrid(grid)) {
+      rasterizeSphericalPlatesV2(world);
+      return;
+    }
     const { size, plate, pvx, pvy, weakness, crustThickness } = grid;
     const cost = new Float32Array(size);
     const q = new Int32Array(size * 8);
@@ -3512,6 +3559,27 @@
       plate[i] = p;
       pvx[i] = plates.vx[p];
       pvy[i] = plates.vy[p];
+    }
+  }
+
+  function rasterizeSphericalPlatesV2(world) {
+    const { grid, plates } = world;
+    const assignment = assignNearestSphericalPlates(grid, plates);
+    grid.plate.set(assignment.plate);
+    world.plateAssignment = assignment;
+    for (let id = 0; id < grid.size; id += 1) {
+      const p = grid.plate[id] < 0 ? 0 : grid.plate[id];
+      grid.plate[id] = p;
+      const v = sphericalPlateVelocityAt(
+        plates,
+        p,
+        grid.positionX[id],
+        grid.positionY[id],
+        grid.positionZ[id],
+      );
+      grid.pvx[id] = v.x;
+      grid.pvy[id] = v.y;
+      if (grid.pvz) grid.pvz[id] = v.z;
     }
   }
 
@@ -4082,6 +4150,8 @@
     const { grid } = world;
     const { size, plate, btype, boundaryKind, stress, activeBoundary, boundaryCoherence, noisyBoundaryPatch } = grid;
     const topology = topologyForGrid(grid);
+    const graphBacked = isGraphBackedGrid(grid, topology);
+    const motionThreshold = graphBacked ? 0.000025 : 0.02;
     btype.fill(BoundaryType.INTERIOR);
     boundaryKind.fill(BoundaryType.INTERIOR);
     stress.fill(0);
@@ -4096,8 +4166,8 @@
       visitBoundaryClassificationNeighbors(grid, topology, id, (nid, dx, dy, slot) => {
         inspectBoundaryNeighbor(grid, id, nid, dx, dy, currentPlate, slot, (normal, tangent) => {
           touches = true;
-          if (normal > 0.02) convergent += normal;
-          else if (normal < -0.02) divergent += -normal;
+          if (normal > motionThreshold) convergent += normal;
+          else if (normal < -motionThreshold) divergent += -normal;
           shear += Math.abs(tangent);
         });
       });
@@ -4227,20 +4297,54 @@
     const offset = start >= 0 ? start + slot : -1;
     let dx = offset >= 0 && grid.edgeTangentX ? grid.edgeTangentX[offset] : 0;
     let dy = offset >= 0 && grid.edgeTangentY ? grid.edgeTangentY[offset] : 0;
-    if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) < 1e-6) {
-      dx = (grid.positionX?.[nid] ?? 0) - (grid.positionX?.[id] ?? 0);
-      dy = (grid.positionY?.[nid] ?? 0) - (grid.positionY?.[id] ?? 0);
+    let dz = offset >= 0 && grid.edgeTangentZ ? grid.edgeTangentZ[offset] : 0;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy) || !Number.isFinite(dz) || Math.hypot(dx, dy, dz) < 1e-6) {
+      const ax = grid.positionX?.[id] ?? 0;
+      const ay = grid.positionY?.[id] ?? 0;
+      const az = grid.positionZ?.[id] ?? 0;
+      const bx = grid.positionX?.[nid] ?? 0;
+      const by = grid.positionY?.[nid] ?? 0;
+      const bz = grid.positionZ?.[nid] ?? 0;
+      const radialProjection = bx * ax + by * ay + bz * az;
+      dx = bx - ax * radialProjection;
+      dy = by - ay * radialProjection;
+      dz = bz - az * radialProjection;
     }
-    const length = Math.hypot(dx, dy);
-    if (length < 1e-6) return { dx: 1, dy: 0 };
-    return { dx: dx / length, dy: dy / length };
+    const length = Math.hypot(dx, dy, dz);
+    if (length < 1e-6) return { dx: 1, dy: 0, dz: 0 };
+    return { dx: dx / length, dy: dy / length, dz: dz / length };
   }
 
   function inspectBoundaryNeighbor(grid, id, nid, dx, dy, currentPlate, _slot, visit) {
     if (grid.plate[nid] === currentPlate) return;
     const rvx = grid.pvx[id] - grid.pvx[nid];
     const rvy = grid.pvy[id] - grid.pvy[nid];
+    if (grid.pvz && Number.isFinite(_slot) && isGraphBackedGrid(grid)) {
+      const direction = graphBoundaryDirection(grid, id, nid, _slot);
+      const rvz = grid.pvz[id] - grid.pvz[nid];
+      const normal = rvx * direction.dx + rvy * direction.dy + rvz * direction.dz;
+      const tangent = sphericalBoundaryShear(grid, id, nid, direction, rvx, rvy, rvz);
+      visit(normal, tangent);
+      return;
+    }
     visit(rvx * dx + rvy * dy, rvx * -dy + rvy * dx);
+  }
+
+  function sphericalBoundaryShear(grid, id, nid, normalDirection, rvx, rvy, rvz) {
+    const mx = (grid.positionX?.[id] ?? 0) + (grid.positionX?.[nid] ?? 0);
+    const my = (grid.positionY?.[id] ?? 0) + (grid.positionY?.[nid] ?? 0);
+    const mz = (grid.positionZ?.[id] ?? 0) + (grid.positionZ?.[nid] ?? 0);
+    const mLength = Math.hypot(mx, my, mz);
+    if (mLength < 1e-6) return 0;
+    const rx = mx / mLength;
+    const ry = my / mLength;
+    const rz = mz / mLength;
+    const tx = ry * normalDirection.dz - rz * normalDirection.dy;
+    const ty = rz * normalDirection.dx - rx * normalDirection.dz;
+    const tz = rx * normalDirection.dy - ry * normalDirection.dx;
+    const tLength = Math.hypot(tx, ty, tz);
+    if (tLength < 1e-6) return 0;
+    return (rvx * tx + rvy * ty + rvz * tz) / tLength;
   }
 
   function nearestBoundaryKind(grid, id) {
@@ -8556,6 +8660,7 @@
       initialPlateCentersY: null,
       initialPlateCentersU: null,
       initialPlateCentersV: null,
+      initialSphericalPlates: null,
       stats: {},
     };
     initializeBaseTerrain(world);
@@ -8721,6 +8826,9 @@
   }
 
   function measurePlateDrift(world) {
+    if (world.plates?.kind === "spherical-plates" && world.initialSphericalPlates) {
+      return measureSphericalPlateDrift(world.initialSphericalPlates, world.plates);
+    }
     if (!world.plates || !world.initialPlateCentersU || !world.initialPlateCentersV) return 0;
     let total = 0;
     for (let p = 0; p < world.plates.centersX.length; p += 1) {

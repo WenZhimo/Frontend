@@ -92,6 +92,7 @@ export function createGrid(width, height) {
     plate: new Int32Array(size),
     pvx: new Float32Array(size),
     pvy: new Float32Array(size),
+    pvz: new Float32Array(size),
     btype: new Int8Array(size),
     stress: new Float32Array(size),
     uplift: new Float32Array(size),

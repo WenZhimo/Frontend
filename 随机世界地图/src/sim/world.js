@@ -2,6 +2,7 @@ import { createGrid } from "./grid.js";
 import { hashSeed } from "./prng.js";
 import { createCubedSphereGrid } from "./sphere/cubedSphere.js";
 import { createCubedSphereProductionGridAdapter } from "./sphere/productionGridAdapter.js";
+import { measureSphericalPlateDrift } from "./sphere/plates.js";
 import { createSphericalExperimentalWorld } from "./sphere/sphericalWorld.js";
 import { initializeBaseTerrain, initializeSeaLevel, updateSeaLevel } from "./terrain.js";
 import { assignPlates, computeBoundaryStress } from "./tectonics.js";
@@ -52,6 +53,7 @@ export function createWorld(params) {
     initialPlateCentersY: null,
     initialPlateCentersU: null,
     initialPlateCentersV: null,
+    initialSphericalPlates: null,
     stats: {},
   };
   initializeBaseTerrain(world);
@@ -217,6 +219,9 @@ function isGraphBackedGrid(grid) {
 }
 
 function measurePlateDrift(world) {
+  if (world.plates?.kind === "spherical-plates" && world.initialSphericalPlates) {
+    return measureSphericalPlateDrift(world.initialSphericalPlates, world.plates);
+  }
   if (!world.plates || !world.initialPlateCentersU || !world.initialPlateCentersV) return 0;
   let total = 0;
   for (let p = 0; p < world.plates.centersX.length; p += 1) {

@@ -40,6 +40,7 @@ const FIELD_SPECS = [
   ["plate", Int32Array],
   ["pvx", Float32Array],
   ["pvy", Float32Array],
+  ["pvz", Float32Array],
   ["btype", Int8Array],
   ["boundaryKind", Int8Array],
   ["boundaryInfluence", Float32Array],
@@ -183,6 +184,9 @@ export function createCubedSphereProductionGridAdapter({
     neighborCount: sphericalGrid.neighborCount,
     neighbors: sphericalGrid.neighbors,
     edgeLength: sphericalGrid.edgeLength,
+    edgeTangentX: sphericalGrid.edgeTangentX,
+    edgeTangentY: sphericalGrid.edgeTangentY,
+    edgeTangentZ: sphericalGrid.edgeTangentZ,
   };
 
   if (includeLegacyDimensions) {

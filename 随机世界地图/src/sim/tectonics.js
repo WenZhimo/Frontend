@@ -16,6 +16,7 @@ import {
   xyOf,
 } from "./grid.js";
 import { mixSeed, mulberry32 } from "./prng.js";
+import { createSphericalPlates } from "./sphere/plates.js";
 import { rebuildElevation } from "./terrain.js";
 
 export const BoundaryType = {
@@ -27,6 +28,21 @@ export const BoundaryType = {
 
 export function assignPlates(world) {
   const { grid, params, seedUint32 } = world;
+  if (isGraphBackedGrid(grid)) {
+    const plates = createSphericalPlates({
+      seedUint32,
+      plateCount: params.plateCount,
+      intensity: params.intensity,
+    });
+    world.plates = plates;
+    world.initialSphericalPlates = cloneSphericalPlates(plates);
+    world.initialPlateCentersU = null;
+    world.initialPlateCentersV = null;
+    world.initialPlateCentersX = null;
+    world.initialPlateCentersY = null;
+    return;
+  }
+
   const width = gridParamWidth(grid);
   const height = gridParamHeight(grid);
   const plateCount = params.plateCount;
@@ -56,6 +72,24 @@ export function assignPlates(world) {
   world.initialPlateCentersX = new Float32Array(centersX);
   world.initialPlateCentersY = new Float32Array(centersY);
   rasterizePlates(world);
+}
+
+function cloneSphericalPlates(plates) {
+  return {
+    kind: plates.kind,
+    count: plates.count,
+    centerX: new Float32Array(plates.centerX),
+    centerY: new Float32Array(plates.centerY),
+    centerZ: new Float32Array(plates.centerZ),
+    angularVelocityX: new Float32Array(plates.angularVelocityX),
+    angularVelocityY: new Float32Array(plates.angularVelocityY),
+    angularVelocityZ: new Float32Array(plates.angularVelocityZ),
+    speed: new Float32Array(plates.speed),
+  };
+}
+
+function isGraphBackedGrid(grid) {
+  return Boolean(grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere");
 }
 
 export function driftPlates(world) {
