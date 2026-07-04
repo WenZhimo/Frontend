@@ -34,6 +34,19 @@ const checks = [
     "--face-size",
     String(faceSize),
   ]],
+  ["long-run-check:cubed-sphere-production", [
+    "tools/long-run-check.mjs",
+    seedText,
+    "200",
+    "geology-v2",
+    "256x128",
+    "--topology",
+    "cubed-sphere",
+    "--projection",
+    "equirectangular",
+    "--face-size",
+    String(faceSize),
+  ]],
   ["spherical-sidecar-gate-check", ["tools/spherical-sidecar-gate-check.mjs", seedText, String(faceSize)]],
   ["spherical-world-stats-check", ["tools/spherical-world-stats-check.mjs", String(faceSize)]],
   ["spherical-resolution-gate-check", ["tools/spherical-resolution-gate-check.mjs", seedText, "2", `${smallFaceSize},${faceSize}`, "128x64"]],
@@ -734,6 +747,51 @@ function compactMetrics(name, parsed) {
     picked.interfaceCubedSphereClosedBasinCount = parsed.stats?.closedBasinCount;
     picked.interfaceCubedSphereSedimentBudgetError = parsed.stats?.sedimentBudgetError;
     picked.interfaceCubedSpherePlateCheckerboardScore = parsed.stats?.plateCheckerboardScore;
+  }
+  if (name === "long-run-check:cubed-sphere-production") {
+    picked.longRunCubedSpherePipelineMode = parsed.pipelineMode;
+    picked.longRunCubedSphereTopologyMode = parsed.topologyMode;
+    picked.longRunCubedSphereProjectionMode = parsed.projectionMode;
+    picked.longRunCubedSphereFaceSize = parsed.faceSize;
+    picked.longRunCubedSphereSphericalGridSize = parsed.sphericalGridSize;
+    picked.longRunCubedSphereSteps = parsed.steps;
+    picked.longRunCubedSphereAverageStepMs = parsed.averageStepMs;
+    picked.longRunCubedSphereLandRatio = parsed.landRatio;
+    picked.longRunCubedSphereSeaRatio = parsed.seaRatio;
+    picked.longRunCubedSphereSeaLevel = parsed.seaLevel;
+    picked.longRunCubedSphereAveragePlateDriftCells = parsed.averagePlateDriftCells;
+    picked.longRunCubedSphereMinElevation = parsed.minElevation;
+    picked.longRunCubedSphereMaxElevation = parsed.maxElevation;
+    picked.longRunCubedSphereExtremeHighRatio = parsed.extremeHighRatio;
+    picked.longRunCubedSphereExtremeLowRatio = parsed.extremeLowRatio;
+    picked.longRunCubedSphereCausalityPass = parsed.causalityPass;
+    picked.longRunCubedSphereTopologyKind = parsed.topologyDiagnostics?.topologyKind;
+    picked.longRunCubedSphereNeighborConsistencyValid =
+      parsed.topologyDiagnostics?.neighborConsistencyValid;
+    picked.longRunCubedSphereFloodFillTopologyValid = parsed.topologyDiagnostics?.floodFillTopologyValid;
+    picked.longRunCubedSphereConnectedComponentTopologyValid =
+      parsed.topologyDiagnostics?.connectedComponentTopologyValid;
+    picked.longRunCubedSphereTopologyManualAccessRisk =
+      parsed.topologyDiagnostics?.topologyManualAccessRisk;
+    picked.longRunCubedSphereTopologyMigrationCoverage =
+      parsed.topologyDiagnostics?.topologyMigrationCoverage;
+    picked.longRunCubedSphereHydrologyValid = parsed.hydrologyDiagnostics?.hydrologyValid;
+    picked.longRunCubedSphereExternalSeaDrainageShare =
+      parsed.hydrologyDiagnostics?.externalSeaDrainageShare;
+    picked.longRunCubedSphereClosedBasinDrainageShare =
+      parsed.hydrologyDiagnostics?.closedBasinDrainageShare;
+    picked.longRunCubedSphereSedimentBudgetError =
+      parsed.sedimentBudgetDiagnostics?.sedimentBudgetError;
+    picked.longRunCubedSphereSedimentStraightnessRisk =
+      parsed.sedimentBudgetDiagnostics?.sedimentStraightnessRisk;
+    picked.longRunCubedSpherePlateCheckerboardScore =
+      parsed.boundaryDiagnostics?.plateCheckerboardScore;
+    picked.longRunCubedSphereDepthAgeCorrelation =
+      parsed.oceanAgeDiagnostics?.depthAgeCorrelation;
+    picked.longRunCubedSphereRidgeAgeResetShare =
+      parsed.oceanAgeDiagnostics?.ridgeAgeResetShare;
+    picked.longRunCubedSphereActiveVsInactiveBoundaryReliefRatio =
+      parsed.transformDiagnostics?.activeVsInactiveBoundaryReliefRatio;
   }
   if (name === "spherical-production-init-check") {
     picked.productionInitStageCount = parsed.stages?.length ?? 0;
