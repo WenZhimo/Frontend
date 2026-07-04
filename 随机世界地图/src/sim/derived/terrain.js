@@ -499,6 +499,18 @@ function measureTerrainShape(grid, field) {
 
 function distanceFromCoast(grid, landMask) {
   const coast = new Uint8Array(grid.size);
+  const topology = topologyForGrid(grid);
+  if (isGraphBackedGrid(grid, topology)) {
+    for (let id = 0; id < grid.size; id += 1) {
+      let nearOpposite = false;
+      topology.forEachNeighbor(id, (nid) => {
+        if (landMask[nid] !== landMask[id]) nearOpposite = true;
+      });
+      if (nearOpposite) coast[id] = 1;
+    }
+    return topology.shortestDistanceSeeds(coast);
+  }
+
   forEachGridCell(grid, (id) => {
     let nearOpposite = false;
     forEachNeighbor4ById(grid, id, (nid) => {
@@ -547,7 +559,8 @@ function labelLandmasses(grid, landMask) {
   const queue = new Int32Array(size);
   let nextLandId = 1;
   let nextIslandId = 1;
-  const graphBacked = isGraphBackedGrid(grid);
+  const topology = topologyForGrid(grid);
+  const graphBacked = isGraphBackedGrid(grid, topology);
   const islandLimit = graphBacked ? metricTotal(grid) * 0.018 : Math.max(24, Math.floor(size * 0.018));
 
   for (let start = 0; start < size; start += 1) {
@@ -560,7 +573,7 @@ function labelLandmasses(grid, landMask) {
     while (head < tail) {
       const id = queue[head++];
       componentMeasure += metricArea(grid, id);
-      forEachNeighbor4ById(grid, id, (nid) => {
+      visitTerrainCardinalNeighbor(grid, topology, id, graphBacked, (nid) => {
         if (!landMask[nid] || landmassId[nid]) return;
         landmassId[nid] = nextLandId;
         queue[tail++] = nid;
@@ -619,18 +632,44 @@ function findLocalDepressions(grid, field, seaMask) {
 function smoothElevation(grid, field, radius) {
   const { size } = grid;
   const output = new Float32Array(field.length);
+  const topology = topologyForGrid(grid);
+  const graphBacked = isGraphBackedGrid(grid, topology);
   for (let id = 0; id < size; id += 1) {
     let total = field[id] * 2;
     let weight = 2;
-    forEachNeighborRadiusById(grid, id, radius, (nid, dx, dy) => {
-      const dist = Math.hypot(dx, dy);
-      const w = 1 / (1 + dist);
+    visitTerrainRadiusNeighbor(grid, topology, id, radius, graphBacked, (nid, distance) => {
+      const w = 1 / (1 + distance);
       total += field[nid] * w;
       weight += w;
     });
     output[id] = total / weight;
   }
   return output;
+}
+
+function visitTerrainCardinalNeighbor(grid, topology, id, graphBacked, visit) {
+  if (graphBacked) {
+    topology.forEachNeighbor(id, (nid) => {
+      visit(nid);
+    });
+    return;
+  }
+  forEachNeighbor4ById(grid, id, (nid) => {
+    visit(nid);
+  });
+}
+
+function visitTerrainRadiusNeighbor(grid, topology, id, radius, graphBacked, visit) {
+  if (graphBacked) {
+    topology.forEachNeighborRing(id, radius, (nid, depth) => {
+      if (nid === id || depth <= 0) return;
+      visit(nid, depth);
+    });
+    return;
+  }
+  forEachNeighborRadiusById(grid, id, radius, (nid, dx, dy) => {
+    visit(nid, Math.hypot(dx, dy));
+  });
 }
 
 function finiteSample(grid, field, x, y, fallback) {
