@@ -1,6 +1,7 @@
 import { createGrid } from "./grid.js";
 import { hashSeed } from "./prng.js";
 import { createCubedSphereGrid } from "./sphere/cubedSphere.js";
+import { createCubedSphereProductionGridAdapter } from "./sphere/productionGridAdapter.js";
 import { createSphericalExperimentalWorld } from "./sphere/sphericalWorld.js";
 import { initializeBaseTerrain, initializeSeaLevel, updateSeaLevel } from "./terrain.js";
 import { assignPlates, computeBoundaryStress } from "./tectonics.js";
@@ -23,11 +24,16 @@ export const ProjectionMode = {
   DEBUG_FACE: "debug-face",
 };
 
+export const ProductionTopologyMode = {
+  CYLINDRICAL: "cylindrical",
+  CUBED_SPHERE_ADAPTER: "cubed-sphere-adapter",
+};
+
 export function createWorld(params) {
   const normalizedParams = normalizeParams(params);
   const [width, height] = normalizedParams.resolution.split("x").map(Number);
   const seedUint32 = hashSeed(normalizedParams.seedText);
-  const grid = createGrid(width, height);
+  const grid = createProductionGrid(normalizedParams, width, height, seedUint32);
   const world = {
     grid,
     sphericalGrid: createExperimentalSphericalGrid(normalizedParams),
@@ -44,6 +50,8 @@ export function createWorld(params) {
     textureNoise: null,
     initialPlateCentersX: null,
     initialPlateCentersY: null,
+    initialPlateCentersU: null,
+    initialPlateCentersV: null,
     stats: {},
   };
   initializeBaseTerrain(world);
@@ -77,8 +85,29 @@ function normalizeParams(params) {
     pipelineMode: params.pipelineMode === PipelineMode.GEOLOGY_V2 ? PipelineMode.GEOLOGY_V2 : PipelineMode.LEGACY,
     topologyMode,
     projectionMode,
+    productionTopologyMode: normalizeProductionTopologyMode(params),
     faceSize: normalizeFaceSize(params.faceSize, params.resolution),
   };
+}
+
+function normalizeProductionTopologyMode(params) {
+  if (
+    params.productionTopologyMode === ProductionTopologyMode.CUBED_SPHERE_ADAPTER ||
+    params.useSphericalProductionGrid === true
+  ) {
+    return ProductionTopologyMode.CUBED_SPHERE_ADAPTER;
+  }
+  return ProductionTopologyMode.CYLINDRICAL;
+}
+
+function createProductionGrid(params, width, height, seedUint32) {
+  if (params.productionTopologyMode === ProductionTopologyMode.CUBED_SPHERE_ADAPTER) {
+    return createCubedSphereProductionGridAdapter({
+      faceSize: params.faceSize,
+      seedUint32,
+    });
+  }
+  return createGrid(width, height);
 }
 
 function createExperimentalSphericalGrid(params) {
