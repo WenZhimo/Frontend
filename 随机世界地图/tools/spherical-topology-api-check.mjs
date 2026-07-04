@@ -1,6 +1,10 @@
 import { createCubedSphereGrid } from "../src/sim/sphere/cubedSphere.js";
 import { createSphericalTopology } from "../src/sim/sphere/topology.js";
-import { forEachNeighborRadiusById } from "../src/sim/grid.js";
+import {
+  forEachNeighbor4ById,
+  forEachNeighbor8ById,
+  forEachNeighborRadiusById,
+} from "../src/sim/grid.js";
 import { parseIntOption, parseOptions } from "./lib/cli.mjs";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
@@ -18,6 +22,7 @@ const cellVisitCount = countCells(topology);
 const neighborParity = measureNeighborParity(grid, topology);
 const ringStats = measureRingStats(topology);
 const ringContract = measureRingContract(grid, topology);
+const localWrapperContract = measureLocalWrapperContract(grid);
 const flood = topology.floodFill([0], () => true);
 const components = topology.connectedComponents(allMask);
 const distance = topology.shortestDistanceSeeds(seedMask);
@@ -34,6 +39,7 @@ const result = {
   ...neighborParity,
   ...ringStats,
   ...ringContract,
+  ...localWrapperContract,
   floodFillCount: countMask(flood),
   componentCount: components.componentCount,
   componentArea: components.componentAreas[1] ?? 0,
@@ -53,6 +59,8 @@ if (!neighborParity.neighborParityValid) result.valid = false;
 if (ringStats.ringRadius2Count <= ringStats.ringRadius1Count) result.valid = false;
 if (!ringContract.ringDepthContractValid) result.valid = false;
 if (!ringContract.gridRadiusWrapperUsesGraphDepth) result.valid = false;
+if (!localWrapperContract.gridNeighbor4WrapperUsesGraphNeighbors) result.valid = false;
+if (!localWrapperContract.gridNeighbor8WrapperUsesGraphNeighbors) result.valid = false;
 if (result.floodFillCount !== grid.size) result.valid = false;
 if (components.componentCount !== 1) result.valid = false;
 if (result.distanceFiniteShare !== 1) result.valid = false;
@@ -150,6 +158,68 @@ function measureRingContract(grid, topology) {
       wrapperNonZeroDy === 0 &&
       wrapperMismatch === 0,
   };
+}
+
+function measureLocalWrapperContract(grid) {
+  const sampleIds = [
+    0,
+    Math.floor(grid.size * 0.17),
+    Math.floor(grid.size * 0.41),
+    Math.max(0, grid.size - 1),
+  ];
+  let neighbor4Visited = 0;
+  let neighbor4Mismatch = 0;
+  let neighbor4NonZeroDelta = 0;
+  let neighbor8Visited = 0;
+  let neighbor8Mismatch = 0;
+  let neighbor8NonZeroDelta = 0;
+
+  for (const sampleId of sampleIds) {
+    const expected = directNeighborSet(grid, sampleId);
+    const seen4 = new Set();
+    const seen8 = new Set();
+    forEachNeighbor4ById(grid, sampleId, (id, dx, dy) => {
+      neighbor4Visited += 1;
+      seen4.add(id);
+      if (dx !== 0 || dy !== 0) neighbor4NonZeroDelta += 1;
+      if (!expected.has(id)) neighbor4Mismatch += 1;
+    });
+    forEachNeighbor8ById(grid, sampleId, (id, dx, dy) => {
+      neighbor8Visited += 1;
+      seen8.add(id);
+      if (dx !== 0 || dy !== 0) neighbor8NonZeroDelta += 1;
+      if (!expected.has(id)) neighbor8Mismatch += 1;
+    });
+    if (seen4.size !== expected.size) neighbor4Mismatch += Math.abs(seen4.size - expected.size);
+    if (seen8.size !== expected.size) neighbor8Mismatch += Math.abs(seen8.size - expected.size);
+  }
+
+  return {
+    gridNeighborWrapperSampleCount: sampleIds.length,
+    gridNeighbor4WrapperVisited: neighbor4Visited,
+    gridNeighbor4WrapperMismatchCount: neighbor4Mismatch,
+    gridNeighbor4WrapperNonZeroDeltaCount: neighbor4NonZeroDelta,
+    gridNeighbor8WrapperVisited: neighbor8Visited,
+    gridNeighbor8WrapperMismatchCount: neighbor8Mismatch,
+    gridNeighbor8WrapperNonZeroDeltaCount: neighbor8NonZeroDelta,
+    gridNeighbor4WrapperUsesGraphNeighbors:
+      neighbor4Visited > 0 &&
+      neighbor4Mismatch === 0 &&
+      neighbor4NonZeroDelta === 0,
+    gridNeighbor8WrapperUsesGraphNeighbors:
+      neighbor8Visited > 0 &&
+      neighbor8Mismatch === 0 &&
+      neighbor8NonZeroDelta === 0,
+  };
+}
+
+function directNeighborSet(grid, id) {
+  const neighbors = new Set();
+  const start = grid.neighborStart[id];
+  for (let k = 0; k < grid.neighborCount[id]; k += 1) {
+    neighbors.add(grid.neighbors[start + k]);
+  }
+  return neighbors;
 }
 
 function isDirectNeighbor(grid, id, target) {
