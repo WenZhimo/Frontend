@@ -237,12 +237,14 @@ export function forEachGridCell(grid, visit) {
 
 export function forEachNeighbor4(grid, x, y, visit) {
   const topology = topologyForGrid(grid);
+  if (typeof topology.index !== "function" || typeof topology.forEachNeighbor4 !== "function") return;
   const id = topology.index(x, y);
   if (id < 0) return;
   topology.forEachNeighbor4(id, (nid, dx, dy) => {
-    const nx = nid % grid.width;
-    const ny = Math.floor(nid / grid.width);
-    visit(nx, ny, dx, dy);
+    const xy = typeof topology.xy === "function"
+      ? topology.xy(nid)
+      : { x: nid % grid.width, y: Math.floor(nid / grid.width) };
+    visit(xy.x, xy.y, dx, dy);
   });
 }
 
