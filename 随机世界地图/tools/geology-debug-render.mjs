@@ -144,6 +144,9 @@ const layers = {
   inactiveBoundaryRelief: colorField("inactiveBoundaryRelief", 0, 1, [39, 31, 32], [224, 65, 54]),
   oldBoundaryCorrelation: colorOldBoundaryCorrelation,
   ageBandStraightnessRisk: colorField("ageBandStraightnessRisk", 0, 1, [44, 178, 185], [226, 67, 58]),
+  topologyFace: colorTopologyFace,
+  debugFaceSeamRisk: colorDebugFaceSeamRisk,
+  debugProjectionSampling: colorDebugProjectionSampling,
 };
 
 const outputs = [];
@@ -398,6 +401,47 @@ function colorOldBoundaryCorrelation(world, i) {
   const t = Math.max(0, Math.min(1, world.grid.oldBoundaryCorrelation[i]));
   if (t < 0.5) return lerpColor([26, 31, 36], [230, 232, 217], t * 2);
   return lerpColor([230, 232, 217], [218, 55, 49], (t - 0.5) * 2);
+}
+
+function colorTopologyFace(world, i) {
+  const face = world.grid.face?.[i];
+  if (face === undefined) return [32, 35, 38];
+  const palette = [
+    [220, 75, 75],
+    [78, 145, 220],
+    [90, 180, 105],
+    [235, 180, 70],
+    [160, 100, 210],
+    [70, 190, 195],
+  ];
+  return palette[face % palette.length];
+}
+
+function colorDebugFaceSeamRisk(world, i) {
+  const { grid } = world;
+  if (!isGraphBackedGrid(grid)) return [31, 34, 36];
+  let seam = false;
+  const start = grid.neighborStart?.[i] ?? 0;
+  const count = grid.neighborCount?.[i] ?? 0;
+  for (let k = 0; k < count; k += 1) {
+    const nid = grid.neighbors[start + k];
+    if (grid.face?.[nid] !== grid.face?.[i]) seam = true;
+  }
+  if (!seam) return [29, 34, 38];
+  const reliefJump = Math.min(1, Math.abs((grid.elev?.[i] ?? 0) - world.seaLevel) * 5);
+  return lerpColor([238, 216, 75], [226, 62, 54], reliefJump);
+}
+
+function colorDebugProjectionSampling(world, i) {
+  const { grid } = world;
+  if (!isGraphBackedGrid(grid)) return [31, 34, 36];
+  const u = grid.faceU?.[i] ?? 0;
+  const v = grid.faceV?.[i] ?? 0;
+  const faceSize = Math.max(1, grid.faceSize ?? 1);
+  const edge = u === 0 || v === 0 || u === faceSize - 1 || v === faceSize - 1;
+  const checker = ((Math.floor(u / 2) + Math.floor(v / 2) + (grid.face?.[i] ?? 0)) % 2) === 0;
+  if (edge) return checker ? [240, 238, 118] : [230, 92, 76];
+  return checker ? [70, 122, 186] : [38, 64, 102];
 }
 
 function colorField(fieldName, min, max, low, high) {

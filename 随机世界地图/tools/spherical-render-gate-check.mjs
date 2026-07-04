@@ -11,6 +11,9 @@ const gpuOutputPrefix = "_spherical_gpu_render_gate";
 const gpuOutput = `${gpuOutputPrefix}_cpu.ppm`;
 const debugOutputDir = "_spherical_debug_render_gate";
 const debugOutput = `${debugOutputDir}/flowAccumulation.ppm`;
+const topologyDebugOutput = `${debugOutputDir}/topologyFace.ppm`;
+const seamDebugOutput = `${debugOutputDir}/debugFaceSeamRisk.ppm`;
+const samplingDebugOutput = `${debugOutputDir}/debugProjectionSampling.ppm`;
 
 cleanup();
 
@@ -64,7 +67,7 @@ const debugRenderCheck = runJsonCheck("geology-debug-render", [
   "--output-resolution",
   outputResolution,
   "--layers",
-  "flowAccumulation",
+  "flowAccumulation,topologyFace,debugFaceSeamRisk,debugProjectionSampling",
 ]);
 
 const checks = {
@@ -80,8 +83,14 @@ const checks = {
   debugTopologyCubedSphere: debugRenderCheck.parsed?.topologyMode === "cubed-sphere",
   debugLayerRestricted:
     Array.isArray(debugRenderCheck.parsed?.requestedLayers) &&
-    debugRenderCheck.parsed.requestedLayers.includes("flowAccumulation"),
+    debugRenderCheck.parsed.requestedLayers.includes("flowAccumulation") &&
+    debugRenderCheck.parsed.requestedLayers.includes("topologyFace") &&
+    debugRenderCheck.parsed.requestedLayers.includes("debugFaceSeamRisk") &&
+    debugRenderCheck.parsed.requestedLayers.includes("debugProjectionSampling"),
   debugOutputExists: existsSync(debugOutput),
+  topologyDebugOutputExists: existsSync(topologyDebugOutput),
+  seamDebugOutputExists: existsSync(seamDebugOutput),
+  samplingDebugOutputExists: existsSync(samplingDebugOutput),
 };
 
 const failures = Object.entries(checks)
@@ -169,7 +178,7 @@ function compactDebugResult(result) {
 }
 
 function cleanup() {
-  for (const path of [renderOutput, gpuOutput, debugOutput]) {
+  for (const path of [renderOutput, gpuOutput, debugOutput, topologyDebugOutput, seamDebugOutput, samplingDebugOutput]) {
     if (existsSync(path)) rmSync(path, { force: true });
   }
   if (existsSync(debugOutputDir)) rmSync(debugOutputDir, { recursive: true, force: true });
