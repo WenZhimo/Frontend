@@ -6347,9 +6347,13 @@
   }
 
   function legacySameAgeBandAt(grid, x, y, band) {
-    const id = indexOf(grid, x, y);
+    const id = legacyTransformIndexOf(grid, x, y);
     if (id < 0) return 0;
     return grid.crustType[id] === CrustType.OCEANIC && Math.floor(grid.crustAge[id] * 10) === band ? 1 : 0;
+  }
+
+  function legacyTransformIndexOf(grid, x, y) {
+    return indexOf(grid, x, y);
   }
 
   function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
