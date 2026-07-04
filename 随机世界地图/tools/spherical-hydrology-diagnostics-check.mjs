@@ -15,6 +15,9 @@ const checks = {
   sphericalClosedDrainageDiffersFromCellShare: Math.abs(spherical.areaClosedDrainageShare - spherical.cellClosedDrainageShare) > 0.001,
   sphericalFlowAssignedUsesArea: nearlyEqual(spherical.diagnostics.flowAssignedShare, spherical.areaAssignedShare, 1e-12),
   sphericalRiverShareUsesArea: nearlyEqual(spherical.diagnostics.riverCellShare, spherical.areaRiverShare, 1e-12),
+  cylindricalFlowAccumulationUsesCellUnit: cylindrical.flowAccumulationExpectedDeltaMax < 1e-9,
+  sphericalFlowAccumulationUsesAreaUnit: spherical.flowAccumulationExpectedDeltaMax < 1e-9,
+  sphericalFlowAccumulationDiffersFromCellUnit: spherical.flowAccumulationCellUnitDeltaMax > 0.1,
   sphericalDrainageSharesFinite:
     Number.isFinite(spherical.diagnostics.externalSeaDrainageShare) &&
     Number.isFinite(spherical.diagnostics.closedBasinDrainageShare),
@@ -139,6 +142,9 @@ function summarizeProbe(grid, terrain, hydrology) {
     areaRiverShare: areaConditionalShare(grid, terrain.landMask, (id) => hydrology.riverMask[id]),
     cellClosedDrainageShare: cellConditionalShare(terrain.landMask, (id) => hydrology.endorheicBasin[id]),
     areaClosedDrainageShare: areaConditionalShare(grid, terrain.landMask, (id) => hydrology.endorheicBasin[id]),
+    flowAccumulationMean: meanWhere(grid, terrain.landMask, (id) => hydrology.flowAccumulation[id]),
+    flowAccumulationExpectedDeltaMax: maxExpectedAccumulationDelta(grid, terrain, hydrology, (id) => grid.area?.[id] ?? 1),
+    flowAccumulationCellUnitDeltaMax: maxExpectedAccumulationDelta(grid, terrain, hydrology, () => 1),
     diagnostics: {
       hydrologyValid: diagnostics.hydrologyValid,
       flowAssignedShare: diagnostics.flowAssignedShare,
@@ -182,6 +188,38 @@ function cellConditionalShare(includeMask, predicate) {
     if (predicate(id)) matched += 1;
   }
   return total ? matched / total : 0;
+}
+
+function meanWhere(grid, includeMask, valueForId) {
+  let total = 0;
+  let count = 0;
+  for (let id = 0; id < grid.size; id += 1) {
+    if (!includeMask[id]) continue;
+    total += valueForId(id);
+    count += 1;
+  }
+  return count ? total / count : 0;
+}
+
+function maxExpectedAccumulationDelta(grid, terrain, hydrology, sourceUnitForId) {
+  const expected = new Float32Array(grid.size);
+  const landCells = [];
+  for (let id = 0; id < grid.size; id += 1) {
+    if (!terrain.landMask[id]) continue;
+    expected[id] = sourceUnitForId(id);
+    landCells.push(id);
+  }
+  landCells.sort((a, b) => hydrology.hydroElevation[b] - hydrology.hydroElevation[a]);
+  for (const id of landCells) {
+    const target = hydrology.flowTarget[id];
+    if (target < 0) continue;
+    expected[target] += expected[id];
+  }
+  let max = 0;
+  for (const id of landCells) {
+    max = Math.max(max, Math.abs(hydrology.flowAccumulation[id] - expected[id]));
+  }
+  return max;
 }
 
 function nearlyEqual(a, b, tolerance) {
