@@ -68,9 +68,15 @@ const legacyHelperByFile = summarizeByFile(legacyHelperMatches);
 const legacyFallbackHelperMatches = classifiedLegacyHelperMatches.filter((match) => match.classification === "legacyFallback");
 const guardedHelperMatches = classifiedLegacyHelperMatches.filter((match) => match.classification === "guardedHelper");
 const possibleSphericalPathHelperMatches = classifiedLegacyHelperMatches.filter((match) => match.classification === "possibleSphericalPath");
+const graphRoutedFallbackMatches = legacyFallbackHelperMatches.filter((match) => match.routeKind === "graphRoutedFile");
+const explicitLegacyWrapperMatches = legacyFallbackHelperMatches.filter((match) => match.routeKind === "explicitLegacyFunction");
+const graphBranchFallbackMatches = legacyFallbackHelperMatches.filter((match) => match.routeKind === "graphBranchFallback");
 const legacyFallbackHelperByFile = summarizeByFile(legacyFallbackHelperMatches);
 const guardedHelperByFile = summarizeByFile(guardedHelperMatches);
 const possibleSphericalPathHelperByFile = summarizeByFile(possibleSphericalPathHelperMatches);
+const graphRoutedFallbackByFile = summarizeByFile(graphRoutedFallbackMatches);
+const explicitLegacyWrapperByFile = summarizeByFile(explicitLegacyWrapperMatches);
+const graphBranchFallbackByFile = summarizeByFile(graphBranchFallbackMatches);
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -90,6 +96,12 @@ const result = {
   legacyHelperRiskFiles: Object.keys(legacyHelperByFile).length,
   legacyFallbackHelperCount: legacyFallbackHelperMatches.length,
   legacyFallbackHelperFiles: Object.keys(legacyFallbackHelperByFile).length,
+  graphRoutedFallbackCount: graphRoutedFallbackMatches.length,
+  graphRoutedFallbackFiles: Object.keys(graphRoutedFallbackByFile).length,
+  explicitLegacyWrapperCount: explicitLegacyWrapperMatches.length,
+  explicitLegacyWrapperFiles: Object.keys(explicitLegacyWrapperByFile).length,
+  graphBranchFallbackCount: graphBranchFallbackMatches.length,
+  graphBranchFallbackFiles: Object.keys(graphBranchFallbackByFile).length,
   guardedHelperCount: guardedHelperMatches.length,
   guardedHelperFiles: Object.keys(guardedHelperByFile).length,
   possibleSphericalPathHelperCount: possibleSphericalPathHelperMatches.length,
@@ -111,6 +123,18 @@ const result = {
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 12)
     .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
+  topGraphRoutedFallbackFiles: Object.entries(graphRoutedFallbackByFile)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 12)
+    .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
+  topExplicitLegacyWrapperFiles: Object.entries(explicitLegacyWrapperByFile)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 12)
+    .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
+  topGraphBranchFallbackFiles: Object.entries(graphBranchFallbackByFile)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 12)
+    .map(([file, summary]) => ({ file, count: summary.count, patterns: summary.patterns })),
   topGuardedHelperFiles: Object.entries(guardedHelperByFile)
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, 12)
@@ -124,7 +148,7 @@ const result = {
       ? "helperMigrationReady means all scanned topology helper usage is classified as guarded or legacy fallback"
       : "helperMigrationReady is false while possibleSphericalPathHelperCount is non-zero",
     "legacyHelperRiskCount is diagnostic: topology helpers are migration dependencies, not automatic failures",
-    "possibleSphericalPathHelperCount is the next migration target; legacyFallbackHelperCount tracks helpers guarded by graph-backed branches",
+    "possibleSphericalPathHelperCount is the next migration target; legacyFallbackHelperCount is split into graphRoutedFallback, explicitLegacyWrapper, and graphBranchFallback buckets",
   ],
 };
 
@@ -207,10 +231,20 @@ function classifyHelperMatch(match) {
   const context = `${before}\n${match.lineText}\n${after}`;
   const graphRoutedFile = graphRoutedLegacyFiles.get(match.file);
   if (graphRoutedFile?.patterns.has(match.pattern)) {
-    return { ...match, classification: "legacyFallback", routeReason: graphRoutedFile.reason };
+    return {
+      ...match,
+      classification: "legacyFallback",
+      routeKind: "graphRoutedFile",
+      routeReason: graphRoutedFile.reason,
+    };
   }
   if (isInsideLegacyFunction(match)) {
-    return { ...match, classification: "legacyFallback", routeReason: "helper call is inside an explicitly named legacy fallback function" };
+    return {
+      ...match,
+      classification: "legacyFallback",
+      routeKind: "explicitLegacyFunction",
+      routeReason: "helper call is inside an explicitly named legacy fallback function",
+    };
   }
   const hasGraphGuard = /isGraphBackedGrid\s*\(|graphBacked|topology\.forEachNeighbor|topology\.shortestDistanceSeeds/.test(context);
   const precededByGraphReturn = /if\s*\([^\n]*(?:isGraphBackedGrid|graphBacked)[^\n]*\)\s*\{[\s\S]{0,2600}\breturn\s*;[\s\S]{0,1600}$/.test(before);
@@ -221,7 +255,11 @@ function classifyHelperMatch(match) {
     : hasGraphGuard
       ? "guardedHelper"
       : "possibleSphericalPath";
-  return { ...match, classification };
+  return {
+    ...match,
+    classification,
+    routeKind: classification === "legacyFallback" ? "graphBranchFallback" : null,
+  };
 }
 
 function isInsideLegacyFunction(match) {
