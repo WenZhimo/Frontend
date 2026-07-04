@@ -154,7 +154,7 @@ function diffuseFeature(grid, source, target, referenceRadius, gain, options = {
   if (isGraphBackedGrid(grid, topology)) {
     diffuseFeatureGraph(grid, topology, source, spread, radius, gain, options);
   } else {
-    diffuseFeatureRaster(grid, source, spread, radius, gain, options);
+    legacyDiffuseFeatureRaster(grid, source, spread, radius, gain, options);
   }
 
   for (let i = 0; i < size; i += 1) {
@@ -162,7 +162,7 @@ function diffuseFeature(grid, source, target, referenceRadius, gain, options = {
   }
 }
 
-function diffuseFeatureRaster(grid, source, spread, radius, gain, options) {
+function legacyDiffuseFeatureRaster(grid, source, spread, radius, gain, options) {
   const { crustType, weakness } = grid;
   forEachGridCell(grid, (id, x, y) => {
     const seed = source[id];
@@ -181,7 +181,7 @@ function diffuseFeatureRaster(grid, source, spread, radius, gain, options) {
         if (options.oceanicBias && crustType[nid] !== CrustType.OCEANIC && dist > radius * 0.45) continue;
         const weak = weakness[nid];
         if (weak < (options.minWeakness ?? 0) && dist > 1.5) continue;
-        if (options.segmented && weak < 0.38 && segmentMask(sx, sy, weak) < 0.8) continue;
+        if (options.segmented && weak < 0.38 && legacySegmentMask(sx, sy, weak) < 0.8) continue;
         const falloff = Math.max(0, 1 - dist / (radius + 0.5));
         const weakWeight = 0.45 + weak * 0.9;
         const addition = seed * gain * falloff * weakWeight;
@@ -233,7 +233,7 @@ function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
   );
 }
 
-function segmentMask(x, y, weakness) {
+function legacySegmentMask(x, y, weakness) {
   const sx = Math.floor((x + 5) / 11);
   const sy = Math.floor((y + 3) / 9);
   const n = hash2(sx, sy);
