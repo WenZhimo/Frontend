@@ -606,12 +606,22 @@ function compactMetrics(name, parsed) {
   if (parsed.checks) {
     picked.defaultCubedSphereProductionGridIsCubedSphere = parsed.checks.defaultCubedSphereProductionGridIsCubedSphere;
     picked.defaultCubedSphereProductionGridGraphBacked = parsed.checks.defaultCubedSphereProductionGridGraphBacked;
+    picked.defaultCubedSphereMatchesFaceSize = parsed.checks.defaultCubedSphereMatchesFaceSize;
     picked.defaultCubedSphereHasNoLegacyDimensions = parsed.checks.defaultCubedSphereHasNoLegacyDimensions;
+    picked.defaultCubedSphereKeepsDiagnosticSidecar = parsed.checks.defaultCubedSphereKeepsDiagnosticSidecar;
+    picked.defaultCubedSphereDiagnosticSidecarExplicit = parsed.checks.defaultCubedSphereDiagnosticSidecarExplicit;
     picked.defaultCubedSphereSidecarNonAuthoritative = parsed.checks.defaultCubedSphereSidecarNonAuthoritative;
     picked.adapterProductionGridIsCubedSphere = parsed.checks.adapterProductionGridIsCubedSphere;
     picked.adapterProductionGridGraphBacked = parsed.checks.adapterProductionGridGraphBacked;
     picked.adapterHasNoLegacyDimensions = parsed.checks.adapterHasNoLegacyDimensions;
+    picked.adapterMatchesFaceSize = parsed.checks.adapterMatchesFaceSize;
+    picked.adapterStepAdvanced = parsed.checks.adapterStepAdvanced;
     picked.adapterStatsFinite = parsed.checks.adapterStatsFinite;
+    picked.createWorldTerrainSized = parsed.checks.terrainSized;
+    picked.createWorldClimateSized = parsed.checks.climateSized;
+    picked.createWorldHydrologySized = parsed.checks.hydrologySized;
+    picked.createWorldResourcesSized = parsed.checks.resourcesSized;
+    picked.createWorldHydrologyValid = parsed.checks.hydrologyValid;
   }
   if (name === "spherical-production-init-check") {
     picked.productionInitStageCount = parsed.stages?.length ?? 0;
