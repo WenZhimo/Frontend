@@ -1,4 +1,5 @@
 import { forEachGridCell, forEachNeighbor4ById, indexOf, physicalRadius, sampleGridWrapped } from "../grid.js";
+import { topologyForGrid } from "../topology.js";
 import { BoundaryType } from "../tectonics.js";
 import { CrustType } from "./crust.js";
 
@@ -131,6 +132,7 @@ function rebuildCombinedAxis(grid) {
 
 function measureAxisDiagnostics(grid) {
   const { tectonicAxis, axisCurvature, axisContinuity, axisBoundaryDependency, axisSegmentId, boundaryInfluence, activeBoundary, scratch } = grid;
+  const topology = topologyForGrid(grid);
   scratch.fill(0);
   let nextSegment = 1;
 
@@ -144,15 +146,11 @@ function measureAxisDiagnostics(grid) {
       return;
     }
 
-    const left = sample(grid, tectonicAxis, x - 1, y);
-    const right = sample(grid, tectonicAxis, x + 1, y);
-    const up = sample(grid, tectonicAxis, x, y - 1);
-    const down = sample(grid, tectonicAxis, x, y + 1);
-    const dx = Math.abs(left - right);
-    const dy = Math.abs(up - down);
-    const localMax = Math.max(left, right, up, down);
-    axisCurvature[id] = Math.min(1, Math.abs(dx - dy) * 4 + Math.min(dx + dy, 1) * 0.25);
-    axisContinuity[id] = Math.min(1, (localMax + v) * 0.5);
+    const diagnostic = isGraphBackedGrid(grid, topology)
+      ? sampleGraphAxisDiagnostic(grid, topology, tectonicAxis, id)
+      : sampleLegacyAxisDiagnostic(grid, tectonicAxis, x, y);
+    axisCurvature[id] = diagnostic.curvature;
+    axisContinuity[id] = Math.min(1, (diagnostic.localMax + v) * 0.5);
     axisBoundaryDependency[id] = Math.min(1, v * 0.45 + boundaryInfluence[id] * 0.45 + (activeBoundary[id] ? 0.1 : 0));
   });
 
@@ -167,7 +165,7 @@ function measureAxisDiagnostics(grid) {
     queue[tail++] = start;
     while (head < tail) {
       const id = queue[head++];
-      forEachNeighbor4ById(grid, id, (nid) => {
+      visitAxisSegmentNeighbors(grid, topology, id, (nid) => {
         if (tectonicAxis[nid] <= 0.06 || axisSegmentId[nid]) return;
         axisSegmentId[nid] = segmentId;
         queue[tail++] = nid;
@@ -177,6 +175,12 @@ function measureAxisDiagnostics(grid) {
 }
 
 function measureFieldBlockiness(grid, field, output) {
+  const topology = topologyForGrid(grid);
+  if (isGraphBackedGrid(grid, topology)) {
+    measureGraphFieldBlockiness(grid, topology, field, output);
+    return;
+  }
+
   forEachGridCell(grid, (id, x, y) => {
     const v = field[id];
     if (v <= 0.0001) {
@@ -195,6 +199,7 @@ function measureFieldBlockiness(grid, field, output) {
 }
 
 function measureFieldContinuity(grid, field, output) {
+  const topology = topologyForGrid(grid);
   forEachGridCell(grid, (id) => {
     const v = field[id];
     if (v <= 0.0001) {
@@ -202,10 +207,86 @@ function measureFieldContinuity(grid, field, output) {
       return;
     }
     let neighbors = 0;
-    forEachNeighbor4ById(grid, id, (nid) => {
+    let total = 0;
+    visitAxisSegmentNeighbors(grid, topology, id, (nid) => {
+      total += 1;
       if (field[nid] > v * 0.35) neighbors += 1;
     });
-    output[id] = neighbors / 4;
+    output[id] = total ? neighbors / total : 0;
+  });
+}
+
+function sampleLegacyAxisDiagnostic(grid, field, x, y) {
+  const left = sample(grid, field, x - 1, y);
+  const right = sample(grid, field, x + 1, y);
+  const up = sample(grid, field, x, y - 1);
+  const down = sample(grid, field, x, y + 1);
+  const dx = Math.abs(left - right);
+  const dy = Math.abs(up - down);
+  const localMax = Math.max(left, right, up, down);
+  return {
+    curvature: Math.min(1, Math.abs(dx - dy) * 4 + Math.min(dx + dy, 1) * 0.25),
+    localMax,
+  };
+}
+
+function sampleGraphAxisDiagnostic(grid, topology, field, id) {
+  const center = field[id];
+  let neighborCount = 0;
+  let localMax = 0;
+  let totalDelta = 0;
+  let totalDeltaSq = 0;
+  topology.forEachNeighbor(id, (nid) => {
+    const delta = Math.abs(center - field[nid]);
+    neighborCount += 1;
+    totalDelta += delta;
+    totalDeltaSq += delta * delta;
+    if (field[nid] > localMax) localMax = field[nid];
+  });
+  if (!neighborCount) return { curvature: 0, localMax: 0 };
+  const mean = totalDelta / neighborCount;
+  const variance = Math.max(0, totalDeltaSq / neighborCount - mean * mean);
+  return {
+    curvature: Math.min(1, Math.sqrt(variance) * 5.2 + mean * 0.32),
+    localMax,
+  };
+}
+
+function measureGraphFieldBlockiness(grid, topology, field, output) {
+  forEachGridCell(grid, (id) => {
+    const v = field[id];
+    if (v <= 0.0001) {
+      output[id] = 0;
+      return;
+    }
+    let count = 0;
+    let totalDelta = 0;
+    let totalDeltaSq = 0;
+    topology.forEachNeighbor(id, (nid) => {
+      const delta = Math.abs(v - field[nid]);
+      count += 1;
+      totalDelta += delta;
+      totalDeltaSq += delta * delta;
+    });
+    if (!count) {
+      output[id] = 0;
+      return;
+    }
+    const mean = totalDelta / count;
+    const variance = Math.max(0, totalDeltaSq / count - mean * mean);
+    output[id] = Math.min(1, Math.sqrt(variance) * 3.8 + mean * 0.18);
+  });
+}
+
+function visitAxisSegmentNeighbors(grid, topology, id, visit) {
+  if (isGraphBackedGrid(grid, topology)) {
+    topology.forEachNeighbor(id, (nid) => {
+      visit(nid);
+    });
+    return;
+  }
+  forEachNeighbor4ById(grid, id, (nid) => {
+    visit(nid);
   });
 }
 
@@ -227,4 +308,12 @@ function sample(grid, field, x, y) {
   const id = indexOf(grid, x, y);
   if (id < 0) return 0;
   return sampleGridWrapped(grid, field, x, y);
+}
+
+function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+  return Boolean(
+    grid.topologyOptions?.graphBacked ||
+      topology?.topologyKind === "cubed-sphere" ||
+      grid.topologyKind === "cubed-sphere",
+  );
 }
