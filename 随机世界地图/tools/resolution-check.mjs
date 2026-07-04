@@ -501,11 +501,11 @@ function measureTransformDiagnostics(world) {
   let inactiveOceanicCount = 0;
 
   for (let i = 0; i < grid.size; i += 1) {
-    if (grid.activeTransform[i] > 0.05) {
+    if (grid.activeTransform[i] > transformDiagnosticThreshold(grid)) {
       activeSignalSum += grid.activeTransform[i];
       activeSignalCount += 1;
     }
-    if (grid.transformMemory[i] > 0.05 && grid.activeTransform[i] <= 0.01) {
+    if (grid.transformMemory[i] > transformDiagnosticThreshold(grid) && grid.activeTransform[i] <= transformDiagnosticThreshold(grid) * 0.2) {
       inactiveSignalSum += grid.inactiveBoundaryRelief[i];
       inactiveSignalCount += 1;
     }
@@ -521,7 +521,7 @@ function measureTransformDiagnostics(world) {
       abyssalSuppression += grid.oldBoundaryCorrelation[i];
       abyssalCount += 1;
     }
-    if (grid.crustType[i] === 0 && grid.boundaryInfluence[i] < 0.12 && grid.transformMemory[i] > 0.05) {
+    if (grid.crustType[i] === 0 && grid.boundaryInfluence[i] < 0.12 && grid.transformMemory[i] > transformDiagnosticThreshold(grid)) {
       inactiveOceanicMemory += grid.inactiveBoundaryRelief[i];
       inactiveOceanicCount += 1;
     }
@@ -530,9 +530,9 @@ function measureTransformDiagnostics(world) {
   const activeRelief = activeSignalCount ? activeSignalSum / activeSignalCount : 0;
   const inactiveRelief = inactiveSignalCount ? inactiveSignalSum / inactiveSignalCount : 0;
   return {
-    activeTransformCoverage: coverage(grid.activeTransform, 0.05),
-    transformMemoryCoverage: coverage(grid.transformMemory, 0.05),
-    fractureZoneMemoryCoverage: coverage(grid.fractureZoneMemory, 0.05),
+    activeTransformCoverage: coverage(grid.activeTransform, transformDiagnosticThreshold(grid)),
+    transformMemoryCoverage: coverage(grid.transformMemory, transformDiagnosticThreshold(grid)),
+    fractureZoneMemoryCoverage: coverage(grid.fractureZoneMemory, transformDiagnosticThreshold(grid)),
     inactiveTransformReliefMean: inactiveOceanicCount ? inactiveOceanicMemory / inactiveOceanicCount : 0,
     fractureZoneElevationContribution: fractureCount ? fractureContribution / fractureCount : 0,
     oceanicStraightReliefDecay: inactiveOceanicCount ? inactiveOceanicMemory / inactiveOceanicCount : 0,
@@ -684,6 +684,10 @@ function axisSegmentLengthMean(grid) {
 
 function axisDiagnosticThreshold(grid) {
   return grid.topologyKind === "cubed-sphere" || grid.topologyOptions?.graphBacked ? 0.016 : 0.05;
+}
+
+function transformDiagnosticThreshold(grid) {
+  return grid.topologyKind === "cubed-sphere" || grid.topologyOptions?.graphBacked ? 0.006 : 0.05;
 }
 
 function isPlateIslandNoise(grid, id) {

@@ -326,15 +326,15 @@ const stats = {
   landRatioDriftAfterIsostasy: isostasy.landRatioDriftAfterIsostasy,
   closedBasinMisclassifiedAsMarginShare: conditionalShare(terrain.inlandWaterCandidate, (i) => terrain.inlandWaterCandidate[i], (i) => terrain.passiveMargin[i] > 0.05),
   activeBoundaryMisclassifiedAsPassiveMarginShare: conditionalShare(terrain.passiveMargin, (i) => terrain.passiveMargin[i] > 0.05, (i) => world.grid.boundaryInfluence[i] > 0.35 || world.grid.ridge[i] > 0.2 || world.grid.trench[i] > 0.2),
-  activeTransformCoverage: coverage(terrain.activeTransform, 0.05),
-  transformMemoryCoverage: coverage(terrain.transformMemory, 0.05),
-  fractureZoneMemoryCoverage: coverage(terrain.fractureZoneMemory, 0.05),
-  inactiveTransformReliefMean: averageWhere(world.grid.inactiveBoundaryRelief, (i) => terrain.transformMemory[i] > 0.05 && world.grid.boundaryInfluence[i] < 0.12),
-  fractureZoneElevationContribution: averageWhere(world.grid.oldBoundaryCorrelation, (i) => terrain.fractureZoneMemory[i] > 0.05),
+  activeTransformCoverage: coverage(terrain.activeTransform, transformDiagnosticThreshold(world.grid)),
+  transformMemoryCoverage: coverage(terrain.transformMemory, transformDiagnosticThreshold(world.grid)),
+  fractureZoneMemoryCoverage: coverage(terrain.fractureZoneMemory, transformDiagnosticThreshold(world.grid)),
+  inactiveTransformReliefMean: averageWhere(world.grid.inactiveBoundaryRelief, (i) => terrain.transformMemory[i] > transformDiagnosticThreshold(world.grid) && world.grid.boundaryInfluence[i] < 0.12),
+  fractureZoneElevationContribution: averageWhere(world.grid.oldBoundaryCorrelation, (i) => terrain.fractureZoneMemory[i] > transformDiagnosticThreshold(world.grid)),
   oldBoundaryReliefCorrelation: average(world.grid.oldBoundaryCorrelation),
   activeVsInactiveBoundaryReliefRatio: ratio(
-    averageWhere(terrain.activeTransform, (i) => terrain.activeTransform[i] > 0.05),
-    averageWhere(world.grid.inactiveBoundaryRelief, (i) => terrain.transformMemory[i] > 0.05 && terrain.activeTransform[i] <= 0.01),
+    averageWhere(terrain.activeTransform, (i) => terrain.activeTransform[i] > transformDiagnosticThreshold(world.grid)),
+    averageWhere(world.grid.inactiveBoundaryRelief, (i) => terrain.transformMemory[i] > transformDiagnosticThreshold(world.grid) && terrain.activeTransform[i] <= transformDiagnosticThreshold(world.grid) * 0.2),
   ),
   plateCheckerboardScore: average(world.grid.plateCheckerboard),
   activeBoundaryCoverage: coverage(world.grid.activeBoundary, 0.5),
@@ -683,6 +683,10 @@ function axisSegmentLengthMean(grid) {
 
 function axisDiagnosticThreshold(grid) {
   return grid.topologyKind === "cubed-sphere" || grid.topologyOptions?.graphBacked ? 0.016 : 0.05;
+}
+
+function transformDiagnosticThreshold(grid) {
+  return grid.topologyKind === "cubed-sphere" || grid.topologyOptions?.graphBacked ? 0.006 : 0.05;
 }
 
 function mountainAxisCurvature(grid) {
