@@ -85,12 +85,23 @@ const result = {
 
 if (rendered.stats.sampledPixels <= 0) result.valid = false;
 if (projectionMode === "equirectangular" && rendered.stats.blankPixels !== 0) result.valid = false;
-if (projectionMode === "orthographic" && !(result.blankShare > 0.1 && result.blankShare < 0.35)) result.valid = false;
+if (projectionMode === "orthographic") {
+  const expectedBlankShare = expectedOrthographicBlankShare(width, height);
+  result.expectedBlankShare = expectedBlankShare;
+  result.blankShareDelta = Math.abs(result.blankShare - expectedBlankShare);
+  if (result.blankShareDelta > 0.08) result.valid = false;
+}
 if (projectionMode === "mollweide" && !(result.blankShare > 0.12 && result.blankShare < 0.35)) result.valid = false;
 if (rendered.stats.nearestCellMaxReuse <= 0) result.valid = false;
 
 console.log(JSON.stringify(result, null, 2));
 process.exit(result.valid ? 0 : 1);
+
+function expectedOrthographicBlankShare(width, height, zoom = 0.92) {
+  const diameter = Math.min(width, height) * zoom;
+  const visiblePixels = Math.PI * (diameter / 2) ** 2;
+  return 1 - visiblePixels / Math.max(1, width * height);
+}
 
 function createSyntheticField(grid) {
   const field = new Float32Array(grid.size);
