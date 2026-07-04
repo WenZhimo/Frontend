@@ -4108,21 +4108,23 @@
 
   function deriveBoundaryCoherence(grid) {
     const { plate, activeBoundary, boundaryDensity, boundaryCoherence, noisyBoundaryPatch, plateCheckerboard } = grid;
+    const topology = topologyForGrid(grid);
     forEachGridCell(grid, (id) => {
       let boundaryCount = activeBoundary[id] ? 1 : 0;
       let cells = 1;
       let same = 0;
       let different = 0;
-      forEachNeighbor8ById(grid, id, (nid) => {
+      visitBoundaryCoherenceNeighbors(grid, topology, id, (nid) => {
         cells += 1;
         if (activeBoundary[nid]) boundaryCount += 1;
         if (plate[nid] === plate[id]) same += 1;
         else different += 1;
       });
 
-      const { x, y } = xyOf(grid, id);
       const density = cells ? boundaryCount / cells : 0;
-      const checker = checkerboardRiskAt(grid, x, y);
+      const checker = isGraphBackedGrid(grid, topology)
+        ? graphCheckerboardRiskAt(grid, topology, id)
+        : legacyCheckerboardRiskAt(grid, id);
       const islandNoise = same <= 2 && different >= 5 ? 1 : 0;
       const coherence = Math.max(0, Math.min(1, 1 - Math.max(0, density - 0.42) * 1.35 - checker * 0.75 - islandNoise * 0.55));
       boundaryDensity[id] = density;
@@ -4132,7 +4134,20 @@
     });
   }
 
-  function checkerboardRiskAt(grid, x, y) {
+  function visitBoundaryCoherenceNeighbors(grid, topology, id, visit) {
+    if (isGraphBackedGrid(grid, topology)) {
+      topology.forEachNeighbor(id, (nid) => {
+        visit(nid);
+      });
+      return;
+    }
+    forEachNeighbor8ById(grid, id, (nid) => {
+      visit(nid);
+    });
+  }
+
+  function legacyCheckerboardRiskAt(grid, id) {
+    const { x, y } = xyOf(grid, id);
     let risk = 0;
     for (let dy = -1; dy <= 0; dy += 1) {
       const y0 = y + dy;
@@ -4155,6 +4170,26 @@
     return risk;
   }
 
+  function graphCheckerboardRiskAt(grid, topology, id) {
+    const current = grid.plate[id];
+    let same = 0;
+    let different = 0;
+    let otherA = -1;
+    let otherB = -1;
+    topology.forEachNeighbor(id, (nid) => {
+      const plate = grid.plate[nid];
+      if (plate === current) {
+        same += 1;
+        return;
+      }
+      different += 1;
+      if (otherA < 0) otherA = plate;
+      else if (plate !== otherA) otherB = plate;
+    });
+    if (different < 3 || same > 1 || otherB < 0) return 0;
+    return Math.min(1, (different - same) / Math.max(1, different));
+  }
+
   function inspectBoundaryNeighbor(grid, id, nid, dx, dy, currentPlate, visit) {
     if (grid.plate[nid] === currentPlate) return;
     const rvx = grid.pvx[id] - grid.pvx[nid];
@@ -4164,11 +4199,24 @@
 
   function nearestBoundaryKind(grid, id) {
     let best = BoundaryType.INTERIOR;
-    forEachNeighbor4ById(grid, id, (nid) => {
+    const topology = topologyForGrid(grid);
+    visitNearestBoundaryKindNeighbors(grid, topology, id, (nid) => {
       const kind = grid.boundaryKind[nid];
       if (kind !== BoundaryType.INTERIOR) best = kind;
     });
     return best;
+  }
+
+  function visitNearestBoundaryKindNeighbors(grid, topology, id, visit) {
+    if (isGraphBackedGrid(grid, topology)) {
+      topology.forEachNeighbor(id, (nid) => {
+        visit(nid);
+      });
+      return;
+    }
+    forEachNeighbor4ById(grid, id, (nid) => {
+      visit(nid);
+    });
   }
 
   function rebuildGraphBoundaryDistance(grid, topology, sourceMask, radius) {
