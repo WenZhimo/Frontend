@@ -15,10 +15,19 @@ export function stepWorld(world) {
   // Future phases plug in here: climateStep, hydrologyStep, biomeStep, resourceStep, impactStep.
   world.step += 1;
   world.ageYears += Number(world.params.timeScale);
-  if (world.params.topologyMode === "cubed-sphere" && world.sphericalWorld) {
+  if (shouldStepSphericalDiagnosticSidecar(world)) {
     stepSphericalExperimentalWorld(world.sphericalWorld, 1);
   }
   world.stats = analyzeWorld(world);
   world.lastStepMs = performance.now() - t0;
   return world;
+}
+
+function shouldStepSphericalDiagnosticSidecar(world) {
+  const sidecar = world.sphericalWorld;
+  return world.params.topologyMode === "cubed-sphere"
+    && sidecar?.kind === "spherical-experimental-world"
+    && sidecar.role === "diagnostic-sidecar"
+    && sidecar.authoritative === false
+    && sidecar.writesProductionState === false;
 }
