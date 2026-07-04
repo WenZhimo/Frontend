@@ -7158,7 +7158,10 @@
   function localSlope(grid, id) {
     const topology = topologyForGrid(grid);
     if (isGraphBackedGrid(grid, topology)) return localGraphSlope(grid, topology, id);
+    return legacyLocalSlope(grid, id);
+  }
 
+  function legacyLocalSlope(grid, id) {
     const { x, y } = xyOf(grid, id);
     const left = sampleGridWrapped(grid, grid.elev, x - 1, y);
     const right = sampleGridWrapped(grid, grid.elev, x + 1, y);
