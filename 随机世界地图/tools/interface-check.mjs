@@ -235,7 +235,7 @@ const stats = {
   landmassCount: maxInt(terrain.landmassId),
   islandCount: maxInt(terrain.islandId),
   externalSeaShare: share(hydrology.externalSeaMask),
-  inlandWaterCandidateShare: shareWhere(terrain.seaMask, (i) => !hydrology.externalSeaMask[i]),
+  unconnectedSeaMaskShare: shareWhere(terrain.seaMask, (i) => !hydrology.externalSeaMask[i]),
   closedBasinCount: maxInt(hydrology.closedBasinId),
   inlandWaterCandidateShare: share(terrain.inlandWaterCandidate),
   hydrologyValid: Boolean(hydrologyDiagnostics.hydrologyValid),
@@ -658,12 +658,13 @@ function widthProxy(field, threshold) {
   const topology = topologyForGrid(world.grid);
   for (let id = 0; id < world.grid.size; id += 1) {
     if (field[id] <= threshold) continue;
-    covered += 1;
+    const area = metricArea(id);
+    covered += area;
     let nearEmpty = false;
     forEachAnyNeighbor(topology, id, (nid) => {
       if (field[nid] <= threshold) nearEmpty = true;
     });
-    if (nearEmpty) edge += 1;
+    if (nearEmpty) edge += area;
   }
   return edge ? covered / edge : 0;
 }
@@ -696,7 +697,8 @@ function mountainAxisCurvature(grid) {
   const threshold = axisDiagnosticThreshold(grid);
   for (let id = 0; id < grid.size; id += 1) {
     if (grid.mountainAxis[id] <= threshold) continue;
-    total += 1;
+    const area = metricArea(id);
+    total += area;
     let connected = 0;
     let strongest = 0;
     forEachAnyNeighbor(topology, id, (nid) => {
@@ -704,7 +706,7 @@ function mountainAxisCurvature(grid) {
       connected += v;
       if (v > strongest) strongest = v;
     });
-    if (connected > strongest + threshold) bent += 1;
+    if (connected > strongest + threshold) bent += area;
   }
   return total ? bent / total : 0;
 }
@@ -713,8 +715,9 @@ function plateIslandNoiseShare(grid) {
   let count = 0;
   let total = 0;
   for (let i = 0; i < grid.size; i += 1) {
-    total += metricArea(i);
-    if (isPlateIslandNoise(grid, i)) count += 1;
+    const area = metricArea(i);
+    total += area;
+    if (isPlateIslandNoise(grid, i)) count += area;
   }
   return count / Math.max(total, Number.EPSILON);
 }
@@ -725,8 +728,9 @@ function featureOnNoisyBoundaryShare(grid) {
   for (let i = 0; i < grid.size; i += 1) {
     const feature = Math.max(grid.mountainBelt[i], grid.trench[i], grid.ridge[i], grid.rift[i], grid.basin[i], grid.islandArc[i]);
     if (feature <= 0.05) continue;
-    featureCount += 1;
-    if (grid.noisyBoundaryPatch[i]) noisyFeature += 1;
+    const area = metricArea(i);
+    featureCount += area;
+    if (grid.noisyBoundaryPatch[i]) noisyFeature += area;
   }
   return featureCount ? noisyFeature / featureCount : 0;
 }
@@ -758,15 +762,16 @@ function measureAgeBandStraightnessSplit(grid) {
       if (grid.crustType[nid] === 0 && Math.floor(grid.crustAge[nid] * 10) === band) aligned += 1;
     });
     if (aligned <= 0) continue;
-    const straight = aligned >= 2 ? 1 : 0;
+    const area = metricArea(id);
+    const straight = aligned >= 2 ? area : 0;
     if (grid.ridge[id] > 0.05 || grid.ridgeDistance[id] <= 3) {
-      nearTotal += 1;
+      nearTotal += area;
       nearStraight += straight;
     } else if (grid.fractureZoneMemory[id] > 0.05) {
-      fractureTotal += 1;
+      fractureTotal += area;
       fractureStraight += straight;
     } else if (grid.boundaryInfluence[id] < 0.12) {
-      inactiveTotal += 1;
+      inactiveTotal += area;
       inactiveStraight += straight;
     }
   }
