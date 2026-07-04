@@ -29,6 +29,7 @@ const checks = [
   ["spherical-plate-check", ["tools/spherical-plate-check.mjs", seedText, String(faceSize), "14", String(steps)]],
   ["spherical-core-check", ["tools/spherical-core-check.mjs", seedText, String(faceSize), "14", String(steps)]],
   ["spherical-authoritative-core-check", ["tools/spherical-authoritative-core-check.mjs", seedText, String(faceSize), "20"]],
+  ["spherical-geology-health-check", ["tools/spherical-geology-health-check.mjs", seedText, String(smallFaceSize), "20"]],
   ["spherical-noise-check", ["tools/spherical-noise-check.mjs", String(faceSize), seedText]],
   ["spherical-diagnostic-terrain-check", ["tools/spherical-diagnostic-terrain-check.mjs", seedText, String(faceSize), String(steps)]],
   ["spherical-diagnostic-terrain-check:small", ["tools/spherical-diagnostic-terrain-check.mjs", "artifact-seed-3", String(smallFaceSize), "55"]],
@@ -125,8 +126,17 @@ function compactMetrics(parsed) {
     "sphericalForbiddenCount",
     "legacyRiskCount",
     "legacyRiskFiles",
+    "landRatio",
+    "seaRatio",
+    "activeTectonicCoverage",
+    "activeBoundaryCoverage",
+    "activeTransformCoverage",
+    "transformMemoryCoverage",
+    "oldBoundaryReliefCorrelation",
+    "sedimentStraightnessRisk",
   ]) {
     if (parsed[key] !== undefined) picked[key] = parsed[key];
+    else if (parsed.metrics?.[key] !== undefined) picked[key] = parsed.metrics[key];
   }
   return picked;
 }
