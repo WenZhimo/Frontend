@@ -199,25 +199,33 @@ function measureFeatureHealth(grid) {
 
 function measureFeatureField(grid, field) {
   let sum = 0;
+  let weight = 0;
   let max = 0;
   let coverage02 = 0;
   let coverage05 = 0;
   let boundaryCovered02 = 0;
   for (let i = 0; i < grid.size; i += 1) {
+    const area = metricArea(grid, i);
     const value = field?.[i] ?? 0;
-    sum += value;
+    sum += value * area;
+    weight += area;
     if (value > max) max = value;
     if (value > 0.02) {
-      coverage02 += 1;
-      if (grid.boundaryDistance?.[i] === 0) boundaryCovered02 += 1;
+      coverage02 += area;
+      if (grid.boundaryDistance?.[i] === 0) boundaryCovered02 += area;
     }
-    if (value > 0.05) coverage05 += 1;
+    if (value > 0.05) coverage05 += area;
   }
   return {
-    mean: sum / Math.max(1, grid.size),
+    mean: sum / Math.max(weight, Number.EPSILON),
     max,
-    coverage02: coverage02 / Math.max(1, grid.size),
-    coverage05: coverage05 / Math.max(1, grid.size),
+    coverage02: coverage02 / Math.max(weight, Number.EPSILON),
+    coverage05: coverage05 / Math.max(weight, Number.EPSILON),
     boundaryZeroShare02: coverage02 ? boundaryCovered02 / coverage02 : 0,
   };
+}
+
+function metricArea(grid, id) {
+  const area = grid.area?.[id];
+  return Number.isFinite(area) && area > 0 ? area : 1;
 }
