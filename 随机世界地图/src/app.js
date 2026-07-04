@@ -5197,7 +5197,7 @@
           if (dist > radius + 0.01) continue;
           const sx = x + dx + bend;
           const sy = y + dy + arcShift;
-          const nid = indexOf(grid, sx, sy);
+          const nid = legacyFeatureIndexOf(grid, sx, sy);
           if (nid < 0) continue;
           if (options.continentalOnly && crustType[nid] !== CrustType.CONTINENTAL) continue;
           if (options.oceanicBias && crustType[nid] !== CrustType.OCEANIC && dist > radius * 0.45) continue;
@@ -5260,6 +5260,10 @@
     const sy = Math.floor((y + 3) / 9);
     const n = hash2(sx, sy);
     return n < 0.58 + weakness * 0.28 ? 1 : 0.65;
+  }
+
+  function legacyFeatureIndexOf(grid, x, y) {
+    return indexOf(grid, x, y);
   }
 
   function graphSegmentMask(sourceId, targetId, weakness) {
