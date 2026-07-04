@@ -104,12 +104,12 @@ function runNodeCheck(name, args) {
     valid: child.status === 0,
     status: child.status,
     ms: Date.now() - startedAt,
-    metrics: compactMetrics(parsed),
+    metrics: compactMetrics(name, parsed),
     stderr: stderr ? stderr.slice(0, 1200) : undefined,
   };
 }
 
-function compactMetrics(parsed) {
+function compactMetrics(name, parsed) {
   if (!parsed || typeof parsed !== "object") return null;
   const picked = {};
   for (const key of [
@@ -612,6 +612,52 @@ function compactMetrics(parsed) {
     picked.adapterProductionGridGraphBacked = parsed.checks.adapterProductionGridGraphBacked;
     picked.adapterHasNoLegacyDimensions = parsed.checks.adapterHasNoLegacyDimensions;
     picked.adapterStatsFinite = parsed.checks.adapterStatsFinite;
+  }
+  if (name === "spherical-production-init-check") {
+    picked.productionInitStageCount = parsed.stages?.length ?? 0;
+    picked.productionInitFailedStageName = parsed.stages?.find((stage) => !stage.ok)?.name ?? null;
+    picked.productionInitGridIsCubedSphere = parsed.checks?.gridIsCubedSphere;
+    picked.productionInitGraphBacked = parsed.checks?.graphBacked;
+    picked.productionInitStepAdvanced = parsed.checks?.stepAdvanced;
+    picked.productionInitLandRatioFinite = parsed.checks?.landRatioFinite;
+    picked.productionInitSeaLevelFinite = parsed.checks?.seaLevelFinite;
+    picked.productionInitTerrainSized = parsed.checks?.terrainSized;
+    picked.productionInitClimateSized = parsed.checks?.climateSized;
+    picked.productionInitHydrologySized = parsed.checks?.hydrologySized;
+    picked.productionInitResourcesSized = parsed.checks?.resourcesSized;
+    picked.productionInitHydrologyValid = parsed.checks?.hydrologyValid;
+    picked.productionInitLandRatio = parsed.stats?.landRatio;
+    picked.productionInitSeaRatio = parsed.stats?.seaRatio;
+  }
+  if (name === "spherical-production-step-check") {
+    picked.productionStepStageCount = parsed.stages?.length ?? 0;
+    picked.productionStepFailedStageName = parsed.stages?.find((stage) => !stage.ok)?.name ?? null;
+    picked.productionStepSampleCount = parsed.samples?.length ?? 0;
+    picked.productionStepLastSampleValid = parsed.samples?.at(-1)?.valid;
+    picked.productionStepGridIsCubedSphere = parsed.checks?.gridIsCubedSphere;
+    picked.productionStepGraphBacked = parsed.checks?.graphBacked;
+    picked.productionStepAdapterKeepsLegacyDimensionsHidden = parsed.checks?.adapterKeepsLegacyDimensionsHidden;
+    picked.productionStepTopologyParamDimensionsAvailable = parsed.checks?.topologyParamDimensionsAvailable;
+    picked.productionStepAdvanced = parsed.checks?.stepAdvanced;
+    picked.productionStepAgeAdvanced = parsed.checks?.ageAdvanced;
+    picked.productionStepSeaLevelFinite = parsed.checks?.seaLevelFinite;
+    picked.productionStepLandRatioFinite = parsed.checks?.landRatioFinite;
+    picked.productionStepPlateDriftFinite = parsed.checks?.plateDriftFinite;
+    picked.productionStepPlateDriftNotExploding = parsed.checks?.plateDriftNotExploding;
+    picked.productionStepNoStageFailures = parsed.checks?.noStageFailures;
+    picked.productionStepSamplesValid = parsed.checks?.samplesValid;
+    picked.productionStepTerrainSized = parsed.checks?.terrainSized;
+    picked.productionStepClimateSized = parsed.checks?.climateSized;
+    picked.productionStepHydrologySized = parsed.checks?.hydrologySized;
+    picked.productionStepResourcesSized = parsed.checks?.resourcesSized;
+    picked.productionStepHydrologyValid = parsed.checks?.hydrologyValid;
+    picked.productionStepActiveFeaturesPresent = parsed.checks?.activeFeaturesPresent;
+    picked.productionStepActiveFeatureCoveragePresent = parsed.checks?.activeFeatureCoveragePresent;
+    picked.productionStepActiveTectonicCoverage02 = parsed.featureHealth?.activeTectonicCoverage02;
+    picked.productionStepActiveTectonicMax = parsed.featureHealth?.activeTectonicMax;
+    picked.productionStepLandRatio = parsed.stats?.landRatio;
+    picked.productionStepSeaRatio = parsed.stats?.seaRatio;
+    picked.productionStepAvgPlateDrift = parsed.stats?.avgPlateDrift;
   }
   return picked;
 }
