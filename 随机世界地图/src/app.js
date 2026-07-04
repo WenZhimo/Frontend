@@ -5501,6 +5501,7 @@
       oldBoundaryCorrelation,
       scratch,
     } = grid;
+    const topology = topologyForGrid(grid);
 
     scratch.set(elev);
     forEachGridCell(grid, (id) => {
@@ -5511,7 +5512,7 @@
 
       let total = scratch[id] * 2;
       let weight = 2;
-      forEachNeighbor4ById(grid, id, (nid) => {
+      visitFractureSmoothingNeighbors(grid, topology, id, (nid) => {
         if (crustType[nid] !== CrustType.OCEANIC || ridge[nid] > 0.08 || trench[nid] > 0.08) return;
         total += scratch[nid];
         weight += 1;
@@ -5533,13 +5534,14 @@
 
   function diffuseFractureMemory(grid) {
     const { crustType, fractureZoneMemory, boundaryInfluence, ridge, trench, scratch } = grid;
+    const topology = topologyForGrid(grid);
     scratch.set(fractureZoneMemory);
     forEachGridCell(grid, (id) => {
       if (crustType[id] !== CrustType.OCEANIC || scratch[id] < 0.02) return;
       if (boundaryInfluence[id] > 0.35 || ridge[id] > 0.2 || trench[id] > 0.2) return;
       let total = scratch[id] * 3;
       let weight = 3;
-      forEachNeighbor4ById(grid, id, (nid) => {
+      visitFractureSmoothingNeighbors(grid, topology, id, (nid) => {
         if (crustType[nid] !== CrustType.OCEANIC) return;
         total += scratch[nid] * 0.55;
         weight += 0.55;
@@ -5621,6 +5623,7 @@
       scratch2,
       scratch3,
     } = grid;
+    const topology = topologyForGrid(grid);
     scratch.set(crustAge);
     scratch2.set(crustThickness);
     scratch3.set(sediment);
@@ -5640,7 +5643,7 @@
       let sedTotal = scratch3[id] * 2.5;
       let ageWeight = 3.5;
       let sedWeight = 2.5;
-      forEachNeighbor4ById(grid, id, (nid) => {
+      visitFractureSmoothingNeighbors(grid, topology, id, (nid) => {
         if (crustType[nid] !== CrustType.OCEANIC) return;
         if (ridge[nid] > 0.06 || trench[nid] > 0.09 || boundaryInfluence[nid] > 0.22) return;
         ageTotal += scratch[nid];
@@ -5657,6 +5660,18 @@
       crustAge[id] = Math.max(0, Math.min(1, scratch[id] * (1 - mix) + ageSmooth * mix));
       crustThickness[id] = Math.max(0.12, Math.min(0.42, scratch2[id] * (1 - mix * 0.6) + thickSmooth * mix * 0.6));
       sediment[id] = Math.max(0, Math.min(1, scratch3[id] * (1 - mix * 0.35) + sedSmooth * mix * 0.35));
+    });
+  }
+
+  function visitFractureSmoothingNeighbors(grid, topology, id, visit) {
+    if (isGraphBackedGrid(grid, topology)) {
+      topology.forEachNeighbor(id, (nid) => {
+        visit(nid);
+      });
+      return;
+    }
+    forEachNeighbor4ById(grid, id, (nid) => {
+      visit(nid);
     });
   }
 
