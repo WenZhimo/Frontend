@@ -655,17 +655,15 @@ function ratio(active, inactive) {
 function widthProxy(field, threshold) {
   let covered = 0;
   let edge = 0;
-  for (let y = 0; y < world.grid.height; y += 1) {
-    for (let x = 0; x < world.grid.width; x += 1) {
-      const id = y * world.grid.width + x;
-      if (field[id] <= threshold) continue;
-      covered += 1;
-      let nearEmpty = false;
-      visitNeighbor8Ids(world.grid, x, y, (nid) => {
-        if (field[nid] <= threshold) nearEmpty = true;
-      });
-      if (nearEmpty) edge += 1;
-    }
+  const topology = topologyForGrid(world.grid);
+  for (let id = 0; id < world.grid.size; id += 1) {
+    if (field[id] <= threshold) continue;
+    covered += 1;
+    let nearEmpty = false;
+    forEachAnyNeighbor(topology, id, (nid) => {
+      if (field[nid] <= threshold) nearEmpty = true;
+    });
+    if (nearEmpty) edge += 1;
   }
   return edge ? covered / edge : 0;
 }
@@ -686,33 +684,30 @@ function axisSegmentLengthMean(grid) {
 function mountainAxisCurvature(grid) {
   let total = 0;
   let bent = 0;
-  for (let y = 1; y < grid.height - 1; y += 1) {
-    for (let x = 0; x < grid.width; x += 1) {
-      const id = y * grid.width + x;
-      if (grid.mountainAxis[id] <= 0.05) continue;
-      total += 1;
-      const horizontal = axisAt(grid, x - 1, y) + axisAt(grid, x + 1, y);
-      const vertical = axisAt(grid, x, y - 1) + axisAt(grid, x, y + 1);
-      const diagA = axisAt(grid, x - 1, y - 1) + axisAt(grid, x + 1, y + 1);
-      const diagB = axisAt(grid, x + 1, y - 1) + axisAt(grid, x - 1, y + 1);
-      const aligned = Math.max(horizontal, vertical, diagA, diagB);
-      const connected = horizontal + vertical + diagA + diagB;
-      if (connected > aligned + 0.05) bent += 1;
-    }
+  const topology = topologyForGrid(grid);
+  for (let id = 0; id < grid.size; id += 1) {
+    if (grid.mountainAxis[id] <= 0.05) continue;
+    total += 1;
+    let connected = 0;
+    let strongest = 0;
+    forEachAnyNeighbor(topology, id, (nid) => {
+      const v = grid.mountainAxis[nid] > 0.05 ? grid.mountainAxis[nid] : 0;
+      connected += v;
+      if (v > strongest) strongest = v;
+    });
+    if (connected > strongest + 0.05) bent += 1;
   }
   return total ? bent / total : 0;
 }
 
-function axisAt(grid, x, y) {
-  return topologyForGrid(grid).sampleWrapped(grid.mountainAxis, x, y) ?? 0;
-}
-
 function plateIslandNoiseShare(grid) {
   let count = 0;
+  let total = 0;
   for (let i = 0; i < grid.size; i += 1) {
+    total += metricArea(i);
     if (isPlateIslandNoise(grid, i)) count += 1;
   }
-  return count / grid.size;
+  return count / Math.max(total, Number.EPSILON);
 }
 
 function featureOnNoisyBoundaryShare(grid) {
@@ -728,23 +723,14 @@ function featureOnNoisyBoundaryShare(grid) {
 }
 
 function isPlateIslandNoise(grid, id) {
-  const x = id % grid.width;
-  const y = Math.floor(id / grid.width);
   const current = grid.plate[id];
   let same = 0;
   let different = 0;
-  visitNeighbor8Ids(grid, x, y, (nid) => {
+  forEachAnyNeighbor(topologyForGrid(grid), id, (nid) => {
     if (grid.plate[nid] === current) same += 1;
     else different += 1;
   });
   return same <= 2 && different >= 5;
-}
-
-function visitNeighbor8Ids(grid, x, y, visit) {
-  const topology = topologyForGrid(grid);
-  const id = topology.index(x, y);
-  if (id < 0) return;
-  topology.forEachNeighbor8(id, visit);
 }
 
 function measureAgeBandStraightnessSplit(grid) {
@@ -754,29 +740,25 @@ function measureAgeBandStraightnessSplit(grid) {
   let inactiveStraight = 0;
   let fractureTotal = 0;
   let fractureStraight = 0;
-  for (let y = 1; y < grid.height - 1; y += 1) {
-    for (let x = 0; x < grid.width; x += 1) {
-      const id = y * grid.width + x;
-      if (grid.crustType[id] !== 0) continue;
-      const band = Math.floor(grid.crustAge[id] * 10);
-      const aligned = Math.max(
-        sameAgeBand(grid, x - 1, y, band) + sameAgeBand(grid, x + 1, y, band),
-        sameAgeBand(grid, x, y - 1, band) + sameAgeBand(grid, x, y + 1, band),
-        sameAgeBand(grid, x - 1, y - 1, band) + sameAgeBand(grid, x + 1, y + 1, band),
-        sameAgeBand(grid, x + 1, y - 1, band) + sameAgeBand(grid, x - 1, y + 1, band),
-      );
-      if (aligned <= 0) continue;
-      const straight = aligned >= 2 ? 1 : 0;
-      if (grid.ridge[id] > 0.05 || grid.ridgeDistance[id] <= 3) {
-        nearTotal += 1;
-        nearStraight += straight;
-      } else if (grid.fractureZoneMemory[id] > 0.05) {
-        fractureTotal += 1;
-        fractureStraight += straight;
-      } else if (grid.boundaryInfluence[id] < 0.12) {
-        inactiveTotal += 1;
-        inactiveStraight += straight;
-      }
+  const topology = topologyForGrid(grid);
+  for (let id = 0; id < grid.size; id += 1) {
+    if (grid.crustType[id] !== 0) continue;
+    const band = Math.floor(grid.crustAge[id] * 10);
+    let aligned = 0;
+    forEachAnyNeighbor(topology, id, (nid) => {
+      if (grid.crustType[nid] === 0 && Math.floor(grid.crustAge[nid] * 10) === band) aligned += 1;
+    });
+    if (aligned <= 0) continue;
+    const straight = aligned >= 2 ? 1 : 0;
+    if (grid.ridge[id] > 0.05 || grid.ridgeDistance[id] <= 3) {
+      nearTotal += 1;
+      nearStraight += straight;
+    } else if (grid.fractureZoneMemory[id] > 0.05) {
+      fractureTotal += 1;
+      fractureStraight += straight;
+    } else if (grid.boundaryInfluence[id] < 0.12) {
+      inactiveTotal += 1;
+      inactiveStraight += straight;
     }
   }
   return {
@@ -786,8 +768,12 @@ function measureAgeBandStraightnessSplit(grid) {
   };
 }
 
-function sameAgeBand(grid, x, y, band) {
-  const id = topologyForGrid(grid).index(x, y);
-  if (id < 0) return 0;
-  return grid.crustType[id] === 0 && Math.floor(grid.crustAge[id] * 10) === band ? 1 : 0;
+function forEachAnyNeighbor(topology, id, visit) {
+  if (typeof topology.forEachNeighbor8 === "function") {
+    topology.forEachNeighbor8(id, visit);
+    return;
+  }
+  if (typeof topology.forEachNeighbor === "function") {
+    topology.forEachNeighbor(id, visit);
+  }
 }
