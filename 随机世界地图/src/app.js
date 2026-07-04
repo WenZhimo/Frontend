@@ -5040,6 +5040,11 @@
   }
 
   function marginDistanceFromSources(grid, sourceMask, scratch) {
+    const topology = topologyForGrid(grid);
+    if (isGraphBackedGrid(grid, topology) && typeof topology.shortestDistanceSeeds === "function") {
+      return topology.shortestDistanceSeeds(sourceMask);
+    }
+
     const { size } = grid;
     scratch.fill(Number.POSITIVE_INFINITY);
     const queue = new Int32Array(size);
@@ -5125,6 +5130,14 @@
         abyssalPlain[i] = 0;
       }
     }
+  }
+
+  function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+    return Boolean(
+      grid.topologyOptions?.graphBacked ||
+        topology?.topologyKind === "cubed-sphere" ||
+        grid.topologyKind === "cubed-sphere",
+    );
   }
 
 

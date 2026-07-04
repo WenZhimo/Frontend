@@ -1,4 +1,5 @@
 import { forEachGridCell, forEachNeighbor4ById, physicalRadius } from "../grid.js";
+import { topologyForGrid } from "../topology.js";
 import { CrustType } from "./crust.js";
 
 export function updatePassiveMargins(world) {
@@ -114,6 +115,11 @@ export function updatePassiveMargins(world) {
 }
 
 function marginDistanceFromSources(grid, sourceMask, scratch) {
+  const topology = topologyForGrid(grid);
+  if (isGraphBackedGrid(grid, topology) && typeof topology.shortestDistanceSeeds === "function") {
+    return topology.shortestDistanceSeeds(sourceMask);
+  }
+
   const { size } = grid;
   scratch.fill(Number.POSITIVE_INFINITY);
   const queue = new Int32Array(size);
@@ -199,4 +205,12 @@ function clampMarginFields(grid) {
       abyssalPlain[i] = 0;
     }
   }
+}
+
+function isGraphBackedGrid(grid, topology = topologyForGrid(grid)) {
+  return Boolean(
+    grid.topologyOptions?.graphBacked ||
+      topology?.topologyKind === "cubed-sphere" ||
+      grid.topologyKind === "cubed-sphere",
+  );
 }

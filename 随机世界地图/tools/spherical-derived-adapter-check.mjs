@@ -1,4 +1,5 @@
 import { getClimateInputs, getTerrainDerived } from "../src/sim/derived/terrain.js";
+import { updatePassiveMargins } from "../src/sim/geology/margins.js";
 import { createCubedSphereProductionGridAdapter } from "../src/sim/sphere/productionGridAdapter.js";
 import { finiteShare, weightedShare } from "../src/sim/sphere/stats.js";
 
@@ -20,7 +21,10 @@ const world = {
 };
 
 const terrain = getTerrainDerived(world);
+updatePassiveMargins(world);
 const climate = getClimateInputs(world);
+const externalSeaGraphDistance = grid.topology.shortestDistanceSeeds(grid.externalSeaMask);
+const marginDistanceDelta = maxAbsDelta(grid.marginExternalSeaDistance, externalSeaGraphDistance);
 const result = {
   valid: true,
   faceSize,
@@ -36,6 +40,9 @@ const result = {
     ruggednessFiniteShare: finiteShare(terrain.ruggedness),
     coastDistanceFiniteShare: finiteShare(terrain.coastDistance),
     distanceToOceanFiniteShare: finiteShare(terrain.distanceToOcean),
+    marginCoastDistanceFiniteShare: finiteShare(grid.marginCoastDistance),
+    marginExternalSeaDistanceFiniteShare: finiteShare(grid.marginExternalSeaDistance),
+    marginExternalSeaGraphDistanceMaxDelta: marginDistanceDelta,
     landmassCount: maxInt(terrain.landmassId),
     islandCount: maxInt(terrain.islandId),
   },
@@ -57,6 +64,9 @@ if (result.terrain.slopeFiniteShare !== 1) result.valid = false;
 if (result.terrain.ruggednessFiniteShare !== 1) result.valid = false;
 if (result.terrain.coastDistanceFiniteShare !== 1) result.valid = false;
 if (result.terrain.distanceToOceanFiniteShare !== 1) result.valid = false;
+if (result.terrain.marginCoastDistanceFiniteShare !== 1) result.valid = false;
+if (result.terrain.marginExternalSeaDistanceFiniteShare !== 1) result.valid = false;
+if (result.terrain.marginExternalSeaGraphDistanceMaxDelta > 1e-6) result.valid = false;
 if (result.terrain.landmassCount < 1) result.valid = false;
 if (result.climate.latitudeFiniteShare !== 1) result.valid = false;
 if (result.climate.latitudeMin < -90.1 || result.climate.latitudeMax > 90.1) result.valid = false;
@@ -81,5 +91,17 @@ function minFinite(field) {
 function maxFiniteSigned(field) {
   let max = -Infinity;
   for (let i = 0; i < field.length; i += 1) if (Number.isFinite(field[i]) && field[i] > max) max = field[i];
+  return max;
+}
+
+function maxAbsDelta(a, b) {
+  let max = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    const av = a[i];
+    const bv = b[i];
+    if (!Number.isFinite(av) || !Number.isFinite(bv)) return Infinity;
+    const delta = Math.abs(av - bv);
+    if (delta > max) max = delta;
+  }
   return max;
 }
