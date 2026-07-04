@@ -11,6 +11,8 @@ const gpuOutputPrefix = "_spherical_gpu_render_gate";
 const gpuOutput = `${gpuOutputPrefix}_cpu.ppm`;
 const debugOutputDir = "_spherical_debug_render_gate";
 const debugOutput = `${debugOutputDir}/flowAccumulation.ppm`;
+const finalElevationDebugOutput = `${debugOutputDir}/finalElevation.ppm`;
+const externalSeaDebugOutput = `${debugOutputDir}/externalSeaMask.ppm`;
 const topologyDebugOutput = `${debugOutputDir}/topologyFace.ppm`;
 const seamDebugOutput = `${debugOutputDir}/debugFaceSeamRisk.ppm`;
 const samplingDebugOutput = `${debugOutputDir}/debugProjectionSampling.ppm`;
@@ -67,7 +69,7 @@ const debugRenderCheck = runJsonCheck("geology-debug-render", [
   "--output-resolution",
   outputResolution,
   "--layers",
-  "flowAccumulation,topologyFace,debugFaceSeamRisk,debugProjectionSampling",
+  "flowAccumulation,finalElevation,externalSeaMask,topologyFace,debugFaceSeamRisk,debugProjectionSampling",
 ]);
 
 const checks = {
@@ -84,10 +86,14 @@ const checks = {
   debugLayerRestricted:
     Array.isArray(debugRenderCheck.parsed?.requestedLayers) &&
     debugRenderCheck.parsed.requestedLayers.includes("flowAccumulation") &&
+    debugRenderCheck.parsed.requestedLayers.includes("finalElevation") &&
+    debugRenderCheck.parsed.requestedLayers.includes("externalSeaMask") &&
     debugRenderCheck.parsed.requestedLayers.includes("topologyFace") &&
     debugRenderCheck.parsed.requestedLayers.includes("debugFaceSeamRisk") &&
     debugRenderCheck.parsed.requestedLayers.includes("debugProjectionSampling"),
   debugOutputExists: existsSync(debugOutput),
+  finalElevationDebugOutputExists: existsSync(finalElevationDebugOutput),
+  externalSeaDebugOutputExists: existsSync(externalSeaDebugOutput),
   topologyDebugOutputExists: existsSync(topologyDebugOutput),
   seamDebugOutputExists: existsSync(seamDebugOutput),
   samplingDebugOutputExists: existsSync(samplingDebugOutput),
@@ -178,7 +184,16 @@ function compactDebugResult(result) {
 }
 
 function cleanup() {
-  for (const path of [renderOutput, gpuOutput, debugOutput, topologyDebugOutput, seamDebugOutput, samplingDebugOutput]) {
+  for (const path of [
+    renderOutput,
+    gpuOutput,
+    debugOutput,
+    finalElevationDebugOutput,
+    externalSeaDebugOutput,
+    topologyDebugOutput,
+    seamDebugOutput,
+    samplingDebugOutput,
+  ]) {
     if (existsSync(path)) rmSync(path, { force: true });
   }
   if (existsSync(debugOutputDir)) rmSync(debugOutputDir, { recursive: true, force: true });
