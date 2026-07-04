@@ -229,6 +229,14 @@ function classifyHelperMatch(match) {
   const before = match.contextBefore.join("\n");
   const after = match.contextAfter.join("\n");
   const context = `${before}\n${match.lineText}\n${after}`;
+  if (isInsideLegacyFunction(match)) {
+    return {
+      ...match,
+      classification: "legacyFallback",
+      routeKind: "explicitLegacyFunction",
+      routeReason: "helper call is inside an explicitly named legacy fallback function",
+    };
+  }
   const graphRoutedFile = graphRoutedLegacyFiles.get(match.file);
   if (graphRoutedFile?.patterns.has(match.pattern)) {
     return {
@@ -236,14 +244,6 @@ function classifyHelperMatch(match) {
       classification: "legacyFallback",
       routeKind: "graphRoutedFile",
       routeReason: graphRoutedFile.reason,
-    };
-  }
-  if (isInsideLegacyFunction(match)) {
-    return {
-      ...match,
-      classification: "legacyFallback",
-      routeKind: "explicitLegacyFunction",
-      routeReason: "helper call is inside an explicitly named legacy fallback function",
     };
   }
   const hasGraphGuard = /isGraphBackedGrid\s*\(|graphBacked|topology\.forEachNeighbor|topology\.shortestDistanceSeeds/.test(context);
