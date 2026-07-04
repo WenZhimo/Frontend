@@ -150,6 +150,7 @@ const FIELD_SPECS = [
 export function createCubedSphereProductionGridAdapter({
   faceSize = 64,
   includeLegacyDimensions = false,
+  seedUint32 = 0,
 } = {}) {
   const sphericalGrid = createCubedSphereGrid(faceSize);
   const topology = createSphericalTopology(sphericalGrid);
@@ -193,7 +194,7 @@ export function createCubedSphereProductionGridAdapter({
     grid[name] = new Type(sphericalGrid.size);
   }
 
-  populateProductionAdapterDiagnosticTerrain(grid);
+  populateProductionAdapterDiagnosticTerrain(grid, { seedUint32 });
   return grid;
 }
 
