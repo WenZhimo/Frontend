@@ -346,19 +346,19 @@ const stats = {
   ageBandStraightnessInactive: ageBandSplit.inactive,
   ageBandStraightnessFractureZone: ageBandSplit.fractureZone,
   abyssalPlainFractureSuppression: averageWhere(world.grid.oldBoundaryCorrelation, (i) => terrain.fractureZoneMemory[i] > 0.05 && terrain.abyssalPlain[i] > 0.05),
-  axisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.tectonicAxis[i] > 0.05),
-  axisNoisyBoundaryShare: conditionalShare(world.grid.tectonicAxis, (i) => world.grid.tectonicAxis[i] > 0.05, (i) => world.grid.noisyBoundaryPatch[i]),
+  axisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.tectonicAxis[i] > axisDiagnosticThreshold(world.grid)),
+  axisNoisyBoundaryShare: conditionalShare(world.grid.tectonicAxis, (i) => world.grid.tectonicAxis[i] > axisDiagnosticThreshold(world.grid), (i) => world.grid.noisyBoundaryPatch[i]),
   axisSegmentLengthMean: axisSegmentLengthMean(world.grid),
-  axisCurvatureMean: averageWhere(world.grid.axisCurvature, (i) => world.grid.tectonicAxis[i] > 0.05),
-  axisContinuityMean: averageWhere(world.grid.axisContinuity, (i) => world.grid.tectonicAxis[i] > 0.05),
+  axisCurvatureMean: averageWhere(world.grid.axisCurvature, (i) => world.grid.tectonicAxis[i] > axisDiagnosticThreshold(world.grid)),
+  axisContinuityMean: averageWhere(world.grid.axisContinuity, (i) => world.grid.tectonicAxis[i] > axisDiagnosticThreshold(world.grid)),
   mountainHeightBlockiness: averageWhere(world.grid.mountainHeightBlockiness, (i) => world.grid.mountainHeight[i] > 0.02),
   orographicBarrierContinuity: averageWhere(world.grid.orographicBarrierContinuity, (i) => world.grid.orographicBarrier[i] > 0.02),
   ...geologicSeaLevelStats(world),
   ...reliefStats(world, outputs),
   activeFeatureOnNoisyBoundaryShare: featureOnNoisyBoundaryShare(world.grid),
-  ridgeAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.ridgeAxis[i] > 0.05),
-  trenchAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.trenchAxis[i] > 0.05),
-  riftAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.riftAxis[i] > 0.05),
+  ridgeAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.ridgeAxis[i] > axisDiagnosticThreshold(world.grid)),
+  trenchAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.trenchAxis[i] > axisDiagnosticThreshold(world.grid)),
+  riftAxisBoundaryDependency: averageWhere(world.grid.axisBoundaryDependency, (i) => world.grid.riftAxis[i] > axisDiagnosticThreshold(world.grid)),
   averageSlope: average(terrain.slope),
   averageRuggedness: average(terrain.ruggedness),
   orographicBarrierCoverage: coverage(climate.orographicBarrier, 0.02),
@@ -679,6 +679,10 @@ function axisSegmentLengthMean(grid) {
   let total = 0;
   for (const count of counts.values()) total += count;
   return total / counts.size;
+}
+
+function axisDiagnosticThreshold(grid) {
+  return grid.topologyKind === "cubed-sphere" || grid.topologyOptions?.graphBacked ? 0.016 : 0.05;
 }
 
 function mountainAxisCurvature(grid) {

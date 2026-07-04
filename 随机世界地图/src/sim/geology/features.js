@@ -54,16 +54,20 @@ function seedFeatureSources(grid) {
   mountain.fill(0);
   trench.fill(0);
   ridge.fill(0);
+  const graphBacked = isGraphBackedGrid(grid);
+  const stressModel = graphBacked ? measureFeatureGraphStressModel(grid) : null;
 
   for (let i = 0; i < size; i += 1) {
-    const active = Math.min(1, boundaryInfluence[i]);
-    const s = Math.min(2.5, stress[i]);
-    if (active <= 0.015 || s <= 0.01) continue;
+    const active = Math.min(1, graphBacked ? featureActiveBoundaryInfluence(grid, i) : boundaryInfluence[i]);
+    const s = graphBacked
+      ? normalizedFeatureGraphStress(stress[i], stressModel)
+      : Math.min(2.5, stress[i]);
+    if (active <= 0.015 || s <= (graphBacked ? 0.03 : 0.01)) continue;
     const weak = weakness[i];
     const weakGate = weak > 0.34 ? 1 : weak > 0.22 ? 0.45 : 0.12;
     const broken = weak < 0.3 && ((i * 1103515245 + 12345) & 7) < 3 ? 0.35 : 1;
     const coherenceFactor = noisyBoundaryPatch[i] ? 0.12 : 0.35 + (boundaryCoherence[i] ?? 1) * 0.65;
-    const signal = active * s * weakGate * broken * coherenceFactor;
+    const signal = active * s * weakGate * broken * coherenceFactor * (graphBacked ? 0.42 : 1);
     const continental = crustType[i] === CrustType.CONTINENTAL;
     const transitional = crustType[i] === CrustType.TRANSITIONAL;
     const oceanic = crustType[i] === CrustType.OCEANIC;
@@ -97,6 +101,37 @@ function seedFeatureSources(grid) {
   }
 
   return { mountain, trench, ridge, rift, arc, basin };
+}
+
+function featureActiveBoundaryInfluence(grid, id) {
+  if (!grid.activeBoundary?.[id]) return 0;
+  return Math.min(1, grid.boundaryInfluence[id] * 0.72 + 0.28);
+}
+
+function measureFeatureGraphStressModel(grid) {
+  let max = 0;
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < grid.size; i += 1) {
+    if (!grid.activeBoundary?.[i]) continue;
+    const value = grid.stress[i];
+    if (!Number.isFinite(value) || value <= 0) continue;
+    sum += value;
+    count += 1;
+    if (value > max) max = value;
+  }
+  return {
+    mean: count ? sum / count : 0,
+    max,
+    scale: Math.max(0.00045, Math.min(0.006, max * 0.55, count ? (sum / count) * 2.8 : 0.00045)),
+  };
+}
+
+function normalizedFeatureGraphStress(value, model) {
+  if (!model || value <= 0 || model.max <= 0) return 0;
+  const scaled = value / Math.max(1e-7, model.scale);
+  const normalized = scaled / (1 + scaled);
+  return Math.min(1, normalized);
 }
 
 function blendAxisSources(grid, sources) {

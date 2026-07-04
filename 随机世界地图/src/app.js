@@ -4517,16 +4517,18 @@
     mountain.fill(0);
     ridge.fill(0);
     trench.fill(0);
+    const graphBacked = isGraphBackedGrid(grid);
+    const stressModel = graphBacked ? measureAxisGraphStressModel(grid) : null;
 
     for (let i = 0; i < size; i += 1) {
-      const active = Math.min(1, boundaryInfluence[i]);
-      const s = Math.min(2.5, stress[i]);
-      if (active <= 0.012 || s <= 0.008) continue;
+      const active = Math.min(1, graphBacked ? axisActiveBoundaryInfluence(grid, i) : boundaryInfluence[i]);
+      const s = graphBacked ? normalizedAxisGraphStress(stress[i], stressModel) : Math.min(2.5, stress[i]);
+      if (active <= 0.012 || s <= (graphBacked ? 0.03 : 0.008)) continue;
       const coherence = Math.max(0, Math.min(1, boundaryCoherence[i] ?? 1));
       const noisyGate = noisyBoundaryPatch[i] ? 0.06 : 1;
       const checkerGate = Math.max(0, 1 - (plateCheckerboard[i] ?? 0) * 2.4);
       const memoryPull = 0.55 + Math.min(0.45, oldOrogeny[i] * 0.8 + transformMemory[i] * 0.2 + fractureZoneMemory[i] * 0.12);
-      const seedPower = active * s * (0.2 + coherence * 0.8) * noisyGate * checkerGate * memoryPull;
+      const seedPower = active * s * (0.2 + coherence * 0.8) * noisyGate * checkerGate * memoryPull * (graphBacked ? 0.24 : 1);
       if (seedPower <= 0.0001) continue;
 
       const continental = crustType[i] === CrustType.CONTINENTAL;
@@ -4543,11 +4545,49 @@
     return { mountain, ridge, trench, rift };
   }
 
+  function axisActiveBoundaryInfluence(grid, id) {
+    if (!grid.activeBoundary?.[id]) return 0;
+    return Math.min(1, grid.boundaryInfluence[id] * 0.72 + 0.28);
+  }
+
+  function measureAxisGraphStressModel(grid) {
+    let max = 0;
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < grid.size; i += 1) {
+      if (!grid.activeBoundary?.[i]) continue;
+      const value = grid.stress[i];
+      if (!Number.isFinite(value) || value <= 0) continue;
+      sum += value;
+      count += 1;
+      if (value > max) max = value;
+    }
+    return {
+      max,
+      scale: Math.max(0.00045, Math.min(0.006, max * 0.55, count ? (sum / count) * 2.8 : 0.00045)),
+    };
+  }
+
+  function normalizedAxisGraphStress(value, model) {
+    if (!model || value <= 0 || model.max <= 0) return 0;
+    const scaled = value / Math.max(1e-7, model.scale);
+    return Math.min(1, scaled / (1 + scaled));
+  }
+
   function naturalizeAxis(grid, source, target, referenceRadius, gain, options = {}) {
     const { size, weakness, oldOrogeny, riftStage, transformMemory, fractureZoneMemory, crustType, noisyBoundaryPatch, plateCheckerboard } = grid;
     const radius = Math.max(1, Math.min(physicalRadius(grid, referenceRadius), physicalRadius(grid, 8)));
     const seedSource = new Float32Array(source);
     const spread = new Float32Array(size);
+    const topology = topologyForGrid(grid);
+
+    if (isGraphBackedGrid(grid, topology)) {
+      naturalizeAxisGraph(grid, topology, seedSource, spread, radius, gain, options);
+      for (let i = 0; i < size; i += 1) {
+        if (spread[i] > 0) target[i] = Math.min(1, Math.max(target[i], spread[i]));
+      }
+      return;
+    }
 
     forEachGridCell(grid, (id, x, y) => {
       const seed = seedSource[id];
@@ -4581,6 +4621,32 @@
     }
   }
 
+  function naturalizeAxisGraph(grid, topology, source, spread, radius, gain, options = {}) {
+    const { weakness, oldOrogeny, riftStage, transformMemory, fractureZoneMemory, crustType, noisyBoundaryPatch, plateCheckerboard } = grid;
+    const radiusLimit = radius + 0.5;
+    for (let id = 0; id < grid.size; id += 1) {
+      const seed = source[id];
+      if (seed <= 0.0001) continue;
+      const pull = weakness[id] - 0.5 + oldOrogeny[id] * 0.18 + (riftStage[id] > 0 ? 0.12 : 0) + transformMemory[id] * 0.08 - fractureZoneMemory[id] * 0.04;
+      const segment = graphAxisSegmentMask(id, id, weakness[id], options.segmented);
+      forEachNeighborRadiusById(grid, id, radius, (nid, depth) => {
+        const dist = Math.max(0, depth);
+        if (dist > radiusLimit) return;
+        if (noisyBoundaryPatch[nid] && dist <= 1.5) return;
+        if ((plateCheckerboard[nid] ?? 0) > 0.32) return;
+        if (options.continentalBias && crustType[nid] === CrustType.OCEANIC && dist > radius * 0.45) return;
+        if (options.oceanicBias && crustType[nid] === CrustType.CONTINENTAL && dist > radius * 0.55) return;
+        const bendWeight = Math.max(0.55, Math.min(1.15, 0.92 + pull * 0.18));
+        const weakWeight = 0.55 + weakness[nid] * 0.65 + oldOrogeny[nid] * 0.25;
+        const falloff = Math.max(0, 1 - dist / radiusLimit);
+        const localSegment = Math.min(segment, graphAxisSegmentMask(id, nid, weakness[nid], options.segmented));
+        const addition = seed * gain * falloff * weakWeight * bendWeight * localSegment;
+        if (addition > spread[nid]) spread[nid] = addition;
+      });
+      spread[id] = Math.max(spread[id], seed * gain * (0.6 + weakness[id] * 0.55) * segment);
+    }
+  }
+
   function rebuildCombinedAxis(grid) {
     const { size, tectonicAxis, mountainAxisSeed, ridgeAxis, trenchAxis, riftAxis } = grid;
     for (let i = 0; i < size; i += 1) {
@@ -4591,12 +4657,15 @@
   function measureAxisDiagnostics(grid) {
     const { tectonicAxis, axisCurvature, axisContinuity, axisBoundaryDependency, axisSegmentId, boundaryInfluence, activeBoundary, scratch } = grid;
     const topology = topologyForGrid(grid);
+    const graphBacked = isGraphBackedGrid(grid, topology);
+    const axisThreshold = graphBacked ? 0.016 : 0.035;
+    const segmentThreshold = graphBacked ? 0.028 : 0.06;
     scratch.fill(0);
     let nextSegment = 1;
 
     forEachGridCell(grid, (id, x, y) => {
       const v = tectonicAxis[id];
-      if (v <= 0.035) {
+      if (v <= axisThreshold) {
         axisCurvature[id] = 0;
         axisContinuity[id] = 0;
         axisBoundaryDependency[id] = 0;
@@ -4615,7 +4684,7 @@
     for (let i = 0; i < axisSegmentId.length; i += 1) axisSegmentId[i] = 0;
     const queue = new Int32Array(axisSegmentId.length);
     for (let start = 0; start < axisSegmentId.length; start += 1) {
-      if (tectonicAxis[start] <= 0.06 || axisSegmentId[start]) continue;
+      if (tectonicAxis[start] <= segmentThreshold || axisSegmentId[start]) continue;
       const segmentId = nextSegment++;
       let head = 0;
       let tail = 0;
@@ -4624,7 +4693,7 @@
       while (head < tail) {
         const id = queue[head++];
         visitAxisSegmentNeighbors(grid, topology, id, (nid) => {
-          if (tectonicAxis[nid] <= 0.06 || axisSegmentId[nid]) return;
+          if (tectonicAxis[nid] <= segmentThreshold || axisSegmentId[nid]) return;
           axisSegmentId[nid] = segmentId;
           queue[tail++] = nid;
         });
@@ -4755,6 +4824,13 @@
     return coarse * 0.7 + fine * 0.3 <= keep ? 1 : 0.72;
   }
 
+  function graphAxisSegmentMask(sourceId, targetId, weakness, forceSegmented) {
+    const coarse = hash2(Math.floor((targetId + 3) / 19), Math.floor((sourceId + 5) / 13));
+    const fine = hash2(Math.floor((targetId + 11) / 7), Math.floor((sourceId + 2) / 7));
+    const keep = forceSegmented ? 0.62 + weakness * 0.28 : 0.76 + weakness * 0.2;
+    return coarse * 0.7 + fine * 0.3 <= keep ? 1 : 0.72;
+  }
+
   function hash2(x, y) {
     let n = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
     n = (n ^ (n >>> 13)) >>> 0;
@@ -4830,16 +4906,20 @@
     mountain.fill(0);
     trench.fill(0);
     ridge.fill(0);
+    const graphBacked = isGraphBackedGrid(grid);
+    const stressModel = graphBacked ? measureFeatureGraphStressModel(grid) : null;
 
     for (let i = 0; i < size; i += 1) {
-      const active = Math.min(1, boundaryInfluence[i]);
-      const s = Math.min(2.5, stress[i]);
-      if (active <= 0.015 || s <= 0.01) continue;
+      const active = Math.min(1, graphBacked ? featureActiveBoundaryInfluence(grid, i) : boundaryInfluence[i]);
+      const s = graphBacked
+        ? normalizedFeatureGraphStress(stress[i], stressModel)
+        : Math.min(2.5, stress[i]);
+      if (active <= 0.015 || s <= (graphBacked ? 0.03 : 0.01)) continue;
       const weak = weakness[i];
       const weakGate = weak > 0.34 ? 1 : weak > 0.22 ? 0.45 : 0.12;
       const broken = weak < 0.3 && ((i * 1103515245 + 12345) & 7) < 3 ? 0.35 : 1;
       const coherenceFactor = noisyBoundaryPatch[i] ? 0.12 : 0.35 + (boundaryCoherence[i] ?? 1) * 0.65;
-      const signal = active * s * weakGate * broken * coherenceFactor;
+      const signal = active * s * weakGate * broken * coherenceFactor * (graphBacked ? 0.42 : 1);
       const continental = crustType[i] === CrustType.CONTINENTAL;
       const transitional = crustType[i] === CrustType.TRANSITIONAL;
       const oceanic = crustType[i] === CrustType.OCEANIC;
@@ -4873,6 +4953,37 @@
     }
 
     return { mountain, trench, ridge, rift, arc, basin };
+  }
+
+  function featureActiveBoundaryInfluence(grid, id) {
+    if (!grid.activeBoundary?.[id]) return 0;
+    return Math.min(1, grid.boundaryInfluence[id] * 0.72 + 0.28);
+  }
+
+  function measureFeatureGraphStressModel(grid) {
+    let max = 0;
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < grid.size; i += 1) {
+      if (!grid.activeBoundary?.[i]) continue;
+      const value = grid.stress[i];
+      if (!Number.isFinite(value) || value <= 0) continue;
+      sum += value;
+      count += 1;
+      if (value > max) max = value;
+    }
+    return {
+      mean: count ? sum / count : 0,
+      max,
+      scale: Math.max(0.00045, Math.min(0.006, max * 0.55, count ? (sum / count) * 2.8 : 0.00045)),
+    };
+  }
+
+  function normalizedFeatureGraphStress(value, model) {
+    if (!model || value <= 0 || model.max <= 0) return 0;
+    const scaled = value / Math.max(1e-7, model.scale);
+    const normalized = scaled / (1 + scaled);
+    return Math.min(1, normalized);
   }
 
   function blendAxisSources(grid, sources) {
