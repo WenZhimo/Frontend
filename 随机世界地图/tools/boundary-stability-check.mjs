@@ -1,16 +1,20 @@
 import { createWorld } from "../src/sim/world.js";
 import { stepWorld } from "../src/sim/evolution.js";
+import { topologyForGrid } from "../src/sim/topology.js";
+import { parseOptions, parseTopologyOptions } from "./lib/cli.mjs";
 
+const { positional, options } = parseOptions(process.argv.slice(2));
 const params = {
-  seedText: process.argv[2] ?? "龙骨海-纪元7",
+  seedText: positional[0] ?? "龙骨海-纪元7",
   waterLevel: 50,
   intensity: 1,
   plateCount: 14,
   timeScale: 1_000_000,
-  pipelineMode: process.argv[4] ?? "geology-v2",
-  resolution: process.argv[5] ?? "512x256",
+  pipelineMode: positional[2] ?? "geology-v2",
+  resolution: positional[3] ?? "512x256",
+  ...parseTopologyOptions(options),
 };
-const steps = Number(process.argv[3] ?? 200);
+const steps = Number(positional[1] ?? 200);
 const world = createWorld(params);
 const peaks = {
   plateCheckerboardScore: { value: 0, step: 0 },
@@ -47,49 +51,52 @@ function measureBoundaryDiagnostics(grid) {
   let islandNoise = 0;
   let featureOnNoisy = 0;
   let featureCount = 0;
+  let totalAreaValue = 0;
   for (let i = 0; i < grid.size; i += 1) {
-    if (grid.activeBoundary[i]) active += 1;
-    densitySum += grid.boundaryDensity[i] ?? 0;
-    if (grid.noisyBoundaryPatch[i]) noisy += 1;
-    checker += grid.plateCheckerboard[i] ?? 0;
-    if (isPlateIslandNoise(grid, i)) islandNoise += 1;
+    const area = metricArea(grid, i);
+    totalAreaValue += area;
+    if (grid.activeBoundary[i]) active += area;
+    densitySum += (grid.boundaryDensity[i] ?? 0) * area;
+    if (grid.noisyBoundaryPatch[i]) noisy += area;
+    checker += (grid.plateCheckerboard[i] ?? 0) * area;
+    if (isPlateIslandNoise(grid, i)) islandNoise += area;
     const feature = Math.max(grid.mountainBelt[i], grid.trench[i], grid.ridge[i], grid.rift[i], grid.basin[i], grid.islandArc[i]);
     if (feature > 0.05) {
-      featureCount += 1;
-      if (grid.noisyBoundaryPatch[i]) featureOnNoisy += 1;
+      featureCount += area;
+      if (grid.noisyBoundaryPatch[i]) featureOnNoisy += area;
     }
   }
   return {
-    plateCheckerboardScore: checker / grid.size,
-    activeBoundaryCoverage: active / grid.size,
-    localBoundaryDensityMean: densitySum / grid.size,
-    noisyBoundaryPatchCoverage: noisy / grid.size,
-    plateIslandNoiseShare: islandNoise / grid.size,
+    plateCheckerboardScore: checker / Math.max(totalAreaValue, Number.EPSILON),
+    activeBoundaryCoverage: active / Math.max(totalAreaValue, Number.EPSILON),
+    localBoundaryDensityMean: densitySum / Math.max(totalAreaValue, Number.EPSILON),
+    noisyBoundaryPatchCoverage: noisy / Math.max(totalAreaValue, Number.EPSILON),
+    plateIslandNoiseShare: islandNoise / Math.max(totalAreaValue, Number.EPSILON),
     featureOnNoisyBoundaryShare: featureCount ? featureOnNoisy / featureCount : 0,
   };
 }
 
 function isPlateIslandNoise(grid, id) {
-  const x = id % grid.width;
-  const y = Math.floor(id / grid.width);
+  const topology = topologyForGrid(grid);
   const current = grid.plate[id];
   let same = 0;
   let different = 0;
-  visitNeighbor8Ids(grid, x, y, (nid) => {
+  forEachAnyNeighbor(topology, id, (nid) => {
     if (grid.plate[nid] === current) same += 1;
     else different += 1;
   });
   return same <= 2 && different >= 5;
 }
 
-function visitNeighbor8Ids(grid, x, y, visit) {
-  for (let dy = -1; dy <= 1; dy += 1) {
-    const ny = y + dy;
-    if (ny < 0 || ny >= grid.height) continue;
-    for (let dx = -1; dx <= 1; dx += 1) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = ((x + dx) % grid.width + grid.width) % grid.width;
-      visit(ny * grid.width + nx);
-    }
+function forEachAnyNeighbor(topology, id, visit) {
+  if (typeof topology.forEachNeighbor8 === "function") {
+    topology.forEachNeighbor8(id, visit);
+    return;
   }
+  if (typeof topology.forEachNeighbor === "function") topology.forEachNeighbor(id, visit);
+}
+
+function metricArea(grid, id) {
+  const area = grid?.area?.[id];
+  return Number.isFinite(area) && area > 0 ? area : 1;
 }
