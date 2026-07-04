@@ -43,6 +43,7 @@ const checks = [
   ["spherical-render-backend-check", ["tools/spherical-render-backend-check.mjs"]],
   ["spherical-render-gate-check", ["tools/spherical-render-gate-check.mjs", seedText, String(smallFaceSize), "2", "128x64"]],
   ["spherical-toolchain-smoke-check", ["tools/spherical-toolchain-smoke-check.mjs"]],
+  ["spherical-artifact-scan-check", ["tools/spherical-artifact-scan-check.mjs"]],
 ];
 
 const startedAt = Date.now();
@@ -106,6 +107,9 @@ function compactMetrics(parsed) {
     "gridKind",
     "graphBacked",
     "steps",
+    "testedSeeds",
+    "passedSeeds",
+    "failedSeeds",
     "avgStepMs",
     "activeBoundaryShare",
     "externalSeaShare",
