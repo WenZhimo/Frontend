@@ -30,11 +30,21 @@ const adapter = createCheckWorld({
   faceSize,
 });
 
-const before = summarizeWorldSet(cylindrical, spherical, adapter);
+const legacyRequestedSpherical = createCheckWorld({
+  seedText,
+  resolution: "256x128",
+  pipelineMode: "legacy",
+  topologyMode: "cubed-sphere",
+  projectionMode: "equirectangular",
+  faceSize,
+});
+
+const before = summarizeWorldSet(cylindrical, spherical, adapter, legacyRequestedSpherical);
 runToCheckpoints(cylindrical, [steps], () => null);
 runToCheckpoints(spherical, [steps], () => null);
 runToCheckpoints(adapter, [steps], () => null);
-const after = summarizeWorldSet(cylindrical, spherical, adapter);
+runToCheckpoints(legacyRequestedSpherical, [Math.min(2, steps)], () => null);
+const after = summarizeWorldSet(cylindrical, spherical, adapter, legacyRequestedSpherical);
 const gate = evaluateAuthoritativeGate(before, after);
 
 const result = {
@@ -69,6 +79,8 @@ const result = {
     productionStatsStillPresent: Number.isFinite(after.spherical.landRatio) && Number.isFinite(after.spherical.seaRatio),
     authoritativeModeCorrectlyIdentified: gate.authoritativeCoreReady === true,
     experimentalAdapterCorrectlyIdentified: gate.expectedExperimentalAdapterMode === true,
+    legacySphericalRequestNormalizedToGeologyV2: before.legacyRequestedSpherical.pipelineMode === "geology-v2",
+    legacySphericalRequestCanStep: after.legacyRequestedSpherical.step === Math.min(2, steps),
     noAuthoritativeBlockers: gate.blockers.length === 0,
   },
   authorityChecks: gate.authorityChecks,
@@ -81,11 +93,12 @@ for (const value of Object.values(result.checks)) {
 console.log(JSON.stringify(result, null, 2));
 process.exit(result.valid ? 0 : 1);
 
-function summarizeWorldSet(cylindricalWorld, sphericalWorld, adapterWorld) {
+function summarizeWorldSet(cylindricalWorld, sphericalWorld, adapterWorld, legacyRequestedSphericalWorld) {
   return {
     cylindrical: summarizeWorld(cylindricalWorld),
     spherical: summarizeWorld(sphericalWorld),
     adapter: summarizeWorld(adapterWorld),
+    legacyRequestedSpherical: summarizeWorld(legacyRequestedSphericalWorld),
   };
 }
 
@@ -94,6 +107,7 @@ function summarizeWorld(world) {
   const productionTopologyKind = world.grid.topologyKind ?? world.grid.topologyOptions?.kind ?? productionGridKind;
   return {
     step: world.step,
+    pipelineMode: world.params.pipelineMode,
     topologyMode: world.params.topologyMode,
     projectionMode: world.params.projectionMode,
     productionTopologyMode: world.params.productionTopologyMode ?? null,
