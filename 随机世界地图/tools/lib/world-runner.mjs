@@ -7,6 +7,7 @@ export function createCheckWorld({
   resolution = "512x256",
   topologyMode = "cylindrical",
   projectionMode = "equirectangular",
+  productionTopologyMode,
   faceSize,
   waterLevel = 50,
   intensity = 1,
@@ -23,6 +24,7 @@ export function createCheckWorld({
     pipelineMode,
     topologyMode,
     projectionMode,
+    productionTopologyMode,
     faceSize,
     showBoundaries: false,
   });
