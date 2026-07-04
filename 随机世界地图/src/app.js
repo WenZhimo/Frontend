@@ -8435,7 +8435,8 @@
     const volcanicSoilPotential = new Float32Array(size);
     const disturbance = new Float32Array(size);
     const connectivityToLandmass = new Float32Array(size);
-    const componentSizes = measureComponentSizes(base.landmassId);
+    const componentSizes = measureComponentSizes(grid, base.landmassId);
+    const landConnectivityScale = metricTotal(grid) * 0.18;
 
     for (let i = 0; i < size; i += 1) {
       const type = crustType?.[i] ?? (base.landMask[i] ? 1 : 0);
@@ -8459,7 +8460,7 @@
         (oldOrogeny?.[i] ?? 0) * 0.35,
       );
       const landId = base.landmassId[i];
-      connectivityToLandmass[i] = landId ? Math.min(1, (componentSizes.get(landId) ?? 0) / (grid.size * 0.18)) : 0;
+      connectivityToLandmass[i] = landId ? Math.min(1, (componentSizes.get(landId) ?? 0) / Math.max(Number.EPSILON, landConnectivityScale)) : 0;
     }
 
     return {
@@ -8812,16 +8813,19 @@
     const queue = new Int32Array(size);
     let nextLandId = 1;
     let nextIslandId = 1;
-    const islandLimit = Math.max(24, Math.floor(size * 0.018));
+    const graphBacked = isGraphBackedGrid(grid);
+    const islandLimit = graphBacked ? metricTotal(grid) * 0.018 : Math.max(24, Math.floor(size * 0.018));
 
     for (let start = 0; start < size; start += 1) {
       if (!landMask[start] || landmassId[start]) continue;
       let head = 0;
       let tail = 0;
+      let componentMeasure = 0;
       landmassId[start] = nextLandId;
       queue[tail++] = start;
       while (head < tail) {
         const id = queue[head++];
+        componentMeasure += metricArea(grid, id);
         forEachNeighbor4ById(grid, id, (nid) => {
           if (!landMask[nid] || landmassId[nid]) return;
           landmassId[nid] = nextLandId;
@@ -8829,7 +8833,7 @@
         });
       }
 
-      if (tail <= islandLimit) {
+      if (componentMeasure <= islandLimit) {
         for (let i = 0; i < tail; i += 1) islandId[queue[i]] = nextIslandId;
         nextIslandId += 1;
       }
@@ -8910,12 +8914,23 @@
     return Boolean(grid.topologyOptions?.graphBacked || topology?.topologyKind === "cubed-sphere" || grid.topologyKind === "cubed-sphere");
   }
 
-  function measureComponentSizes(componentId) {
+  function metricArea(grid, id) {
+    return grid.area?.[id] ?? 1;
+  }
+
+  function metricTotal(grid) {
+    if (!grid.area) return grid.size;
+    let total = 0;
+    for (let i = 0; i < grid.size; i += 1) total += metricArea(grid, i);
+    return total;
+  }
+
+  function measureComponentSizes(grid, componentId) {
     const sizes = new Map();
     for (let i = 0; i < componentId.length; i += 1) {
       const id = componentId[i];
       if (!id) continue;
-      sizes.set(id, (sizes.get(id) ?? 0) + 1);
+      sizes.set(id, (sizes.get(id) ?? 0) + metricArea(grid, i));
     }
     return sizes;
   }
