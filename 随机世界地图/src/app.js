@@ -6156,10 +6156,10 @@
     forEachGridCell(grid, (id, x, y) => {
       if (crustType[id] !== CrustType.OCEANIC) return;
       const band = Math.floor(crustAge[id] * 10);
-      const horizontal = sameAgeBandAt(grid, x - 1, y, band) + sameAgeBandAt(grid, x + 1, y, band);
-      const vertical = sameAgeBandAt(grid, x, y - 1, band) + sameAgeBandAt(grid, x, y + 1, band);
-      const diagA = sameAgeBandAt(grid, x - 1, y - 1, band) + sameAgeBandAt(grid, x + 1, y + 1, band);
-      const diagB = sameAgeBandAt(grid, x + 1, y - 1, band) + sameAgeBandAt(grid, x - 1, y + 1, band);
+      const horizontal = legacySameAgeBandAt(grid, x - 1, y, band) + legacySameAgeBandAt(grid, x + 1, y, band);
+      const vertical = legacySameAgeBandAt(grid, x, y - 1, band) + legacySameAgeBandAt(grid, x, y + 1, band);
+      const diagA = legacySameAgeBandAt(grid, x - 1, y - 1, band) + legacySameAgeBandAt(grid, x + 1, y + 1, band);
+      const diagB = legacySameAgeBandAt(grid, x + 1, y - 1, band) + legacySameAgeBandAt(grid, x - 1, y + 1, band);
       const aligned = Math.max(horizontal, vertical, diagA, diagB);
       if (aligned < 2) return;
       const nearRidge = ridge[id] > 0.05 || grid.ridgeDistance[id] <= 3;
@@ -6270,7 +6270,7 @@
     });
   }
 
-  function sameAgeBandAt(grid, x, y, band) {
+  function legacySameAgeBandAt(grid, x, y, band) {
     const id = indexOf(grid, x, y);
     if (id < 0) return 0;
     return grid.crustType[id] === CrustType.OCEANIC && Math.floor(grid.crustAge[id] * 10) === band ? 1 : 0;
