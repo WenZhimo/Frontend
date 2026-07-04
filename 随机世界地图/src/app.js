@@ -9008,15 +9008,19 @@
     const topologyMode = params.topologyMode === TopologyMode.CUBED_SPHERE
       ? TopologyMode.CUBED_SPHERE
       : TopologyMode.CYLINDRICAL;
+    const productionTopologyMode = normalizeProductionTopologyMode({ ...params, topologyMode });
+    const pipelineMode = productionTopologyMode === ProductionTopologyMode.CUBED_SPHERE_ADAPTER || params.pipelineMode === PipelineMode.GEOLOGY_V2
+      ? PipelineMode.GEOLOGY_V2
+      : PipelineMode.LEGACY;
     const projectionMode = Object.values(ProjectionMode).includes(params.projectionMode)
       ? params.projectionMode
       : ProjectionMode.EQUIRECTANGULAR;
     return {
       ...params,
-      pipelineMode: params.pipelineMode === PipelineMode.GEOLOGY_V2 ? PipelineMode.GEOLOGY_V2 : PipelineMode.LEGACY,
+      pipelineMode,
       topologyMode,
       projectionMode,
-      productionTopologyMode: normalizeProductionTopologyMode(params),
+      productionTopologyMode,
       faceSize: normalizeFaceSize(params.faceSize, params.resolution),
     };
   }
