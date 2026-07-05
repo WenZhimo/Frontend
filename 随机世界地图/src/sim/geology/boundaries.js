@@ -11,6 +11,8 @@ export function updatePlateBoundariesV2(world) {
   const { grid } = world;
   const { size, plate, boundaryDistance, boundaryInfluence, weakness, activeBoundary, boundaryDensity, boundaryCoherence, noisyBoundaryPatch, plateCheckerboard } = grid;
   const radius = physicalRadius(grid, 4);
+  const topology = topologyForGrid(grid);
+  const graphBacked = isGraphBackedGrid(grid, topology);
   const q = new Int32Array(size);
   let head = 0;
   let tail = 0;
@@ -24,20 +26,19 @@ export function updatePlateBoundariesV2(world) {
 
   forEachGridCell(grid, (id) => {
     let edge = false;
-    forEachNeighbor4ById(grid, id, (nid) => {
+    visitBoundarySourceNeighbors(grid, topology, graphBacked, id, (nid) => {
       if (plate[nid] !== plate[id]) edge = true;
     });
     if (edge) {
       boundaryDistance[id] = 0;
       activeBoundary[id] = 1;
-      q[tail++] = id;
+      if (!graphBacked) q[tail++] = id;
     }
   });
 
   deriveBoundaryCoherence(grid);
 
-  const topology = topologyForGrid(grid);
-  if (isGraphBackedGrid(grid, topology)) {
+  if (graphBacked) {
     rebuildGraphBoundaryDistance(grid, topology, activeBoundary, radius);
   } else {
     while (head < tail) {
@@ -62,6 +63,18 @@ export function updatePlateBoundariesV2(world) {
     const noisyGate = noisyBoundaryPatch[i] ? 0.32 : 1;
     boundaryInfluence[i] = Math.min(1, distanceBand * weakPath * segmented * coherenceGate * noisyGate);
   }
+}
+
+function visitBoundarySourceNeighbors(grid, topology, graphBacked, id, visit) {
+  if (graphBacked) {
+    topology.forEachNeighbor(id, (nid) => {
+      visit(nid);
+    });
+    return;
+  }
+  forEachNeighbor4ById(grid, id, (nid) => {
+    visit(nid);
+  });
 }
 
 export function classifyBoundaryKindV2(world) {
