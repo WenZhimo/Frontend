@@ -907,7 +907,7 @@ function measureInlandBasinRisk(grid, seaLevel) {
   }
   return {
     belowSeaRatio: belowSeaArea / Math.max(globalArea, Number.EPSILON),
-    belowSeaCellRatio: belowSea / grid.size,
+    belowSeaUnweightedCellRatio: belowSea / grid.size,
     waterComponentCount: componentCount,
     smallWaterComponentCount: smallComponentCount,
     inlandBelowSeaCandidateRatio: inlandCandidates / Math.max(globalArea, Number.EPSILON),
