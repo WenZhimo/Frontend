@@ -121,6 +121,7 @@ const checks = [
   ["spherical-render-gate-check", ["tools/spherical-render-gate-check.mjs", seedText, String(smallFaceSize), "2", "128x64"]],
   ["spherical-toolchain-smoke-check", ["tools/spherical-toolchain-smoke-check.mjs"]],
   ["spherical-file-url-bundle-check", ["tools/spherical-file-url-bundle-check.mjs"]],
+  ["spherical-regression-coverage-check", ["tools/spherical-regression-coverage-check.mjs"]],
   ["spherical-artifact-scan-check", ["tools/spherical-artifact-scan-check.mjs"]],
 ];
 
@@ -746,6 +747,9 @@ function compactMetrics(name, parsed) {
     "perfProfileValid",
     "appBundleBytes",
     "appBundleLineCount",
+    "sphericalToolCount",
+    "requiredRegressionToolCount",
+    "regressionReferenceCount",
     "baselineFaceSize",
     "maxLandMismatch",
     "maxPlateMismatch",
