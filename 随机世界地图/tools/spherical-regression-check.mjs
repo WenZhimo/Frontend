@@ -21,6 +21,7 @@ const checks = [
   ["spherical-production-init-check", ["tools/spherical-production-init-check.mjs", seedText, String(smallFaceSize)]],
   ["spherical-production-step-check", ["tools/spherical-production-step-check.mjs", seedText, String(smallFaceSize), "5"]],
   ["spherical-production-create-world-check", ["tools/spherical-production-create-world-check.mjs", seedText, String(smallFaceSize), "1"]],
+  ["spherical-world-check", ["tools/spherical-world-check.mjs", seedText, "256x128", String(smallFaceSize)]],
   ["ui-topology-controls-check", ["tools/ui-topology-controls-check.mjs"]],
   ["interface-check:cubed-sphere-production", [
     "tools/interface-check.mjs",
@@ -819,6 +820,23 @@ function compactMetrics(name, parsed) {
     picked.adapterProductionStep = parsed.adapterProduction.step;
     picked.adapterProductionLandRatio = parsed.adapterProduction.landRatio;
     picked.adapterProductionSeaRatio = parsed.adapterProduction.seaRatio;
+  }
+  if (name === "spherical-world-check") {
+    picked.worldCheckResolution = parsed.resolution;
+    picked.worldCheckRequestedFaceSize = parsed.requestedFaceSize;
+    picked.worldCheckCylindricalTopologyMode = parsed.cylindrical?.topologyMode;
+    picked.worldCheckCylindricalHasSphericalGrid = parsed.cylindrical?.hasSphericalGrid;
+    picked.worldCheckCylindricalHasSphericalWorld = parsed.cylindrical?.hasSphericalWorld;
+    picked.worldCheckSphericalTopologyMode = parsed.spherical?.topologyMode;
+    picked.worldCheckSphericalSimulationGridKind = parsed.spherical?.simulationGridKind;
+    picked.worldCheckSphericalSimulationTopologyKind = parsed.spherical?.simulationTopologyKind;
+    picked.worldCheckSphericalSimulationGraphBacked = parsed.spherical?.simulationGraphBacked;
+    picked.worldCheckSphericalSimulationSize = parsed.spherical?.simulationSize;
+    picked.worldCheckSphericalGridSize = parsed.spherical?.sphericalGridSize;
+    picked.worldCheckSphericalWorldRole = parsed.spherical?.sphericalWorldRole;
+    picked.worldCheckSphericalWorldAuthoritative = parsed.spherical?.sphericalWorldAuthoritative;
+    picked.worldCheckSphericalWorldWritesProductionState =
+      parsed.spherical?.sphericalWorldWritesProductionState;
   }
   if (parsed.checks) {
     picked.defaultCubedSphereProductionGridIsCubedSphere = parsed.checks.defaultCubedSphereProductionGridIsCubedSphere;
