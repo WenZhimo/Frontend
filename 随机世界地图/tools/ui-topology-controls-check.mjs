@@ -10,6 +10,16 @@ for (const id of ["topologyMode", "projectionMode", "faceSize", "faceSizeLabel"]
 }
 expect(html.includes("cubed-sphere"), "index.html exposes cubed-sphere option");
 expect(html.includes("orthographic"), "index.html exposes orthographic projection option");
+for (const mode of [
+  "debug-face",
+  "debug-cell-id",
+  "debug-neighbor-count",
+  "debug-area",
+  "debug-face-seam-risk",
+  "debug-projection-sampling",
+]) {
+  expect(html.includes(`value="${mode}"`), `index.html exposes ${mode} projection option`);
+}
 
 const elements = createMockElements({
   topologyMode: "cubed-sphere",
@@ -45,6 +55,17 @@ expect(autoElements.faceSizeLabel.textContent === "自动", "blank face-size sel
 expect(autoWorld.params.topologyMode === "cylindrical", "default UI topology remains cylindrical");
 expect(autoWorld.grid.topologyKind !== "cubed-sphere", "default UI path keeps legacy cylindrical grid");
 
+const debugElements = createMockElements({
+  topologyMode: "cubed-sphere",
+  projectionMode: "debug-area",
+  faceSize: "24",
+});
+const debugParams = readParams(debugElements);
+const debugWorld = createWorld(debugParams);
+expect(debugParams.projectionMode === "debug-area", "readParams preserves debug projection selector value");
+expect(debugWorld.params.projectionMode === "debug-area", "createWorld normalizes debug projection mode");
+expect(debugWorld.grid.topologyOptions?.graphBacked === true, "debug projection keeps cubed-sphere graph-backed grid");
+
 const result = {
   valid: failures.length === 0,
   failures,
@@ -76,6 +97,15 @@ const result = {
     topologyKind: autoWorld.grid.topologyKind ?? autoWorld.grid.topologyOptions?.kind ?? null,
     graphBacked: autoWorld.grid.topologyOptions?.graphBacked === true,
     gridSize: autoWorld.grid.size,
+  },
+  debugWorld: {
+    topologyMode: debugWorld.params.topologyMode,
+    projectionMode: debugWorld.params.projectionMode,
+    faceSize: debugWorld.params.faceSize,
+    gridKind: debugWorld.grid.kind ?? debugWorld.grid.topologyKind ?? null,
+    topologyKind: debugWorld.grid.topologyKind ?? null,
+    graphBacked: debugWorld.grid.topologyOptions?.graphBacked === true,
+    gridSize: debugWorld.grid.size,
   },
 };
 
