@@ -197,6 +197,7 @@ function addLongRunCubedSphereMetrics(picked, parsed, prefix) {
   picked[`${prefix}FloodFillTopologyValid`] = parsed.topologyDiagnostics?.floodFillTopologyValid;
   picked[`${prefix}ConnectedComponentTopologyValid`] =
     parsed.topologyDiagnostics?.connectedComponentTopologyValid;
+  picked[`${prefix}FaceSeamContinuityRisk`] = parsed.topologyDiagnostics?.faceSeamContinuityRisk;
   picked[`${prefix}TopologyManualAccessRisk`] = parsed.topologyDiagnostics?.topologyManualAccessRisk;
   picked[`${prefix}TopologyMigrationCoverage`] = parsed.topologyDiagnostics?.topologyMigrationCoverage;
   picked[`${prefix}HydrologyValid`] = parsed.hydrologyDiagnostics?.hydrologyValid;
@@ -902,6 +903,7 @@ function compactMetrics(name, parsed) {
     picked.productionAdapterTopologyFloodFillValid = parsed.topologyDiagnostics?.floodFillTopologyValid;
     picked.productionAdapterTopologyConnectedComponentValid =
       parsed.topologyDiagnostics?.connectedComponentTopologyValid;
+    picked.productionAdapterTopologyFaceSeamContinuityRisk = parsed.topologyDiagnostics?.faceSeamContinuityRisk;
     picked.productionAdapterTopologyManualAccessRisk = parsed.topologyDiagnostics?.topologyManualAccessRisk;
     picked.productionAdapterTopologyMigrationCoverage = parsed.topologyDiagnostics?.topologyMigrationCoverage;
   }
