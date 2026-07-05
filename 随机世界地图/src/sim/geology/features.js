@@ -65,7 +65,7 @@ function seedFeatureSources(grid) {
     if (active <= 0.015 || s <= (graphBacked ? 0.03 : 0.01)) continue;
     const weak = weakness[i];
     const weakGate = weak > 0.34 ? 1 : weak > 0.22 ? 0.45 : 0.12;
-    const broken = weak < 0.3 && ((i * 1103515245 + 12345) & 7) < 3 ? 0.35 : 1;
+    const broken = weak < 0.3 && featureSeedBreakNoise(grid, i, graphBacked) < 0.375 ? 0.35 : 1;
     const coherenceFactor = noisyBoundaryPatch[i] ? 0.12 : 0.35 + (boundaryCoherence[i] ?? 1) * 0.65;
     const signal = active * s * weakGate * broken * coherenceFactor * (graphBacked ? 0.42 : 1);
     const continental = crustType[i] === CrustType.CONTINENTAL;
@@ -132,6 +132,22 @@ function normalizedFeatureGraphStress(value, model) {
   const scaled = value / Math.max(1e-7, model.scale);
   const normalized = scaled / (1 + scaled);
   return Math.min(1, normalized);
+}
+
+function featureSeedBreakNoise(grid, id, graphBacked) {
+  if (graphBacked) {
+    const px = grid.positionX?.[id] ?? 0;
+    const py = grid.positionY?.[id] ?? 0;
+    const pz = grid.positionZ?.[id] ?? 1;
+    const lon = Math.atan2(py, px);
+    const lat = Math.asin(Math.max(-1, Math.min(1, pz)));
+    const coarseLon = Math.floor((lon + Math.PI) * 9.5);
+    const coarseLat = Math.floor((lat + Math.PI / 2) * 11.5);
+    const fineLon = Math.floor((lon + Math.PI) * 23.5);
+    const fineLat = Math.floor((lat + Math.PI / 2) * 27.5);
+    return hash2(coarseLon, coarseLat) * 0.7 + hash2(fineLon + 17, fineLat + 29) * 0.3;
+  }
+  return (((id * 1103515245 + 12345) >>> 0) & 7) / 8;
 }
 
 function blendAxisSources(grid, sources) {
