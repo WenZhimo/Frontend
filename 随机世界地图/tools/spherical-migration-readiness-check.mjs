@@ -298,6 +298,33 @@ const hydrologyTopologyGuardSpecs = [
   },
 ];
 
+const worldTopologyGuardSpecs = [
+  {
+    name: "createWorldRoutesCubedSphereToProductionAdapter",
+    file: "src/sim/world.js",
+    pattern:
+      /function\s+normalizeProductionTopologyMode\s*\(\s*params\s*\)\s*\{[\s\S]*?params\.topologyMode\s*===\s*TopologyMode\.CUBED_SPHERE[\s\S]*?return\s+ProductionTopologyMode\.CUBED_SPHERE_ADAPTER[\s\S]*?function\s+createProductionGrid\s*\(\s*params\s*,\s*width\s*,\s*height\s*,\s*seedUint32\s*\)\s*\{[\s\S]*?params\.productionTopologyMode\s*===\s*ProductionTopologyMode\.CUBED_SPHERE_ADAPTER[\s\S]*?createCubedSphereProductionGridAdapter\s*\(\s*\{[\s\S]*?faceSize\s*:\s*params\.faceSize[\s\S]*?seedUint32[\s\S]*?return\s+createGrid\s*\(\s*width\s*,\s*height\s*\)/,
+  },
+  {
+    name: "cubedSphereForcesGeologyV2Pipeline",
+    file: "src/sim/world.js",
+    pattern:
+      /function\s+normalizeParams\s*\(\s*params\s*\)\s*\{[\s\S]*?const\s+productionTopologyMode\s*=\s*normalizeProductionTopologyMode\s*\(\s*\{[\s\S]*?const\s+pipelineMode\s*=\s*productionTopologyMode\s*===\s*ProductionTopologyMode\.CUBED_SPHERE_ADAPTER\s*\|\|\s*params\.pipelineMode\s*===\s*PipelineMode\.GEOLOGY_V2[\s\S]*?\?\s*PipelineMode\.GEOLOGY_V2[\s\S]*?:\s*PipelineMode\.LEGACY/,
+  },
+  {
+    name: "worldStatsUseAreaWeightsForGraphBackedGrid",
+    file: "src/sim/world.js",
+    pattern:
+      /export\s+function\s+analyzeWorld\s*\(\s*world\s*\)\s*\{[\s\S]*?const\s+areaWeighted\s*=\s*isGraphBackedGrid\s*\(\s*grid\s*\)[\s\S]*?const\s+weight\s*=\s*areaWeighted\s*\?\s*grid\.area\?\.\[\s*i\s*\]\s*\?\?\s*1\s*:\s*1[\s\S]*?totalArea\s*\+=\s*weight[\s\S]*?if\s*\(\s*h\s*>=\s*world\.seaLevel\s*\)\s*landArea\s*\+=\s*weight[\s\S]*?const\s+landRatio\s*=\s*landArea\s*\/\s*Math\.max\s*\(\s*totalArea\s*,\s*Number\.EPSILON\s*\)/,
+  },
+  {
+    name: "worldPlateDriftUsesSphericalPlatesBeforeLegacyUv",
+    file: "src/sim/world.js",
+    pattern:
+      /function\s+measurePlateDrift\s*\(\s*world\s*\)\s*\{[\s\S]*?world\.plates\?\.kind\s*===\s*["']spherical-plates["']\s*&&\s*world\.initialSphericalPlates[\s\S]*?measureSphericalPlateDrift\s*\(\s*world\.initialSphericalPlates\s*,\s*world\.plates\s*\)[\s\S]*?if\s*\(\s*!world\.plates\s*\|\|[\s\S]*?initialPlateCentersU[\s\S]*?initialPlateCentersV[\s\S]*?world\.plates\.centersU/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -355,6 +382,8 @@ const derivedTerrainTopologyGuardStatus = measureDerivedTerrainTopologyGuards();
 const derivedTerrainTopologyGuardReady = derivedTerrainTopologyGuardStatus.missing.length === 0;
 const hydrologyTopologyGuardStatus = measureHydrologyTopologyGuards();
 const hydrologyTopologyGuardReady = hydrologyTopologyGuardStatus.missing.length === 0;
+const worldTopologyGuardStatus = measureWorldTopologyGuards();
+const worldTopologyGuardReady = worldTopologyGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -371,7 +400,8 @@ const result = {
     projectionOutputIndexGuardReady &&
     legacyFallbackIndexGuardReady &&
     derivedTerrainTopologyGuardReady &&
-    hydrologyTopologyGuardReady,
+    hydrologyTopologyGuardReady &&
+    worldTopologyGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -411,6 +441,10 @@ const result = {
   hydrologyTopologyGuardCount: hydrologyTopologyGuardStatus.guarded.length,
   hydrologyTopologyGuardMissing: hydrologyTopologyGuardStatus.missing,
   guardedHydrologyTopologyPaths: hydrologyTopologyGuardStatus.guarded,
+  worldTopologyGuardReady,
+  worldTopologyGuardCount: worldTopologyGuardStatus.guarded.length,
+  worldTopologyGuardMissing: worldTopologyGuardStatus.missing,
+  guardedWorldTopologyPaths: worldTopologyGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -495,6 +529,7 @@ const result = {
     "legacyFallbackIndexGuardReady means remaining id-to-xy rectangular index math is behind explicit rectangular-only helper guards or inside legacy helper tests",
     "derivedTerrainTopologyGuardReady means terrain shape, distance, smoothing, labels, and latitude use graph topology or cell metadata before legacy rectangular helpers",
     "hydrologyTopologyGuardReady means hydrology flow, smoothing, diagnostics, and watershed accounting use topology methods and area weights before legacy rectangular helpers",
+    "worldTopologyGuardReady means cubed-sphere createWorld requests route to the production adapter, force geology-v2, use area-weighted stats, and prefer spherical plate drift",
   ],
 };
 
@@ -709,6 +744,10 @@ function measureDerivedTerrainTopologyGuards() {
 
 function measureHydrologyTopologyGuards() {
   return measureRegexSpecs(hydrologyTopologyGuardSpecs, "missing graph-backed hydrology topology guard");
+}
+
+function measureWorldTopologyGuards() {
+  return measureRegexSpecs(worldTopologyGuardSpecs, "missing graph-backed world topology guard");
 }
 
 function measureRegexSpecs(specs, missingReason) {
