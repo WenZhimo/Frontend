@@ -142,6 +142,7 @@ export function createTopology(width, height, options = {}) {
     const componentId = new Int32Array(size);
     const queue = new Int32Array(size);
     const componentSizes = [];
+    const componentAreas = [];
     let nextId = 1;
 
     for (let start = 0; start < size; start += 1) {
@@ -159,12 +160,14 @@ export function createTopology(width, height, options = {}) {
         });
       }
       componentSizes[nextId] = tail;
+      componentAreas[nextId] = tail;
       nextId += 1;
     }
 
     return {
       componentId,
       componentSizes,
+      componentAreas,
       componentCount: nextId - 1,
     };
   }
