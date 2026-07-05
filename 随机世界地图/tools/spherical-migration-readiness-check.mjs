@@ -468,7 +468,7 @@ const geologySurfaceTopologyGuardSpecs = [
     name: "geologyRiftExternalSeaUsesAreaWeightedLargestComponent",
     file: "src/sim/geology/rift.js",
     pattern:
-      /function\s+fillExternalSea\s*\(\s*grid\s*,\s*seaMask\s*,\s*externalSeaMask\s*\)\s*\{[\s\S]*?const\s+componentAreas\s*=\s*new\s+Float64Array\s*\(\s*components\.componentCount\s*\+\s*1\s*\)[\s\S]*?componentAreas\s*\[\s*componentId\s*\]\s*\+=\s*metricArea\s*\(\s*grid\s*,\s*i\s*\)[\s\S]*?const\s+componentArea\s*=\s*componentAreas\s*\[\s*id\s*\]\s*\?\?\s*0[\s\S]*?if\s*\(\s*componentArea\s*>\s*largestArea\s*\)[\s\S]*?function\s+metricArea\s*\(\s*grid\s*,\s*id\s*\)/,
+      /function\s+fillExternalSea\s*\(\s*grid\s*,\s*seaMask\s*,\s*externalSeaMask\s*\)\s*\{[\s\S]*?const\s+components\s*=\s*topology\.connectedComponents\s*\(\s*seaMask\s*\)[\s\S]*?let\s+largestArea\s*=\s*0[\s\S]*?const\s+componentArea\s*=\s*components\.componentAreas\?\.\[\s*id\s*\]\s*\?\?\s*components\.componentSizes\s*\[\s*id\s*\]\s*\?\?\s*0[\s\S]*?if\s*\(\s*componentArea\s*>\s*largestArea\s*\)/,
   },
   {
     name: "geologyMarginsUseGraphDistancesAndNeighbors",
