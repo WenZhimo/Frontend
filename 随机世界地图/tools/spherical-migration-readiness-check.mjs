@@ -535,6 +535,45 @@ const interfaceTopologyGuardSpecs = [
   },
 ];
 
+const diagnosticToolchainGuardSpecs = [
+  {
+    name: "artifactScanPreservesTopologyOptionsAndReportsRiskDebugLayers",
+    file: "tools/artifact-scan.mjs",
+    pattern:
+      /const\s+topologyOptions\s*=\s*parseTopologyOptions\s*\(\s*options\s*\)[\s\S]*?createCheckWorld\s*\(\s*\{\s*seedText\s*,\s*pipelineMode\s*,\s*resolution\s*,\s*\.\.\.topologyOptions\s*\}\s*\)[\s\S]*?assessArtifactRisk\s*\(\s*lastMetrics\s*\)[\s\S]*?suggestedDebugLayers\s*\(\s*failures\[0\]\?\.failures\s*\?\?\s*\[\]\s*\)/,
+  },
+  {
+    name: "perfProfilePreservesTopologyOptionsAndStageTimings",
+    file: "tools/perf-profile.mjs",
+    pattern:
+      /const\s+topologyOptions\s*=\s*parseTopologyOptions\s*\(\s*options\s*\)[\s\S]*?createCheckWorld\s*\(\s*\{\s*seedText\s*,\s*pipelineMode\s*,\s*resolution\s*,\s*\.\.\.topologyOptions\s*\}\s*\)[\s\S]*?world\.profileGeologyV2Stages\s*=\s*true[\s\S]*?geologyStageTimings:\s*formatStageTimings\s*\(\s*world\.geologyV2StageTimings\s*\)/,
+  },
+  {
+    name: "scenarioCheckSnapshotsPreserveTopologyMetadata",
+    file: "tools/scenario-check.mjs",
+    pattern:
+      /const\s+topologyOptions\s*=\s*parseTopologyOptions\s*\(\s*options\s*\)[\s\S]*?createCheckWorld\s*\(\s*\{\s*seedText\s*,\s*pipelineMode\s*,\s*resolution\s*,\s*\.\.\.topologyOptions\s*\}\s*\)[\s\S]*?saveWorldSnapshot\s*\(\s*currentWorld\s*,\s*snapshotDir\s*,\s*\{\s*seedText\s*,\s*pipelineMode\s*,\s*resolution\s*,\s*\.\.\.topologyOptions\s*\}\s*\)[\s\S]*?summarizeScenario\s*\(\s*\{/,
+  },
+  {
+    name: "snapshotCacheStoresParamsStatsAndTypedArrays",
+    file: "tools/lib/snapshot-cache.mjs",
+    pattern:
+      /export\s+function\s+saveWorldSnapshot\s*\(\s*world\s*,\s*snapshotDir[\s\S]*?params:\s*world\.params[\s\S]*?for\s*\(\s*const\s+\[\s*key\s*,\s*value\s*\]\s+of\s+Object\.entries\s*\(\s*world\.grid\s*\)\s*\)[\s\S]*?isTypedArray\s*\(\s*value\s*\)[\s\S]*?encodeTypedArray\s*\(\s*value\s*\)[\s\S]*?export\s+function\s+loadWorldSnapshot\s*\(\s*file\s*\)/,
+  },
+  {
+    name: "sphericalToolchainSmokeCoversArtifactScanAndPerfProfile",
+    file: "tools/spherical-toolchain-smoke-check.mjs",
+    pattern:
+      /const\s+artifactScan\s*=\s*runJson\s*\(\s*["']artifact-scan["'][\s\S]*?["']--topology["'][\s\S]*?["']cubed-sphere["'][\s\S]*?const\s+perfProfile\s*=\s*runJson\s*\(\s*["']perf-profile["'][\s\S]*?["']--topology["'][\s\S]*?["']cubed-sphere["'][\s\S]*?expect\s*\(\s*artifactScan\.parsed\?\.topologyMode\s*===\s*["']cubed-sphere["'][\s\S]*?expect\s*\(\s*perfProfile\.parsed\?\.topologyMode\s*===\s*["']cubed-sphere["'][\s\S]*?geologyStageTimings/,
+  },
+  {
+    name: "sphericalRenderGateValidatesProjectionDebugAndCleanup",
+    file: "tools/spherical-render-gate-check.mjs",
+    pattern:
+      /cleanup\s*\(\s*\)[\s\S]*?const\s+renderCheck\s*=\s*runJsonCheck\s*\(\s*["']render-check["'][\s\S]*?["']--topology["'][\s\S]*?["']cubed-sphere["'][\s\S]*?renderUsesSphericalProjection:\s*renderCheck\.parsed\?\.renderBackend\s*===\s*["']cpu-spherical-projection-reference["'][\s\S]*?debugLayerRestricted:[\s\S]*?debugProjectionSampling[\s\S]*?cleanup\s*\(\s*\)[\s\S]*?function\s+cleanup\s*\(\s*\)\s*\{[\s\S]*?rmSync\s*\(\s*debugOutputDir\s*,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\s*\)/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -602,6 +641,8 @@ const geologySurfaceTopologyGuardStatus = measureGeologySurfaceTopologyGuards();
 const geologySurfaceTopologyGuardReady = geologySurfaceTopologyGuardStatus.missing.length === 0;
 const interfaceTopologyGuardStatus = measureInterfaceTopologyGuards();
 const interfaceTopologyGuardReady = interfaceTopologyGuardStatus.missing.length === 0;
+const diagnosticToolchainGuardStatus = measureDiagnosticToolchainGuards();
+const diagnosticToolchainGuardReady = diagnosticToolchainGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -623,7 +664,8 @@ const result = {
     geologyFeatureTopologyGuardReady &&
     geologyCoreTopologyGuardReady &&
     geologySurfaceTopologyGuardReady &&
-    interfaceTopologyGuardReady,
+    interfaceTopologyGuardReady &&
+    diagnosticToolchainGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -683,6 +725,10 @@ const result = {
   interfaceTopologyGuardCount: interfaceTopologyGuardStatus.guarded.length,
   interfaceTopologyGuardMissing: interfaceTopologyGuardStatus.missing,
   guardedInterfaceTopologyPaths: interfaceTopologyGuardStatus.guarded,
+  diagnosticToolchainGuardReady,
+  diagnosticToolchainGuardCount: diagnosticToolchainGuardStatus.guarded.length,
+  diagnosticToolchainGuardMissing: diagnosticToolchainGuardStatus.missing,
+  guardedDiagnosticToolchainPaths: diagnosticToolchainGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -772,6 +818,7 @@ const result = {
     "geologyCoreTopologyGuardReady means boundaries, plates, crust advection, and oceanic ridge-age distance route graph-backed worlds through spherical plate, graph-neighbor, and heap-distance paths before legacy raster helpers",
     "geologySurfaceTopologyGuardReady means sea level, sediment, rift connectivity, passive margins, orogeny, pipeline smoothing, and relief budget use topology-aware graph paths or explicitly tracked legacy radius helpers",
     "interfaceTopologyGuardReady means terrain, hydrology, climate, biosphere, and resource getters expose graph-derived fields and are covered by area-weighted topology-aware interface checks",
+    "diagnosticToolchainGuardReady means artifact scans, performance profiles, scenario snapshots, render gates, and debug tools preserve cubed-sphere topology options and clean temporary render artifacts",
   ],
 };
 
@@ -1006,6 +1053,10 @@ function measureGeologySurfaceTopologyGuards() {
 
 function measureInterfaceTopologyGuards() {
   return measureRegexSpecs(interfaceTopologyGuardSpecs, "missing graph-backed interface topology guard");
+}
+
+function measureDiagnosticToolchainGuards() {
+  return measureRegexSpecs(diagnosticToolchainGuardSpecs, "missing spherical diagnostic toolchain guard");
 }
 
 function measureRegexSpecs(specs, missingReason) {
