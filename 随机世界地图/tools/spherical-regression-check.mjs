@@ -135,6 +135,20 @@ const checks = [
   ["spherical-render-gate-check", ["tools/spherical-render-gate-check.mjs", seedText, String(smallFaceSize), "2", "128x64"]],
   ["spherical-toolchain-smoke-check", ["tools/spherical-toolchain-smoke-check.mjs"]],
   ["spherical-file-url-bundle-check", ["tools/spherical-file-url-bundle-check.mjs"]],
+  ["spherical-final-acceptance-check", [
+    "tools/spherical-final-acceptance-check.mjs",
+    seedText,
+    String(smallFaceSize),
+    String(steps),
+    "--long-steps",
+    "200",
+    "--deep-steps",
+    "739",
+    "--timeout-ms",
+    String(checkTimeoutMs),
+    "--heavy-timeout-ms",
+    String(heavyCheckTimeoutMs),
+  ]],
   ["spherical-regression-coverage-check", ["tools/spherical-regression-coverage-check.mjs"]],
   ["spherical-artifact-scan-check", ["tools/spherical-artifact-scan-check.mjs"]],
 ];
@@ -295,6 +309,7 @@ function isHeavyCheck(name) {
     name.startsWith("spherical-plate-check") ||
     name.startsWith("spherical-core-check") ||
     name.startsWith("spherical-authoritative-core-check") ||
+    name === "spherical-final-acceptance-check" ||
     name === "spherical-diagnostic-terrain-check"
   );
 }
@@ -312,7 +327,8 @@ function checkGroupForName(name) {
     name.includes("long-run") ||
     name.includes("resolution") ||
     name.includes("diagnostic-terrain") ||
-    name.includes("artifact")
+    name.includes("artifact") ||
+    name.includes("final-acceptance")
   ) {
     return "artifact";
   }
@@ -1026,6 +1042,13 @@ function compactMetrics(name, parsed) {
     "perfProfileValid",
     "appBundleBytes",
     "appBundleLineCount",
+    "finalAcceptanceValid",
+    "finalAcceptanceFailedCount",
+    "finalAcceptanceTopologyReady",
+    "finalAcceptanceGeologyReady",
+    "finalAcceptanceStatisticsReady",
+    "finalAcceptanceRenderReady",
+    "finalAcceptanceCompatibilityReady",
     "sphericalToolCount",
     "requiredRegressionToolCount",
     "regressionReferenceCount",
@@ -1222,6 +1245,28 @@ function compactMetrics(name, parsed) {
     picked.rectangularGpuMirrorRenderCompatible = parsed.rectangularGpuMirror?.renderCompatible;
     picked.rectangularGpuMirrorWidth = parsed.rectangularGpuMirror?.width;
     picked.rectangularGpuMirrorHeight = parsed.rectangularGpuMirror?.height;
+  }
+  if (name === "spherical-final-acceptance-check") {
+    picked.finalAcceptanceValid = parsed.acceptance?.valid;
+    picked.finalAcceptanceFailedCount = parsed.acceptance?.failed?.length ?? 0;
+    picked.finalAcceptanceTopologyReady =
+      parsed.acceptance?.checks?.topologyIsCubedSphere &&
+      parsed.acceptance?.checks?.neighborSymmetryValid &&
+      parsed.acceptance?.checks?.globalConnectivityValid &&
+      parsed.acceptance?.checks?.areaTotalErrorBounded &&
+      parsed.acceptance?.checks?.poleSingularityRiskZero;
+    picked.finalAcceptanceGeologyReady =
+      parsed.acceptance?.checks?.authoritativeCubedSphereCore &&
+      parsed.acceptance?.checks?.geologyLongRun200Valid &&
+      parsed.acceptance?.checks?.geologyLongRun739Valid;
+    picked.finalAcceptanceStatisticsReady = parsed.acceptance?.checks?.resolutionConverges;
+    picked.finalAcceptanceRenderReady =
+      parsed.acceptance?.checks?.projectionContinuityValid &&
+      parsed.acceptance?.checks?.renderGateValid;
+    picked.finalAcceptanceCompatibilityReady =
+      parsed.acceptance?.checks?.interfacesValid &&
+      parsed.acceptance?.checks?.fileUrlClassicScriptValid &&
+      parsed.acceptance?.checks?.defaultCpuCanvasRenderValid;
   }
   if (name === "spherical-authoritative-core-check") {
     picked.authoritativeProductionGridKind = parsed.before?.spherical?.productionGridKind;
