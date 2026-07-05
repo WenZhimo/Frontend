@@ -14,6 +14,9 @@ const debugOutput = `${debugOutputDir}/flowAccumulation.ppm`;
 const finalElevationDebugOutput = `${debugOutputDir}/finalElevation.ppm`;
 const externalSeaDebugOutput = `${debugOutputDir}/externalSeaMask.ppm`;
 const topologyDebugOutput = `${debugOutputDir}/topologyFace.ppm`;
+const cellIdDebugOutput = `${debugOutputDir}/debugCellId.ppm`;
+const neighborCountDebugOutput = `${debugOutputDir}/debugNeighborCount.ppm`;
+const areaDebugOutput = `${debugOutputDir}/debugArea.ppm`;
 const seamDebugOutput = `${debugOutputDir}/debugFaceSeamRisk.ppm`;
 const samplingDebugOutput = `${debugOutputDir}/debugProjectionSampling.ppm`;
 
@@ -69,12 +72,15 @@ const debugRenderCheck = runJsonCheck("geology-debug-render", [
   "--output-resolution",
   outputResolution,
   "--layers",
-  "flowAccumulation,finalElevation,externalSeaMask,topologyFace,debugFaceSeamRisk,debugProjectionSampling",
+  "flowAccumulation,finalElevation,externalSeaMask,topologyFace,debugCellId,debugNeighborCount,debugArea,debugFaceSeamRisk,debugProjectionSampling",
 ]);
 
 const finalElevationStats = ppmStats(finalElevationDebugOutput);
 const externalSeaStats = ppmStats(externalSeaDebugOutput);
 const topologyStats = ppmStats(topologyDebugOutput);
+const cellIdStats = ppmStats(cellIdDebugOutput);
+const neighborCountStats = ppmStats(neighborCountDebugOutput);
+const areaStats = ppmStats(areaDebugOutput);
 const seamStats = ppmStats(seamDebugOutput);
 const samplingStats = ppmStats(samplingDebugOutput);
 
@@ -95,17 +101,26 @@ const checks = {
     debugRenderCheck.parsed.requestedLayers.includes("finalElevation") &&
     debugRenderCheck.parsed.requestedLayers.includes("externalSeaMask") &&
     debugRenderCheck.parsed.requestedLayers.includes("topologyFace") &&
+    debugRenderCheck.parsed.requestedLayers.includes("debugCellId") &&
+    debugRenderCheck.parsed.requestedLayers.includes("debugNeighborCount") &&
+    debugRenderCheck.parsed.requestedLayers.includes("debugArea") &&
     debugRenderCheck.parsed.requestedLayers.includes("debugFaceSeamRisk") &&
     debugRenderCheck.parsed.requestedLayers.includes("debugProjectionSampling"),
   debugOutputExists: existsSync(debugOutput),
   finalElevationDebugOutputExists: existsSync(finalElevationDebugOutput),
   externalSeaDebugOutputExists: existsSync(externalSeaDebugOutput),
   topologyDebugOutputExists: existsSync(topologyDebugOutput),
+  cellIdDebugOutputExists: existsSync(cellIdDebugOutput),
+  neighborCountDebugOutputExists: existsSync(neighborCountDebugOutput),
+  areaDebugOutputExists: existsSync(areaDebugOutput),
   seamDebugOutputExists: existsSync(seamDebugOutput),
   samplingDebugOutputExists: existsSync(samplingDebugOutput),
   finalElevationDebugInformative: finalElevationStats.uniqueColorCount > 24 && finalElevationStats.nonBackgroundShare > 0.65,
   externalSeaDebugInformative: externalSeaStats.uniqueColorCount >= 2 && externalSeaStats.nonBackgroundShare > 0.08,
   topologyFaceDebugShowsFaces: topologyStats.uniqueColorCount >= 6 && topologyStats.nonBackgroundShare > 0.8,
+  cellIdDebugInformative: cellIdStats.uniqueColorCount > 48 && cellIdStats.nonBackgroundShare > 0.8,
+  neighborCountDebugInformative: neighborCountStats.uniqueColorCount >= 1 && neighborCountStats.nonBackgroundShare > 0.8,
+  areaDebugInformative: areaStats.uniqueColorCount >= 4 && areaStats.nonBackgroundShare > 0.8,
   faceSeamRiskDebugShowsSeams: seamStats.highlightShare > 0.004 && seamStats.uniqueColorCount >= 3,
   projectionSamplingDebugShowsFaceGrid: samplingStats.uniqueColorCount >= 4 && samplingStats.nonBackgroundShare > 0.8,
 };
@@ -129,6 +144,9 @@ const result = {
     finalElevation: finalElevationStats,
     externalSeaMask: externalSeaStats,
     topologyFace: topologyStats,
+    debugCellId: cellIdStats,
+    debugNeighborCount: neighborCountStats,
+    debugArea: areaStats,
     debugFaceSeamRisk: seamStats,
     debugProjectionSampling: samplingStats,
   },
@@ -277,6 +295,9 @@ function cleanup() {
     finalElevationDebugOutput,
     externalSeaDebugOutput,
     topologyDebugOutput,
+    cellIdDebugOutput,
+    neighborCountDebugOutput,
+    areaDebugOutput,
     seamDebugOutput,
     samplingDebugOutput,
   ]) {
