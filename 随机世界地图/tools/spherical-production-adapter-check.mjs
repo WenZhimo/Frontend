@@ -99,6 +99,7 @@ if (!topologyDiagnostics.graphBacked) result.valid = false;
 if (!topologyDiagnostics.neighborConsistencyValid) result.valid = false;
 if (!topologyDiagnostics.floodFillTopologyValid) result.valid = false;
 if (!topologyDiagnostics.connectedComponentTopologyValid) result.valid = false;
+if (topologyDiagnostics.connectedComponentAreaError > 1e-5) result.valid = false;
 if (topologyDiagnostics.topologyManualAccessRisk !== 0) result.valid = false;
 if (topologyDiagnostics.topologyMigrationCoverage !== 1) result.valid = false;
 if (topologyDiagnostics.areaTotalError > 1e-5) result.valid = false;
