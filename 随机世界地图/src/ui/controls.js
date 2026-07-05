@@ -102,7 +102,5 @@ function optionalNumber(value) {
 
 function interactiveAutoFaceSize(topologyMode, productionTopologyMode, resolution) {
   if (topologyMode !== "cubed-sphere" && productionTopologyMode !== "cubed-sphere-adapter") return undefined;
-  const [width, height] = String(resolution ?? "512x256").split("x").map(Number);
-  const base = Math.max(2, Math.min(width || 512, height || 256));
-  return Math.min(64, Math.max(24, Math.round(base / 2)));
+  return 24;
 }
