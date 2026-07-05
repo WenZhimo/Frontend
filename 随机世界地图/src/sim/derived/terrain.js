@@ -590,45 +590,6 @@ function labelLandmasses(grid, landMask) {
   return { landmassId, islandId };
 }
 
-function labelClosedBasins(grid, seaMask, externalSeaMask) {
-  const { size } = grid;
-  const closedBasinId = new Int32Array(size);
-  const queue = new Int32Array(size);
-  let nextId = 1;
-
-  for (let start = 0; start < size; start += 1) {
-    if (!seaMask[start] || externalSeaMask[start] || closedBasinId[start]) continue;
-    let head = 0;
-    let tail = 0;
-    closedBasinId[start] = nextId;
-    queue[tail++] = start;
-    while (head < tail) {
-      const id = queue[head++];
-      forEachNeighbor4ById(grid, id, (nid) => {
-        if (!seaMask[nid] || externalSeaMask[nid] || closedBasinId[nid]) return;
-        closedBasinId[nid] = nextId;
-        queue[tail++] = nid;
-      });
-    }
-    nextId += 1;
-  }
-
-  return closedBasinId;
-}
-
-function findLocalDepressions(grid, field, seaMask) {
-  const depressionMask = new Uint8Array(grid.size);
-  forEachGridCell(grid, (id) => {
-    if (seaMask[id]) return;
-    let lowerThanAll = true;
-    forEachNeighbor4ById(grid, id, (nid) => {
-      if (field[id] >= field[nid]) lowerThanAll = false;
-    });
-    if (lowerThanAll) depressionMask[id] = 1;
-  });
-  return depressionMask;
-}
-
 function smoothElevation(grid, field, radius) {
   const { size } = grid;
   const output = new Float32Array(field.length);
