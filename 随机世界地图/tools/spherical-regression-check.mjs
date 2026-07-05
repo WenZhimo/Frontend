@@ -1141,6 +1141,8 @@ function compactMetrics(name, parsed) {
       parsed.stats?.connectedComponentTopologyValid;
     picked.interfaceCubedSphereConnectedComponentAreaError =
       parsed.stats?.connectedComponentAreaError;
+    picked.interfaceCubedSphereFaceSeamContinuityRisk =
+      parsed.stats?.faceSeamContinuityRisk;
     picked.interfaceCubedSphereTopologyManualAccessRisk = parsed.stats?.topologyManualAccessRisk;
     picked.interfaceCubedSphereTopologyMigrationCoverage = parsed.stats?.topologyMigrationCoverage;
     picked.interfaceCubedSphereLandRatio = parsed.stats?.landRatio;
