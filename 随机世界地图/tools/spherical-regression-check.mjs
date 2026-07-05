@@ -149,6 +149,8 @@ for (const check of selectedChecks) {
   if (!result.valid) failures.push(check.name);
 }
 
+const timedOutChecks = results.filter((result) => result.timedOut).map((result) => result.name);
+
 const summary = {
   valid: failures.length === 0,
   seedText,
@@ -158,7 +160,11 @@ const summary = {
   availableGroups: Array.from(new Set(checks.map(([name]) => checkGroupForName(name)))).sort(),
   selectedCheckCount: selectedChecks.length,
   checkCount: results.length,
+  passedCheckCount: results.length - failures.length,
+  failedCheckCount: failures.length,
+  timedOutCheckCount: timedOutChecks.length,
   failures,
+  timedOutChecks,
   totalMs: Date.now() - startedAt,
   results,
 };
