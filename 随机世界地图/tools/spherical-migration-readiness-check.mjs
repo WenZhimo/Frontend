@@ -211,6 +211,21 @@ const projectionOutputIndexGuardSpecs = [
   },
 ];
 
+const legacyFallbackIndexGuardSpecs = [
+  {
+    name: "forEachNeighbor4IdToXyFallbackRequiresRectangularGrid",
+    file: "src/sim/grid.js",
+    pattern:
+      /export\s+function\s+forEachNeighbor4\s*\(\s*grid\s*,\s*x\s*,\s*y\s*,\s*visit\s*\)\s*\{[\s\S]*?assertRectangularGrid\s*\(\s*grid\s*,\s*["']forEachNeighbor4["']\s*\)[\s\S]*?nid\s*%\s*grid\.width[\s\S]*?Math\.floor\s*\(\s*nid\s*\/\s*grid\.width\s*\)/,
+  },
+  {
+    name: "gridTopologyHelperCheckExercisesLegacyRectangularHelpers",
+    file: "tools/grid-topology-helper-check.mjs",
+    pattern:
+      /const\s+sizes\s*=\s*\[[\s\S]*?\[\s*8\s*,\s*4\s*\][\s\S]*?createGrid\s*\(\s*width\s*,\s*height\s*\)[\s\S]*?wrapXMatchesLegacy:\s*wrapX\s*\(\s*grid\.width[\s\S]*?indexMatchesTopology:[\s\S]*?top\.index\s*\(\s*grid\.width\s*-\s*1\s*,\s*1\s*\)[\s\S]*?checkGraphGridHelpers\s*\(\s*grid\s*\)/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -262,6 +277,8 @@ const resolutionSamplingGuardStatus = measureResolutionSamplingGuards();
 const resolutionSamplingGuardReady = resolutionSamplingGuardStatus.missing.length === 0;
 const projectionOutputIndexGuardStatus = measureProjectionOutputIndexGuards();
 const projectionOutputIndexGuardReady = projectionOutputIndexGuardStatus.missing.length === 0;
+const legacyFallbackIndexGuardStatus = measureLegacyFallbackIndexGuards();
+const legacyFallbackIndexGuardReady = legacyFallbackIndexGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -275,7 +292,8 @@ const result = {
     scaleTopologyGuardReady &&
     topologyDiagnosticGuardReady &&
     resolutionSamplingGuardReady &&
-    projectionOutputIndexGuardReady,
+    projectionOutputIndexGuardReady &&
+    legacyFallbackIndexGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -303,6 +321,10 @@ const result = {
   projectionOutputIndexGuardCount: projectionOutputIndexGuardStatus.guarded.length,
   projectionOutputIndexGuardMissing: projectionOutputIndexGuardStatus.missing,
   guardedProjectionOutputIndexPaths: projectionOutputIndexGuardStatus.guarded,
+  legacyFallbackIndexGuardReady,
+  legacyFallbackIndexGuardCount: legacyFallbackIndexGuardStatus.guarded.length,
+  legacyFallbackIndexGuardMissing: legacyFallbackIndexGuardStatus.missing,
+  guardedLegacyFallbackIndexPaths: legacyFallbackIndexGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -384,6 +406,7 @@ const result = {
     "topologyDiagnosticGuardReady means graph-backed cubed-sphere topology diagnostics route away from rectangular grid.width/grid.height checks and report zero manual-access risk",
     "resolutionSamplingGuardReady means graph-backed resolution comparisons sample through projection vectors and reserve rectangular bilinear sampling for legacy grids",
     "projectionOutputIndexGuardReady means y * width + x occurrences in projection render/gate tools index output pixels or projected sample buffers, not simulation grid cells",
+    "legacyFallbackIndexGuardReady means remaining id-to-xy rectangular index math is behind explicit rectangular-only helper guards or inside legacy helper tests",
   ],
 };
 
@@ -586,6 +609,10 @@ function measureResolutionSamplingGuards() {
 
 function measureProjectionOutputIndexGuards() {
   return measureRegexSpecs(projectionOutputIndexGuardSpecs, "missing projection-output pixel indexing guard");
+}
+
+function measureLegacyFallbackIndexGuards() {
+  return measureRegexSpecs(legacyFallbackIndexGuardSpecs, "missing legacy fallback indexing guard");
 }
 
 function measureRegexSpecs(specs, missingReason) {
