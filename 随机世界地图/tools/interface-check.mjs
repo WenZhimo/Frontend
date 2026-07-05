@@ -306,6 +306,7 @@ const stats = {
   connectedComponentTopologyValid: topology.connectedComponentTopologyValid,
   connectedComponentCount: topology.connectedComponentCount,
   seamContinuityRisk: topology.seamContinuityRisk,
+  faceSeamContinuityRisk: topology.faceSeamContinuityRisk ?? topology.seamContinuityRisk,
   polarBoundaryRisk: topology.polarBoundaryRisk,
   polarAccessRisk: topology.polarAccessRisk,
   topologyManualAccessRisk: topology.topologyManualAccessRisk,
