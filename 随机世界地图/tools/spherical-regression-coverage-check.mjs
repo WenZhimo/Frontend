@@ -30,6 +30,7 @@ const result = {
   sphericalToolCount: sphericalTools.length,
   requiredRegressionToolCount: required.length,
   regressionReferenceCount: referenced.size,
+  regressionCoverageRatio: required.length > 0 ? (required.length - missingFromRegression.length) / required.length : 1,
   excluded: [...excluded].sort(),
   missingFromRegression,
   unknownReferences,

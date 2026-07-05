@@ -908,6 +908,7 @@ function compactMetrics(name, parsed) {
     "sphericalToolCount",
     "requiredRegressionToolCount",
     "regressionReferenceCount",
+    "regressionCoverageRatio",
     "baselineFaceSize",
     "maxLandMismatch",
     "maxPlateMismatch",
