@@ -686,6 +686,13 @@ function compactMetrics(name, parsed) {
     "maxMarginSeamDelta",
     "activeMarginFieldCount",
     "renderBackend",
+    "debugLayerRestricted",
+    "cellIdDebugOutputExists",
+    "neighborCountDebugOutputExists",
+    "areaDebugOutputExists",
+    "cellIdDebugInformative",
+    "neighborCountDebugInformative",
+    "areaDebugInformative",
     "equirectangularVisibleShare",
     "mollweideVisibleShare",
     "orthographicFrontVisibleShare",
@@ -795,6 +802,13 @@ function compactMetrics(name, parsed) {
     picked.terrainMarginExternalSeaGraphDistanceMaxDelta = parsed.terrain.marginExternalSeaGraphDistanceMaxDelta;
     picked.terrainLandmassCount = parsed.terrain.landmassCount;
     picked.terrainIslandCount = parsed.terrain.islandCount;
+  }
+  if (parsed.debugLayerStats) {
+    addDebugLayerStats(picked, parsed.debugLayerStats, "debugCellId", "debugCellId");
+    addDebugLayerStats(picked, parsed.debugLayerStats, "debugNeighborCount", "debugNeighborCount");
+    addDebugLayerStats(picked, parsed.debugLayerStats, "debugArea", "debugArea");
+    addDebugLayerStats(picked, parsed.debugLayerStats, "debugFaceSeamRisk", "debugFaceSeamRisk");
+    addDebugLayerStats(picked, parsed.debugLayerStats, "debugProjectionSampling", "debugProjectionSampling");
   }
   if (parsed.climate) {
     picked.climateLatitudeFiniteShare = parsed.climate.latitudeFiniteShare;
@@ -1086,4 +1100,12 @@ function compactMetrics(name, parsed) {
     picked.productionStepAvgPlateDrift = parsed.stats?.avgPlateDrift;
   }
   return picked;
+}
+
+function addDebugLayerStats(picked, stats, layerName, prefix) {
+  const layer = stats[layerName];
+  if (!layer) return;
+  picked[`${prefix}UniqueColorCount`] = layer.uniqueColorCount;
+  picked[`${prefix}NonBackgroundShare`] = layer.nonBackgroundShare;
+  picked[`${prefix}HighlightShare`] = layer.highlightShare;
 }
