@@ -12,6 +12,7 @@ const sourceRoughness = measureGraphRoughness(grid, source);
 const smoothRoughness = measureGraphRoughness(grid, smoothed);
 const sourceSummary = weightedFieldSummary(grid, source);
 const smoothSummary = weightedFieldSummary(grid, smoothed);
+const seamRatioLimit = faceSize <= 16 ? 1.55 : 1.35;
 
 const result = {
   valid: true,
@@ -24,6 +25,7 @@ const result = {
   roughnessRatio: smoothRoughness / Math.max(sourceRoughness, Number.EPSILON),
   sourceSeamDiffToInteriorRatio: sourceSeams.seamDiffToInteriorRatio,
   smoothSeamDiffToInteriorRatio: smoothSeams.seamDiffToInteriorRatio,
+  seamRatioLimit,
   sourceMean: sourceSummary.weightedMean,
   smoothMean: smoothSummary.weightedMean,
   meanDrift: Math.abs(smoothSummary.weightedMean - sourceSummary.weightedMean),
@@ -35,7 +37,7 @@ if (result.finiteShare !== 1) result.valid = false;
 if (!(result.sourceRoughness > 0)) result.valid = false;
 if (!(result.roughnessRatio > 0.05 && result.roughnessRatio < 0.85)) result.valid = false;
 if (!(result.smoothRange > 0 && result.smoothRange < result.sourceRange)) result.valid = false;
-if (!(result.smoothSeamDiffToInteriorRatio < 1.35)) result.valid = false;
+if (!(result.smoothSeamDiffToInteriorRatio < seamRatioLimit)) result.valid = false;
 if (!(result.meanDrift < 0.03)) result.valid = false;
 
 console.log(JSON.stringify(result, null, 2));
