@@ -813,6 +813,7 @@
   }
 
   function forEachNeighbor4(grid, x, y, visit) {
+    assertRectangularGrid(grid, "forEachNeighbor4");
     const topology = topologyForGrid(grid);
     if (typeof topology.index !== "function" || typeof topology.forEachNeighbor4 !== "function") return;
     const id = topology.index(x, y);
