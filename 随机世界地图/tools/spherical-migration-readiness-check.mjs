@@ -507,7 +507,7 @@ const geologySurfaceTopologyGuardSpecs = [
     name: "geologyOrogenyUsesGraphNeighborhoodsAndInterfaces",
     file: "src/sim/geology/orogeny.js",
     pattern:
-      /function\s+visitOrogenyNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*x\s*,\s*y\s*,\s*radius\s*,\s*bend\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?forEachNeighborRadiusById\s*\(\s*grid\s*,\s*id[\s\S]*?legacyVisitOrogenyNeighborhood[\s\S]*?function\s+visitForelandNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?forEachNeighborRadiusById\s*\(\s*grid\s*,\s*id[\s\S]*?function\s+visitMountainInterfaceNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id/,
+      /function\s+visitOrogenyNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*x\s*,\s*y\s*,\s*radius\s*,\s*bend\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighborRing\s*\(\s*id\s*,\s*radius\s*\+\s*bendDepth[\s\S]*?legacyVisitOrogenyNeighborhood[\s\S]*?function\s+visitForelandNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighborRing\s*\(\s*id\s*,\s*radius[\s\S]*?function\s+visitMountainInterfaceNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id/,
   },
   {
     name: "geologyPipelineUsesGraphNeighborhoodVisitors",
