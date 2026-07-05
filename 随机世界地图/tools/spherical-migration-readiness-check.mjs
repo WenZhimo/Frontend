@@ -484,6 +484,57 @@ const geologySurfaceTopologyGuardSpecs = [
   },
 ];
 
+const interfaceTopologyGuardSpecs = [
+  {
+    name: "terrainDerivedGetterExposesTopologyDerivedMasksAndDiagnostics",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /export\s+function\s+getTerrainDerived\s*\(\s*world\s*\)\s*\{[\s\S]*?externalSeaMask:\s*base\.externalSeaMask[\s\S]*?oceanConnectivity:\s*base\.oceanConnectivity[\s\S]*?closedBasinId:\s*base\.closedBasinId[\s\S]*?inlandWaterCandidate:\s*base\.inlandWaterCandidate[\s\S]*?topologyDiagnostics:\s*measureTopologyDiagnostics\s*\(\s*world\s*\)/,
+  },
+  {
+    name: "terrainBaseBuildsConnectivityAndGraphDistances",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /function\s+buildTerrainBase\s*\(\s*world\s*\)\s*\{[\s\S]*?const\s+connectivity\s*=\s*deriveOceanConnectivity\s*\(\s*world\s*\)[\s\S]*?const\s+externalSeaMask\s*=\s*new\s+Uint8Array\s*\(\s*connectivity\.externalSeaMask\s*\)[\s\S]*?const\s+closedBasinId\s*=\s*new\s+Int32Array\s*\(\s*connectivity\.closedBasinId\s*\)[\s\S]*?const\s+coastDistance\s*=\s*distanceFromCoast\s*\(\s*grid\s*,\s*landMask\s*\)[\s\S]*?const\s+distanceToOcean\s*=\s*distanceFromSources\s*\(\s*grid\s*,\s*externalSeaMask\s*\)/,
+  },
+  {
+    name: "climateInputsUseSphericalLatitudeAndTerrainMasks",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /export\s+function\s+getClimateInputs\s*\(\s*world\s*\)\s*\{[\s\S]*?forEachGridCell\s*\(\s*grid\s*,\s*\(\s*id\s*,\s*_x\s*,\s*y\s*\)\s*=>\s*\{[\s\S]*?const\s+lat\s*=\s*latitudeDegrees\s*\(\s*grid\s*,\s*id\s*,\s*y\s*\)[\s\S]*?latitude\s*\[\s*id\s*\]\s*=\s*lat[\s\S]*?landMask:\s*base\.landMask[\s\S]*?seaMask:\s*base\.seaMask[\s\S]*?distanceToOcean:\s*base\.distanceToOcean/,
+  },
+  {
+    name: "hydrologyInputsRouteThroughDerivedHydrologyWithStepCache",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /export\s+function\s+getHydrologyInputs\s*\(\s*world\s*,\s*options\s*=\s*\{\}\s*\)\s*\{[\s\S]*?const\s+cached\s*=\s*getStepCache\s*\(\s*world\s*,\s*HYDROLOGY_CACHE\s*\)[\s\S]*?const\s+base\s*=\s*getTerrainBase\s*\(\s*world\s*\)[\s\S]*?const\s+value\s*=\s*deriveHydrology\s*\(\s*world\s*,\s*base\s*,\s*options\s*\)[\s\S]*?setStepCache\s*\(\s*world\s*,\s*HYDROLOGY_CACHE\s*,\s*value\s*,\s*\{\s*level\s*\}\s*\)/,
+  },
+  {
+    name: "biosphereInputsUseMetricLandmassSizesAndGraphSmoothing",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /export\s+function\s+getBiosphereInputs\s*\(\s*world\s*\)\s*\{[\s\S]*?const\s+biomeBaseElevation\s*=\s*smoothElevation\s*\(\s*grid\s*,\s*elev\s*,\s*physicalRadius\s*\(\s*grid\s*,\s*1\s*\)\s*\)[\s\S]*?const\s+componentSizes\s*=\s*measureComponentSizes\s*\(\s*grid\s*,\s*base\.landmassId\s*\)[\s\S]*?const\s+landConnectivityScale\s*=\s*metricTotal\s*\(\s*grid\s*\)\s*\*\s*0\.18[\s\S]*?connectivityToLandmass\s*\[\s*i\s*\]\s*=\s*landId\s*\?/,
+  },
+  {
+    name: "resourceInputsExposeGeologyV2TraceFields",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /export\s+function\s+getResourceInputs\s*\(\s*world\s*\)\s*\{[\s\S]*?riftStage[\s\S]*?passiveMargin[\s\S]*?sedimentaryBasin[\s\S]*?orogenicBelt:\s*maxFields\s*\(\s*activeOrogeny\s*,\s*oldOrogeny\s*,\s*orogeny\s*\)[\s\S]*?activeTransform:\s*new\s+Float32Array\s*\(\s*grid\.activeTransform\s*\)[\s\S]*?transformMemory:\s*new\s+Float32Array\s*\(\s*grid\.transformMemory\s*\)[\s\S]*?fractureZoneMemory:\s*new\s+Float32Array\s*\(\s*grid\.fractureZoneMemory\s*\)/,
+  },
+  {
+    name: "interfaceCheckUsesAreaWeightsAndTopologyNeighbors",
+    file: "tools/interface-check.mjs",
+    pattern:
+      /function\s+metricArea\s*\(\s*id\s*\)\s*\{[\s\S]*?world\.grid\.area\?\.\[\s*id\s*\][\s\S]*?function\s+widthProxy\s*\(\s*field\s*,\s*threshold\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*world\.grid\s*\)[\s\S]*?forEachAnyNeighbor\s*\(\s*topology\s*,\s*id[\s\S]*?function\s+forEachAnyNeighbor\s*\(\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor8[\s\S]*?topology\.forEachNeighbor/,
+  },
+  {
+    name: "productionInterfaceChecksExerciseAllDerivedGetters",
+    file: "tools/spherical-production-init-check.mjs",
+    pattern:
+      /runStage\s*\(\s*["']getTerrainDerived["'][\s\S]*?getTerrainDerived\s*\(\s*world\s*\)[\s\S]*?runStage\s*\(\s*["']getClimateInputs["'][\s\S]*?getClimateInputs\s*\(\s*world\s*\)[\s\S]*?runStage\s*\(\s*["']getHydrologyInputs["'][\s\S]*?getHydrologyInputs\s*\(\s*world\s*\)[\s\S]*?runStage\s*\(\s*["']getResourceInputs["'][\s\S]*?getResourceInputs\s*\(\s*world\s*\)/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -549,6 +600,8 @@ const geologyCoreTopologyGuardStatus = measureGeologyCoreTopologyGuards();
 const geologyCoreTopologyGuardReady = geologyCoreTopologyGuardStatus.missing.length === 0;
 const geologySurfaceTopologyGuardStatus = measureGeologySurfaceTopologyGuards();
 const geologySurfaceTopologyGuardReady = geologySurfaceTopologyGuardStatus.missing.length === 0;
+const interfaceTopologyGuardStatus = measureInterfaceTopologyGuards();
+const interfaceTopologyGuardReady = interfaceTopologyGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -569,7 +622,8 @@ const result = {
     worldTopologyGuardReady &&
     geologyFeatureTopologyGuardReady &&
     geologyCoreTopologyGuardReady &&
-    geologySurfaceTopologyGuardReady,
+    geologySurfaceTopologyGuardReady &&
+    interfaceTopologyGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -625,6 +679,10 @@ const result = {
   geologySurfaceTopologyGuardCount: geologySurfaceTopologyGuardStatus.guarded.length,
   geologySurfaceTopologyGuardMissing: geologySurfaceTopologyGuardStatus.missing,
   guardedGeologySurfaceTopologyPaths: geologySurfaceTopologyGuardStatus.guarded,
+  interfaceTopologyGuardReady,
+  interfaceTopologyGuardCount: interfaceTopologyGuardStatus.guarded.length,
+  interfaceTopologyGuardMissing: interfaceTopologyGuardStatus.missing,
+  guardedInterfaceTopologyPaths: interfaceTopologyGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -713,6 +771,7 @@ const result = {
     "geologyFeatureTopologyGuardReady means geology-v2 features, axes, and transform/fracture diagnostics route graph-backed worlds through topology-aware stress, diffusion, smoothing, and segmentation paths",
     "geologyCoreTopologyGuardReady means boundaries, plates, crust advection, and oceanic ridge-age distance route graph-backed worlds through spherical plate, graph-neighbor, and heap-distance paths before legacy raster helpers",
     "geologySurfaceTopologyGuardReady means sea level, sediment, rift connectivity, passive margins, orogeny, pipeline smoothing, and relief budget use topology-aware graph paths or explicitly tracked legacy radius helpers",
+    "interfaceTopologyGuardReady means terrain, hydrology, climate, biosphere, and resource getters expose graph-derived fields and are covered by area-weighted topology-aware interface checks",
   ],
 };
 
@@ -943,6 +1002,10 @@ function measureGeologyCoreTopologyGuards() {
 
 function measureGeologySurfaceTopologyGuards() {
   return measureRegexSpecs(geologySurfaceTopologyGuardSpecs, "missing graph-backed geology surface topology guard");
+}
+
+function measureInterfaceTopologyGuards() {
+  return measureRegexSpecs(interfaceTopologyGuardSpecs, "missing graph-backed interface topology guard");
 }
 
 function measureRegexSpecs(specs, missingReason) {
