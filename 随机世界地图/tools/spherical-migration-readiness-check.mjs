@@ -513,7 +513,7 @@ const geologySurfaceTopologyGuardSpecs = [
     name: "geologyPipelineUsesGraphNeighborhoodVisitors",
     file: "src/sim/geology/pipeline.js",
     pattern:
-      /function\s+visitPassiveCrustNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?function\s+visitSmoothingNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?forEachNeighborRadiusById\s*\(\s*grid\s*,\s*id[\s\S]*?function\s+visitBentSmoothingNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)/,
+      /function\s+visitPassiveCrustNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?function\s+visitSmoothingNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighborRing\s*\(\s*id\s*,\s*radius[\s\S]*?function\s+visitBentSmoothingNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighborRing\s*\(\s*id\s*,\s*radius\s*\+\s*bendDepth/,
   },
   {
     name: "geologyReliefBudgetUsesGraphSlopeAndTracksReliefRadius",

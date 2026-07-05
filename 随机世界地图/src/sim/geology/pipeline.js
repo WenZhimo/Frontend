@@ -1,5 +1,5 @@
 import { initializeSeaLevel, updateSeaLevel } from "../terrain.js";
-import { forEachGridCell, forEachNeighbor8ById, forEachNeighborRadiusById, indexOf, physicalRadius } from "../grid.js";
+import { forEachGridCell, forEachNeighbor8ById, indexOf, physicalRadius } from "../grid.js";
 import { topologyForGrid } from "../topology.js";
 import { updateSurfaceContinuityDiagnostics, updateTectonicAxes } from "./axes.js";
 import { updatePlateBoundaries } from "./boundaries.js";
@@ -259,7 +259,7 @@ function visitPassiveCrustNeighbors(grid, topology, id, visit) {
 
 function visitSmoothingNeighborhood(grid, topology, id, x, y, radius, visit) {
   if (isGraphBackedGrid(grid, topology)) {
-    forEachNeighborRadiusById(grid, id, radius, (nid, depth) => {
+    topology.forEachNeighborRing(id, radius, (nid, depth) => {
       if (nid === id || depth <= 0 || depth > radius + 0.01) return;
       visit(nid, depth);
     });
@@ -283,7 +283,7 @@ function legacyVisitSmoothingNeighborhood(grid, x, y, radius, visit) {
 function visitBentSmoothingNeighborhood(grid, topology, id, x, y, radius, bendX, bendY, visit) {
   if (isGraphBackedGrid(grid, topology)) {
     const bendDepth = Math.max(0, Math.min(radius, Math.round(Math.hypot(bendX, bendY))));
-    forEachNeighborRadiusById(grid, id, radius + bendDepth, (nid, depth) => {
+    topology.forEachNeighborRing(id, radius + bendDepth, (nid, depth) => {
       if (nid === id || depth <= bendDepth || depth > radius + bendDepth + 0.01) return;
       visit(nid, Math.max(0.01, depth - bendDepth));
     });
