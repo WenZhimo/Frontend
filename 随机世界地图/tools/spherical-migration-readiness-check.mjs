@@ -191,6 +191,12 @@ const projectionOutputIndexGuardSpecs = [
     pattern:
       /function\s+writeProjectedPpm\s*\(\s*currentWorld\s*,\s*output\s*,\s*colorFn\s*\)\s*\{[\s\S]*?const\s+bytes\s*=\s*Buffer\.alloc\s*\(\s*width\s*\*\s*height\s*\*\s*3\s*\)[\s\S]*?const\s+pixel\s*=\s*y\s*\*\s*width\s*\+\s*x[\s\S]*?projectionSampleToVec3\s*\(\s*x\s*,\s*y\s*,\s*width\s*,\s*height\s*,\s*projectionMode\s*\)[\s\S]*?nearestCellByVector\s*\(\s*grid\s*,\s*sample\.x\s*,\s*sample\.y\s*,\s*sample\.z\s*\)/,
   },
+  {
+    name: "sphericalRenderCheckWritesProjectedPixelsOnly",
+    file: "tools/spherical-render-check.mjs",
+    pattern:
+      /const\s+rendered\s*=\s*createRenderedLayer\s*\(\s*\{\s*grid\s*,\s*world\s*,\s*adapter\s*,\s*mode\s*,\s*width\s*,\s*height\s*,\s*projectionMode\s*\}\s*\)[\s\S]*?writePpm\s*\(\s*output\s*,\s*rendered\.pixels\s*,\s*width\s*,\s*height\s*\)[\s\S]*?function\s+writePpm\s*\(\s*path\s*,\s*pixels\s*,\s*width\s*,\s*height\s*\)\s*\{[\s\S]*?const\s+bytes\s*=\s*Buffer\.alloc\s*\(\s*width\s*\*\s*height\s*\*\s*3\s*\)[\s\S]*?pixels\s*\[\s*i\s*\*\s*4\s*\]/,
+  },
 ];
 
 const graphRoutedLegacyFiles = new Map([
