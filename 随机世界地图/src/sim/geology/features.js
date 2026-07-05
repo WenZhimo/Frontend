@@ -1,4 +1,4 @@
-import { forEachGridCell, forEachNeighborRadiusById, indexOf, physicalRadius } from "../grid.js";
+import { forEachGridCell, indexOf, physicalRadius } from "../grid.js";
 import { topologyForGrid } from "../topology.js";
 import { BoundaryType } from "../tectonics.js";
 import { CrustType } from "./crust.js";
@@ -214,7 +214,7 @@ function diffuseFeatureGraph(grid, topology, source, spread, radius, gain, optio
     const seed = source[id];
     if (seed <= 0.0001) continue;
     const arcOffsetDepth = options.arcOffset ? Math.max(1, Math.round(radius * 0.75)) : 0;
-    forEachNeighborRadiusById(grid, id, radius + arcOffsetDepth, (nid, dx, _dy) => {
+    topology.forEachNeighborRing(id, radius + arcOffsetDepth, (nid, dx) => {
       const edgeDistance = Math.max(0, dx);
       if (edgeDistance > radiusLimit + arcOffsetDepth) return;
       const targetDistance = Math.max(0, edgeDistance - arcOffsetDepth);
