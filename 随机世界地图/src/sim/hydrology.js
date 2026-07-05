@@ -588,6 +588,12 @@ function smoothHydroElevation(topology, field) {
 }
 
 function forEachHydrologyNeighbor4(topology, id, visit) {
+  if (isGraphBackedGrid(topology.grid) && typeof topology.forEachNeighbor === "function") {
+    topology.forEachNeighbor(id, (nid, slot, edgeLength) => {
+      visit(nid, 0, 0, edgeLength, slot);
+    });
+    return;
+  }
   if (typeof topology.forEachNeighbor4 === "function") {
     topology.forEachNeighbor4(id, visit);
     return;
@@ -596,6 +602,12 @@ function forEachHydrologyNeighbor4(topology, id, visit) {
 }
 
 function forEachHydrologyNeighbor8(topology, id, visit) {
+  if (isGraphBackedGrid(topology.grid) && typeof topology.forEachNeighbor === "function") {
+    topology.forEachNeighbor(id, (nid, slot, edgeLength) => {
+      visit(nid, 0, 0, edgeLength, slot);
+    });
+    return;
+  }
   if (typeof topology.forEachNeighbor8 === "function") {
     topology.forEachNeighbor8(id, visit);
     return;
@@ -604,6 +616,12 @@ function forEachHydrologyNeighbor8(topology, id, visit) {
 }
 
 function forEachHydrologyNeighborRadius(topology, id, radius, visit) {
+  if (isGraphBackedGrid(topology.grid) && typeof topology.forEachNeighborRing === "function") {
+    topology.forEachNeighborRing(id, radius, (nid, depth) => {
+      visit(nid, depth, 0);
+    });
+    return;
+  }
   if (typeof topology.forEachNeighborRadius === "function") {
     topology.forEachNeighborRadius(id, radius, visit);
     return;
