@@ -265,6 +265,39 @@ const derivedTerrainTopologyGuardSpecs = [
   },
 ];
 
+const hydrologyTopologyGuardSpecs = [
+  {
+    name: "hydrologyDeriveUsesTopologyForGrid",
+    file: "src/sim/hydrology.js",
+    pattern:
+      /export\s+function\s+deriveHydrology\s*\(\s*world\s*,\s*terrain\s*,\s*options\s*=\s*\{\}\s*\)\s*\{[\s\S]*?const\s+\{\s*grid\s*\}\s*=\s*world[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?smoothHydroElevation\s*\(\s*topology\s*,\s*elev\s*\)[\s\S]*?assignFlowTargets\s*\(\s*topology/,
+  },
+  {
+    name: "hydrologyFlowTargetsUseTopologyDistance",
+    file: "src/sim/hydrology.js",
+    pattern:
+      /function\s+assignFlowTargets\s*\(\s*topology\s*,[\s\S]*?\)\s*\{[\s\S]*?forEachHydrologyNeighbor8\s*\(\s*topology\s*,\s*id[\s\S]*?const\s+distance\s*=\s*Math\.max\s*\(\s*1\s*,\s*topology\.distance\s*\(\s*id\s*,\s*nid\s*\)\s*\)[\s\S]*?const\s+drop\s*=\s*\(\s*hydroElevation\s*\[\s*id\s*\]\s*-\s*targetElevation\s*\)\s*\/\s*distance/,
+  },
+  {
+    name: "hydrologyNeighborWrappersPreferTopologyMethods",
+    file: "src/sim/hydrology.js",
+    pattern:
+      /function\s+forEachHydrologyNeighbor4\s*\(\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?typeof\s+topology\.forEachNeighbor4\s*===\s*["']function["'][\s\S]*?topology\.forEachNeighbor4\s*\(\s*id\s*,\s*visit\s*\)[\s\S]*?forEachNeighbor4ById\s*\(\s*topology\.grid\s*,\s*id\s*,\s*visit\s*\)[\s\S]*?function\s+forEachHydrologyNeighbor8\s*\(\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?typeof\s+topology\.forEachNeighbor8\s*===\s*["']function["'][\s\S]*?topology\.forEachNeighbor8\s*\(\s*id\s*,\s*visit\s*\)[\s\S]*?forEachNeighbor8ById\s*\(\s*topology\.grid\s*,\s*id\s*,\s*visit\s*\)[\s\S]*?function\s+forEachHydrologyNeighborRadius\s*\(\s*topology\s*,\s*id\s*,\s*radius\s*,\s*visit\s*\)\s*\{[\s\S]*?typeof\s+topology\.forEachNeighborRadius\s*===\s*["']function["'][\s\S]*?topology\.forEachNeighborRadius\s*\(\s*id\s*,\s*radius\s*,\s*visit\s*\)[\s\S]*?forEachNeighborRadiusById\s*\(\s*topology\.grid\s*,\s*id\s*,\s*radius\s*,\s*visit\s*\)/,
+  },
+  {
+    name: "hydrologyUsesMetricWeightsForGraphBackedAreas",
+    file: "src/sim/hydrology.js",
+    pattern:
+      /function\s+metricWeight\s*\(\s*grid\s*,\s*id\s*\)\s*\{[\s\S]*?if\s*\(\s*!isGraphBackedGrid\s*\(\s*grid\s*\)\s*\)\s*return\s+1[\s\S]*?grid\.area\?\.\[\s*id\s*\][\s\S]*?function\s+totalMetricArea\s*\(\s*grid\s*\)\s*\{[\s\S]*?if\s*\(\s*!isGraphBackedGrid\s*\(\s*grid\s*\)\s*\)\s*return\s+grid\.size\s*\?\?\s*0[\s\S]*?metricWeight\s*\(\s*grid\s*,\s*i\s*\)[\s\S]*?function\s+hydrologyFlowUnit\s*\(\s*grid\s*,\s*landArea\s*,\s*landCount\s*\)\s*\{[\s\S]*?if\s*\(\s*!isGraphBackedGrid\s*\(\s*grid\s*\)\s*\)\s*return\s+1[\s\S]*?landArea\s*\/\s*Math\.max\s*\(\s*1\s*,\s*landCount\s*\)/,
+  },
+  {
+    name: "hydrologyDiagnosticsUseAreaWeightedDenominators",
+    file: "src/sim/hydrology.js",
+    pattern:
+      /function\s+measureHydrologyDiagnostics\s*\(\s*\{[\s\S]*?const\s+graphBacked\s*=\s*isGraphBackedGrid\s*\(\s*grid\s*\)[\s\S]*?const\s+totalArea\s*=\s*graphBacked\s*\?\s*totalMetricArea\s*\(\s*grid\s*\)\s*:\s*size[\s\S]*?const\s+landDenominator\s*=\s*graphBacked\s*\?\s*landArea\s*:\s*landCount[\s\S]*?flowAssignedShare\s*:\s*shareValue\s*\(\s*graphBacked\s*\?\s*assignedArea\s*:\s*assigned\s*,\s*landDenominator\s*\)[\s\S]*?lakeCandidateShare\s*:\s*shareValue\s*\(\s*graphBacked\s*\?\s*lakeArea\s*:\s*lake\s*,\s*totalArea\s*\)/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -320,6 +353,8 @@ const legacyFallbackIndexGuardStatus = measureLegacyFallbackIndexGuards();
 const legacyFallbackIndexGuardReady = legacyFallbackIndexGuardStatus.missing.length === 0;
 const derivedTerrainTopologyGuardStatus = measureDerivedTerrainTopologyGuards();
 const derivedTerrainTopologyGuardReady = derivedTerrainTopologyGuardStatus.missing.length === 0;
+const hydrologyTopologyGuardStatus = measureHydrologyTopologyGuards();
+const hydrologyTopologyGuardReady = hydrologyTopologyGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -335,7 +370,8 @@ const result = {
     resolutionSamplingGuardReady &&
     projectionOutputIndexGuardReady &&
     legacyFallbackIndexGuardReady &&
-    derivedTerrainTopologyGuardReady,
+    derivedTerrainTopologyGuardReady &&
+    hydrologyTopologyGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -371,6 +407,10 @@ const result = {
   derivedTerrainTopologyGuardCount: derivedTerrainTopologyGuardStatus.guarded.length,
   derivedTerrainTopologyGuardMissing: derivedTerrainTopologyGuardStatus.missing,
   guardedDerivedTerrainTopologyPaths: derivedTerrainTopologyGuardStatus.guarded,
+  hydrologyTopologyGuardReady,
+  hydrologyTopologyGuardCount: hydrologyTopologyGuardStatus.guarded.length,
+  hydrologyTopologyGuardMissing: hydrologyTopologyGuardStatus.missing,
+  guardedHydrologyTopologyPaths: hydrologyTopologyGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -454,6 +494,7 @@ const result = {
     "projectionOutputIndexGuardReady means y * width + x occurrences in projection render/gate tools index output pixels or projected sample buffers, not simulation grid cells",
     "legacyFallbackIndexGuardReady means remaining id-to-xy rectangular index math is behind explicit rectangular-only helper guards or inside legacy helper tests",
     "derivedTerrainTopologyGuardReady means terrain shape, distance, smoothing, labels, and latitude use graph topology or cell metadata before legacy rectangular helpers",
+    "hydrologyTopologyGuardReady means hydrology flow, smoothing, diagnostics, and watershed accounting use topology methods and area weights before legacy rectangular helpers",
   ],
 };
 
@@ -664,6 +705,10 @@ function measureLegacyFallbackIndexGuards() {
 
 function measureDerivedTerrainTopologyGuards() {
   return measureRegexSpecs(derivedTerrainTopologyGuardSpecs, "missing graph-backed derived terrain topology guard");
+}
+
+function measureHydrologyTopologyGuards() {
+  return measureRegexSpecs(hydrologyTopologyGuardSpecs, "missing graph-backed hydrology topology guard");
 }
 
 function measureRegexSpecs(specs, missingReason) {
