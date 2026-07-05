@@ -624,6 +624,12 @@ const diagnosticToolchainGuardSpecs = [
       /["']foundationalTopologyToolchainGuardReady["'][\s\S]*?["']foundationalTopologyToolchainGuardCount["']/,
   },
   {
+    name: "sphericalRegressionCompactsPlateBoundaryMetrics",
+    file: "tools/spherical-regression-check.mjs",
+    pattern:
+      /["']meanPlateDriftRadians["'][\s\S]*?["']plateCoverageMin["'][\s\S]*?["']emptyPlateCount["'][\s\S]*?["']convergentShareOfActive["'][\s\S]*?["']transformShareOfActive["'][\s\S]*?["']faceSeamBoundaryContinuityRisk["']/,
+  },
+  {
     name: "sphericalRegressionCoverageReportsCoverageRatio",
     file: "tools/spherical-regression-coverage-check.mjs",
     pattern:
