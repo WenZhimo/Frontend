@@ -150,6 +150,7 @@ for (const check of selectedChecks) {
 }
 
 const timedOutChecks = results.filter((result) => result.timedOut).map((result) => result.name);
+const groupSummary = summarizeResultsByGroup(results);
 
 const summary = {
   valid: failures.length === 0,
@@ -165,6 +166,7 @@ const summary = {
   timedOutCheckCount: timedOutChecks.length,
   failures,
   timedOutChecks,
+  groupSummary,
   totalMs: Date.now() - startedAt,
   results,
 };
@@ -207,6 +209,29 @@ function runNodeCheck(check) {
 function groupMatches(group) {
   if (requestedGroups.includes("all")) return true;
   return requestedGroups.includes(group);
+}
+
+function summarizeResultsByGroup(results) {
+  const summary = {};
+  for (const result of results) {
+    const group = result.group ?? "unknown";
+    if (!summary[group]) {
+      summary[group] = {
+        checkCount: 0,
+        passedCheckCount: 0,
+        failedCheckCount: 0,
+        timedOutCheckCount: 0,
+        totalMs: 0,
+      };
+    }
+    const bucket = summary[group];
+    bucket.checkCount += 1;
+    bucket.passedCheckCount += result.valid ? 1 : 0;
+    bucket.failedCheckCount += result.valid ? 0 : 1;
+    bucket.timedOutCheckCount += result.timedOut ? 1 : 0;
+    bucket.totalMs += Number.isFinite(result.ms) ? result.ms : 0;
+  }
+  return summary;
 }
 
 function checkTimeoutForName(name) {
