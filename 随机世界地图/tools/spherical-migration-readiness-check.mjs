@@ -124,6 +124,27 @@ const scaleTopologyGuardSpecs = [
   },
 ];
 
+const topologyDiagnosticGuardSpecs = [
+  {
+    name: "topologyForGridRoutesCubedSphereToGraphTopology",
+    file: "src/sim/topology.js",
+    pattern:
+      /export\s+function\s+topologyForGrid\s*\(\s*grid\s*\)\s*\{[\s\S]*?grid\.topologyKind\s*===\s*["']cubed-sphere["'][\s\S]*?createSphericalTopology\s*\(\s*grid\s*\)[\s\S]*?createTopology\s*\(\s*grid\.width\s*,\s*grid\.height\s*,\s*grid\.topologyOptions\s*\)/,
+  },
+  {
+    name: "measureTopologyDiagnosticsRoutesGraphBackedToGraphDiagnostics",
+    file: "src/sim/topology.js",
+    pattern:
+      /export\s+function\s+measureTopologyDiagnostics\s*\(\s*world\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedTopology\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*return\s+measureGraphTopologyDiagnostics\s*\(\s*grid\s*,\s*topology\s*\)[\s\S]*?grid\.width/,
+  },
+  {
+    name: "graphTopologyDiagnosticsReportsNoManualRectangularAccess",
+    file: "src/sim/topology.js",
+    pattern:
+      /function\s+measureGraphTopologyDiagnostics\s*\(\s*grid\s*,\s*topology\s*\)\s*\{[\s\S]*?topologyManualAccessRisk\s*:\s*0\s*,[\s\S]*?topologyMigrationCoverage\s*:\s*1\s*,/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -169,6 +190,8 @@ const renderGuardStatus = measureRenderRectangularGuards();
 const renderRectangularPathGuardReady = renderGuardStatus.missing.length === 0;
 const scaleGuardStatus = measureScaleTopologyGuards();
 const scaleTopologyGuardReady = scaleGuardStatus.missing.length === 0;
+const topologyDiagnosticGuardStatus = measureTopologyDiagnosticGuards();
+const topologyDiagnosticGuardReady = topologyDiagnosticGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -179,7 +202,8 @@ const result = {
     helperMigrationReady &&
     coreRectangularHelperGuardReady &&
     renderRectangularPathGuardReady &&
-    scaleTopologyGuardReady,
+    scaleTopologyGuardReady &&
+    topologyDiagnosticGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -195,6 +219,10 @@ const result = {
   scaleTopologyGuardCount: scaleGuardStatus.guarded.length,
   scaleTopologyGuardMissing: scaleGuardStatus.missing,
   guardedScaleTopologyPaths: scaleGuardStatus.guarded,
+  topologyDiagnosticGuardReady,
+  topologyDiagnosticGuardCount: topologyDiagnosticGuardStatus.guarded.length,
+  topologyDiagnosticGuardMissing: topologyDiagnosticGuardStatus.missing,
+  guardedTopologyDiagnosticPaths: topologyDiagnosticGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -273,6 +301,7 @@ const result = {
     "coreRectangularHelperGuardReady means src/sim/grid.js rectangular coordinate helpers fail fast on graph-backed cubed-sphere grids",
     "renderRectangularPathGuardReady means rectangular render/WebGL paths explicitly route or reject graph-backed cubed-sphere grids before grid.width/grid.height usage",
     "scaleTopologyGuardReady means resolution scaling uses cubed-sphere faceSize while rectangular center helpers reject non-rectangular grids",
+    "topologyDiagnosticGuardReady means graph-backed cubed-sphere topology diagnostics route away from rectangular grid.width/grid.height checks and report zero manual-access risk",
   ],
 };
 
@@ -463,6 +492,10 @@ function measureRenderRectangularGuards() {
 
 function measureScaleTopologyGuards() {
   return measureRegexSpecs(scaleTopologyGuardSpecs, "missing topology-aware scale guard");
+}
+
+function measureTopologyDiagnosticGuards() {
+  return measureRegexSpecs(topologyDiagnosticGuardSpecs, "missing graph-backed topology diagnostic guard");
 }
 
 function measureRegexSpecs(specs, missingReason) {
