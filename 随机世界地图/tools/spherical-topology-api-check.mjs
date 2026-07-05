@@ -43,6 +43,7 @@ const result = {
   floodFillCount: countMask(flood),
   componentCount: components.componentCount,
   componentArea: components.componentAreas[1] ?? 0,
+  componentAreaTotalError: Math.abs((components.componentAreas[1] ?? 0) - 4 * Math.PI),
   distanceFiniteShare: finiteShare(distance),
   sampledValue,
   sampleId,
@@ -63,6 +64,7 @@ if (!localWrapperContract.gridNeighbor4WrapperUsesGraphNeighbors) result.valid =
 if (!localWrapperContract.gridNeighbor8WrapperUsesGraphNeighbors) result.valid = false;
 if (result.floodFillCount !== grid.size) result.valid = false;
 if (components.componentCount !== 1) result.valid = false;
+if (result.componentAreaTotalError > 1e-5) result.valid = false;
 if (result.distanceFiniteShare !== 1) result.valid = false;
 if (!result.sampleMatchesNearestCell) result.valid = false;
 if (!result.projectedFinite) result.valid = false;
