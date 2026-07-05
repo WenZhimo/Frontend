@@ -433,6 +433,57 @@ const geologyCoreTopologyGuardSpecs = [
   },
 ];
 
+const geologySurfaceTopologyGuardSpecs = [
+  {
+    name: "geologySeaLevelUsesGraphSlopeReliefAndAreaWeights",
+    file: "src/sim/geology/seaLevel.js",
+    pattern:
+      /function\s+localSlope\s*\(\s*grid\s*,\s*id\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*return\s+localGraphSlope\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*\)[\s\S]*?return\s+legacyLocalSlope\s*\(\s*grid\s*,\s*id\s*\)[\s\S]*?function\s+visitLocalReliefNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id[\s\S]*?function\s+metricArea\s*\(\s*grid\s*,\s*id\s*\)/,
+  },
+  {
+    name: "geologySedimentRoutesSlopeReliefAndStraightnessToGraph",
+    file: "src/sim/geology/sediment.js",
+    pattern:
+      /function\s+localSlope\s*\(\s*grid\s*,\s*field\s*,\s*id\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*return\s+localGraphSlope\s*\(\s*grid\s*,\s*topology\s*,\s*field\s*,\s*id\s*\)[\s\S]*?legacySedimentXyOf[\s\S]*?function\s+visitNeighbor4\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id[\s\S]*?function\s+measureSedimentStraightnessDiagnostics\s*\(\s*grid\s*,\s*field\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*return\s+measureGraphSedimentStraightnessDiagnostics\s*\(\s*grid\s*,\s*topology\s*,\s*field\s*\)/,
+  },
+  {
+    name: "geologySedimentGraphStraightnessUsesTopologyNeighbors",
+    file: "src/sim/geology/sediment.js",
+    pattern:
+      /function\s+measureGraphSedimentStraightnessDiagnostics\s*\(\s*grid\s*,\s*topology\s*,\s*field\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?sedimentBoundaryCorrelation[\s\S]*?sedimentGridAlignment[\s\S]*?sedimentNaturalSinkShare/,
+  },
+  {
+    name: "geologyRiftConnectivityUsesTopologyComponents",
+    file: "src/sim/geology/rift.js",
+    pattern:
+      /function\s+fillExternalSea\s*\(\s*grid\s*,\s*seaMask\s*,\s*externalSeaMask\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?const\s+components\s*=\s*topology\.connectedComponents\s*\(\s*seaMask\s*\)[\s\S]*?function\s+labelClosedBasins\s*\(\s*grid\s*,\s*seaMask\s*,\s*externalSeaMask\s*,\s*closedBasinId\s*\)\s*\{[\s\S]*?const\s+components\s*=\s*topology\.connectedComponents\s*\(\s*closedMask\s*\)/,
+  },
+  {
+    name: "geologyMarginsUseGraphDistancesAndNeighbors",
+    file: "src/sim/geology/margins.js",
+    pattern:
+      /function\s+marginDistanceFromSources\s*\(\s*grid\s*,\s*sourceMask\s*,\s*scratch\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*&&\s*typeof\s+topology\.shortestDistanceSeeds\s*===\s*["']function["']\s*\)\s*\{[\s\S]*?return\s+topology\.shortestDistanceSeeds\s*\(\s*sourceMask\s*\)[\s\S]*?function\s+visitMarginNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id/,
+  },
+  {
+    name: "geologyOrogenyUsesGraphNeighborhoodsAndInterfaces",
+    file: "src/sim/geology/orogeny.js",
+    pattern:
+      /function\s+visitOrogenyNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*x\s*,\s*y\s*,\s*radius\s*,\s*bend\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?forEachNeighborRadiusById\s*\(\s*grid\s*,\s*id[\s\S]*?legacyVisitOrogenyNeighborhood[\s\S]*?function\s+visitForelandNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?forEachNeighborRadiusById\s*\(\s*grid\s*,\s*id[\s\S]*?function\s+visitMountainInterfaceNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id/,
+  },
+  {
+    name: "geologyPipelineUsesGraphNeighborhoodVisitors",
+    file: "src/sim/geology/pipeline.js",
+    pattern:
+      /function\s+visitPassiveCrustNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?function\s+visitSmoothingNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?forEachNeighborRadiusById\s*\(\s*grid\s*,\s*id[\s\S]*?function\s+visitBentSmoothingNeighborhood\s*\(\s*grid\s*,\s*topology\s*,\s*id[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)/,
+  },
+  {
+    name: "geologyReliefBudgetUsesGraphSlopeAndTracksReliefRadius",
+    file: "src/sim/geology/reliefBudget.js",
+    pattern:
+      /function\s+localRelief\s*\(\s*grid\s*,\s*id\s*,\s*radius\s*\)\s*\{[\s\S]*?forEachNeighborRadiusById\s*\(\s*grid\s*,\s*id\s*,\s*radius[\s\S]*?function\s+localSlope\s*\(\s*grid\s*,\s*id\s*,\s*seaLevel\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?edgeLength[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -496,6 +547,8 @@ const geologyFeatureTopologyGuardStatus = measureGeologyFeatureTopologyGuards();
 const geologyFeatureTopologyGuardReady = geologyFeatureTopologyGuardStatus.missing.length === 0;
 const geologyCoreTopologyGuardStatus = measureGeologyCoreTopologyGuards();
 const geologyCoreTopologyGuardReady = geologyCoreTopologyGuardStatus.missing.length === 0;
+const geologySurfaceTopologyGuardStatus = measureGeologySurfaceTopologyGuards();
+const geologySurfaceTopologyGuardReady = geologySurfaceTopologyGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -515,7 +568,8 @@ const result = {
     hydrologyTopologyGuardReady &&
     worldTopologyGuardReady &&
     geologyFeatureTopologyGuardReady &&
-    geologyCoreTopologyGuardReady,
+    geologyCoreTopologyGuardReady &&
+    geologySurfaceTopologyGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -567,6 +621,10 @@ const result = {
   geologyCoreTopologyGuardCount: geologyCoreTopologyGuardStatus.guarded.length,
   geologyCoreTopologyGuardMissing: geologyCoreTopologyGuardStatus.missing,
   guardedGeologyCoreTopologyPaths: geologyCoreTopologyGuardStatus.guarded,
+  geologySurfaceTopologyGuardReady,
+  geologySurfaceTopologyGuardCount: geologySurfaceTopologyGuardStatus.guarded.length,
+  geologySurfaceTopologyGuardMissing: geologySurfaceTopologyGuardStatus.missing,
+  guardedGeologySurfaceTopologyPaths: geologySurfaceTopologyGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -654,6 +712,7 @@ const result = {
     "worldTopologyGuardReady means cubed-sphere createWorld requests route to the production adapter, force geology-v2, use area-weighted stats, and prefer spherical plate drift",
     "geologyFeatureTopologyGuardReady means geology-v2 features, axes, and transform/fracture diagnostics route graph-backed worlds through topology-aware stress, diffusion, smoothing, and segmentation paths",
     "geologyCoreTopologyGuardReady means boundaries, plates, crust advection, and oceanic ridge-age distance route graph-backed worlds through spherical plate, graph-neighbor, and heap-distance paths before legacy raster helpers",
+    "geologySurfaceTopologyGuardReady means sea level, sediment, rift connectivity, passive margins, orogeny, pipeline smoothing, and relief budget use topology-aware graph paths or explicitly tracked legacy radius helpers",
   ],
 };
 
@@ -880,6 +939,10 @@ function measureGeologyFeatureTopologyGuards() {
 
 function measureGeologyCoreTopologyGuards() {
   return measureRegexSpecs(geologyCoreTopologyGuardSpecs, "missing graph-backed geology core topology guard");
+}
+
+function measureGeologySurfaceTopologyGuards() {
+  return measureRegexSpecs(geologySurfaceTopologyGuardSpecs, "missing graph-backed geology surface topology guard");
 }
 
 function measureRegexSpecs(specs, missingReason) {
