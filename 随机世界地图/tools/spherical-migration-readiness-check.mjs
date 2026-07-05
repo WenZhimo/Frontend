@@ -375,7 +375,7 @@ const geologyFeatureTopologyGuardSpecs = [
     name: "geologyFeaturesGraphSegmentationUsesSphereCoordinates",
     file: "src/sim/geology/features.js",
     pattern:
-      /function\s+diffuseFeatureGraph\s*\(\s*grid\s*,\s*topology\s*,\s*source\s*,\s*spread\s*,\s*radius\s*,\s*gain\s*,\s*options\s*\)\s*\{[\s\S]*?forEachNeighborRadiusById\s*\(\s*grid\s*,\s*id[\s\S]*?graphSegmentMask\s*\(\s*grid\s*,\s*id\s*,\s*nid\s*,\s*weak\s*\)[\s\S]*?function\s+graphSegmentMask\s*\(\s*grid\s*,\s*sourceId\s*,\s*targetId\s*,\s*weakness\s*\)\s*\{[\s\S]*?grid\.positionX\?\.\[\s*sourceId\s*\][\s\S]*?grid\.positionY\?\.\[\s*sourceId\s*\][\s\S]*?grid\.positionZ\?\.\[\s*sourceId\s*\][\s\S]*?grid\.positionX\?\.\[\s*targetId\s*\][\s\S]*?grid\.positionY\?\.\[\s*targetId\s*\][\s\S]*?grid\.positionZ\?\.\[\s*targetId\s*\][\s\S]*?Math\.atan2/,
+      /function\s+diffuseFeatureGraph\s*\(\s*grid\s*,\s*topology\s*,\s*source\s*,\s*spread\s*,\s*radius\s*,\s*gain\s*,\s*options\s*\)\s*\{[\s\S]*?topology\.forEachNeighborRing\s*\(\s*id\s*,\s*radius\s*\+\s*arcOffsetDepth[\s\S]*?graphSegmentMask\s*\(\s*grid\s*,\s*id\s*,\s*nid\s*,\s*weak\s*\)[\s\S]*?function\s+graphSegmentMask\s*\(\s*grid\s*,\s*sourceId\s*,\s*targetId\s*,\s*weakness\s*\)\s*\{[\s\S]*?grid\.positionX\?\.\[\s*sourceId\s*\][\s\S]*?grid\.positionY\?\.\[\s*sourceId\s*\][\s\S]*?grid\.positionZ\?\.\[\s*sourceId\s*\][\s\S]*?grid\.positionX\?\.\[\s*targetId\s*\][\s\S]*?grid\.positionY\?\.\[\s*targetId\s*\][\s\S]*?grid\.positionZ\?\.\[\s*targetId\s*\][\s\S]*?Math\.atan2/,
   },
   {
     name: "geologyAxesRouteNaturalizationToGraphPath",
