@@ -1017,6 +1017,11 @@ function compactMetrics(name, parsed) {
     "uiDefaultTopologyMode",
     "uiDefaultGridKind",
     "uiDefaultGraphBacked",
+    "uiDebugTopologyMode",
+    "uiDebugProjectionMode",
+    "uiDebugFaceSize",
+    "uiDebugGridKind",
+    "uiDebugGraphBacked",
     "artifactScanValid",
     "perfProfileValid",
     "appBundleBytes",
@@ -1199,6 +1204,12 @@ function compactMetrics(name, parsed) {
     picked.uiDefaultTopologyMode = parsed.defaultWorld?.topologyMode;
     picked.uiDefaultGridKind = parsed.defaultWorld?.gridKind;
     picked.uiDefaultGraphBacked = parsed.defaultWorld?.graphBacked;
+    picked.uiDebugTopologyMode = parsed.debugWorld?.topologyMode;
+    picked.uiDebugProjectionMode = parsed.debugWorld?.projectionMode;
+    picked.uiDebugFaceSize = parsed.debugWorld?.faceSize;
+    picked.uiDebugGridKind = parsed.debugWorld?.gridKind;
+    picked.uiDebugGraphBacked = parsed.debugWorld?.graphBacked;
+    picked.uiDebugGridSize = parsed.debugWorld?.gridSize;
     picked.uiControlTopologyPresent = parsed.controlsPresent?.topologyMode;
     picked.uiControlProjectionPresent = parsed.controlsPresent?.projectionMode;
     picked.uiControlFaceSizePresent = parsed.controlsPresent?.faceSize;
