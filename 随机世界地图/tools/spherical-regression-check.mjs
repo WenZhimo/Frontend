@@ -1195,6 +1195,8 @@ function compactMetrics(name, parsed) {
       baseline?.topologyDiagnostics?.connectedComponentTopologyValid;
     picked.resolutionCubedSphereConnectedComponentAreaError =
       baseline?.topologyDiagnostics?.connectedComponentAreaError;
+    picked.resolutionCubedSphereFaceSeamContinuityRisk =
+      baseline?.topologyDiagnostics?.faceSeamContinuityRisk;
     picked.resolutionCubedSphereTopologyManualAccessRisk =
       baseline?.topologyDiagnostics?.topologyManualAccessRisk;
     picked.resolutionCubedSphereTopologyMigrationCoverage =
