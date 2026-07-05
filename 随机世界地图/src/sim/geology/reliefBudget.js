@@ -192,6 +192,16 @@ function targetReliefForWorld(params, stats) {
 function localRelief(grid, id, radius) {
   let min = grid.elev[id];
   let max = grid.elev[id];
+  const topology = topologyForGrid(grid);
+  if (isGraphBackedGrid(grid, topology)) {
+    topology.forEachNeighborRing(id, radius, (nid) => {
+      const h = grid.elev[nid];
+      if (h < min) min = h;
+      if (h > max) max = h;
+    });
+    return max - min;
+  }
+
   forEachNeighborRadiusById(grid, id, radius, (nid) => {
     const h = grid.elev[nid];
     if (h < min) min = h;
