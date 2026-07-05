@@ -683,12 +683,6 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
-function legacyLocalAverage8(grid, field, x, y) {
-  const id = legacySedimentIndexOf(grid, x, y);
-  if (id < 0) return 0;
-  return localAverage8ById(grid, field, id);
-}
-
 function legacySedimentXyOf(grid, id) {
   return xyOf(grid, id);
 }
