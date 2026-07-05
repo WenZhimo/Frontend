@@ -5250,7 +5250,7 @@
         const weak = weakness[nid];
         if (weak < (options.minWeakness ?? 0) && targetDistance > 1.5) return;
         if (options.segmented) {
-          if (weak < 0.38 && graphSegmentMask(id, nid, weak) < 0.8) return;
+          if (weak < 0.38 && graphSegmentMask(grid, id, nid, weak) < 0.8) return;
         }
         if (options.arcOffset && edgeDistance < arcOffsetDepth) return;
         const falloff = Math.max(0, 1 - targetDistance / radiusLimit);
@@ -5286,9 +5286,26 @@
     return indexOf(grid, x, y);
   }
 
-  function graphSegmentMask(sourceId, targetId, weakness) {
-    const coarse = hash2(Math.floor((targetId + 17) / 19), Math.floor((sourceId + 31) / 23));
-    const fine = hash2(targetId + 11, sourceId + 7);
+  function graphSegmentMask(grid, sourceId, targetId, weakness) {
+    const sx = grid.positionX?.[sourceId] ?? 0;
+    const sy = grid.positionY?.[sourceId] ?? 0;
+    const sz = grid.positionZ?.[sourceId] ?? 1;
+    const tx = grid.positionX?.[targetId] ?? 0;
+    const ty = grid.positionY?.[targetId] ?? 0;
+    const tz = grid.positionZ?.[targetId] ?? 1;
+    const mx = sx + tx;
+    const my = sy + ty;
+    const mz = sz + tz;
+    const length = Math.hypot(mx, my, mz) || 1;
+    const lat = Math.asin(Math.max(-1, Math.min(1, my / length)));
+    const lon = Math.atan2(mz / length, mx / length);
+    const coarseLon = Math.floor((lon + Math.PI) * 5.6);
+    const coarseLat = Math.floor((lat + Math.PI / 2) * 7.2);
+    const fineLon = Math.floor((lon + Math.PI) * 15.4);
+    const fineLat = Math.floor((lat + Math.PI / 2) * 18.8);
+    const sourceBand = Math.floor((Math.atan2(sz, sx) + Math.PI) * 4.1);
+    const coarse = hash2(coarseLon + sourceBand * 13, coarseLat + sourceBand * 17);
+    const fine = hash2(fineLon + sourceBand * 19, fineLat + sourceBand * 23);
     const n = coarse * 0.72 + fine * 0.28;
     return n < 0.58 + weakness * 0.28 ? 1 : 0.65;
   }
