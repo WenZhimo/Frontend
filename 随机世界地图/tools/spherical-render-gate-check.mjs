@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const seedText = process.argv[2] ?? "龙骨海-纪元7";
@@ -72,6 +72,12 @@ const debugRenderCheck = runJsonCheck("geology-debug-render", [
   "flowAccumulation,finalElevation,externalSeaMask,topologyFace,debugFaceSeamRisk,debugProjectionSampling",
 ]);
 
+const finalElevationStats = ppmStats(finalElevationDebugOutput);
+const externalSeaStats = ppmStats(externalSeaDebugOutput);
+const topologyStats = ppmStats(topologyDebugOutput);
+const seamStats = ppmStats(seamDebugOutput);
+const samplingStats = ppmStats(samplingDebugOutput);
+
 const checks = {
   renderCheckValid: renderCheck.status === 0 && renderCheck.parsed !== null,
   renderUsesSphericalProjection: renderCheck.parsed?.renderBackend === "cpu-spherical-projection-reference",
@@ -97,6 +103,11 @@ const checks = {
   topologyDebugOutputExists: existsSync(topologyDebugOutput),
   seamDebugOutputExists: existsSync(seamDebugOutput),
   samplingDebugOutputExists: existsSync(samplingDebugOutput),
+  finalElevationDebugInformative: finalElevationStats.uniqueColorCount > 24 && finalElevationStats.nonBackgroundShare > 0.65,
+  externalSeaDebugInformative: externalSeaStats.uniqueColorCount >= 2 && externalSeaStats.nonBackgroundShare > 0.08,
+  topologyFaceDebugShowsFaces: topologyStats.uniqueColorCount >= 6 && topologyStats.nonBackgroundShare > 0.8,
+  faceSeamRiskDebugShowsSeams: seamStats.highlightShare > 0.004 && seamStats.uniqueColorCount >= 3,
+  projectionSamplingDebugShowsFaceGrid: samplingStats.uniqueColorCount >= 4 && samplingStats.nonBackgroundShare > 0.8,
 };
 
 const failures = Object.entries(checks)
@@ -114,6 +125,13 @@ const result = {
   renderCheck: compactRenderResult(renderCheck),
   gpuRenderCheck: compactGpuResult(gpuRenderCheck),
   debugRenderCheck: compactDebugResult(debugRenderCheck),
+  debugLayerStats: {
+    finalElevation: finalElevationStats,
+    externalSeaMask: externalSeaStats,
+    topologyFace: topologyStats,
+    debugFaceSeamRisk: seamStats,
+    debugProjectionSampling: samplingStats,
+  },
 };
 
 cleanup();
@@ -181,6 +199,74 @@ function compactDebugResult(result) {
     outputCount: Array.isArray(parsed.outputs) ? parsed.outputs.length : null,
     stderr: result.stderr,
   };
+}
+
+function ppmStats(path) {
+  if (!existsSync(path)) return emptyPpmStats();
+  const buffer = readFileSync(path);
+  const header = parsePpmHeader(buffer);
+  if (!header) return emptyPpmStats();
+  const pixels = buffer.subarray(header.offset);
+  const pixelCount = Math.max(1, header.width * header.height);
+  const colors = new Set();
+  let backgroundPixels = 0;
+  let highlightedPixels = 0;
+  const background = [31, 34, 36];
+  for (let i = 0; i + 2 < pixels.length; i += 3) {
+    const r = pixels[i];
+    const g = pixels[i + 1];
+    const b = pixels[i + 2];
+    colors.add(`${r},${g},${b}`);
+    if (Math.abs(r - background[0]) + Math.abs(g - background[1]) + Math.abs(b - background[2]) <= 8) {
+      backgroundPixels += 1;
+    }
+    if (r + g + b > 180 && Math.max(r, g, b) - Math.min(r, g, b) > 35) highlightedPixels += 1;
+  }
+  return {
+    width: header.width,
+    height: header.height,
+    uniqueColorCount: colors.size,
+    backgroundShare: backgroundPixels / pixelCount,
+    nonBackgroundShare: 1 - backgroundPixels / pixelCount,
+    highlightShare: highlightedPixels / pixelCount,
+  };
+}
+
+function emptyPpmStats() {
+  return {
+    width: 0,
+    height: 0,
+    uniqueColorCount: 0,
+    backgroundShare: 1,
+    nonBackgroundShare: 0,
+    highlightShare: 0,
+  };
+}
+
+function parsePpmHeader(buffer) {
+  const tokens = [];
+  let offset = 0;
+  while (tokens.length < 4 && offset < buffer.length) {
+    while (offset < buffer.length && isWhitespace(buffer[offset])) offset += 1;
+    if (buffer[offset] === 35) {
+      while (offset < buffer.length && buffer[offset] !== 10) offset += 1;
+      continue;
+    }
+    const start = offset;
+    while (offset < buffer.length && !isWhitespace(buffer[offset])) offset += 1;
+    tokens.push(buffer.subarray(start, offset).toString("ascii"));
+  }
+  while (offset < buffer.length && isWhitespace(buffer[offset])) offset += 1;
+  if (tokens[0] !== "P6") return null;
+  const width = Number(tokens[1]);
+  const height = Number(tokens[2]);
+  const max = Number(tokens[3]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || max !== 255) return null;
+  return { width, height, offset };
+}
+
+function isWhitespace(byte) {
+  return byte === 9 || byte === 10 || byte === 13 || byte === 32;
 }
 
 function cleanup() {
