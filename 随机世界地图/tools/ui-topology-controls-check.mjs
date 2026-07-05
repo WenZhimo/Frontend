@@ -64,9 +64,9 @@ const sphericalAutoElements = createMockElements({
 bindControlLabels(sphericalAutoElements);
 const sphericalAutoParams = readParams(sphericalAutoElements);
 const sphericalAutoWorld = createWorld(sphericalAutoParams);
-expect(sphericalAutoParams.faceSize === 64, "interactive cubed-sphere auto face size uses safe preview size");
-expect(sphericalAutoWorld.params.faceSize === 64, "interactive cubed-sphere auto world keeps safe preview size");
-expect(sphericalAutoWorld.grid.size === 6 * 64 * 64, "interactive cubed-sphere auto avoids high-cost default grid");
+expect(sphericalAutoParams.faceSize === 24, "interactive cubed-sphere auto face size uses fast preview size");
+expect(sphericalAutoWorld.params.faceSize === 24, "interactive cubed-sphere auto world keeps fast preview size");
+expect(sphericalAutoWorld.grid.size === 6 * 24 * 24, "interactive cubed-sphere auto avoids high-cost default grid");
 
 const debugElements = createMockElements({
   topologyMode: "cubed-sphere",
