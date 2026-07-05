@@ -145,6 +145,27 @@ const topologyDiagnosticGuardSpecs = [
   },
 ];
 
+const resolutionSamplingGuardSpecs = [
+  {
+    name: "resolutionCheckRoutesGraphBackedToProjectedSampling",
+    file: "tools/resolution-check.mjs",
+    pattern:
+      /function\s+sampleWorld\s*\(\s*world\s*,\s*width\s*,\s*height\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*world\.grid\s*\)\s*\)\s*return\s+sampleProjectedWorld\s*\(\s*world\s*,\s*width\s*,\s*height\s*\)[\s\S]*?return\s+sampleRectangularWorld\s*\(\s*world\s*,\s*width\s*,\s*height\s*\)/,
+  },
+  {
+    name: "resolutionCheckProjectedSamplingUsesVectorNearestCell",
+    file: "tools/resolution-check.mjs",
+    pattern:
+      /function\s+sampleProjectedWorld\s*\(\s*world\s*,\s*width\s*,\s*height\s*\)\s*\{[\s\S]*?projectionSampleToVec3\s*\(\s*x\s*,\s*y\s*,\s*width\s*,\s*height\s*,\s*projectionMode\s*\)[\s\S]*?nearestCellByVector\s*\(\s*world\.grid\s*,\s*sample\.x\s*,\s*sample\.y\s*,\s*sample\.z\s*\)[\s\S]*?function\s+sampleRectangularWorld/,
+  },
+  {
+    name: "resolutionGateUsesProjectedWorldSamples",
+    file: "tools/spherical-resolution-gate-check.mjs",
+    pattern:
+      /const\s+baseline\s*=\s*sampleProjectedWorld\s*\(\s*baselineWorld\s*,\s*sampleWidth\s*,\s*sampleHeight\s*,\s*projectionMode\s*\)[\s\S]*?const\s+sample\s*=\s*sampleProjectedWorld\s*\(\s*world\s*,\s*sampleWidth\s*,\s*sampleHeight\s*,\s*projectionMode\s*\)/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -192,6 +213,8 @@ const scaleGuardStatus = measureScaleTopologyGuards();
 const scaleTopologyGuardReady = scaleGuardStatus.missing.length === 0;
 const topologyDiagnosticGuardStatus = measureTopologyDiagnosticGuards();
 const topologyDiagnosticGuardReady = topologyDiagnosticGuardStatus.missing.length === 0;
+const resolutionSamplingGuardStatus = measureResolutionSamplingGuards();
+const resolutionSamplingGuardReady = resolutionSamplingGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -203,7 +226,8 @@ const result = {
     coreRectangularHelperGuardReady &&
     renderRectangularPathGuardReady &&
     scaleTopologyGuardReady &&
-    topologyDiagnosticGuardReady,
+    topologyDiagnosticGuardReady &&
+    resolutionSamplingGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -223,6 +247,10 @@ const result = {
   topologyDiagnosticGuardCount: topologyDiagnosticGuardStatus.guarded.length,
   topologyDiagnosticGuardMissing: topologyDiagnosticGuardStatus.missing,
   guardedTopologyDiagnosticPaths: topologyDiagnosticGuardStatus.guarded,
+  resolutionSamplingGuardReady,
+  resolutionSamplingGuardCount: resolutionSamplingGuardStatus.guarded.length,
+  resolutionSamplingGuardMissing: resolutionSamplingGuardStatus.missing,
+  guardedResolutionSamplingPaths: resolutionSamplingGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -302,6 +330,7 @@ const result = {
     "renderRectangularPathGuardReady means rectangular render/WebGL paths explicitly route or reject graph-backed cubed-sphere grids before grid.width/grid.height usage",
     "scaleTopologyGuardReady means resolution scaling uses cubed-sphere faceSize while rectangular center helpers reject non-rectangular grids",
     "topologyDiagnosticGuardReady means graph-backed cubed-sphere topology diagnostics route away from rectangular grid.width/grid.height checks and report zero manual-access risk",
+    "resolutionSamplingGuardReady means graph-backed resolution comparisons sample through projection vectors and reserve rectangular bilinear sampling for legacy grids",
   ],
 };
 
@@ -496,6 +525,10 @@ function measureScaleTopologyGuards() {
 
 function measureTopologyDiagnosticGuards() {
   return measureRegexSpecs(topologyDiagnosticGuardSpecs, "missing graph-backed topology diagnostic guard");
+}
+
+function measureResolutionSamplingGuards() {
+  return measureRegexSpecs(resolutionSamplingGuardSpecs, "missing graph-backed resolution sampling guard");
 }
 
 function measureRegexSpecs(specs, missingReason) {
