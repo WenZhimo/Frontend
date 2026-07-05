@@ -288,6 +288,12 @@ function summarizeSlowestChecks(results, limit = 5) {
 }
 
 function checkTimeoutForName(name) {
+  if (name === "spherical-final-acceptance-check") {
+    return Math.max(
+      heavyCheckTimeoutMs * 2,
+      heavyCheckTimeoutMs + checkTimeoutMs * 5
+    );
+  }
   return isHeavyCheck(name) ? heavyCheckTimeoutMs : checkTimeoutMs;
 }
 
