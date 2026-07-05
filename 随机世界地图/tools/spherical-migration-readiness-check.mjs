@@ -57,6 +57,45 @@ const guardedCoreHelpers = [
   "sampleGridBilinear",
 ];
 
+const renderRectangularGuardSpecs = [
+  {
+    name: "webglRendererRejectsGraphBackedGrid",
+    file: "src/render/gpuMapRenderer.js",
+    pattern:
+      /if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*\)\s*\)\s*\{[\s\S]*?only accepts rectangular grids[\s\S]*?ensureSize\s*\(\s*grid\.width\s*,\s*grid\.height\s*\)/,
+  },
+  {
+    name: "renderBackendRoutesSphericalToCpuProjection",
+    file: "src/render/renderBackend.js",
+    pattern:
+      /if\s*\(\s*isGraphBackedGrid\s*\(\s*world\.grid\s*\)\s*\)\s*\{[\s\S]*?cpuRenderer\.render\s*\(\s*world\s*\)[\s\S]*?world\.renderBackend\s*=\s*["']cpu-spherical-projection["']/,
+  },
+  {
+    name: "cpuRendererUsesProjectionForGraphBackedGrid",
+    file: "src/render/cpuMapRenderer.js",
+    pattern:
+      /if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*\)\s*\)\s*\{[\s\S]*?renderSphericalWorld\s*\(\s*world\s*\)[\s\S]*?renderRectangularWorld\s*\(\s*world\s*\)/,
+  },
+  {
+    name: "renderCheckProjectsGraphBackedGrid",
+    file: "tools/render-check.mjs",
+    pattern:
+      /if\s*\(\s*isGraphBackedGrid\s*\(\s*world\.grid\s*\)\s*\)\s*\{[\s\S]*?renderSphericalField[\s\S]*?cpu-spherical-projection-reference[\s\S]*?world\.grid\.width/,
+  },
+  {
+    name: "gpuRenderCheckSkipsGraphBackedWebgl",
+    file: "tools/gpu-render-check.mjs",
+    pattern:
+      /reason:\s*isGraphBackedGrid\s*\(\s*world\.grid\s*\)[\s\S]*?renderSphericalField[\s\S]*?world\.grid\.width/,
+  },
+  {
+    name: "debugRenderProjectsGraphBackedGrid",
+    file: "tools/geology-debug-render.mjs",
+    pattern:
+      /if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*\)\s*\)\s*\{[\s\S]*?writeProjectedPpm\s*\(\s*currentWorld\s*,\s*output\s*,\s*colorFn\s*\)[\s\S]*?grid\.width\s*\*\s*grid\.height/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -98,12 +137,14 @@ const graphBranchFallbackByFile = summarizeByFile(graphBranchFallbackMatches);
 const migrationHelperRiskByFile = summarizeByFile(migrationHelperRiskMatches);
 const coreHelperGuardStatus = measureCoreHelperGuards();
 const coreRectangularHelperGuardReady = coreHelperGuardStatus.missing.length === 0;
+const renderGuardStatus = measureRenderRectangularGuards();
+const renderRectangularPathGuardReady = renderGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
 const helperMigrationReady = migrationHelperRiskMatches.length === 0;
 const result = {
-  valid: productionAdapterReady && helperMigrationReady && coreRectangularHelperGuardReady,
+  valid: productionAdapterReady && helperMigrationReady && coreRectangularHelperGuardReady && renderRectangularPathGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -111,6 +152,10 @@ const result = {
   coreRectangularHelperGuardCount: coreHelperGuardStatus.guarded.length,
   coreRectangularHelperGuardMissing: coreHelperGuardStatus.missing,
   guardedCoreRectangularHelpers: coreHelperGuardStatus.guarded,
+  renderRectangularPathGuardReady,
+  renderRectangularPathGuardCount: renderGuardStatus.guarded.length,
+  renderRectangularPathGuardMissing: renderGuardStatus.missing,
+  guardedRenderRectangularPaths: renderGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -187,6 +232,7 @@ const result = {
     "legacyHelperRawCount tracks all scanned topology helper usage; explicitLegacyWrapperCount tracks legacy compatibility wrappers",
     "legacyHelperRiskCount and migrationHelperRiskCount exclude explicit legacy wrapper bodies; possibleSphericalPathHelperCount is one risk subtype",
     "coreRectangularHelperGuardReady means src/sim/grid.js rectangular coordinate helpers fail fast on graph-backed cubed-sphere grids",
+    "renderRectangularPathGuardReady means rectangular render/WebGL paths explicitly route or reject graph-backed cubed-sphere grids before grid.width/grid.height usage",
   ],
 };
 
@@ -354,6 +400,25 @@ function callsGuardedHelper(body, directlyGuarded) {
     if (new RegExp(`\\b${helper}\\s*\\(\\s*grid\\b`).test(body)) return true;
   }
   return false;
+}
+
+function measureRenderRectangularGuards() {
+  const guarded = [];
+  const missing = [];
+  for (const spec of renderRectangularGuardSpecs) {
+    const file = path.join(root, spec.file);
+    if (!existsSync(file)) {
+      missing.push({ name: spec.name, file: spec.file, reason: "file missing" });
+      continue;
+    }
+    const text = readFileSync(file, "utf8");
+    if (spec.pattern.test(text)) {
+      guarded.push({ name: spec.name, file: spec.file });
+    } else {
+      missing.push({ name: spec.name, file: spec.file, reason: "missing graph-backed guard before rectangular render path" });
+    }
+  }
+  return { guarded, missing };
 }
 
 function exportedFunctionBody(text, helper) {
