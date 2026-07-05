@@ -1,5 +1,14 @@
 import { BoundaryType } from "../sim/tectonics.js";
-import { renderSphericalField } from "./sphericalProjectionRenderer.js";
+import { renderSphericalDebugLayer, renderSphericalField } from "./sphericalProjectionRenderer.js";
+
+const SPHERICAL_DEBUG_PROJECTION_MODES = new Set([
+  "debug-face",
+  "debug-cell-id",
+  "debug-neighbor-count",
+  "debug-area",
+  "debug-face-seam-risk",
+  "debug-projection-sampling",
+]);
 
 export function createCpuMapRenderer(canvas) {
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -63,24 +72,31 @@ export function createCpuMapRenderer(canvas) {
       imageData = null;
     }
     if (!imageData) imageData = ctx.createImageData(width, height);
-    const rendered = renderSphericalField(grid, grid.elev, {
-      width,
-      height,
-      projectionMode: world.params?.projectionMode ?? "equirectangular",
-      colorRamp: (value, cell) => {
-        const color = colorForElevation(value - world.seaLevel);
-        if (world.params.showBoundaries === false || !hasActiveBoundary(grid, cell)) return color;
-        const overlayStrength = boundaryOverlayStrength(grid, cell);
-        if (overlayStrength <= 0) return color;
-        if (grid.btype[cell] === BoundaryType.CONVERGENT) {
-          return blendedColor(color, [231, 86, 66], 0.55 * overlayStrength);
-        }
-        if (grid.btype[cell] === BoundaryType.DIVERGENT) {
-          return blendedColor(color, [77, 195, 215], 0.5 * overlayStrength);
-        }
-        return blendedColor(color, [236, 196, 83], 0.46 * overlayStrength);
-      },
-    });
+    const projectionMode = world.params?.projectionMode ?? "equirectangular";
+    const rendered = SPHERICAL_DEBUG_PROJECTION_MODES.has(projectionMode)
+      ? renderSphericalDebugLayer(grid, projectionMode, {
+          width,
+          height,
+          projectionMode: "equirectangular",
+        })
+      : renderSphericalField(grid, grid.elev, {
+          width,
+          height,
+          projectionMode,
+          colorRamp: (value, cell) => {
+            const color = colorForElevation(value - world.seaLevel);
+            if (world.params.showBoundaries === false || !hasActiveBoundary(grid, cell)) return color;
+            const overlayStrength = boundaryOverlayStrength(grid, cell);
+            if (overlayStrength <= 0) return color;
+            if (grid.btype[cell] === BoundaryType.CONVERGENT) {
+              return blendedColor(color, [231, 86, 66], 0.55 * overlayStrength);
+            }
+            if (grid.btype[cell] === BoundaryType.DIVERGENT) {
+              return blendedColor(color, [77, 195, 215], 0.5 * overlayStrength);
+            }
+            return blendedColor(color, [236, 196, 83], 0.46 * overlayStrength);
+          },
+        });
     imageData.data.set(rendered.pixels);
     ctx.putImageData(imageData, 0, 0);
   }
