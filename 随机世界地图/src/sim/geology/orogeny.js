@@ -155,7 +155,7 @@ function broadenOldOrogeny(grid) {
     const smooth = total / weight;
     const ageSmooth = ageTotal / weight;
     const segment = graphBacked
-      ? graphSegmentMask(id, weakness[id])
+      ? graphSegmentMask(grid, id, weakness[id])
       : segmentMask(x, y, width ?? grid.faceSize ?? 1, weakness[id]);
     const mix = Math.min(0.42, 0.1 + inactive * 0.26);
     oldOrogeny[id] = Math.min(1, Math.max(sourceMemory, scratch[id] * (1 - mix) + smooth * mix) * segment);
@@ -223,9 +223,19 @@ function segmentMask(x, y, width, weakness) {
   return noise <= keep ? 1 : 0.82;
 }
 
-function graphSegmentMask(id, weakness) {
-  const coarse = hash2(Math.floor((id + 29) / 17), Math.floor((id + 71) / 31));
-  const fine = hash2(id + 13, id * 3 + 5);
+function graphSegmentMask(grid, id, weakness) {
+  const x = grid.positionX?.[id] ?? 0;
+  const y = grid.positionY?.[id] ?? 0;
+  const z = grid.positionZ?.[id] ?? 1;
+  const lat = Math.asin(Math.max(-1, Math.min(1, y)));
+  const lon = Math.atan2(z, x);
+  const coarseLon = Math.floor((lon + Math.PI) * 4.75);
+  const coarseLat = Math.floor((lat + Math.PI / 2) * 6.25);
+  const fineLon = Math.floor((lon + Math.PI) * 13.5);
+  const fineLat = Math.floor((lat + Math.PI / 2) * 17.5);
+  const hemisphereBand = y >= 0 ? 19 : 41;
+  const coarse = hash2(coarseLon + hemisphereBand, coarseLat + hemisphereBand * 3);
+  const fine = hash2(fineLon + hemisphereBand * 5, fineLat + hemisphereBand * 7);
   const noise = coarse * 0.7 + fine * 0.3;
   const keep = weakness > 0.54 ? 0.9 : weakness > 0.38 ? 0.78 : 0.66;
   return noise <= keep ? 1 : 0.82;
