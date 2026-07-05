@@ -145,6 +145,9 @@ const layers = {
   oldBoundaryCorrelation: colorOldBoundaryCorrelation,
   ageBandStraightnessRisk: colorField("ageBandStraightnessRisk", 0, 1, [44, 178, 185], [226, 67, 58]),
   topologyFace: colorTopologyFace,
+  debugCellId: colorDebugCellId,
+  debugNeighborCount: colorDebugNeighborCount,
+  debugArea: colorDebugArea,
   debugFaceSeamRisk: colorDebugFaceSeamRisk,
   debugProjectionSampling: colorDebugProjectionSampling,
 };
@@ -229,6 +232,11 @@ function writeProjectedPpm(currentWorld, output, colorFn) {
 
 function isGraphBackedGrid(grid) {
   return Boolean(grid.topologyOptions?.graphBacked || grid.topologyKind === "cubed-sphere");
+}
+
+function metricArea(grid, id) {
+  const area = grid.area?.[id];
+  return Number.isFinite(area) && area > 0 ? area : 1;
 }
 
 function parseResolution(value, fallbackWidth, fallbackHeight) {
@@ -415,6 +423,41 @@ function colorTopologyFace(world, i) {
     [70, 190, 195],
   ];
   return palette[face % palette.length];
+}
+
+function colorDebugCellId(world, i) {
+  const { grid } = world;
+  if (!isGraphBackedGrid(grid)) return [31, 34, 36];
+  const face = grid.face?.[i] ?? 0;
+  const u = grid.faceU?.[i] ?? 0;
+  const v = grid.faceV?.[i] ?? 0;
+  const hash = (i * 1103515245 + face * 1013904223 + u * 374761393 + v * 668265263) >>> 0;
+  return [
+    45 + (hash & 0x7f),
+    55 + ((hash >>> 8) & 0x7f),
+    65 + ((hash >>> 16) & 0x7f),
+  ];
+}
+
+function colorDebugNeighborCount(world, i) {
+  const { grid } = world;
+  if (!isGraphBackedGrid(grid)) return [31, 34, 36];
+  const count = grid.neighborCount?.[i] ?? 0;
+  if (count <= 2) return [228, 76, 68];
+  if (count === 3) return [235, 189, 76];
+  if (count === 4) return [72, 178, 112];
+  return [82, 174, 224];
+}
+
+function colorDebugArea(world, i) {
+  const { grid } = world;
+  if (!isGraphBackedGrid(grid)) return [31, 34, 36];
+  const area = metricArea(grid, i);
+  const faceSize = Math.max(1, grid.faceSize ?? 1);
+  const ideal = (4 * Math.PI) / Math.max(1, 6 * faceSize * faceSize);
+  const ratio = area / Math.max(ideal, Number.EPSILON);
+  if (ratio < 1) return lerpColor([40, 84, 156], [50, 60, 65], ratio);
+  return lerpColor([50, 60, 65], [230, 188, 82], Math.min(1, ratio - 1));
 }
 
 function colorDebugFaceSeamRisk(world, i) {
