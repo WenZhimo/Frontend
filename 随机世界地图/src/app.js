@@ -7568,7 +7568,7 @@
         if (remaining <= 0) return;
 
         const centerElev = elev[id];
-        const deterministicJitter = 0.82 + (((id * 1103515245 + pass * 1013904223) >>> 0) % 997) / 997 * 0.18;
+        const deterministicJitter = sedimentTransportJitter(grid, id, pass);
         let weightSum = 0;
         let fallback = -1;
         let fallbackScore = -Infinity;
@@ -8127,6 +8127,32 @@
         (grid.fractureZoneMemory?.[id] ?? 0) * 0.9 +
         (grid.transformMemory?.[id] ?? 0) * 0.55,
     );
+  }
+
+  function sedimentTransportJitter(grid, id, pass) {
+    const topology = topologyForGrid(grid);
+    if (isGraphBackedGrid(grid, topology)) {
+      const px = grid.positionX?.[id] ?? 0;
+      const py = grid.positionY?.[id] ?? 0;
+      const pz = grid.positionZ?.[id] ?? 1;
+      const lon = Math.atan2(py, px) / (Math.PI * 2);
+      const lat = Math.asin(Math.max(-1, Math.min(1, pz))) / Math.PI;
+      const coarseLon = Math.floor(lon * 37 + pass * 5);
+      const coarseLat = Math.floor(lat * 31 + pass * 7);
+      const fineLon = Math.floor(lon * 91 + pass * 11);
+      const fineLat = Math.floor(lat * 73 + pass * 13);
+      const coarse = hash2(coarseLon, coarseLat);
+      const fine = hash2(fineLon, fineLat);
+      return 0.82 + (coarse * 0.62 + fine * 0.38) * 0.18;
+    }
+    return 0.82 + (((id * 1103515245 + pass * 1013904223) >>> 0) % 997) / 997 * 0.18;
+  }
+
+  function hash2(x, y) {
+    let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
+    h = (h ^ (h >>> 13)) >>> 0;
+    h = Math.imul(h, 1274126177) >>> 0;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
   }
 
   function mix(a, b, t) {
