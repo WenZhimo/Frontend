@@ -411,7 +411,7 @@ const geologyFeatureTopologyGuardSpecs = [
     name: "geologyTransformsFractureSmoothingUsesGraphNeighbors",
     file: "src/sim/geology/transforms.js",
     pattern:
-      /export\s+function\s+suppressInactiveFractureRelief\s*\(\s*world\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?visitFractureSmoothingNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id[\s\S]*?function\s+visitFractureSmoothingNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id/,
+      /export\s+function\s+suppressInactiveFractureRelief\s*\(\s*world\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?visitFractureSmoothingNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id[\s\S]*?function\s+visitFractureSmoothingNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighborRing\s*\(\s*id\s*,\s*2[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id/,
   },
 ];
 
