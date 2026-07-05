@@ -519,7 +519,7 @@ const geologySurfaceTopologyGuardSpecs = [
     name: "geologyReliefBudgetUsesGraphSlopeAndTracksReliefRadius",
     file: "src/sim/geology/reliefBudget.js",
     pattern:
-      /function\s+localRelief\s*\(\s*grid\s*,\s*id\s*,\s*radius\s*\)\s*\{[\s\S]*?forEachNeighborRadiusById\s*\(\s*grid\s*,\s*id\s*,\s*radius[\s\S]*?function\s+localSlope\s*\(\s*grid\s*,\s*id\s*,\s*seaLevel\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?edgeLength[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id/,
+      /function\s+localRelief\s*\(\s*grid\s*,\s*id\s*,\s*radius\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighborRing\s*\(\s*id\s*,\s*radius[\s\S]*?forEachNeighborRadiusById\s*\(\s*grid\s*,\s*id\s*,\s*radius[\s\S]*?function\s+localSlope\s*\(\s*grid\s*,\s*id\s*,\s*seaLevel\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?edgeLength[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id/,
   },
 ];
 
