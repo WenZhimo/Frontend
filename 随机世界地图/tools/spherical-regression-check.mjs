@@ -300,6 +300,8 @@ function addLongRunCubedSphereMetrics(picked, parsed, prefix) {
   picked[`${prefix}FloodFillTopologyValid`] = parsed.topologyDiagnostics?.floodFillTopologyValid;
   picked[`${prefix}ConnectedComponentTopologyValid`] =
     parsed.topologyDiagnostics?.connectedComponentTopologyValid;
+  picked[`${prefix}ConnectedComponentAreaError`] =
+    parsed.topologyDiagnostics?.connectedComponentAreaError;
   picked[`${prefix}FaceSeamContinuityRisk`] = parsed.topologyDiagnostics?.faceSeamContinuityRisk;
   picked[`${prefix}TopologyManualAccessRisk`] = parsed.topologyDiagnostics?.topologyManualAccessRisk;
   picked[`${prefix}TopologyMigrationCoverage`] = parsed.topologyDiagnostics?.topologyMigrationCoverage;
@@ -1059,6 +1061,8 @@ function compactMetrics(name, parsed) {
     picked.productionAdapterTopologyFloodFillValid = parsed.topologyDiagnostics?.floodFillTopologyValid;
     picked.productionAdapterTopologyConnectedComponentValid =
       parsed.topologyDiagnostics?.connectedComponentTopologyValid;
+    picked.productionAdapterTopologyConnectedComponentAreaError =
+      parsed.topologyDiagnostics?.connectedComponentAreaError;
     picked.productionAdapterTopologyFaceSeamContinuityRisk = parsed.topologyDiagnostics?.faceSeamContinuityRisk;
     picked.productionAdapterTopologyManualAccessRisk = parsed.topologyDiagnostics?.topologyManualAccessRisk;
     picked.productionAdapterTopologyMigrationCoverage = parsed.topologyDiagnostics?.topologyMigrationCoverage;
@@ -1135,6 +1139,8 @@ function compactMetrics(name, parsed) {
     picked.interfaceCubedSphereFloodFillTopologyValid = parsed.stats?.floodFillTopologyValid;
     picked.interfaceCubedSphereConnectedComponentTopologyValid =
       parsed.stats?.connectedComponentTopologyValid;
+    picked.interfaceCubedSphereConnectedComponentAreaError =
+      parsed.stats?.connectedComponentAreaError;
     picked.interfaceCubedSphereTopologyManualAccessRisk = parsed.stats?.topologyManualAccessRisk;
     picked.interfaceCubedSphereTopologyMigrationCoverage = parsed.stats?.topologyMigrationCoverage;
     picked.interfaceCubedSphereLandRatio = parsed.stats?.landRatio;
@@ -1185,6 +1191,8 @@ function compactMetrics(name, parsed) {
       baseline?.topologyDiagnostics?.floodFillTopologyValid;
     picked.resolutionCubedSphereConnectedComponentTopologyValid =
       baseline?.topologyDiagnostics?.connectedComponentTopologyValid;
+    picked.resolutionCubedSphereConnectedComponentAreaError =
+      baseline?.topologyDiagnostics?.connectedComponentAreaError;
     picked.resolutionCubedSphereTopologyManualAccessRisk =
       baseline?.topologyDiagnostics?.topologyManualAccessRisk;
     picked.resolutionCubedSphereTopologyMigrationCoverage =
