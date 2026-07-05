@@ -43,6 +43,7 @@ const result = {
   outputWidth: cpuRender.width,
   outputHeight: cpuRender.height,
   cpuRenderBackend: isGraphBackedGrid(world.grid) ? "cpu-spherical-projection-reference" : "cpu-canvas-compatible",
+  cpuRenderUsesSphericalProjection: isGraphBackedGrid(world.grid),
   experimentalGpuRender: {
     attempted: false,
     skipped: true,

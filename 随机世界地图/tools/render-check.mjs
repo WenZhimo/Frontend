@@ -32,6 +32,7 @@ console.log(JSON.stringify({
   outputWidth: render.width,
   outputHeight: render.height,
   renderBackend: render.backend,
+  renderUsesSphericalProjection: render.backend === "cpu-spherical-projection-reference",
   steps,
   ageYears: world.ageYears,
   pipelineMode: params.pipelineMode,
