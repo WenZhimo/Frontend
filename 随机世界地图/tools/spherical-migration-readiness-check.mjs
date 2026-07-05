@@ -582,7 +582,7 @@ const diagnosticToolchainGuardSpecs = [
     name: "sphericalRenderGateValidatesProjectionDebugAndCleanup",
     file: "tools/spherical-render-gate-check.mjs",
     pattern:
-      /cleanup\s*\(\s*\)[\s\S]*?const\s+renderCheck\s*=\s*runJsonCheck\s*\(\s*["']render-check["'][\s\S]*?["']--topology["'][\s\S]*?["']cubed-sphere["'][\s\S]*?renderUsesSphericalProjection:\s*renderCheck\.parsed\?\.renderBackend\s*===\s*["']cpu-spherical-projection-reference["'][\s\S]*?debugLayerRestricted:[\s\S]*?debugProjectionSampling[\s\S]*?cleanup\s*\(\s*\)[\s\S]*?function\s+cleanup\s*\(\s*\)\s*\{[\s\S]*?rmSync\s*\(\s*debugOutputDir\s*,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\s*\)/,
+      /cleanup\s*\(\s*\)[\s\S]*?const\s+renderCheck\s*=\s*runJsonCheck\s*\(\s*["']render-check["'][\s\S]*?["']--topology["'][\s\S]*?["']cubed-sphere["'][\s\S]*?renderUsesSphericalProjection:\s*renderCheck\.parsed\?\.renderUsesSphericalProjection\s*===\s*true[\s\S]*?gpuUsesSphericalCpuReference:\s*gpuRenderCheck\.parsed\?\.cpuRenderUsesSphericalProjection\s*===\s*true[\s\S]*?debugLayerRestricted:[\s\S]*?debugProjectionSampling[\s\S]*?cleanup\s*\(\s*\)[\s\S]*?function\s+cleanup\s*\(\s*\)\s*\{[\s\S]*?rmSync\s*\(\s*debugOutputDir\s*,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\s*\)/,
   },
   {
     name: "sphericalRegressionSupportsGroupedTimeoutResumableRuns",
