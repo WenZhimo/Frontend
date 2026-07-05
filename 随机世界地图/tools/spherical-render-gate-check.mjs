@@ -86,11 +86,11 @@ const samplingStats = ppmStats(samplingDebugOutput);
 
 const checks = {
   renderCheckValid: renderCheck.status === 0 && renderCheck.parsed !== null,
-  renderUsesSphericalProjection: renderCheck.parsed?.renderBackend === "cpu-spherical-projection-reference",
+  renderUsesSphericalProjection: renderCheck.parsed?.renderUsesSphericalProjection === true,
   renderTopologyCubedSphere: renderCheck.parsed?.topologyMode === "cubed-sphere",
   renderOutputExists: existsSync(renderOutput),
   gpuCheckValid: gpuRenderCheck.status === 0 && gpuRenderCheck.parsed !== null,
-  gpuUsesSphericalCpuReference: gpuRenderCheck.parsed?.cpuRenderBackend === "cpu-spherical-projection-reference",
+  gpuUsesSphericalCpuReference: gpuRenderCheck.parsed?.cpuRenderUsesSphericalProjection === true,
   gpuRectangularPathSkipped: gpuRenderCheck.parsed?.experimentalGpuRender?.skipped === true,
   gpuOutputExists: existsSync(gpuOutput),
   debugCheckValid: debugRenderCheck.status === 0 && debugRenderCheck.parsed !== null,
@@ -183,6 +183,7 @@ function compactRenderResult(result) {
   return {
     status: result.status,
     renderBackend: parsed.renderBackend ?? null,
+    renderUsesSphericalProjection: parsed.renderUsesSphericalProjection ?? null,
     topologyMode: parsed.topologyMode ?? null,
     projectionMode: parsed.projectionMode ?? null,
     outputWidth: parsed.outputWidth ?? null,
@@ -197,6 +198,7 @@ function compactGpuResult(result) {
   return {
     status: result.status,
     cpuRenderBackend: parsed.cpuRenderBackend ?? null,
+    cpuRenderUsesSphericalProjection: parsed.cpuRenderUsesSphericalProjection ?? null,
     topologyMode: parsed.topologyMode ?? null,
     projectionMode: parsed.projectionMode ?? null,
     outputWidth: parsed.outputWidth ?? null,
