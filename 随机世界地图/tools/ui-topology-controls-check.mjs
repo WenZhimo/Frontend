@@ -55,6 +55,19 @@ expect(autoElements.faceSizeLabel.textContent === "自动", "blank face-size sel
 expect(autoWorld.params.topologyMode === "cylindrical", "default UI topology remains cylindrical");
 expect(autoWorld.grid.topologyKind !== "cubed-sphere", "default UI path keeps legacy cylindrical grid");
 
+const sphericalAutoElements = createMockElements({
+  topologyMode: "cubed-sphere",
+  projectionMode: "equirectangular",
+  faceSize: "",
+  resolution: "512x256",
+});
+bindControlLabels(sphericalAutoElements);
+const sphericalAutoParams = readParams(sphericalAutoElements);
+const sphericalAutoWorld = createWorld(sphericalAutoParams);
+expect(sphericalAutoParams.faceSize === 64, "interactive cubed-sphere auto face size uses safe preview size");
+expect(sphericalAutoWorld.params.faceSize === 64, "interactive cubed-sphere auto world keeps safe preview size");
+expect(sphericalAutoWorld.grid.size === 6 * 64 * 64, "interactive cubed-sphere auto avoids high-cost default grid");
+
 const debugElements = createMockElements({
   topologyMode: "cubed-sphere",
   projectionMode: "debug-area",
@@ -98,6 +111,15 @@ const result = {
     graphBacked: autoWorld.grid.topologyOptions?.graphBacked === true,
     gridSize: autoWorld.grid.size,
   },
+  sphericalAutoWorld: {
+    topologyMode: sphericalAutoWorld.params.topologyMode,
+    projectionMode: sphericalAutoWorld.params.projectionMode,
+    faceSize: sphericalAutoWorld.params.faceSize,
+    gridKind: sphericalAutoWorld.grid.kind ?? sphericalAutoWorld.grid.topologyKind ?? null,
+    topologyKind: sphericalAutoWorld.grid.topologyKind ?? null,
+    graphBacked: sphericalAutoWorld.grid.topologyOptions?.graphBacked === true,
+    gridSize: sphericalAutoWorld.grid.size,
+  },
   debugWorld: {
     topologyMode: debugWorld.params.topologyMode,
     projectionMode: debugWorld.params.projectionMode,
@@ -122,7 +144,7 @@ function createMockElements(overrides = {}) {
     plateCount: mockControl("14"),
     platesLabel: mockOutput(),
     timeScale: mockControl("1000000"),
-    resolution: mockControl("256x128"),
+    resolution: mockControl(overrides.resolution ?? "256x128"),
     topologyMode: mockControl(overrides.topologyMode ?? "cylindrical"),
     projectionMode: mockControl(overrides.projectionMode ?? "equirectangular"),
     faceSize: mockControl(overrides.faceSize ?? ""),

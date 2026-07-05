@@ -1,17 +1,27 @@
 export function readParams(elements) {
+  const urlParams = readUrlOnlyParams();
+  const topologyMode = urlParams.topologyMode ?? elements.topologyMode?.value;
+  const projectionMode = urlParams.projectionMode ?? elements.projectionMode?.value;
+  const resolution = elements.resolution.value;
+  const faceSize = urlParams.faceSize
+    ?? optionalNumber(elements.faceSize?.value)
+    ?? interactiveAutoFaceSize(topologyMode, urlParams.productionTopologyMode, resolution);
   return {
     seedText: elements.seedText.value,
     waterLevel: Number(elements.waterLevel.value),
     intensity: Number(elements.intensity.value),
     plateCount: Number(elements.plateCount.value),
     timeScale: Number(elements.timeScale.value),
-    resolution: elements.resolution.value,
-    topologyMode: elements.topologyMode?.value,
-    projectionMode: elements.projectionMode?.value,
-    faceSize: optionalNumber(elements.faceSize?.value),
+    resolution,
+    topologyMode,
+    projectionMode,
+    faceSize,
     showBoundaries: elements.showBoundaries.checked,
     pipelineMode: elements.pipelineMode?.value ?? "geology-v2",
-    ...readUrlOnlyParams(),
+    ...urlParams,
+    topologyMode,
+    projectionMode,
+    faceSize,
   };
 }
 
@@ -88,4 +98,11 @@ function optionalNumber(value) {
   if (value === undefined || value === null || value === "") return undefined;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function interactiveAutoFaceSize(topologyMode, productionTopologyMode, resolution) {
+  if (topologyMode !== "cubed-sphere" && productionTopologyMode !== "cubed-sphere-adapter") return undefined;
+  const [width, height] = String(resolution ?? "512x256").split("x").map(Number);
+  const base = Math.max(2, Math.min(width || 512, height || 256));
+  return Math.min(64, Math.max(24, Math.round(base / 2)));
 }
