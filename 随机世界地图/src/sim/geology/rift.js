@@ -128,12 +128,19 @@ function fillExternalSea(grid, seaMask, externalSeaMask) {
   externalSeaMask.fill(0);
   const components = topology.connectedComponents(seaMask);
   let largestStart = -1;
-  let largestSize = 0;
+  let largestArea = 0;
+  const componentAreas = new Float64Array(components.componentCount + 1);
+
+  for (let i = 0; i < size; i += 1) {
+    const componentId = components.componentId[i];
+    if (!componentId) continue;
+    componentAreas[componentId] += metricArea(grid, i);
+  }
 
   for (let id = 1; id < components.componentSizes.length; id += 1) {
-    const componentSize = components.componentSizes[id] ?? 0;
-    if (componentSize > largestSize) {
-      largestSize = componentSize;
+    const componentArea = componentAreas[id] ?? 0;
+    if (componentArea > largestArea) {
+      largestArea = componentArea;
       largestStart = id;
     }
   }
@@ -142,6 +149,11 @@ function fillExternalSea(grid, seaMask, externalSeaMask) {
   for (let i = 0; i < size; i += 1) {
     if (components.componentId[i] === largestStart) externalSeaMask[i] = 1;
   }
+}
+
+function metricArea(grid, id) {
+  const area = grid.area?.[id];
+  return Number.isFinite(area) && area > 0 ? area : 1;
 }
 
 function labelClosedBasins(grid, seaMask, externalSeaMask, closedBasinId) {
