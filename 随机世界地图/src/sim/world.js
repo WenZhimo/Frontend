@@ -23,6 +23,11 @@ export const ProjectionMode = {
   EQUIRECTANGULAR: "equirectangular",
   ORTHOGRAPHIC: "orthographic",
   DEBUG_FACE: "debug-face",
+  DEBUG_CELL_ID: "debug-cell-id",
+  DEBUG_NEIGHBOR_COUNT: "debug-neighbor-count",
+  DEBUG_AREA: "debug-area",
+  DEBUG_FACE_SEAM_RISK: "debug-face-seam-risk",
+  DEBUG_PROJECTION_SAMPLING: "debug-projection-sampling",
 };
 
 export const ProductionTopologyMode = {
