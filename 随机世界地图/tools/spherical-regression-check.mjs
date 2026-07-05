@@ -151,6 +151,7 @@ for (const check of selectedChecks) {
 
 const timedOutChecks = results.filter((result) => result.timedOut).map((result) => result.name);
 const groupSummary = summarizeResultsByGroup(results);
+const slowestChecks = summarizeSlowestChecks(results);
 
 const summary = {
   valid: failures.length === 0,
@@ -166,6 +167,9 @@ const summary = {
   timedOutCheckCount: timedOutChecks.length,
   failures,
   timedOutChecks,
+  slowestChecks,
+  slowestCheckName: slowestChecks[0]?.name ?? null,
+  maxCheckMs: slowestChecks[0]?.ms ?? 0,
   groupSummary,
   totalMs: Date.now() - startedAt,
   results,
@@ -222,6 +226,8 @@ function summarizeResultsByGroup(results) {
         failedCheckCount: 0,
         timedOutCheckCount: 0,
         totalMs: 0,
+        slowestCheckName: null,
+        maxCheckMs: 0,
       };
     }
     const bucket = summary[group];
@@ -230,8 +236,27 @@ function summarizeResultsByGroup(results) {
     bucket.failedCheckCount += result.valid ? 0 : 1;
     bucket.timedOutCheckCount += result.timedOut ? 1 : 0;
     bucket.totalMs += Number.isFinite(result.ms) ? result.ms : 0;
+    if (Number.isFinite(result.ms) && result.ms > bucket.maxCheckMs) {
+      bucket.maxCheckMs = result.ms;
+      bucket.slowestCheckName = result.name;
+    }
   }
   return summary;
+}
+
+function summarizeSlowestChecks(results, limit = 5) {
+  return results
+    .filter((result) => Number.isFinite(result.ms))
+    .toSorted((left, right) => right.ms - left.ms)
+    .slice(0, limit)
+    .map((result) => ({
+      name: result.name,
+      group: result.group ?? "unknown",
+      ms: result.ms,
+      timeoutMs: result.timeoutMs,
+      timedOut: result.timedOut,
+      valid: result.valid,
+    }));
 }
 
 function checkTimeoutForName(name) {
