@@ -572,6 +572,12 @@ const diagnosticToolchainGuardSpecs = [
     pattern:
       /cleanup\s*\(\s*\)[\s\S]*?const\s+renderCheck\s*=\s*runJsonCheck\s*\(\s*["']render-check["'][\s\S]*?["']--topology["'][\s\S]*?["']cubed-sphere["'][\s\S]*?renderUsesSphericalProjection:\s*renderCheck\.parsed\?\.renderBackend\s*===\s*["']cpu-spherical-projection-reference["'][\s\S]*?debugLayerRestricted:[\s\S]*?debugProjectionSampling[\s\S]*?cleanup\s*\(\s*\)[\s\S]*?function\s+cleanup\s*\(\s*\)\s*\{[\s\S]*?rmSync\s*\(\s*debugOutputDir\s*,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\s*\)/,
   },
+  {
+    name: "sphericalRegressionSupportsGroupedTimeoutResumableRuns",
+    file: "tools/spherical-regression-check.mjs",
+    pattern:
+      /const\s+resolutionGateFaceSizes\s*=\s*makeResolutionGateFaceSizes\s*\(\s*smallFaceSize\s*,\s*faceSize\s*\)[\s\S]*?const\s+requestedGroups\s*=\s*parseCsv\s*\(\s*options\.group\s*\?\?\s*options\.groups\s*,\s*\[\s*["']all["']\s*\]\s*\)[\s\S]*?const\s+checkTimeoutMs\s*=\s*parseIntOption\s*\(\s*options\s*,\s*["']timeout-ms["'][\s\S]*?const\s+heavyCheckTimeoutMs\s*=\s*parseIntOption\s*\(\s*options\s*,\s*["']heavy-timeout-ms["'][\s\S]*?resolutionGateFaceSizes\.join\s*\(\s*["'],["']\s*\)[\s\S]*?const\s+selectedChecks\s*=\s*checks[\s\S]*?group:\s*checkGroupForName\s*\(\s*name\s*\)[\s\S]*?timeoutMs:\s*checkTimeoutForName\s*\(\s*name\s*\)[\s\S]*?\.filter\s*\(\s*\(\s*check\s*\)\s*=>\s*groupMatches\s*\(\s*check\.group\s*\)\s*\)[\s\S]*?timeout:\s*timeoutMs[\s\S]*?function\s+makeResolutionGateFaceSizes\s*\(\s*a\s*,\s*b\s*\)/,
+  },
 ];
 
 const graphRoutedLegacyFiles = new Map([
@@ -818,7 +824,7 @@ const result = {
     "geologyCoreTopologyGuardReady means boundaries, plates, crust advection, and oceanic ridge-age distance route graph-backed worlds through spherical plate, graph-neighbor, and heap-distance paths before legacy raster helpers",
     "geologySurfaceTopologyGuardReady means sea level, sediment, rift connectivity, passive margins, orogeny, pipeline smoothing, and relief budget use topology-aware graph paths or explicitly tracked legacy radius helpers",
     "interfaceTopologyGuardReady means terrain, hydrology, climate, biosphere, and resource getters expose graph-derived fields and are covered by area-weighted topology-aware interface checks",
-    "diagnosticToolchainGuardReady means artifact scans, performance profiles, scenario snapshots, render gates, and debug tools preserve cubed-sphere topology options and clean temporary render artifacts",
+    "diagnosticToolchainGuardReady means artifact scans, performance profiles, scenario snapshots, grouped regression checks, render gates, and debug tools preserve cubed-sphere topology options and clean temporary render artifacts",
   ],
 };
 
