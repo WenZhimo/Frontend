@@ -144,10 +144,10 @@ const topologyDiagnosticGuardSpecs = [
       /export\s+function\s+measureTopologyDiagnostics\s*\(\s*world\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedTopology\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*return\s+measureGraphTopologyDiagnostics\s*\(\s*grid\s*,\s*topology\s*\)[\s\S]*?grid\.width/,
   },
   {
-    name: "graphTopologyDiagnosticsReportsNoManualRectangularAccess",
+    name: "graphTopologyDiagnosticsReportsAreaContractAndNoManualRectangularAccess",
     file: "src/sim/topology.js",
     pattern:
-      /function\s+measureGraphTopologyDiagnostics\s*\(\s*grid\s*,\s*topology\s*\)\s*\{[\s\S]*?topologyManualAccessRisk\s*:\s*0\s*,[\s\S]*?topologyMigrationCoverage\s*:\s*1\s*,/,
+      /function\s+measureGraphTopologyDiagnostics\s*\(\s*grid\s*,\s*topology\s*\)\s*\{[\s\S]*?const\s+connectedComponentArea\s*=\s*components\.componentAreas\?\.\[\s*1\s*\]\s*\?\?\s*null[\s\S]*?connectedComponentAreaError[\s\S]*?topologyManualAccessRisk\s*:\s*0\s*,[\s\S]*?topologyMigrationCoverage\s*:\s*1\s*,/,
   },
 ];
 
