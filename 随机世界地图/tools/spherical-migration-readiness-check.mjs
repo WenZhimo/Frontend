@@ -226,6 +226,45 @@ const legacyFallbackIndexGuardSpecs = [
   },
 ];
 
+const derivedTerrainTopologyGuardSpecs = [
+  {
+    name: "terrainShapeUsesGraphNeighborsForGraphBackedGrid",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /function\s+measureTerrainShape\s*\(\s*grid\s*,\s*field\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?return\s*\{\s*slope\s*,\s*aspect\s*,\s*ruggedness\s*\}[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id/,
+  },
+  {
+    name: "terrainCoastDistanceUsesGraphShortestDistance",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /function\s+distanceFromCoast\s*\(\s*grid\s*,\s*landMask\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?return\s+topology\.shortestDistanceSeeds\s*\(\s*coast\s*\)[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id/,
+  },
+  {
+    name: "terrainDistanceSourcesUsesGraphShortestDistance",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /function\s+distanceFromSources\s*\(\s*grid\s*,\s*sourceMask\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*&&\s*topology\.shortestDistanceSeeds\s*\)\s*\{[\s\S]*?return\s+topology\.shortestDistanceSeeds\s*\(\s*sourceMask\s*\)[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id/,
+  },
+  {
+    name: "terrainLandmassLabelsUseTopologyNeighborVisitor",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /function\s+labelLandmasses\s*\(\s*grid\s*,\s*landMask\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?const\s+graphBacked\s*=\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)[\s\S]*?visitTerrainCardinalNeighbor\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*graphBacked[\s\S]*?function\s+visitTerrainCardinalNeighbor\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*graphBacked\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*graphBacked\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id/,
+  },
+  {
+    name: "terrainSmoothingUsesGraphNeighborRing",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /function\s+smoothElevation\s*\(\s*grid\s*,\s*field\s*,\s*radius\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?const\s+graphBacked\s*=\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)[\s\S]*?visitTerrainRadiusNeighbor\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*radius\s*,\s*graphBacked[\s\S]*?function\s+visitTerrainRadiusNeighbor\s*\(\s*grid\s*,\s*topology\s*,\s*id\s*,\s*radius\s*,\s*graphBacked\s*,\s*visit\s*\)\s*\{[\s\S]*?if\s*\(\s*graphBacked\s*\)\s*\{[\s\S]*?topology\.forEachNeighborRing\s*\(\s*id\s*,\s*radius[\s\S]*?forEachNeighborRadiusById\s*\(\s*grid\s*,\s*id\s*,\s*radius/,
+  },
+  {
+    name: "terrainLatitudeUsesCellLatitudeBeforeLegacyHeight",
+    file: "src/sim/derived/terrain.js",
+    pattern:
+      /function\s+latitudeDegrees\s*\(\s*grid\s*,\s*id\s*,\s*y\s*\)\s*\{[\s\S]*?if\s*\(\s*grid\.lat\s*&&\s*Number\.isFinite\s*\(\s*grid\.lat\s*\[\s*id\s*\]\s*\)\s*\)\s*return\s+grid\.lat\s*\[\s*id\s*\]\s*\*\s*180\s*\/\s*Math\.PI[\s\S]*?return\s+legacyLatitudeDegrees\s*\(\s*grid\s*,\s*y\s*\)[\s\S]*?function\s+legacyLatitudeDegrees\s*\(\s*grid\s*,\s*y\s*\)\s*\{[\s\S]*?gridParamHeight\s*\(\s*grid\s*\)/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -279,6 +318,8 @@ const projectionOutputIndexGuardStatus = measureProjectionOutputIndexGuards();
 const projectionOutputIndexGuardReady = projectionOutputIndexGuardStatus.missing.length === 0;
 const legacyFallbackIndexGuardStatus = measureLegacyFallbackIndexGuards();
 const legacyFallbackIndexGuardReady = legacyFallbackIndexGuardStatus.missing.length === 0;
+const derivedTerrainTopologyGuardStatus = measureDerivedTerrainTopologyGuards();
+const derivedTerrainTopologyGuardReady = derivedTerrainTopologyGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -293,7 +334,8 @@ const result = {
     topologyDiagnosticGuardReady &&
     resolutionSamplingGuardReady &&
     projectionOutputIndexGuardReady &&
-    legacyFallbackIndexGuardReady,
+    legacyFallbackIndexGuardReady &&
+    derivedTerrainTopologyGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -325,6 +367,10 @@ const result = {
   legacyFallbackIndexGuardCount: legacyFallbackIndexGuardStatus.guarded.length,
   legacyFallbackIndexGuardMissing: legacyFallbackIndexGuardStatus.missing,
   guardedLegacyFallbackIndexPaths: legacyFallbackIndexGuardStatus.guarded,
+  derivedTerrainTopologyGuardReady,
+  derivedTerrainTopologyGuardCount: derivedTerrainTopologyGuardStatus.guarded.length,
+  derivedTerrainTopologyGuardMissing: derivedTerrainTopologyGuardStatus.missing,
+  guardedDerivedTerrainTopologyPaths: derivedTerrainTopologyGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -407,6 +453,7 @@ const result = {
     "resolutionSamplingGuardReady means graph-backed resolution comparisons sample through projection vectors and reserve rectangular bilinear sampling for legacy grids",
     "projectionOutputIndexGuardReady means y * width + x occurrences in projection render/gate tools index output pixels or projected sample buffers, not simulation grid cells",
     "legacyFallbackIndexGuardReady means remaining id-to-xy rectangular index math is behind explicit rectangular-only helper guards or inside legacy helper tests",
+    "derivedTerrainTopologyGuardReady means terrain shape, distance, smoothing, labels, and latitude use graph topology or cell metadata before legacy rectangular helpers",
   ],
 };
 
@@ -613,6 +660,10 @@ function measureProjectionOutputIndexGuards() {
 
 function measureLegacyFallbackIndexGuards() {
   return measureRegexSpecs(legacyFallbackIndexGuardSpecs, "missing legacy fallback indexing guard");
+}
+
+function measureDerivedTerrainTopologyGuards() {
+  return measureRegexSpecs(derivedTerrainTopologyGuardSpecs, "missing graph-backed derived terrain topology guard");
 }
 
 function measureRegexSpecs(specs, missingReason) {

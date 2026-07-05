@@ -329,6 +329,8 @@ function compactMetrics(name, parsed) {
     "projectionOutputIndexGuardCount",
     "legacyFallbackIndexGuardReady",
     "legacyFallbackIndexGuardCount",
+    "derivedTerrainTopologyGuardReady",
+    "derivedTerrainTopologyGuardCount",
     "migrationHelperRiskCount",
     "possibleSphericalPathHelperCount",
     "validSidecarAdvanced",
