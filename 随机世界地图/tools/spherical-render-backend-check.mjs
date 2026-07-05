@@ -15,6 +15,10 @@ const backend = createRenderBackend(canvas, {
   gpuCapabilities: capabilities,
   experimentalGpuRender: true,
 });
+const defaultCanvas = createFakeCanvas();
+const defaultBackend = createRenderBackend(defaultCanvas, {
+  gpuCapabilities: capabilities,
+});
 
 const sphericalWorld = createWorld({
   seedText: "龙骨海-纪元7",
@@ -50,7 +54,25 @@ const rectangularWorld = createWorld({
 
 backend.render(rectangularWorld);
 
+const defaultRectangularWorld = createWorld({
+  seedText: "榫欓娴?绾厓7",
+  waterLevel: 50,
+  intensity: 1,
+  plateCount: 14,
+  timeScale: 1_000_000,
+  resolution: "64x32",
+  pipelineMode: "geology-v2",
+  topologyMode: "cylindrical",
+  showBoundaries: false,
+});
+
+defaultBackend.render(defaultRectangularWorld);
+
 const checks = {
+  defaultBackendCreatedAsCpu: defaultBackend.kind === "cpu-canvas",
+  defaultRectangularUsesCpu: defaultRectangularWorld.renderBackend === "cpu-canvas",
+  defaultDidNotDrawWebgl: defaultCanvas.gl.drawCalls === 0,
+  defaultExplainsGpuDisabled: /disabled/i.test(defaultRectangularWorld.renderFallbackReason ?? ""),
   backendCreatedAsWebgl: backend.kind === "webgl2-render-experimental",
   sphericalUsesCpuProjection: sphericalWorld.renderBackend === "cpu-spherical-projection",
   sphericalExplainsGpuSkip: /spherical grids/i.test(sphericalWorld.renderFallbackReason ?? ""),
@@ -67,10 +89,14 @@ const result = {
   valid: failures.length === 0,
   failures,
   checks,
+  defaultBackendKind: defaultBackend.kind,
+  defaultRectangularRenderBackend: defaultRectangularWorld.renderBackend,
+  defaultFallbackReason: defaultRectangularWorld.renderFallbackReason,
   backendKind: backend.kind,
   sphericalRenderBackend: sphericalWorld.renderBackend,
   sphericalFallbackReason: sphericalWorld.renderFallbackReason,
   rectangularRenderBackend: rectangularWorld.renderBackend,
+  defaultWebglDrawCalls: defaultCanvas.gl.drawCalls,
   webglDrawCalls: canvas.gl.drawCalls,
 };
 
