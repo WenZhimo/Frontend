@@ -20,6 +20,7 @@ const checks = [
   ["scale-topology-check", ["tools/scale-topology-check.mjs"]],
   ["projection-check:equirectangular", ["tools/projection-check.mjs", String(faceSize), "equirectangular"]],
   ["projection-check:mollweide", ["tools/projection-check.mjs", String(faceSize), "mollweide"]],
+  ["projection-check:orthographic", ["tools/projection-check.mjs", String(faceSize), "orthographic"]],
   ["plate-pole-crossing-check", ["tools/plate-pole-crossing-check.mjs", seedText, "cubed-sphere", String(faceSize)]],
   ["spherical-topology-api-check", ["tools/spherical-topology-api-check.mjs", String(faceSize)]],
   ["spherical-production-adapter-check", ["tools/spherical-production-adapter-check.mjs", String(faceSize)]],
