@@ -4797,7 +4797,7 @@
       const seed = source[id];
       if (seed <= 0.0001) continue;
       const pull = weakness[id] - 0.5 + oldOrogeny[id] * 0.18 + (riftStage[id] > 0 ? 0.12 : 0) + transformMemory[id] * 0.08 - fractureZoneMemory[id] * 0.04;
-      const segment = graphAxisSegmentMask(id, id, weakness[id], options.segmented);
+      const segment = graphAxisSegmentMask(grid, id, id, weakness[id], options.segmented);
       forEachNeighborRadiusById(grid, id, radius, (nid, depth) => {
         const dist = Math.max(0, depth);
         if (dist > radiusLimit) return;
@@ -4808,7 +4808,7 @@
         const bendWeight = Math.max(0.55, Math.min(1.15, 0.92 + pull * 0.18));
         const weakWeight = 0.55 + weakness[nid] * 0.65 + oldOrogeny[nid] * 0.25;
         const falloff = Math.max(0, 1 - dist / radiusLimit);
-        const localSegment = Math.min(segment, graphAxisSegmentMask(id, nid, weakness[nid], options.segmented));
+        const localSegment = Math.min(segment, graphAxisSegmentMask(grid, id, nid, weakness[nid], options.segmented));
         const addition = seed * gain * falloff * weakWeight * bendWeight * localSegment;
         if (addition > spread[nid]) spread[nid] = addition;
       });
@@ -4993,9 +4993,26 @@
     return coarse * 0.7 + fine * 0.3 <= keep ? 1 : 0.72;
   }
 
-  function graphAxisSegmentMask(sourceId, targetId, weakness, forceSegmented) {
-    const coarse = hash2(Math.floor((targetId + 3) / 19), Math.floor((sourceId + 5) / 13));
-    const fine = hash2(Math.floor((targetId + 11) / 7), Math.floor((sourceId + 2) / 7));
+  function graphAxisSegmentMask(grid, sourceId, targetId, weakness, forceSegmented) {
+    const sx = grid.positionX?.[sourceId] ?? 0;
+    const sy = grid.positionY?.[sourceId] ?? 0;
+    const sz = grid.positionZ?.[sourceId] ?? 1;
+    const tx = grid.positionX?.[targetId] ?? 0;
+    const ty = grid.positionY?.[targetId] ?? 0;
+    const tz = grid.positionZ?.[targetId] ?? 1;
+    const mx = sx + tx;
+    const my = sy + ty;
+    const mz = sz + tz;
+    const length = Math.hypot(mx, my, mz) || 1;
+    const lat = Math.asin(Math.max(-1, Math.min(1, my / length)));
+    const lon = Math.atan2(mz / length, mx / length);
+    const coarseLon = Math.floor((lon + Math.PI) * 5.25);
+    const coarseLat = Math.floor((lat + Math.PI / 2) * 6.5);
+    const fineLon = Math.floor((lon + Math.PI) * 14.5);
+    const fineLat = Math.floor((lat + Math.PI / 2) * 18.5);
+    const sourceBand = Math.floor((Math.atan2(sz, sx) + Math.PI) * 3.5);
+    const coarse = hash2(coarseLon + sourceBand * 17, coarseLat + sourceBand * 11);
+    const fine = hash2(fineLon + sourceBand * 23, fineLat + sourceBand * 19);
     const keep = forceSegmented ? 0.62 + weakness * 0.28 : 0.76 + weakness * 0.2;
     return coarse * 0.7 + fine * 0.3 <= keep ? 1 : 0.72;
   }
