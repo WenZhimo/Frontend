@@ -104,6 +104,7 @@ const checks = [
   ["spherical-isostasy-relief-check", ["tools/spherical-isostasy-relief-check.mjs", seedText, String(smallFaceSize), "55"]],
   ["spherical-relief-budget-topology-check", ["tools/spherical-relief-budget-topology-check.mjs", seedText, String(smallFaceSize), "55"]],
   ["spherical-sea-level-coupling-check", ["tools/spherical-sea-level-coupling-check.mjs", seedText, String(smallFaceSize), "55"]],
+  ["spherical-sea-level-area-check", ["tools/spherical-sea-level-area-check.mjs", String(faceSize)]],
   ["spherical-resource-inputs-check", ["tools/spherical-resource-inputs-check.mjs", seedText, String(smallFaceSize), "55"]],
   ["spherical-climate-biosphere-inputs-check", ["tools/spherical-climate-biosphere-inputs-check.mjs", seedText, String(smallFaceSize), "55"]],
   ["spherical-noise-check", ["tools/spherical-noise-check.mjs", String(faceSize), seedText]],

@@ -2889,9 +2889,9 @@
 
   function initializeSeaLevel(world) {
     const seaFraction = Math.max(0.05, Math.min(0.95, world.params.waterLevel / 100));
-    const initialSeaLevel = quantile(world.grid.elev, seaFraction);
+    const initialSeaLevel = areaWeightedQuantile(world.grid, world.grid.elev, seaFraction);
     world.seaLevel = initialSeaLevel;
-    world.waterVolume = measureWaterVolume(world.grid.elev, initialSeaLevel);
+    world.waterVolume = measureWaterVolume(world.grid, initialSeaLevel);
   }
 
   function updateSeaLevel(world) {
@@ -2912,26 +2912,43 @@
 
     for (let iter = 0; iter < 28; iter += 1) {
       const mid = (lo + hi) * 0.5;
-      const volume = measureWaterVolume(elev, mid);
+      const volume = measureWaterVolume(world.grid, mid);
       if (volume < world.waterVolume) lo = mid;
       else hi = mid;
     }
     world.seaLevel = (lo + hi) * 0.5;
   }
 
-  function measureWaterVolume(elev, seaLevel) {
+  function measureWaterVolume(grid, seaLevel) {
+    const { elev } = grid;
     let volume = 0;
     for (let i = 0; i < elev.length; i += 1) {
-      if (elev[i] < seaLevel) volume += seaLevel - elev[i];
+      if (elev[i] < seaLevel) volume += (seaLevel - elev[i]) * metricArea(grid, i);
     }
     return volume;
   }
 
-  function quantile(values, fraction) {
-    const sorted = Array.from(values);
-    sorted.sort((a, b) => a - b);
-    const index = Math.max(0, Math.min(sorted.length - 1, Math.floor(sorted.length * fraction)));
-    return sorted[index];
+  function areaWeightedQuantile(grid, values, fraction) {
+    const sorted = Array.from(values, (value, id) => ({
+      value,
+      weight: metricArea(grid, id),
+    })).sort((a, b) => a.value - b.value);
+    let totalWeight = 0;
+    for (const entry of sorted) totalWeight += entry.weight;
+    const clampedFraction = Math.max(0, Math.min(1, fraction));
+    if (clampedFraction <= 0) return sorted.length ? sorted[0].value : 0;
+    const target = clampedFraction * Math.max(totalWeight, Number.EPSILON);
+    let cumulative = 0;
+    for (const entry of sorted) {
+      cumulative += entry.weight;
+      if (cumulative > target) return entry.value;
+    }
+    return sorted.length ? sorted[sorted.length - 1].value : 0;
+  }
+
+  function metricArea(grid, id) {
+    const area = grid?.area?.[id];
+    return Number.isFinite(area) && area > 0 ? area : 1;
   }
 
   function applyErosionAndDeposition(world) {
