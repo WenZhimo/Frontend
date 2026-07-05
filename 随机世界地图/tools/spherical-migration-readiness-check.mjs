@@ -381,7 +381,7 @@ const geologyFeatureTopologyGuardSpecs = [
     name: "geologyAxesRouteNaturalizationToGraphPath",
     file: "src/sim/geology/axes.js",
     pattern:
-      /function\s+naturalizeAxis\s*\(\s*grid\s*,\s*source\s*,\s*target\s*,\s*referenceRadius\s*,\s*gain\s*,\s*options\s*=\s*\{\}\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?naturalizeAxisGraph\s*\(\s*grid\s*,\s*topology\s*,\s*seedSource\s*,\s*spread\s*,\s*radius\s*,\s*gain\s*,\s*options\s*\)[\s\S]*?return[\s\S]*?forEachGridCell\s*\(\s*grid\s*,\s*\(\s*id\s*,\s*x\s*,\s*y\s*\)/,
+      /function\s+naturalizeAxis\s*\(\s*grid\s*,\s*source\s*,\s*target\s*,\s*referenceRadius\s*,\s*gain\s*,\s*options\s*=\s*\{\}\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?naturalizeAxisGraph\s*\(\s*grid\s*,\s*topology\s*,\s*seedSource\s*,\s*spread\s*,\s*radius\s*,\s*gain\s*,\s*options\s*\)[\s\S]*?return[\s\S]*?function\s+naturalizeAxisGraph\s*\(\s*grid\s*,\s*topology[\s\S]*?topology\.forEachNeighborRing\s*\(\s*id\s*,\s*radius[\s\S]*?forEachGridCell\s*\(\s*grid\s*,\s*\(\s*id\s*,\s*x\s*,\s*y\s*\)/,
   },
   {
     name: "geologyAxesGraphDiagnosticsAvoidLegacySamples",

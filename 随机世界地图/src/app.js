@@ -4895,7 +4895,7 @@
       if (seed <= 0.0001) continue;
       const pull = weakness[id] - 0.5 + oldOrogeny[id] * 0.18 + (riftStage[id] > 0 ? 0.12 : 0) + transformMemory[id] * 0.08 - fractureZoneMemory[id] * 0.04;
       const segment = graphAxisSegmentMask(grid, id, id, weakness[id], options.segmented);
-      forEachNeighborRadiusById(grid, id, radius, (nid, depth) => {
+      topology.forEachNeighborRing(id, radius, (nid, depth) => {
         const dist = Math.max(0, depth);
         if (dist > radiusLimit) return;
         if (noisyBoundaryPatch[nid] && dist <= 1.5) return;
