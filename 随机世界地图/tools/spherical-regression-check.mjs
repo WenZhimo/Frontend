@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { rmSync } from "node:fs";
 import { parseCsv, parseIntOption, parseOptions } from "./lib/cli.mjs";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
@@ -117,6 +118,11 @@ const checks = [
   ["spherical-diagnostic-terrain-check", ["tools/spherical-diagnostic-terrain-check.mjs", seedText, String(faceSize), String(steps)]],
   ["spherical-diagnostic-terrain-check:small", ["tools/spherical-diagnostic-terrain-check.mjs", "artifact-seed-3", String(smallFaceSize), "55"]],
   ["spherical-render-check:debug-face", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_debug_face.ppm", "equirectangular", "256", "128", "debug-face"]],
+  ["spherical-render-check:debug-cell-id", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_debug_cell_id.ppm", "equirectangular", "256", "128", "debug-cell-id"]],
+  ["spherical-render-check:debug-neighbor-count", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_debug_neighbor_count.ppm", "equirectangular", "256", "128", "debug-neighbor-count"]],
+  ["spherical-render-check:debug-area", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_debug_area.ppm", "orthographic", "256", "256", "debug-area"]],
+  ["spherical-render-check:debug-face-seam-risk", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_debug_face_seam_risk.ppm", "mollweide", "256", "128", "debug-face-seam-risk"]],
+  ["spherical-render-check:debug-projection-sampling", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_debug_projection_sampling.ppm", "equirectangular", "256", "128", "debug-projection-sampling"]],
   ["spherical-render-check:mollweide", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_mollweide.ppm", "mollweide", "256", "128", "diagnostic-elevation", seedText, "20"]],
   ["spherical-render-check:orthographic", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_orthographic.ppm", "orthographic", "256", "128", "diagnostic-elevation", seedText, "20"]],
   ["spherical-render-check:normal-motion", ["tools/spherical-render-check.mjs", String(smallFaceSize), "_spherical_regression_normal_motion.ppm", "equirectangular", "256", "128", "normal-motion", seedText, "20"]],
@@ -147,6 +153,7 @@ for (const check of selectedChecks) {
   const result = runNodeCheck(check);
   results.push(result);
   if (!result.valid) failures.push(check.name);
+  cleanupRegressionArtifact(check.args);
 }
 
 const timedOutChecks = results.filter((result) => result.timedOut).map((result) => result.name);
@@ -208,6 +215,12 @@ function runNodeCheck(check) {
     error: child.error ? String(child.error.message ?? child.error).slice(0, 1200) : undefined,
     stderr: stderr ? stderr.slice(0, 1200) : undefined,
   };
+}
+
+function cleanupRegressionArtifact(args) {
+  const output = args?.[2];
+  if (typeof output !== "string" || !/^_spherical_regression_.*\.ppm$/i.test(output)) return;
+  rmSync(output, { force: true });
 }
 
 function groupMatches(group) {

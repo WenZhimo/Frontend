@@ -3,6 +3,7 @@ import { createCubedSphereGrid } from "../src/sim/sphere/cubedSphere.js";
 import { hashSeed } from "../src/sim/prng.js";
 import {
   renderSphericalDebugFace,
+  renderSphericalDebugLayer,
   renderSphericalField,
 } from "../src/render/sphericalProjectionRenderer.js";
 import { SphericalBoundaryType } from "../src/sim/sphere/plates.js";
@@ -117,6 +118,11 @@ function createSyntheticField(grid) {
 
 function createRenderedLayer({ grid, world, adapter, mode, width, height, projectionMode }) {
   if (mode === "debug-face") return renderSphericalDebugFace(grid, { width, height, projectionMode });
+  if (mode === "debug-cell-id") return renderSphericalDebugLayer(grid, mode, { width, height, projectionMode });
+  if (mode === "debug-neighbor-count") return renderSphericalDebugLayer(grid, mode, { width, height, projectionMode });
+  if (mode === "debug-area") return renderSphericalDebugLayer(grid, mode, { width, height, projectionMode });
+  if (mode === "debug-face-seam-risk") return renderSphericalDebugLayer(grid, mode, { width, height, projectionMode });
+  if (mode === "debug-projection-sampling") return renderSphericalDebugLayer(grid, mode, { width, height, projectionMode });
   if (mode === "synthetic-elevation") {
     return renderSphericalField(grid, createSyntheticField(grid), { width, height, projectionMode });
   }

@@ -10503,10 +10503,13 @@
   }
 
   function renderSphericalDebugFace(grid, options = {}) {
-    const field = grid.face;
-    return renderSphericalField(grid, field, {
+    return renderSphericalDebugLayer(grid, "debug-face", options);
+  }
+
+  function renderSphericalDebugLayer(grid, layer, options = {}) {
+    return renderSphericalField(grid, debugLayerField(grid), {
       ...options,
-      colorRamp: (face) => FACE_COLORS[face % FACE_COLORS.length],
+      colorRamp: (_value, cell) => colorDebugLayer(grid, layer, cell),
     });
   }
 
@@ -10565,6 +10568,89 @@
     [160, 100, 210],
     [70, 190, 195],
   ];
+
+  function debugLayerField(grid) {
+    if (!grid.__debugProjectionField || grid.__debugProjectionField.length !== grid.size) {
+      Object.defineProperty(grid, "__debugProjectionField", {
+        value: new Uint8Array(grid.size),
+        configurable: true,
+      });
+    }
+    return grid.__debugProjectionField;
+  }
+
+  function colorDebugLayer(grid, layer, cell) {
+    if (layer === "debug-face") return FACE_COLORS[(grid.face?.[cell] ?? 0) % FACE_COLORS.length];
+    if (layer === "debug-cell-id") return colorDebugCellId(grid, cell);
+    if (layer === "debug-neighbor-count") return colorDebugNeighborCount(grid, cell);
+    if (layer === "debug-area") return colorDebugArea(grid, cell);
+    if (layer === "debug-face-seam-risk") return colorDebugFaceSeamRisk(grid, cell);
+    if (layer === "debug-projection-sampling") return colorDebugProjectionSampling(grid, cell);
+    throw new Error(`Unknown spherical debug layer: ${layer}`);
+  }
+
+  function colorDebugCellId(grid, cell) {
+    const face = grid.face?.[cell] ?? 0;
+    const u = grid.faceU?.[cell] ?? 0;
+    const v = grid.faceV?.[cell] ?? 0;
+    const hash = (cell * 1103515245 + face * 1013904223 + u * 374761393 + v * 668265263) >>> 0;
+    return [
+      45 + (hash & 0x7f),
+      55 + ((hash >>> 8) & 0x7f),
+      65 + ((hash >>> 16) & 0x7f),
+    ];
+  }
+
+  function colorDebugNeighborCount(grid, cell) {
+    const count = grid.neighborCount?.[cell] ?? 0;
+    if (count <= 2) return [228, 76, 68];
+    if (count === 3) return [235, 189, 76];
+    if (count === 4) return [72, 178, 112];
+    return [82, 174, 224];
+  }
+
+  function colorDebugArea(grid, cell) {
+    const area = grid.area?.[cell];
+    const metricArea = Number.isFinite(area) && area > 0 ? area : 1;
+    const faceSize = Math.max(1, grid.faceSize ?? 1);
+    const ideal = (4 * Math.PI) / Math.max(1, 6 * faceSize * faceSize);
+    const ratio = metricArea / Math.max(ideal, Number.EPSILON);
+    if (ratio < 1) return lerpColor([40, 84, 156], [50, 60, 65], ratio);
+    return lerpColor([50, 60, 65], [230, 188, 82], Math.min(1, ratio - 1));
+  }
+
+  function colorDebugFaceSeamRisk(grid, cell) {
+    let seam = false;
+    const start = grid.neighborStart?.[cell] ?? 0;
+    const count = grid.neighborCount?.[cell] ?? 0;
+    for (let k = 0; k < count; k += 1) {
+      const nid = grid.neighbors[start + k];
+      if (grid.face?.[nid] !== grid.face?.[cell]) seam = true;
+    }
+    if (!seam) return [29, 34, 38];
+    const edgeLength = meanNeighborEdgeLength(grid, cell);
+    const t = Math.max(0, Math.min(1, edgeLength / Math.max(1e-6, Math.PI / Math.max(2, grid.faceSize ?? 2))));
+    return lerpColor([238, 216, 75], [226, 62, 54], t);
+  }
+
+  function colorDebugProjectionSampling(grid, cell) {
+    const u = grid.faceU?.[cell] ?? 0;
+    const v = grid.faceV?.[cell] ?? 0;
+    const faceSize = Math.max(1, grid.faceSize ?? 1);
+    const edge = u === 0 || v === 0 || u === faceSize - 1 || v === faceSize - 1;
+    const checker = ((Math.floor(u / 2) + Math.floor(v / 2) + (grid.face?.[cell] ?? 0)) % 2) === 0;
+    if (edge) return checker ? [240, 238, 118] : [230, 92, 76];
+    return checker ? [70, 122, 186] : [38, 64, 102];
+  }
+
+  function meanNeighborEdgeLength(grid, cell) {
+    const start = grid.neighborStart?.[cell] ?? 0;
+    const count = grid.neighborCount?.[cell] ?? 0;
+    if (!count) return 0;
+    let total = 0;
+    for (let k = 0; k < count; k += 1) total += grid.edgeLength?.[start + k] ?? 0;
+    return total / count;
+  }
 
   function lerpColor(a, b, t) {
     const k = Math.max(0, Math.min(1, t));
