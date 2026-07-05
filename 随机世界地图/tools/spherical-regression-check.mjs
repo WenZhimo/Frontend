@@ -878,6 +878,13 @@ function compactMetrics(name, parsed) {
     "backendKind",
     "sphericalRenderBackend",
     "rectangularRenderBackend",
+    "sphericalGpuMirrorGraphBacked",
+    "sphericalGpuMirrorRenderCompatible",
+    "sphericalGpuMirrorWidth",
+    "sphericalGpuMirrorHeight",
+    "rectangularGpuMirrorRenderCompatible",
+    "rectangularGpuMirrorWidth",
+    "rectangularGpuMirrorHeight",
     "webglDrawCalls",
     "uiTopologyControlsValid",
     "uiSelectedTopologyMode",
@@ -1070,6 +1077,15 @@ function compactMetrics(name, parsed) {
     picked.uiControlTopologyPresent = parsed.controlsPresent?.topologyMode;
     picked.uiControlProjectionPresent = parsed.controlsPresent?.projectionMode;
     picked.uiControlFaceSizePresent = parsed.controlsPresent?.faceSize;
+  }
+  if (name === "spherical-render-backend-check") {
+    picked.sphericalGpuMirrorGraphBacked = parsed.sphericalGpuMirror?.graphBacked;
+    picked.sphericalGpuMirrorRenderCompatible = parsed.sphericalGpuMirror?.renderCompatible;
+    picked.sphericalGpuMirrorWidth = parsed.sphericalGpuMirror?.width;
+    picked.sphericalGpuMirrorHeight = parsed.sphericalGpuMirror?.height;
+    picked.rectangularGpuMirrorRenderCompatible = parsed.rectangularGpuMirror?.renderCompatible;
+    picked.rectangularGpuMirrorWidth = parsed.rectangularGpuMirror?.width;
+    picked.rectangularGpuMirrorHeight = parsed.rectangularGpuMirror?.height;
   }
   if (name === "spherical-authoritative-core-check") {
     picked.authoritativeProductionGridKind = parsed.before?.spherical?.productionGridKind;
