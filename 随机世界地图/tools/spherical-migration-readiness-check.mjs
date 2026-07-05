@@ -522,10 +522,10 @@ const interfaceTopologyGuardSpecs = [
       /export\s+function\s+getHydrologyInputs\s*\(\s*world\s*,\s*options\s*=\s*\{\}\s*\)\s*\{[\s\S]*?const\s+cached\s*=\s*getStepCache\s*\(\s*world\s*,\s*HYDROLOGY_CACHE\s*\)[\s\S]*?const\s+base\s*=\s*getTerrainBase\s*\(\s*world\s*\)[\s\S]*?const\s+value\s*=\s*deriveHydrology\s*\(\s*world\s*,\s*base\s*,\s*options\s*\)[\s\S]*?setStepCache\s*\(\s*world\s*,\s*HYDROLOGY_CACHE\s*,\s*value\s*,\s*\{\s*level\s*\}\s*\)/,
   },
   {
-    name: "biosphereInputsUseMetricLandmassSizesAndGraphSmoothing",
+    name: "biosphereInputsUseMetricLandmassAreasAndGraphSmoothing",
     file: "src/sim/derived/terrain.js",
     pattern:
-      /export\s+function\s+getBiosphereInputs\s*\(\s*world\s*\)\s*\{[\s\S]*?const\s+biomeBaseElevation\s*=\s*smoothElevation\s*\(\s*grid\s*,\s*elev\s*,\s*physicalRadius\s*\(\s*grid\s*,\s*1\s*\)\s*\)[\s\S]*?const\s+componentSizes\s*=\s*measureComponentSizes\s*\(\s*grid\s*,\s*base\.landmassId\s*\)[\s\S]*?const\s+landConnectivityScale\s*=\s*metricTotal\s*\(\s*grid\s*\)\s*\*\s*0\.18[\s\S]*?connectivityToLandmass\s*\[\s*i\s*\]\s*=\s*landId\s*\?/,
+      /export\s+function\s+getBiosphereInputs\s*\(\s*world\s*\)\s*\{[\s\S]*?const\s+biomeBaseElevation\s*=\s*smoothElevation\s*\(\s*grid\s*,\s*elev\s*,\s*physicalRadius\s*\(\s*grid\s*,\s*1\s*\)\s*\)[\s\S]*?const\s+landmassAreas\s*=\s*measureComponentAreas\s*\(\s*grid\s*,\s*base\.landmassId\s*\)[\s\S]*?const\s+landConnectivityScale\s*=\s*metricTotal\s*\(\s*grid\s*\)\s*\*\s*0\.18[\s\S]*?connectivityToLandmass\s*\[\s*i\s*\]\s*=\s*landId\s*\?/,
   },
   {
     name: "resourceInputsExposeGeologyV2TraceFields",
