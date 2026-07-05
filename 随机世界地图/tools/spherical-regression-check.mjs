@@ -1,11 +1,14 @@
 import { spawnSync } from "node:child_process";
-import { parseIntOption, parseOptions } from "./lib/cli.mjs";
+import { parseCsv, parseIntOption, parseOptions } from "./lib/cli.mjs";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
 const seedText = positional[0] ?? options.seed ?? "龙骨海-纪元7";
 const faceSize = parseIntOption(options, "face-size", Number(positional[1] ?? 64));
 const steps = parseIntOption(options, "steps", Number(positional[2] ?? 200));
 const smallFaceSize = Math.max(16, Math.floor(faceSize / 2));
+const requestedGroups = parseCsv(options.group ?? options.groups, ["all"]);
+const checkTimeoutMs = parseIntOption(options, "timeout-ms", 120000);
+const heavyCheckTimeoutMs = parseIntOption(options, "heavy-timeout-ms", 300000);
 const failures = [];
 
 const checks = [
@@ -127,14 +130,22 @@ const checks = [
   ["spherical-regression-coverage-check", ["tools/spherical-regression-coverage-check.mjs"]],
   ["spherical-artifact-scan-check", ["tools/spherical-artifact-scan-check.mjs"]],
 ];
+const selectedChecks = checks
+  .map(([name, args]) => ({
+    name,
+    args,
+    group: checkGroupForName(name),
+    timeoutMs: checkTimeoutForName(name),
+  }))
+  .filter((check) => groupMatches(check.group));
 
 const startedAt = Date.now();
 const results = [];
 
-for (const [name, args] of checks) {
-  const result = runNodeCheck(name, args);
+for (const check of selectedChecks) {
+  const result = runNodeCheck(check);
   results.push(result);
-  if (!result.valid) failures.push(name);
+  if (!result.valid) failures.push(check.name);
 }
 
 const summary = {
@@ -142,6 +153,9 @@ const summary = {
   seedText,
   faceSize,
   steps,
+  requestedGroups,
+  availableGroups: Array.from(new Set(checks.map(([name]) => checkGroupForName(name)))).sort(),
+  selectedCheckCount: selectedChecks.length,
   checkCount: results.length,
   failures,
   totalMs: Date.now() - startedAt,
@@ -151,12 +165,14 @@ const summary = {
 console.log(JSON.stringify(summary, null, 2));
 process.exit(summary.valid ? 0 : 1);
 
-function runNodeCheck(name, args) {
+function runNodeCheck(check) {
+  const { name, args, group, timeoutMs } = check;
   const startedAt = Date.now();
   const child = spawnSync(process.execPath, args, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
+    timeout: timeoutMs,
   });
   const stdout = String(child.stdout ?? "").trim();
   const stderr = String(child.stderr ?? "").trim();
@@ -168,12 +184,87 @@ function runNodeCheck(name, args) {
   }
   return {
     name,
-    valid: child.status === 0,
+    group,
+    valid: child.status === 0 && !child.error,
     status: child.status,
+    signal: child.signal ?? undefined,
+    timedOut: child.error?.code === "ETIMEDOUT" || child.signal === "SIGTERM",
+    timeoutMs,
     ms: Date.now() - startedAt,
     metrics: compactMetrics(name, parsed),
+    error: child.error ? String(child.error.message ?? child.error).slice(0, 1200) : undefined,
     stderr: stderr ? stderr.slice(0, 1200) : undefined,
   };
+}
+
+function groupMatches(group) {
+  if (requestedGroups.includes("all")) return true;
+  return requestedGroups.includes(group);
+}
+
+function checkTimeoutForName(name) {
+  return isHeavyCheck(name) ? heavyCheckTimeoutMs : checkTimeoutMs;
+}
+
+function isHeavyCheck(name) {
+  return (
+    name.startsWith("long-run-check:") ||
+    name.startsWith("resolution-check:") ||
+    name.startsWith("spherical-boundary-check") ||
+    name.startsWith("spherical-plate-check") ||
+    name.startsWith("spherical-core-check") ||
+    name.startsWith("spherical-authoritative-core-check") ||
+    name === "spherical-diagnostic-terrain-check"
+  );
+}
+
+function checkGroupForName(name) {
+  if (
+    name.includes("render") ||
+    name.includes("projection") ||
+    name.includes("file-url") ||
+    name === "ui-topology-controls-check"
+  ) {
+    return "render";
+  }
+  if (
+    name.includes("long-run") ||
+    name.includes("resolution") ||
+    name.includes("diagnostic-terrain") ||
+    name.includes("artifact")
+  ) {
+    return "artifact";
+  }
+  if (
+    name.includes("hydrology") ||
+    name.includes("derived") ||
+    name.includes("interface") ||
+    name.includes("resource") ||
+    name.includes("climate") ||
+    name.includes("biosphere") ||
+    name.includes("production")
+  ) {
+    return "interface";
+  }
+  if (
+    name.includes("geology") ||
+    name.includes("boundary") ||
+    name.includes("plate") ||
+    name.includes("core") ||
+    name.includes("crust") ||
+    name.includes("sediment") ||
+    name.includes("rift") ||
+    name.includes("margin") ||
+    name.includes("transform") ||
+    name.includes("orogeny") ||
+    name.includes("axis") ||
+    name.includes("isostasy") ||
+    name.includes("relief") ||
+    name.includes("sea-level")
+  ) {
+    return "geology";
+  }
+  return "core";
 }
 
 function addLongRunCubedSphereMetrics(picked, parsed, prefix) {
