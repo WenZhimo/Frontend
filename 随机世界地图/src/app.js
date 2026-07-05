@@ -408,6 +408,8 @@
     const neighborSymmetryValid = checkGraphNeighborSymmetry(topology);
     const isolatedCellCount = countGraphIsolatedCells(topology);
     const areaTotal = sumArea(grid);
+    const connectedComponentArea = components.componentAreas?.[1] ?? null;
+    const connectedComponentAreaError = Number.isFinite(connectedComponentArea) ? Math.abs(connectedComponentArea - 4 * Math.PI) : null;
     const faceSeamContinuityRisk = measureGraphFaceSeamContinuityRisk(grid);
     return {
       topologyKind: topology.topologyKind ?? grid.topologyKind ?? "graph",
@@ -421,6 +423,8 @@
       floodFillTopologyValid: floodCount === grid.size,
       connectedComponentTopologyValid: components.componentCount === 1,
       connectedComponentCount: components.componentCount,
+      connectedComponentArea,
+      connectedComponentAreaError,
       isolatedCellCount,
       seamContinuityRisk: faceSeamContinuityRisk,
       faceSeamContinuityRisk,
