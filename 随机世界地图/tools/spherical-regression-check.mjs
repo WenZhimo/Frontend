@@ -341,6 +341,8 @@ function compactMetrics(name, parsed) {
     "geologyCoreTopologyGuardCount",
     "geologySurfaceTopologyGuardReady",
     "geologySurfaceTopologyGuardCount",
+    "interfaceTopologyGuardReady",
+    "interfaceTopologyGuardCount",
     "migrationHelperRiskCount",
     "possibleSphericalPathHelperCount",
     "validSidecarAdvanced",
