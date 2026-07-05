@@ -197,6 +197,18 @@ const projectionOutputIndexGuardSpecs = [
     pattern:
       /const\s+rendered\s*=\s*createRenderedLayer\s*\(\s*\{\s*grid\s*,\s*world\s*,\s*adapter\s*,\s*mode\s*,\s*width\s*,\s*height\s*,\s*projectionMode\s*\}\s*\)[\s\S]*?writePpm\s*\(\s*output\s*,\s*rendered\.pixels\s*,\s*width\s*,\s*height\s*\)[\s\S]*?function\s+writePpm\s*\(\s*path\s*,\s*pixels\s*,\s*width\s*,\s*height\s*\)\s*\{[\s\S]*?const\s+bytes\s*=\s*Buffer\.alloc\s*\(\s*width\s*\*\s*height\s*\*\s*3\s*\)[\s\S]*?pixels\s*\[\s*i\s*\*\s*4\s*\]/,
   },
+  {
+    name: "renderCheckRectangularRgbOutputIsLegacyFallback",
+    file: "tools/render-check.mjs",
+    pattern:
+      /function\s+renderElevationReference\s*\(\s*world\s*,\s*params\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*world\.grid\s*\)\s*\)\s*\{[\s\S]*?renderSphericalField\s*\(\s*world\.grid\s*,\s*world\.grid\.elev[\s\S]*?backend\s*:\s*["']cpu-spherical-projection-reference["'][\s\S]*?return\s*\{[\s\S]*?width\s*:\s*world\.grid\.width[\s\S]*?bytes\s*:\s*renderRectangularElevationToRgbBytes\s*\(\s*world\s*\)[\s\S]*?function\s+renderRectangularElevationToRgbBytes\s*\(\s*world\s*\)\s*\{[\s\S]*?Buffer\.alloc\s*\(\s*grid\.width\s*\*\s*grid\.height\s*\*\s*3\s*\)/,
+  },
+  {
+    name: "gpuRenderCheckRectangularRgbOutputIsLegacyFallback",
+    file: "tools/gpu-render-check.mjs",
+    pattern:
+      /function\s+renderElevationReference\s*\(\s*world\s*,\s*topologyOptions\s*\)\s*\{[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*world\.grid\s*\)\s*\)\s*\{[\s\S]*?renderSphericalField\s*\(\s*world\.grid\s*,\s*world\.grid\.elev[\s\S]*?return\s*\{[\s\S]*?width\s*:\s*world\.grid\.width[\s\S]*?bytes\s*:\s*renderRectangularElevationToRgbBytes\s*\(\s*world\s*\)[\s\S]*?function\s+renderRectangularElevationToRgbBytes\s*\(\s*world\s*\)\s*\{[\s\S]*?Buffer\.alloc\s*\(\s*grid\.width\s*\*\s*grid\.height\s*\*\s*3\s*\)/,
+  },
 ];
 
 const graphRoutedLegacyFiles = new Map([
