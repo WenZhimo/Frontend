@@ -1003,7 +1003,7 @@ function measureInlandBasinRisk(grid, seaLevel) {
     }
   }
   return {
-    belowSeaCellRatio: belowSeaCellRatio(grid, seaLevel),
+    belowSeaUnweightedCellRatio: belowSeaUnweightedCellRatio(grid, seaLevel),
     belowSeaRatio: belowSea / Math.max(totalAreaValue, Number.EPSILON),
     waterComponentCount: componentCount,
     smallWaterComponentCount: smallComponentCount,
@@ -1013,7 +1013,7 @@ function measureInlandBasinRisk(grid, seaLevel) {
   };
 }
 
-function belowSeaCellRatio(grid, seaLevel) {
+function belowSeaUnweightedCellRatio(grid, seaLevel) {
   let belowSea = 0;
   for (let i = 0; i < grid.size; i += 1) {
     if (grid.elev[i] < seaLevel) belowSea += 1;
