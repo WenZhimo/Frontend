@@ -50,6 +50,7 @@ const guardedCoreHelpers = [
   "clampGridParamY",
   "gridParamToU",
   "gridParamToV",
+  "forEachNeighbor4",
   "indexOf",
   "xyOf",
   "sampleGrid",
