@@ -185,6 +185,12 @@ const projectionOutputIndexGuardSpecs = [
     pattern:
       /function\s+measureCoastline\s*\(\s*land\s*,\s*width\s*,\s*height\s*\)\s*\{[\s\S]*?const\s+id\s*=\s*y\s*\*\s*width\s*\+\s*x[\s\S]*?const\s+right\s*=\s*y\s*\*\s*width\s*\+\s*wrapX\s*\(\s*width\s*,\s*x\s*\+\s*1\s*\)[\s\S]*?return\s+edges\s*\/\s*Math\.max\s*\(\s*1\s*,\s*land\.length\s*\)/,
   },
+  {
+    name: "geologyDebugRenderIndexesProjectedPpmPixelsOnly",
+    file: "tools/geology-debug-render.mjs",
+    pattern:
+      /function\s+writeProjectedPpm\s*\(\s*currentWorld\s*,\s*output\s*,\s*colorFn\s*\)\s*\{[\s\S]*?const\s+bytes\s*=\s*Buffer\.alloc\s*\(\s*width\s*\*\s*height\s*\*\s*3\s*\)[\s\S]*?const\s+pixel\s*=\s*y\s*\*\s*width\s*\+\s*x[\s\S]*?projectionSampleToVec3\s*\(\s*x\s*,\s*y\s*,\s*width\s*,\s*height\s*,\s*projectionMode\s*\)[\s\S]*?nearestCellByVector\s*\(\s*grid\s*,\s*sample\.x\s*,\s*sample\.y\s*,\s*sample\.z\s*\)/,
+  },
 ];
 
 const graphRoutedLegacyFiles = new Map([
