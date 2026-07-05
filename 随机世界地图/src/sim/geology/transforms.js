@@ -124,10 +124,10 @@ export function suppressInactiveFractureRelief(world) {
 
     let total = scratch[id] * 2;
     let weight = 2;
-    visitFractureSmoothingNeighbors(grid, topology, id, (nid) => {
+    visitFractureSmoothingNeighbors(grid, topology, id, (nid, neighborWeight = 1) => {
       if (crustType[nid] !== CrustType.OCEANIC || ridge[nid] > 0.08 || trench[nid] > 0.08) return;
-      total += scratch[nid];
-      weight += 1;
+      total += scratch[nid] * neighborWeight;
+      weight += neighborWeight;
     });
     const smooth = total / weight;
     const oldPositiveRelief = Math.max(0, scratch[id] - smooth);
@@ -153,10 +153,11 @@ function diffuseFractureMemory(grid) {
     if (boundaryInfluence[id] > 0.35 || ridge[id] > 0.2 || trench[id] > 0.2) return;
     let total = scratch[id] * 3;
     let weight = 3;
-    visitFractureSmoothingNeighbors(grid, topology, id, (nid) => {
+    visitFractureSmoothingNeighbors(grid, topology, id, (nid, neighborWeight = 1) => {
       if (crustType[nid] !== CrustType.OCEANIC) return;
-      total += scratch[nid] * 0.55;
-      weight += 0.55;
+      const memoryWeight = 0.55 * neighborWeight;
+      total += scratch[nid] * memoryWeight;
+      weight += memoryWeight;
     });
     fractureZoneMemory[id] = Math.min(1, total / weight);
   });
@@ -255,14 +256,14 @@ function softenInactiveFractureSourceFields(grid, dt) {
     let sedTotal = scratch3[id] * 2.5;
     let ageWeight = 3.5;
     let sedWeight = 2.5;
-    visitFractureSmoothingNeighbors(grid, topology, id, (nid) => {
+    visitFractureSmoothingNeighbors(grid, topology, id, (nid, neighborWeight = 1) => {
       if (crustType[nid] !== CrustType.OCEANIC) return;
       if (ridge[nid] > 0.06 || trench[nid] > 0.09 || boundaryInfluence[nid] > 0.22) return;
-      ageTotal += scratch[nid];
-      thickTotal += scratch2[nid];
-      sedTotal += scratch3[nid];
-      ageWeight += 1;
-      sedWeight += 1;
+      ageTotal += scratch[nid] * neighborWeight;
+      thickTotal += scratch2[nid] * neighborWeight;
+      sedTotal += scratch3[nid] * neighborWeight;
+      ageWeight += neighborWeight;
+      sedWeight += neighborWeight;
     });
 
     const ageSmooth = ageTotal / ageWeight;
@@ -277,13 +278,19 @@ function softenInactiveFractureSourceFields(grid, dt) {
 
 function visitFractureSmoothingNeighbors(grid, topology, id, visit) {
   if (isGraphBackedGrid(grid, topology)) {
+    if (typeof topology.forEachNeighborRing === "function") {
+      topology.forEachNeighborRing(id, 2, (nid, depth) => {
+        visit(nid, depth <= 1 ? 1 : 0.38);
+      });
+      return;
+    }
     topology.forEachNeighbor(id, (nid) => {
-      visit(nid);
+      visit(nid, 1);
     });
     return;
   }
   forEachNeighbor4ById(grid, id, (nid) => {
-    visit(nid);
+    visit(nid, 1);
   });
 }
 
