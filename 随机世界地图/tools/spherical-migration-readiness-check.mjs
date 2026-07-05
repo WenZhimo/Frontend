@@ -420,7 +420,7 @@ const geologyCoreTopologyGuardSpecs = [
     name: "geologyBoundariesRouteDistanceToGraphHeap",
     file: "src/sim/geology/boundaries.js",
     pattern:
-      /export\s+function\s+updatePlateBoundariesV2\s*\(\s*world\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)\s*\)\s*\{[\s\S]*?rebuildGraphBoundaryDistance\s*\(\s*grid\s*,\s*topology\s*,\s*activeBoundary\s*,\s*radius\s*\)[\s\S]*?while\s*\(\s*head\s*<\s*tail\s*\)[\s\S]*?function\s+rebuildGraphBoundaryDistance\s*\(\s*grid\s*,\s*topology\s*,\s*sourceMask\s*,\s*radius\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?edgeLength/,
+      /export\s+function\s+updatePlateBoundariesV2\s*\(\s*world\s*\)\s*\{[\s\S]*?const\s+topology\s*=\s*topologyForGrid\s*\(\s*grid\s*\)[\s\S]*?const\s+graphBacked\s*=\s*isGraphBackedGrid\s*\(\s*grid\s*,\s*topology\s*\)[\s\S]*?visitBoundarySourceNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*graphBacked\s*,\s*id[\s\S]*?if\s*\(\s*graphBacked\s*\)\s*\{[\s\S]*?rebuildGraphBoundaryDistance\s*\(\s*grid\s*,\s*topology\s*,\s*activeBoundary\s*,\s*radius\s*\)[\s\S]*?while\s*\(\s*head\s*<\s*tail\s*\)[\s\S]*?function\s+visitBoundarySourceNeighbors\s*\(\s*grid\s*,\s*topology\s*,\s*graphBacked\s*,\s*id\s*,\s*visit\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?forEachNeighbor4ById\s*\(\s*grid\s*,\s*id[\s\S]*?function\s+rebuildGraphBoundaryDistance\s*\(\s*grid\s*,\s*topology\s*,\s*sourceMask\s*,\s*radius\s*\)\s*\{[\s\S]*?topology\.forEachNeighbor\s*\(\s*id[\s\S]*?edgeLength/,
   },
   {
     name: "geologyBoundariesClassifyWithGraphDirections",
