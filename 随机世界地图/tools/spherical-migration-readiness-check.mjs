@@ -304,6 +304,33 @@ const hydrologyTopologyGuardSpecs = [
   },
 ];
 
+const foundationalTopologyToolchainGuardSpecs = [
+  {
+    name: "sphericalConnectivityCheckCoversGraphFloodFillAndExternalSea",
+    file: "tools/spherical-connectivity-check.mjs",
+    pattern:
+      /connectedComponentsGraph[\s\S]*?deriveSphericalOceanConnectivity[\s\S]*?distanceFromGraphSources[\s\S]*?floodFillGraph[\s\S]*?externalSeaShare:\s*weightedShare\s*\(\s*grid\s*,\s*connectivity\.externalSeaMask\s*\)[\s\S]*?inlandWaterCandidateShare:\s*weightedShare\s*\(\s*grid\s*,\s*connectivity\.inlandWaterCandidate\s*\)[\s\S]*?closedBasinCount:\s*connectivity\.closedBasinCount[\s\S]*?faceSeamFloodContinuity:\s*measureFaceSeamContinuity\s*\(\s*grid\s*,\s*flood\s*\)/,
+  },
+  {
+    name: "sphericalDerivedDistanceCheckComparesGetterToGraphDistances",
+    file: "tools/spherical-derived-distance-check.mjs",
+    pattern:
+      /getTerrainDerived[\s\S]*?createCubedSphereProductionGridAdapter[\s\S]*?const\s+terrain\s*=\s*getTerrainDerived\s*\(\s*world\s*\)[\s\S]*?const\s+expectedCoastDistance\s*=\s*grid\.topology\.shortestDistanceSeeds\s*\(\s*coastMask\s*\)[\s\S]*?const\s+expectedOceanDistance\s*=\s*grid\.topology\.shortestDistanceSeeds\s*\(\s*terrain\.externalSeaMask\s*\)[\s\S]*?coastGraphDistanceMaxDelta[\s\S]*?oceanGraphDistanceMaxDelta[\s\S]*?coastUnitStepMismatch[\s\S]*?oceanUnitStepMismatch/,
+  },
+  {
+    name: "sphericalDiffusionCheckMeasuresGraphSmoothingAndSeams",
+    file: "tools/spherical-diffusion-check.mjs",
+    pattern:
+      /smoothGraphField[\s\S]*?measureSeamContinuity[\s\S]*?measureGraphRoughness[\s\S]*?weightedFieldSummary[\s\S]*?roughnessRatio:\s*smoothRoughness\s*\/\s*Math\.max\s*\(\s*sourceRoughness[\s\S]*?smoothSeamDiffToInteriorRatio:\s*smoothSeams\.seamDiffToInteriorRatio[\s\S]*?meanDrift:\s*Math\.abs\s*\(\s*smoothSummary\.weightedMean\s*-\s*sourceSummary\.weightedMean\s*\)/,
+  },
+  {
+    name: "sphericalDerivedSmoothingCheckCoversBiosphereGraphSmoothing",
+    file: "tools/spherical-derived-smoothing-check.mjs",
+    pattern:
+      /getBiosphereInputs[\s\S]*?createCubedSphereProductionGridAdapter[\s\S]*?const\s+biosphere\s*=\s*getBiosphereInputs\s*\(\s*world\s*\)[\s\S]*?measureGraphRoughness\s*\(\s*grid\s*,\s*biosphere\.biomeBaseElevation\s*\)[\s\S]*?measureFaceSeamContinuity\s*\(\s*grid\s*,\s*biosphere\.biomeBaseElevation\s*\)[\s\S]*?smoothSeamDiffToInteriorRatio:\s*smoothSeams\.seamDiffToInteriorRatio[\s\S]*?seamRatioDelta:\s*smoothSeams\.seamDiffToInteriorRatio\s*-\s*sourceSeams\.seamDiffToInteriorRatio/,
+  },
+];
+
 const worldTopologyGuardSpecs = [
   {
     name: "createWorldRoutesCubedSphereToProductionAdapter",
@@ -655,6 +682,8 @@ const derivedTerrainTopologyGuardStatus = measureDerivedTerrainTopologyGuards();
 const derivedTerrainTopologyGuardReady = derivedTerrainTopologyGuardStatus.missing.length === 0;
 const hydrologyTopologyGuardStatus = measureHydrologyTopologyGuards();
 const hydrologyTopologyGuardReady = hydrologyTopologyGuardStatus.missing.length === 0;
+const foundationalTopologyToolchainGuardStatus = measureFoundationalTopologyToolchainGuards();
+const foundationalTopologyToolchainGuardReady = foundationalTopologyToolchainGuardStatus.missing.length === 0;
 const worldTopologyGuardStatus = measureWorldTopologyGuards();
 const worldTopologyGuardReady = worldTopologyGuardStatus.missing.length === 0;
 const geologyFeatureTopologyGuardStatus = measureGeologyFeatureTopologyGuards();
@@ -684,6 +713,7 @@ const result = {
     legacyFallbackIndexGuardReady &&
     derivedTerrainTopologyGuardReady &&
     hydrologyTopologyGuardReady &&
+    foundationalTopologyToolchainGuardReady &&
     worldTopologyGuardReady &&
     geologyFeatureTopologyGuardReady &&
     geologyCoreTopologyGuardReady &&
@@ -729,6 +759,10 @@ const result = {
   hydrologyTopologyGuardCount: hydrologyTopologyGuardStatus.guarded.length,
   hydrologyTopologyGuardMissing: hydrologyTopologyGuardStatus.missing,
   guardedHydrologyTopologyPaths: hydrologyTopologyGuardStatus.guarded,
+  foundationalTopologyToolchainGuardReady,
+  foundationalTopologyToolchainGuardCount: foundationalTopologyToolchainGuardStatus.guarded.length,
+  foundationalTopologyToolchainGuardMissing: foundationalTopologyToolchainGuardStatus.missing,
+  guardedFoundationalTopologyToolchainPaths: foundationalTopologyToolchainGuardStatus.guarded,
   worldTopologyGuardReady,
   worldTopologyGuardCount: worldTopologyGuardStatus.guarded.length,
   worldTopologyGuardMissing: worldTopologyGuardStatus.missing,
@@ -837,6 +871,7 @@ const result = {
     "legacyFallbackIndexGuardReady means remaining id-to-xy rectangular index math is behind explicit rectangular-only helper guards or inside legacy helper tests",
     "derivedTerrainTopologyGuardReady means terrain shape, distance, smoothing, labels, and latitude use graph topology or cell metadata before legacy rectangular helpers",
     "hydrologyTopologyGuardReady means hydrology flow, smoothing, diagnostics, and watershed accounting use topology methods and area weights before legacy rectangular helpers",
+    "foundationalTopologyToolchainGuardReady means fourth-stage connectivity, distance, diffusion, and derived smoothing checks explicitly exercise graph-backed cubed-sphere paths",
     "worldTopologyGuardReady means cubed-sphere createWorld requests route to the production adapter, force geology-v2, use area-weighted stats, and prefer spherical plate drift",
     "geologyFeatureTopologyGuardReady means geology-v2 features, axes, and transform/fracture diagnostics route graph-backed worlds through topology-aware stress, diffusion, smoothing, and segmentation paths",
     "geologyCoreTopologyGuardReady means boundaries, plates, crust advection, and oceanic ridge-age distance route graph-backed worlds through spherical plate, graph-neighbor, and heap-distance paths before legacy raster helpers",
@@ -1057,6 +1092,10 @@ function measureDerivedTerrainTopologyGuards() {
 
 function measureHydrologyTopologyGuards() {
   return measureRegexSpecs(hydrologyTopologyGuardSpecs, "missing graph-backed hydrology topology guard");
+}
+
+function measureFoundationalTopologyToolchainGuards() {
+  return measureRegexSpecs(foundationalTopologyToolchainGuardSpecs, "missing foundational graph topology toolchain guard");
 }
 
 function measureWorldTopologyGuards() {
