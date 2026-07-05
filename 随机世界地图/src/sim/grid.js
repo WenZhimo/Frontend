@@ -144,14 +144,17 @@ export function wrapX(width, x) {
 }
 
 export function gridParamWidth(grid) {
+  assertRectangularGrid(grid, "gridParamWidth");
   return topologyForGrid(grid).width;
 }
 
 export function gridParamHeight(grid) {
+  assertRectangularGrid(grid, "gridParamHeight");
   return topologyForGrid(grid).height;
 }
 
 export function wrapGridParamX(grid, x) {
+  assertRectangularGrid(grid, "wrapGridParamX");
   const topology = topologyForGrid(grid);
   if (typeof topology.wrapX === "function") return topology.wrapX(x);
   const width = gridParamWidth(grid);
@@ -159,6 +162,7 @@ export function wrapGridParamX(grid, x) {
 }
 
 export function clampGridParamY(grid, y) {
+  assertRectangularGrid(grid, "clampGridParamY");
   const topology = topologyForGrid(grid);
   const height = gridParamHeight(grid);
   return Math.max(0, Math.min(height - 1, y));
@@ -175,6 +179,7 @@ export function gridParamToV(grid, y) {
 }
 
 export function indexOf(grid, x, y) {
+  assertRectangularGrid(grid, "indexOf");
   const topology = topologyForGrid(grid);
   if (typeof topology.index === "function") return topology.index(x, y);
   const width = gridParamWidth(grid);
@@ -187,6 +192,7 @@ export function indexOf(grid, x, y) {
 }
 
 export function xyOf(grid, id) {
+  assertRectangularGrid(grid, "xyOf");
   const topology = topologyForGrid(grid);
   if (typeof topology.xy === "function") return topology.xy(id);
   const width = gridParamWidth(grid);
@@ -194,6 +200,7 @@ export function xyOf(grid, id) {
 }
 
 export function sampleGrid(grid, field, x, y) {
+  assertRectangularGrid(grid, "sampleGrid");
   const topology = topologyForGrid(grid);
   if (typeof topology.sample === "function") return topology.sample(field, x, y);
   const id = indexOf(grid, x, y);
@@ -201,6 +208,7 @@ export function sampleGrid(grid, field, x, y) {
 }
 
 export function sampleGridWrapped(grid, field, x, y) {
+  assertRectangularGrid(grid, "sampleGridWrapped");
   const topology = topologyForGrid(grid);
   if (typeof topology.sampleWrapped === "function") return topology.sampleWrapped(field, x, y);
   const id = indexOf(grid, x, y);
@@ -208,6 +216,7 @@ export function sampleGridWrapped(grid, field, x, y) {
 }
 
 export function sampleGridBilinear(grid, field, x, y, fallback = 0) {
+  assertRectangularGrid(grid, "sampleGridBilinear");
   const height = gridParamHeight(grid);
   if (!height) return fallback;
   const sx = wrapGridParamX(grid, x);
@@ -229,6 +238,12 @@ export function sampleGridBilinear(grid, field, x, y, fallback = 0) {
   const a = field[i00] * (1 - tx) + field[i10] * tx;
   const b = field[i01] * (1 - tx) + field[i11] * tx;
   return a * (1 - ty) + b * ty;
+}
+
+function assertRectangularGrid(grid, helperName) {
+  if (grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere") {
+    throw new Error(`${helperName} requires a rectangular grid; use topology graph or spherical projection helpers for cubed-sphere grids`);
+  }
 }
 
 export function forEachGridCell(grid, visit) {
