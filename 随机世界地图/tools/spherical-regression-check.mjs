@@ -77,6 +77,7 @@ const checks = [
   ["spherical-sidecar-gate-check", ["tools/spherical-sidecar-gate-check.mjs", seedText, String(faceSize)]],
   ["spherical-world-stats-check", ["tools/spherical-world-stats-check.mjs", String(faceSize)]],
   ["spherical-topology-seam-check", ["tools/spherical-topology-seam-check.mjs", String(faceSize)]],
+  ["spherical-grid-helper-guard-check", ["tools/spherical-grid-helper-guard-check.mjs", String(faceSize)]],
   ["spherical-resolution-gate-check", ["tools/spherical-resolution-gate-check.mjs", seedText, "2", `${smallFaceSize},${faceSize}`, "128x64"]],
   ["spherical-hydrology-diagnostics-check", ["tools/spherical-hydrology-diagnostics-check.mjs", String(smallFaceSize)]],
   ["spherical-hydrology-flow-topology-check", ["tools/spherical-hydrology-flow-topology-check.mjs", seedText, String(smallFaceSize), "55"]],
