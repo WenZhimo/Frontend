@@ -6,6 +6,7 @@ const seedText = positional[0] ?? options.seed ?? "龙骨海-纪元7";
 const faceSize = parseIntOption(options, "face-size", Number(positional[1] ?? 64));
 const steps = parseIntOption(options, "steps", Number(positional[2] ?? 200));
 const smallFaceSize = Math.max(16, Math.floor(faceSize / 2));
+const resolutionGateFaceSizes = makeResolutionGateFaceSizes(smallFaceSize, faceSize);
 const requestedGroups = parseCsv(options.group ?? options.groups, ["all"]);
 const checkTimeoutMs = parseIntOption(options, "timeout-ms", 120000);
 const heavyCheckTimeoutMs = parseIntOption(options, "heavy-timeout-ms", 300000);
@@ -81,7 +82,7 @@ const checks = [
   ["spherical-world-stats-check", ["tools/spherical-world-stats-check.mjs", String(faceSize)]],
   ["spherical-topology-seam-check", ["tools/spherical-topology-seam-check.mjs", String(faceSize)]],
   ["spherical-grid-helper-guard-check", ["tools/spherical-grid-helper-guard-check.mjs", String(faceSize)]],
-  ["spherical-resolution-gate-check", ["tools/spherical-resolution-gate-check.mjs", seedText, "2", `${smallFaceSize},${faceSize}`, "128x64"]],
+  ["spherical-resolution-gate-check", ["tools/spherical-resolution-gate-check.mjs", seedText, "2", resolutionGateFaceSizes.join(","), "128x64"]],
   ["spherical-hydrology-diagnostics-check", ["tools/spherical-hydrology-diagnostics-check.mjs", String(smallFaceSize)]],
   ["spherical-hydrology-flow-topology-check", ["tools/spherical-hydrology-flow-topology-check.mjs", seedText, String(smallFaceSize), "55"]],
   ["spherical-derived-adapter-check", ["tools/spherical-derived-adapter-check.mjs", String(smallFaceSize)]],
@@ -204,6 +205,16 @@ function groupMatches(group) {
 
 function checkTimeoutForName(name) {
   return isHeavyCheck(name) ? heavyCheckTimeoutMs : checkTimeoutMs;
+}
+
+function makeResolutionGateFaceSizes(a, b) {
+  const sizes = [a, b]
+    .map((value) => Math.max(2, Math.trunc(Number(value))))
+    .filter((value, index, values) => Number.isFinite(value) && values.indexOf(value) === index)
+    .sort((left, right) => left - right);
+  if (sizes.length >= 2) return sizes;
+  const base = sizes[0] ?? 16;
+  return [base, Math.max(base + 8, Math.ceil(base * 1.5))];
 }
 
 function isHeavyCheck(name) {
