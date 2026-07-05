@@ -305,6 +305,8 @@ const stats = {
   floodFillTopologyValid: topology.floodFillTopologyValid,
   connectedComponentTopologyValid: topology.connectedComponentTopologyValid,
   connectedComponentCount: topology.connectedComponentCount,
+  connectedComponentArea: topology.connectedComponentArea,
+  connectedComponentAreaError: topology.connectedComponentAreaError,
   seamContinuityRisk: topology.seamContinuityRisk,
   faceSeamContinuityRisk: topology.faceSeamContinuityRisk ?? topology.seamContinuityRisk,
   polarBoundaryRisk: topology.polarBoundaryRisk,
