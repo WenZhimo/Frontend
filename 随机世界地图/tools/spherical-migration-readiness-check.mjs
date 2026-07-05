@@ -48,6 +48,8 @@ const guardedCoreHelpers = [
   "gridParamHeight",
   "wrapGridParamX",
   "clampGridParamY",
+  "gridParamToU",
+  "gridParamToV",
   "indexOf",
   "xyOf",
   "sampleGrid",
@@ -329,15 +331,29 @@ function measureCoreHelperGuards() {
   const missing = [];
   const hasAssertImplementation =
     /function\s+assertRectangularGrid\s*\([^)]*\)\s*\{[\s\S]*?graphBacked[\s\S]*?cubed-sphere[\s\S]*?requires a rectangular grid/.test(text);
+  const bodies = Object.fromEntries(guardedCoreHelpers.map((helper) => [helper, exportedFunctionBody(text, helper)]));
+  const directlyGuarded = new Set(
+    guardedCoreHelpers.filter((helper) => {
+      const body = bodies[helper];
+      return body && new RegExp(`assertRectangularGrid\\s*\\(\\s*grid\\s*,\\s*["']${helper}["']\\s*\\)`).test(body);
+    }),
+  );
   for (const helper of guardedCoreHelpers) {
-    const body = exportedFunctionBody(text, helper);
-    if (body && hasAssertImplementation && new RegExp(`assertRectangularGrid\\s*\\(\\s*grid\\s*,\\s*["']${helper}["']\\s*\\)`).test(body)) {
+    const body = bodies[helper];
+    if (body && hasAssertImplementation && (directlyGuarded.has(helper) || callsGuardedHelper(body, directlyGuarded))) {
       guarded.push(helper);
     } else {
-      missing.push({ helper, reason: body ? "missing assertRectangularGrid call" : "exported function missing" });
+      missing.push({ helper, reason: body ? "missing direct or indirect rectangular guard" : "exported function missing" });
     }
   }
   return { guarded, missing };
+}
+
+function callsGuardedHelper(body, directlyGuarded) {
+  for (const helper of directlyGuarded) {
+    if (new RegExp(`\\b${helper}\\s*\\(\\s*grid\\b`).test(body)) return true;
+  }
+  return false;
 }
 
 function exportedFunctionBody(text, helper) {
