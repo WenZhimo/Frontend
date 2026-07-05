@@ -169,7 +169,7 @@ export function getBiosphereInputs(world) {
   const volcanicSoilPotential = new Float32Array(size);
   const disturbance = new Float32Array(size);
   const connectivityToLandmass = new Float32Array(size);
-  const componentSizes = measureComponentSizes(grid, base.landmassId);
+  const landmassAreas = measureComponentAreas(grid, base.landmassId);
   const landConnectivityScale = metricTotal(grid) * 0.18;
 
   for (let i = 0; i < size; i += 1) {
@@ -194,7 +194,7 @@ export function getBiosphereInputs(world) {
       (oldOrogeny?.[i] ?? 0) * 0.35,
     );
     const landId = base.landmassId[i];
-    connectivityToLandmass[i] = landId ? Math.min(1, (componentSizes.get(landId) ?? 0) / Math.max(Number.EPSILON, landConnectivityScale)) : 0;
+    connectivityToLandmass[i] = landId ? Math.min(1, (landmassAreas.get(landId) ?? 0) / Math.max(Number.EPSILON, landConnectivityScale)) : 0;
   }
 
   return {
@@ -663,7 +663,7 @@ function metricTotal(grid) {
   return total;
 }
 
-function measureComponentSizes(grid, componentId) {
+function measureComponentAreas(grid, componentId) {
   const sizes = new Map();
   for (let i = 0; i < componentId.length; i += 1) {
     const id = componentId[i];
