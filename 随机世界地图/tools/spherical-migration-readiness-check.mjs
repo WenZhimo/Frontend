@@ -97,6 +97,33 @@ const renderRectangularGuardSpecs = [
   },
 ];
 
+const scaleTopologyGuardSpecs = [
+  {
+    name: "resolutionScaleUsesFaceSizeForCubedSphere",
+    file: "src/sim/scale.js",
+    pattern:
+      /function\s+resolutionScale\s*\(\s*grid\s*\)\s*\{[\s\S]*?topologyKind\s*===\s*["']cubed-sphere["'][\s\S]*?grid\.faceSize[\s\S]*?REFERENCE_CUBED_SPHERE_FACE_SIZE[\s\S]*?grid\.width\s*\/\s*REFERENCE_WIDTH/,
+  },
+  {
+    name: "cellCenterURequiresRectangularWidth",
+    file: "src/sim/scale.js",
+    pattern:
+      /function\s+cellCenterU\s*\(\s*grid\s*,\s*x\s*\)\s*\{[\s\S]*?!Number\.isFinite\s*\(\s*grid\.width\s*\)[\s\S]*?requires a rectangular grid width[\s\S]*?grid\.width/,
+  },
+  {
+    name: "cellCenterVRequiresRectangularHeight",
+    file: "src/sim/scale.js",
+    pattern:
+      /function\s+cellCenterV\s*\(\s*grid\s*,\s*y\s*\)\s*\{[\s\S]*?!Number\.isFinite\s*\(\s*grid\.height\s*\)[\s\S]*?requires a rectangular grid height[\s\S]*?grid\.height/,
+  },
+  {
+    name: "spherePointForCellRejectsCubedSphere",
+    file: "src/sim/scale.js",
+    pattern:
+      /function\s+spherePointForCell\s*\(\s*grid\s*,\s*x\s*,\s*y\s*\)\s*\{[\s\S]*?topologyKind\s*===\s*["']cubed-sphere["'][\s\S]*?only valid for rectangular grids[\s\S]*?cellCenterU\s*\(\s*grid\s*,\s*x\s*\)/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -140,12 +167,19 @@ const coreHelperGuardStatus = measureCoreHelperGuards();
 const coreRectangularHelperGuardReady = coreHelperGuardStatus.missing.length === 0;
 const renderGuardStatus = measureRenderRectangularGuards();
 const renderRectangularPathGuardReady = renderGuardStatus.missing.length === 0;
+const scaleGuardStatus = measureScaleTopologyGuards();
+const scaleTopologyGuardReady = scaleGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
 const helperMigrationReady = migrationHelperRiskMatches.length === 0;
 const result = {
-  valid: productionAdapterReady && helperMigrationReady && coreRectangularHelperGuardReady && renderRectangularPathGuardReady,
+  valid:
+    productionAdapterReady &&
+    helperMigrationReady &&
+    coreRectangularHelperGuardReady &&
+    renderRectangularPathGuardReady &&
+    scaleTopologyGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -157,6 +191,10 @@ const result = {
   renderRectangularPathGuardCount: renderGuardStatus.guarded.length,
   renderRectangularPathGuardMissing: renderGuardStatus.missing,
   guardedRenderRectangularPaths: renderGuardStatus.guarded,
+  scaleTopologyGuardReady,
+  scaleTopologyGuardCount: scaleGuardStatus.guarded.length,
+  scaleTopologyGuardMissing: scaleGuardStatus.missing,
+  guardedScaleTopologyPaths: scaleGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -234,6 +272,7 @@ const result = {
     "legacyHelperRiskCount and migrationHelperRiskCount exclude explicit legacy wrapper bodies; possibleSphericalPathHelperCount is one risk subtype",
     "coreRectangularHelperGuardReady means src/sim/grid.js rectangular coordinate helpers fail fast on graph-backed cubed-sphere grids",
     "renderRectangularPathGuardReady means rectangular render/WebGL paths explicitly route or reject graph-backed cubed-sphere grids before grid.width/grid.height usage",
+    "scaleTopologyGuardReady means resolution scaling uses cubed-sphere faceSize while rectangular center helpers reject non-rectangular grids",
   ],
 };
 
@@ -417,6 +456,29 @@ function measureRenderRectangularGuards() {
       guarded.push({ name: spec.name, file: spec.file });
     } else {
       missing.push({ name: spec.name, file: spec.file, reason: "missing graph-backed guard before rectangular render path" });
+    }
+  }
+  return { guarded, missing };
+}
+
+function measureScaleTopologyGuards() {
+  return measureRegexSpecs(scaleTopologyGuardSpecs, "missing topology-aware scale guard");
+}
+
+function measureRegexSpecs(specs, missingReason) {
+  const guarded = [];
+  const missing = [];
+  for (const spec of specs) {
+    const file = path.join(root, spec.file);
+    if (!existsSync(file)) {
+      missing.push({ name: spec.name, file: spec.file, reason: "file missing" });
+      continue;
+    }
+    const text = readFileSync(file, "utf8");
+    if (spec.pattern.test(text)) {
+      guarded.push({ name: spec.name, file: spec.file });
+    } else {
+      missing.push({ name: spec.name, file: spec.file, reason: missingReason });
     }
   }
   return { guarded, missing };
