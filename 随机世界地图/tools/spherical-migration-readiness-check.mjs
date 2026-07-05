@@ -66,6 +66,12 @@ const renderRectangularGuardSpecs = [
       /if\s*\(\s*isGraphBackedGrid\s*\(\s*grid\s*\)\s*\)\s*\{[\s\S]*?only accepts rectangular grids[\s\S]*?ensureSize\s*\(\s*grid\.width\s*,\s*grid\.height\s*\)/,
   },
   {
+    name: "gpuWorldMirrorMarksGraphBackedWorldsRenderIncompatible",
+    file: "src/gpu/gpuWorld.js",
+    pattern:
+      /const\s+graphBacked\s*=\s*isGraphBackedGrid\s*\(\s*world\.grid\s*\)[\s\S]*?const\s+width\s*=\s*Number\.isFinite\s*\(\s*world\.grid\.width\s*\)\s*\?\s*world\.grid\.width\s*:\s*null[\s\S]*?const\s+height\s*=\s*Number\.isFinite\s*\(\s*world\.grid\.height\s*\)\s*\?\s*world\.grid\.height\s*:\s*null[\s\S]*?renderCompatible:\s*!graphBacked\s*&&\s*Number\.isFinite\s*\(\s*width\s*\)\s*&&\s*Number\.isFinite\s*\(\s*height\s*\)[\s\S]*?snapshotMetadata\s*\(\s*\)\s*\{[\s\S]*?renderCompatible:\s*!graphBacked\s*&&\s*Number\.isFinite\s*\(\s*width\s*\)\s*&&\s*Number\.isFinite\s*\(\s*height\s*\)/,
+  },
+  {
     name: "renderBackendRoutesSphericalToCpuProjection",
     file: "src/render/renderBackend.js",
     pattern:

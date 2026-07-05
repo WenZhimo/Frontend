@@ -1,6 +1,7 @@
 import { createWorld } from "../src/sim/world.js";
 import { createRenderBackend } from "../src/render/renderBackend.js";
 import { GpuRecommendedMode } from "../src/gpu/capability.js";
+import { createGpuWorldMirror } from "../src/gpu/gpuWorld.js";
 
 const capabilities = {
   secureContext: false,
@@ -39,6 +40,8 @@ const sphericalWorld = createWorld({
 
 backend.render(sphericalWorld);
 const drawCallsAfterSpherical = canvas.gl.drawCalls;
+const sphericalGpuMirror = createGpuWorldMirror(sphericalWorld);
+const sphericalGpuMirrorSnapshot = sphericalGpuMirror.snapshotMetadata();
 
 const rectangularWorld = createWorld({
   seedText: "龙骨海-纪元7",
@@ -53,6 +56,8 @@ const rectangularWorld = createWorld({
 });
 
 backend.render(rectangularWorld);
+const rectangularGpuMirror = createGpuWorldMirror(rectangularWorld);
+const rectangularGpuMirrorSnapshot = rectangularGpuMirror.snapshotMetadata();
 
 const defaultRectangularWorld = createWorld({
   seedText: "榫欓娴?绾厓7",
@@ -77,8 +82,16 @@ const checks = {
   sphericalUsesCpuProjection: sphericalWorld.renderBackend === "cpu-spherical-projection",
   sphericalExplainsGpuSkip: /spherical grids/i.test(sphericalWorld.renderFallbackReason ?? ""),
   sphericalDidNotDrawWebgl: drawCallsAfterSpherical === 0,
+  sphericalGpuMirrorGraphBacked: sphericalGpuMirrorSnapshot.graphBacked === true,
+  sphericalGpuMirrorHidesRectangularTextureDimensions:
+    sphericalGpuMirrorSnapshot.width === null && sphericalGpuMirrorSnapshot.height === null,
+  sphericalGpuMirrorNotRenderCompatible: sphericalGpuMirrorSnapshot.renderCompatible === false,
   rectangularUsesWebgl: rectangularWorld.renderBackend === "webgl2-render-experimental",
   rectangularDrewWebgl: canvas.gl.drawCalls > drawCallsAfterSpherical,
+  rectangularGpuMirrorKeepsTextureDimensions:
+    rectangularGpuMirrorSnapshot.width === rectangularWorld.grid.width &&
+    rectangularGpuMirrorSnapshot.height === rectangularWorld.grid.height,
+  rectangularGpuMirrorRenderCompatible: rectangularGpuMirrorSnapshot.renderCompatible === true,
 };
 
 const failures = Object.entries(checks)
@@ -95,7 +108,9 @@ const result = {
   backendKind: backend.kind,
   sphericalRenderBackend: sphericalWorld.renderBackend,
   sphericalFallbackReason: sphericalWorld.renderFallbackReason,
+  sphericalGpuMirror: sphericalGpuMirrorSnapshot,
   rectangularRenderBackend: rectangularWorld.renderBackend,
+  rectangularGpuMirror: rectangularGpuMirrorSnapshot,
   defaultWebglDrawCalls: defaultCanvas.gl.drawCalls,
   webglDrawCalls: canvas.gl.drawCalls,
 };
