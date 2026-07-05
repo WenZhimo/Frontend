@@ -405,6 +405,7 @@
     const neighborSymmetryValid = checkGraphNeighborSymmetry(topology);
     const isolatedCellCount = countGraphIsolatedCells(topology);
     const areaTotal = sumArea(grid);
+    const faceSeamContinuityRisk = measureGraphFaceSeamContinuityRisk(grid);
     return {
       topologyKind: topology.topologyKind ?? grid.topologyKind ?? "graph",
       graphBacked: true,
@@ -418,7 +419,8 @@
       connectedComponentTopologyValid: components.componentCount === 1,
       connectedComponentCount: components.componentCount,
       isolatedCellCount,
-      seamContinuityRisk: 0,
+      seamContinuityRisk: faceSeamContinuityRisk,
+      faceSeamContinuityRisk,
       polarBoundaryRisk: 0,
       polarAccessRisk: 0,
       topologyManualAccessRisk: 0,
@@ -457,6 +459,48 @@
       });
       if (neighborCount === 0) count += 1;
     });
+    return count;
+  }
+
+  function measureGraphFaceSeamContinuityRisk(grid) {
+    if (!grid.elev || !grid.face || !grid.neighborStart || !grid.neighborCount || !grid.neighbors) return 0;
+    let seamTotal = 0;
+    let seamCount = 0;
+    for (let id = 0; id < grid.size; id += 1) {
+      const start = grid.neighborStart[id];
+      for (let k = 0; k < grid.neighborCount[id]; k += 1) {
+        const nid = grid.neighbors[start + k];
+        if (nid < 0 || nid <= id || grid.face[nid] === grid.face[id]) continue;
+        const seamDelta = Math.abs(grid.elev[id] - grid.elev[nid]);
+        const interiorDelta = estimateGraphInteriorDelta(grid, id, nid);
+        seamTotal += Math.max(0, seamDelta - interiorDelta * 1.5);
+        seamCount += 1;
+      }
+    }
+    return seamTotal / Math.max(1, seamCount);
+  }
+
+  function estimateGraphInteriorDelta(grid, a, b) {
+    let total = 0;
+    let count = 0;
+    count += addSameFaceNeighborDelta(grid, a, totalSink);
+    count += addSameFaceNeighborDelta(grid, b, totalSink);
+    return count > 0 ? total / count : 0;
+
+    function totalSink(delta) {
+      total += delta;
+    }
+  }
+
+  function addSameFaceNeighborDelta(grid, id, add) {
+    const start = grid.neighborStart[id];
+    let count = 0;
+    for (let k = 0; k < grid.neighborCount[id]; k += 1) {
+      const nid = grid.neighbors[start + k];
+      if (nid < 0 || grid.face[nid] !== grid.face[id]) continue;
+      add(Math.abs(grid.elev[id] - grid.elev[nid]));
+      count += 1;
+    }
     return count;
   }
 
