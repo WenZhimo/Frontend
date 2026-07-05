@@ -42,6 +42,19 @@ const topologyAwareLegacyFiles = new Set([
   "src/sim/scale.js",
 ]);
 
+const guardedCoreHelperFile = "src/sim/grid.js";
+const guardedCoreHelpers = [
+  "gridParamWidth",
+  "gridParamHeight",
+  "wrapGridParamX",
+  "clampGridParamY",
+  "indexOf",
+  "xyOf",
+  "sampleGrid",
+  "sampleGridWrapped",
+  "sampleGridBilinear",
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -81,15 +94,21 @@ const graphRoutedFallbackByFile = summarizeByFile(graphRoutedFallbackMatches);
 const explicitLegacyWrapperByFile = summarizeByFile(explicitLegacyWrapperMatches);
 const graphBranchFallbackByFile = summarizeByFile(graphBranchFallbackMatches);
 const migrationHelperRiskByFile = summarizeByFile(migrationHelperRiskMatches);
+const coreHelperGuardStatus = measureCoreHelperGuards();
+const coreRectangularHelperGuardReady = coreHelperGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
 const helperMigrationReady = migrationHelperRiskMatches.length === 0;
 const result = {
-  valid: productionAdapterReady && helperMigrationReady,
+  valid: productionAdapterReady && helperMigrationReady && coreRectangularHelperGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
+  coreRectangularHelperGuardReady,
+  coreRectangularHelperGuardCount: coreHelperGuardStatus.guarded.length,
+  coreRectangularHelperGuardMissing: coreHelperGuardStatus.missing,
+  guardedCoreRectangularHelpers: coreHelperGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -165,6 +184,7 @@ const result = {
       : "helperMigrationReady is false while migrationHelperRiskCount is non-zero",
     "legacyHelperRawCount tracks all scanned topology helper usage; explicitLegacyWrapperCount tracks legacy compatibility wrappers",
     "legacyHelperRiskCount and migrationHelperRiskCount exclude explicit legacy wrapper bodies; possibleSphericalPathHelperCount is one risk subtype",
+    "coreRectangularHelperGuardReady means src/sim/grid.js rectangular coordinate helpers fail fast on graph-backed cubed-sphere grids",
   ],
 };
 
@@ -297,6 +317,41 @@ function countChar(text, char) {
     if (text[i] === char) count += 1;
   }
   return count;
+}
+
+function measureCoreHelperGuards() {
+  const file = path.join(root, guardedCoreHelperFile);
+  if (!existsSync(file)) {
+    return { guarded: [], missing: guardedCoreHelpers.map((name) => ({ helper: name, reason: "file missing" })) };
+  }
+  const text = readFileSync(file, "utf8");
+  const guarded = [];
+  const missing = [];
+  const hasAssertImplementation =
+    /function\s+assertRectangularGrid\s*\([^)]*\)\s*\{[\s\S]*?graphBacked[\s\S]*?cubed-sphere[\s\S]*?requires a rectangular grid/.test(text);
+  for (const helper of guardedCoreHelpers) {
+    const body = exportedFunctionBody(text, helper);
+    if (body && hasAssertImplementation && new RegExp(`assertRectangularGrid\\s*\\(\\s*grid\\s*,\\s*["']${helper}["']\\s*\\)`).test(body)) {
+      guarded.push(helper);
+    } else {
+      missing.push({ helper, reason: body ? "missing assertRectangularGrid call" : "exported function missing" });
+    }
+  }
+  return { guarded, missing };
+}
+
+function exportedFunctionBody(text, helper) {
+  const signature = new RegExp(`export\\s+function\\s+${helper}\\s*\\([^)]*\\)\\s*\\{`, "g");
+  const match = signature.exec(text);
+  if (!match) return null;
+  const start = match.index + match[0].length;
+  let depth = 1;
+  for (let i = start; i < text.length; i += 1) {
+    if (text[i] === "{") depth += 1;
+    if (text[i] === "}") depth -= 1;
+    if (depth === 0) return text.slice(start, i);
+  }
+  return null;
 }
 
 function isAllowedSphericalMatch(match) {
