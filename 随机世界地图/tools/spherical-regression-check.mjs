@@ -823,6 +823,8 @@ function compactMetrics(name, parsed) {
     "activeMarginFieldCount",
     "renderBackend",
     "renderUsesSphericalProjection",
+    "gpuUsesSphericalCpuReference",
+    "gpuRectangularPathSkipped",
     "debugLayerRestricted",
     "cellIdDebugOutputExists",
     "neighborCountDebugOutputExists",
