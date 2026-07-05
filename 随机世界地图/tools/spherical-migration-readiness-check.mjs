@@ -618,6 +618,12 @@ const diagnosticToolchainGuardSpecs = [
       /const\s+resolutionGateFaceSizes\s*=\s*makeResolutionGateFaceSizes\s*\(\s*smallFaceSize\s*,\s*faceSize\s*\)[\s\S]*?const\s+requestedGroups\s*=\s*parseCsv\s*\(\s*options\.group\s*\?\?\s*options\.groups\s*,\s*\[\s*["']all["']\s*\]\s*\)[\s\S]*?const\s+checkTimeoutMs\s*=\s*parseIntOption\s*\(\s*options\s*,\s*["']timeout-ms["'][\s\S]*?const\s+heavyCheckTimeoutMs\s*=\s*parseIntOption\s*\(\s*options\s*,\s*["']heavy-timeout-ms["'][\s\S]*?resolutionGateFaceSizes\.join\s*\(\s*["'],["']\s*\)[\s\S]*?const\s+selectedChecks\s*=\s*checks[\s\S]*?group:\s*checkGroupForName\s*\(\s*name\s*\)[\s\S]*?timeoutMs:\s*checkTimeoutForName\s*\(\s*name\s*\)[\s\S]*?\.filter\s*\(\s*\(\s*check\s*\)\s*=>\s*groupMatches\s*\(\s*check\.group\s*\)\s*\)[\s\S]*?const\s+timedOutChecks\s*=\s*results\.filter\s*\(\s*\(\s*result\s*\)\s*=>\s*result\.timedOut\s*\)\.map\s*\(\s*\(\s*result\s*\)\s*=>\s*result\.name\s*\)[\s\S]*?const\s+groupSummary\s*=\s*summarizeResultsByGroup\s*\(\s*results\s*\)[\s\S]*?const\s+slowestChecks\s*=\s*summarizeSlowestChecks\s*\(\s*results\s*\)[\s\S]*?passedCheckCount:\s*results\.length\s*-\s*failures\.length[\s\S]*?failedCheckCount:\s*failures\.length[\s\S]*?timedOutCheckCount:\s*timedOutChecks\.length[\s\S]*?timedOutChecks[\s\S]*?slowestChecks[\s\S]*?slowestCheckName:\s*slowestChecks\[0\]\?\.name\s*\?\?\s*null[\s\S]*?maxCheckMs:\s*slowestChecks\[0\]\?\.ms\s*\?\?\s*0[\s\S]*?groupSummary[\s\S]*?timeout:\s*timeoutMs[\s\S]*?function\s+summarizeResultsByGroup\s*\(\s*results\s*\)[\s\S]*?timedOutCheckCount:\s*0[\s\S]*?slowestCheckName:\s*null[\s\S]*?maxCheckMs:\s*0[\s\S]*?function\s+summarizeSlowestChecks\s*\(\s*results\s*,\s*limit\s*=\s*5\s*\)[\s\S]*?function\s+compactMetrics\s*\(\s*name\s*,\s*parsed\s*\)[\s\S]*?["']gpuUsesSphericalCpuReference["'][\s\S]*?["']gpuRectangularPathSkipped["'][\s\S]*?["']regressionCoverageRatio["']/,
   },
   {
+    name: "sphericalRegressionCompactsFoundationalTopologyMetrics",
+    file: "tools/spherical-regression-check.mjs",
+    pattern:
+      /["']foundationalTopologyToolchainGuardReady["'][\s\S]*?["']foundationalTopologyToolchainGuardCount["']/,
+  },
+  {
     name: "sphericalRegressionCoverageReportsCoverageRatio",
     file: "tools/spherical-regression-coverage-check.mjs",
     pattern:

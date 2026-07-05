@@ -493,6 +493,8 @@ function compactMetrics(name, parsed) {
     "derivedTerrainTopologyGuardCount",
     "hydrologyTopologyGuardReady",
     "hydrologyTopologyGuardCount",
+    "foundationalTopologyToolchainGuardReady",
+    "foundationalTopologyToolchainGuardCount",
     "worldTopologyGuardReady",
     "worldTopologyGuardCount",
     "geologyFeatureTopologyGuardReady",
