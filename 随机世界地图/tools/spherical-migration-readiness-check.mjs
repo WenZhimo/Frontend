@@ -588,7 +588,13 @@ const diagnosticToolchainGuardSpecs = [
     name: "sphericalRegressionSupportsGroupedTimeoutResumableRuns",
     file: "tools/spherical-regression-check.mjs",
     pattern:
-      /const\s+resolutionGateFaceSizes\s*=\s*makeResolutionGateFaceSizes\s*\(\s*smallFaceSize\s*,\s*faceSize\s*\)[\s\S]*?const\s+requestedGroups\s*=\s*parseCsv\s*\(\s*options\.group\s*\?\?\s*options\.groups\s*,\s*\[\s*["']all["']\s*\]\s*\)[\s\S]*?const\s+checkTimeoutMs\s*=\s*parseIntOption\s*\(\s*options\s*,\s*["']timeout-ms["'][\s\S]*?const\s+heavyCheckTimeoutMs\s*=\s*parseIntOption\s*\(\s*options\s*,\s*["']heavy-timeout-ms["'][\s\S]*?resolutionGateFaceSizes\.join\s*\(\s*["'],["']\s*\)[\s\S]*?const\s+selectedChecks\s*=\s*checks[\s\S]*?group:\s*checkGroupForName\s*\(\s*name\s*\)[\s\S]*?timeoutMs:\s*checkTimeoutForName\s*\(\s*name\s*\)[\s\S]*?\.filter\s*\(\s*\(\s*check\s*\)\s*=>\s*groupMatches\s*\(\s*check\.group\s*\)\s*\)[\s\S]*?timeout:\s*timeoutMs[\s\S]*?function\s+compactMetrics\s*\(\s*name\s*,\s*parsed\s*\)[\s\S]*?["']gpuUsesSphericalCpuReference["'][\s\S]*?["']gpuRectangularPathSkipped["']/,
+      /const\s+resolutionGateFaceSizes\s*=\s*makeResolutionGateFaceSizes\s*\(\s*smallFaceSize\s*,\s*faceSize\s*\)[\s\S]*?const\s+requestedGroups\s*=\s*parseCsv\s*\(\s*options\.group\s*\?\?\s*options\.groups\s*,\s*\[\s*["']all["']\s*\]\s*\)[\s\S]*?const\s+checkTimeoutMs\s*=\s*parseIntOption\s*\(\s*options\s*,\s*["']timeout-ms["'][\s\S]*?const\s+heavyCheckTimeoutMs\s*=\s*parseIntOption\s*\(\s*options\s*,\s*["']heavy-timeout-ms["'][\s\S]*?resolutionGateFaceSizes\.join\s*\(\s*["'],["']\s*\)[\s\S]*?const\s+selectedChecks\s*=\s*checks[\s\S]*?group:\s*checkGroupForName\s*\(\s*name\s*\)[\s\S]*?timeoutMs:\s*checkTimeoutForName\s*\(\s*name\s*\)[\s\S]*?\.filter\s*\(\s*\(\s*check\s*\)\s*=>\s*groupMatches\s*\(\s*check\.group\s*\)\s*\)[\s\S]*?timeout:\s*timeoutMs[\s\S]*?function\s+compactMetrics\s*\(\s*name\s*,\s*parsed\s*\)[\s\S]*?["']gpuUsesSphericalCpuReference["'][\s\S]*?["']gpuRectangularPathSkipped["'][\s\S]*?["']regressionCoverageRatio["']/,
+  },
+  {
+    name: "sphericalRegressionCoverageReportsCoverageRatio",
+    file: "tools/spherical-regression-coverage-check.mjs",
+    pattern:
+      /const\s+missingFromRegression\s*=\s*required\.filter\s*\(\s*\(\s*name\s*\)\s*=>\s*!referenced\.has\s*\(\s*name\s*\)\s*\)[\s\S]*?regressionCoverageRatio:\s*required\.length\s*>\s*0\s*\?\s*\(\s*required\.length\s*-\s*missingFromRegression\.length\s*\)\s*\/\s*required\.length\s*:\s*1/,
   },
 ];
 
