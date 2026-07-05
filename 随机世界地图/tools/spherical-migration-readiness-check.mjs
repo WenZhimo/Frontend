@@ -166,6 +166,27 @@ const resolutionSamplingGuardSpecs = [
   },
 ];
 
+const projectionOutputIndexGuardSpecs = [
+  {
+    name: "sphericalRendererIndexesProjectionOutputPixelsOnly",
+    file: "src/render/sphericalProjectionRenderer.js",
+    pattern:
+      /export\s+function\s+renderSphericalField\s*\(\s*grid\s*,\s*field\s*,\s*options\s*=\s*\{\}\s*\)\s*\{[\s\S]*?const\s+pixels\s*=\s*new\s+Uint8ClampedArray\s*\(\s*width\s*\*\s*height\s*\*\s*4\s*\)[\s\S]*?const\s+offset\s*=\s*\(\s*y\s*\*\s*width\s*\+\s*x\s*\)\s*\*\s*4[\s\S]*?projectionSampleToVec3\s*\(\s*x\s*,\s*y\s*,\s*width\s*,\s*height\s*,\s*projectionMode\s*,\s*options\s*\)[\s\S]*?nearestCellByVector\s*\(\s*grid\s*,\s*sample\.x\s*,\s*sample\.y\s*,\s*sample\.z\s*\)/,
+  },
+  {
+    name: "sphericalResolutionGateIndexesProjectedSamplesOnly",
+    file: "tools/spherical-resolution-gate-check.mjs",
+    pattern:
+      /function\s+sampleProjectedWorld\s*\(\s*world\s*,\s*width\s*,\s*height\s*,\s*projectionMode\s*\)\s*\{[\s\S]*?const\s+land\s*=\s*new\s+Uint8Array\s*\(\s*size\s*\)[\s\S]*?const\s+id\s*=\s*y\s*\*\s*width\s*\+\s*x[\s\S]*?projectionSampleToVec3\s*\(\s*x\s*,\s*y\s*,\s*width\s*,\s*height\s*,\s*projectionMode\s*\)[\s\S]*?nearestCellByVector\s*\(\s*world\.grid\s*,\s*sample\.x\s*,\s*sample\.y\s*,\s*sample\.z\s*\)/,
+  },
+  {
+    name: "sphericalResolutionGateCoastlineIndexesProjectedSampleOnly",
+    file: "tools/spherical-resolution-gate-check.mjs",
+    pattern:
+      /function\s+measureCoastline\s*\(\s*land\s*,\s*width\s*,\s*height\s*\)\s*\{[\s\S]*?const\s+id\s*=\s*y\s*\*\s*width\s*\+\s*x[\s\S]*?const\s+right\s*=\s*y\s*\*\s*width\s*\+\s*wrapX\s*\(\s*width\s*,\s*x\s*\+\s*1\s*\)[\s\S]*?return\s+edges\s*\/\s*Math\.max\s*\(\s*1\s*,\s*land\.length\s*\)/,
+  },
+];
+
 const graphRoutedLegacyFiles = new Map([
   [
     "src/sim/tectonics.js",
@@ -215,6 +236,8 @@ const topologyDiagnosticGuardStatus = measureTopologyDiagnosticGuards();
 const topologyDiagnosticGuardReady = topologyDiagnosticGuardStatus.missing.length === 0;
 const resolutionSamplingGuardStatus = measureResolutionSamplingGuards();
 const resolutionSamplingGuardReady = resolutionSamplingGuardStatus.missing.length === 0;
+const projectionOutputIndexGuardStatus = measureProjectionOutputIndexGuards();
+const projectionOutputIndexGuardReady = projectionOutputIndexGuardStatus.missing.length === 0;
 
 const productionAdapterReady = sphericalMatches.length === 0;
 const fullMigrationReady = legacyMatches.length === 0;
@@ -227,7 +250,8 @@ const result = {
     renderRectangularPathGuardReady &&
     scaleTopologyGuardReady &&
     topologyDiagnosticGuardReady &&
-    resolutionSamplingGuardReady,
+    resolutionSamplingGuardReady &&
+    projectionOutputIndexGuardReady,
   productionAdapterReady,
   fullMigrationReady,
   helperMigrationReady,
@@ -251,6 +275,10 @@ const result = {
   resolutionSamplingGuardCount: resolutionSamplingGuardStatus.guarded.length,
   resolutionSamplingGuardMissing: resolutionSamplingGuardStatus.missing,
   guardedResolutionSamplingPaths: resolutionSamplingGuardStatus.guarded,
+  projectionOutputIndexGuardReady,
+  projectionOutputIndexGuardCount: projectionOutputIndexGuardStatus.guarded.length,
+  projectionOutputIndexGuardMissing: projectionOutputIndexGuardStatus.missing,
+  guardedProjectionOutputIndexPaths: projectionOutputIndexGuardStatus.guarded,
   sphericalForbiddenCount: sphericalMatches.length,
   sphericalForbiddenFiles: Object.keys(sphericalByFile).length,
   legacyRiskCount: legacyMatches.length,
@@ -331,6 +359,7 @@ const result = {
     "scaleTopologyGuardReady means resolution scaling uses cubed-sphere faceSize while rectangular center helpers reject non-rectangular grids",
     "topologyDiagnosticGuardReady means graph-backed cubed-sphere topology diagnostics route away from rectangular grid.width/grid.height checks and report zero manual-access risk",
     "resolutionSamplingGuardReady means graph-backed resolution comparisons sample through projection vectors and reserve rectangular bilinear sampling for legacy grids",
+    "projectionOutputIndexGuardReady means y * width + x occurrences in projection render/gate tools index output pixels or projected sample buffers, not simulation grid cells",
   ],
 };
 
@@ -529,6 +558,10 @@ function measureTopologyDiagnosticGuards() {
 
 function measureResolutionSamplingGuards() {
   return measureRegexSpecs(resolutionSamplingGuardSpecs, "missing graph-backed resolution sampling guard");
+}
+
+function measureProjectionOutputIndexGuards() {
+  return measureRegexSpecs(projectionOutputIndexGuardSpecs, "missing projection-output pixel indexing guard");
 }
 
 function measureRegexSpecs(specs, missingReason) {
