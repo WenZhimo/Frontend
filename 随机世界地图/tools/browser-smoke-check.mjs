@@ -89,8 +89,6 @@ try {
 
   const afterPlay = await evaluate(cdp, sessionId, pageProbeScript({ requireStep: steps }));
   if (!afterPlay.ok) throw new Error(`Page probe failed after play: ${afterPlay.reason}`);
-  const performanceSummary = await evaluate(cdp, sessionId, "globalThis.__worldMapPerfSummary ?? null");
-  assertPerformanceSummary(performanceSummary);
 
   let validation = null;
   if (requireValidation) {
@@ -105,6 +103,8 @@ try {
       throw new Error(`GPU experimental writeback did not occur: ${JSON.stringify(validation)}`);
     }
   }
+  const performanceSummary = await evaluate(cdp, sessionId, "globalThis.__worldMapPerfSummary ?? null");
+  assertPerformanceSummary(performanceSummary);
 
   const projectErrors = consoleMessages.filter((message) => isProjectError(message.text));
   if (projectErrors.length > 0) {

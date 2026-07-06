@@ -31,7 +31,7 @@ export function createGpuComputeValidator(options = {}) {
     kernels,
     fields,
     interval,
-    async maybeValidate(world) {
+    maybeValidate(world) {
       if ((mode !== "validate" && mode !== "experimental") || !world?.grid || running || reportCount >= maxReports) {
         return null;
       }
@@ -39,39 +39,56 @@ export function createGpuComputeValidator(options = {}) {
       if (world.step % interval !== 0) return null;
       running = true;
       lastValidatedStep = world.step;
-      try {
-        const result =
-          mode === "experimental"
-            ? await applyExperimentalGpuComputeCheckpoint(world, { kernels, fields, globalObject })
-            : await validateGpuComputeCheckpoint(world, { kernels, fields, globalObject });
-        reportCount += 1;
-        logValidateResult(logger, result);
-        world.gpuComputeValidation = result;
-        globalObject.__lastGpuComputeValidation = result;
-        return result;
-      } catch (error) {
-        const result = {
-          valid: true,
-          skipped: true,
-          step: world.step,
-          mode,
-          reason: `GPU compute validate failed safely: ${error?.message ?? "unknown error"}`,
-          fallbackReason: `GPU compute ${mode} failed safely: ${error?.message ?? "unknown error"}`,
-          writebackApplied: false,
-          writebackFields: [],
-          fields: [],
-          candidateResults: [],
-        };
-        reportCount += 1;
-        logValidateResult(logger, result);
-        world.gpuComputeValidation = result;
-        globalObject.__lastGpuComputeValidation = result;
-        return result;
-      } finally {
-        running = false;
-      }
+      return scheduleValidationTask(globalObject, () => runScheduledValidation(world));
     },
   };
+
+  async function runScheduledValidation(world) {
+    try {
+      const result =
+        mode === "experimental"
+          ? await applyExperimentalGpuComputeCheckpoint(world, { kernels, fields, globalObject })
+          : await validateGpuComputeCheckpoint(world, { kernels, fields, globalObject });
+      reportCount += 1;
+      logValidateResult(logger, result);
+      world.gpuComputeValidation = result;
+      globalObject.__lastGpuComputeValidation = result;
+      return result;
+    } catch (error) {
+      const result = {
+        valid: true,
+        skipped: true,
+        step: world.step,
+        mode,
+        reason: `GPU compute validate failed safely: ${error?.message ?? "unknown error"}`,
+        fallbackReason: `GPU compute ${mode} failed safely: ${error?.message ?? "unknown error"}`,
+        writebackApplied: false,
+        writebackFields: [],
+        fields: [],
+        candidateResults: [],
+      };
+      reportCount += 1;
+      logValidateResult(logger, result);
+      world.gpuComputeValidation = result;
+      globalObject.__lastGpuComputeValidation = result;
+      return result;
+    } finally {
+      running = false;
+    }
+  }
+}
+
+function scheduleValidationTask(globalObject, task) {
+  return new Promise((resolve) => {
+    const run = () => {
+      resolve(Promise.resolve().then(task));
+    };
+    if (typeof globalObject?.requestIdleCallback === "function") {
+      globalObject.requestIdleCallback(run, { timeout: 250 });
+      return;
+    }
+    globalObject?.setTimeout?.(run, 0);
+  });
 }
 
 export async function validateGpuComputeCheckpoint(world, options = {}) {
