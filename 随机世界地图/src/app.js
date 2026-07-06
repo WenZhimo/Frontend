@@ -1071,7 +1071,7 @@
       },
       distance: (a, b) =>
         angularDistance3(positionX[a], positionY[a], positionZ[a], positionX[b], positionY[b], positionZ[b]),
-      nearestCell: (x, y, z) => nearestCellByVector({ size, positionX, positionY, positionZ }, x, y, z),
+      nearestCell: (x, y, z) => nearestCellByVector({ faceSize: n, size, positionX, positionY, positionZ }, x, y, z),
     };
   }
 
@@ -1126,6 +1126,16 @@
   }
 
   function nearestCellByVector(grid, x, y, z) {
+    if (Number.isFinite(grid?.faceSize) && grid.faceSize > 1) {
+      const mapped = vec3ToFaceUv(x, y, z);
+      return cellId(
+        grid.faceSize,
+        mapped.face,
+        localToIndex(mapped.u, grid.faceSize),
+        localToIndex(mapped.v, grid.faceSize),
+      );
+    }
+
     let best = 0;
     let bestDot = -Infinity;
     for (let id = 0; id < grid.size; id += 1) {
@@ -11240,6 +11250,7 @@
   world.gpuCapabilities = gpuCapabilities;
   let playing = false;
   let lastFrame = 0;
+  let pendingProjectionRender = false;
   const projectionCamera = {
     lon: 0,
     lat: 0,
@@ -11344,7 +11355,7 @@
       projectionDrag.lastY = event.clientY;
       projectionCamera.lon = wrapLongitude(projectionCamera.lon - dx * 0.01);
       projectionCamera.lat = clamp(projectionCamera.lat + dy * 0.01, -1.45, 1.45);
-      renderAll();
+      requestProjectionRender();
       event.preventDefault();
     });
 
@@ -11353,6 +11364,7 @@
       canvas.releasePointerCapture?.(event.pointerId);
       projectionDrag = null;
       updateProjectionCursor(false);
+      renderAll();
     };
     canvas.addEventListener("pointerup", stopDrag);
     canvas.addEventListener("pointercancel", stopDrag);
@@ -11368,13 +11380,22 @@
         0.55,
         1.85,
       );
-      renderAll();
+      requestProjectionRender();
       event.preventDefault();
     }, { passive: false });
 
     canvas.addEventListener("mouseenter", () => updateProjectionCursor(false));
     canvas.addEventListener("mouseleave", () => {
       if (!projectionDrag) updateProjectionCursor(false);
+    });
+  }
+
+  function requestProjectionRender() {
+    if (pendingProjectionRender) return;
+    pendingProjectionRender = true;
+    requestAnimationFrame(() => {
+      pendingProjectionRender = false;
+      renderAll();
     });
   }
 
