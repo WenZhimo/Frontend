@@ -45,24 +45,30 @@ export async function runWebGpuIsostasyCandidate(world, options = {}) {
 
   let adapter;
   let device;
+  let adapterInfo = null;
+  let deviceInfo = null;
   try {
     adapter = await gpu.requestAdapter();
     if (!adapter) {
       return skippedResult(capabilities, "WebGPU adapter request returned null.");
     }
+    adapterInfo = await collectAdapterInfo(adapter);
     device = await adapter.requestDevice();
+    deviceInfo = collectDeviceInfo(device);
   } catch (error) {
     return skippedResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
   }
 
   try {
-    return await computeIsostasyOnDevice(world, device, capabilities, requestedFields);
+    return await computeIsostasyOnDevice(world, device, capabilities, requestedFields, { adapterInfo, deviceInfo });
   } catch (error) {
     return {
       skipped: true,
       valid: true,
       backend: "webgpu-isostasy",
       gpuCapabilities: capabilities,
+      adapterInfo,
+      deviceInfo,
       reason: `WebGPU isostasy candidate failed safely: ${error?.message ?? "unknown error"}`,
       timings: emptyTimings(),
       fields: {},
@@ -72,7 +78,7 @@ export async function runWebGpuIsostasyCandidate(world, options = {}) {
   }
 }
 
-async function computeIsostasyOnDevice(world, device, capabilities, requestedFields) {
+async function computeIsostasyOnDevice(world, device, capabilities, requestedFields, diagnostics = {}) {
   const { grid } = world;
   const size = grid.size;
   const requestedSet = new Set(requestedFields);
@@ -178,6 +184,8 @@ async function computeIsostasyOnDevice(world, device, capabilities, requestedFie
     valid: true,
     backend: "webgpu-isostasy",
     gpuCapabilities: capabilities,
+    adapterInfo: diagnostics.adapterInfo ?? null,
+    deviceInfo: diagnostics.deviceInfo ?? null,
     reason: null,
     timings: {
       uploadMs,
@@ -189,6 +197,64 @@ async function computeIsostasyOnDevice(world, device, capabilities, requestedFie
     downloadedPacks: requestedPacks.map((pack) => pack.index),
     fields,
   };
+}
+
+async function collectAdapterInfo(adapter) {
+  try {
+    const rawInfo =
+      adapter?.info ??
+      (typeof adapter?.requestAdapterInfo === "function" ? await adapter.requestAdapterInfo() : null);
+    const info = {};
+    for (const key of [
+      "vendor",
+      "architecture",
+      "device",
+      "description",
+      "subgroupMinSize",
+      "subgroupMaxSize",
+    ]) {
+      const value = rawInfo?.[key];
+      if (value !== undefined && value !== "") info[key] = value;
+    }
+    if (typeof adapter?.isFallbackAdapter === "boolean") {
+      info.isFallbackAdapter = adapter.isFallbackAdapter;
+    }
+    return Object.keys(info).length ? info : null;
+  } catch (error) {
+    return {
+      unavailableReason: `GPU adapter info unavailable: ${error?.message ?? "unknown error"}`,
+    };
+  }
+}
+
+function collectDeviceInfo(device) {
+  try {
+    return {
+      features: [...(device?.features ?? [])].sort(),
+      limits: pickDeviceLimits(device?.limits),
+    };
+  } catch (error) {
+    return {
+      unavailableReason: `GPU device info unavailable: ${error?.message ?? "unknown error"}`,
+    };
+  }
+}
+
+function pickDeviceLimits(limits) {
+  if (!limits) return {};
+  const keys = [
+    "maxBindGroups",
+    "maxBufferSize",
+    "maxComputeInvocationsPerWorkgroup",
+    "maxComputeWorkgroupSizeX",
+    "maxStorageBufferBindingSize",
+  ];
+  const picked = {};
+  for (const key of keys) {
+    const value = limits[key];
+    if (Number.isFinite(value)) picked[key] = value;
+  }
+  return picked;
 }
 
 function createBufferWithData(device, typedArray, usage) {

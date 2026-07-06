@@ -293,6 +293,8 @@ function createBrowserPerfTracker(globalObject, options = {}) {
       fallbackReason: null,
       requestedFields: [],
       downloadedPacks: [],
+      adapterInfo: null,
+      deviceInfo: null,
       upload: summarizeSamples(samples.gpuUploadMs),
       kernel: summarizeSamples(samples.gpuKernelMs),
       download: summarizeSamples(samples.gpuDownloadMs),
@@ -339,6 +341,8 @@ function createBrowserPerfTracker(globalObject, options = {}) {
         fallbackReason: result.fallbackReason ?? result.skippedReason ?? null,
         requestedFields: collectGpuCandidateMetadata(result, "requestedFields"),
         downloadedPacks: collectGpuCandidateMetadata(result, "downloadedPacks"),
+        adapterInfo: collectFirstGpuCandidateMetadata(result, "adapterInfo"),
+        deviceInfo: collectFirstGpuCandidateMetadata(result, "deviceInfo"),
         upload: summarizeSamples(samples.gpuUploadMs),
         kernel: summarizeSamples(samples.gpuKernelMs),
         download: summarizeSamples(samples.gpuDownloadMs),
@@ -423,6 +427,13 @@ function collectGpuCandidateMetadata(result, key) {
     }
   }
   return values;
+}
+
+function collectFirstGpuCandidateMetadata(result, key) {
+  for (const candidate of result?.candidateResults ?? []) {
+    if (candidate?.[key]) return candidate[key];
+  }
+  return null;
 }
 
 function recordSample(samplesList, value, limit) {
