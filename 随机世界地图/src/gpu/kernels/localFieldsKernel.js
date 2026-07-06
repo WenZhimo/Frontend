@@ -7,8 +7,12 @@ struct Params {
 };
 
 @group(0) @binding(0) var<uniform> params: Params;
-@group(0) @binding(1) var<storage, read> field: array<f32>;
+@group(0) @binding(1) var<storage, read> packed: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> output0: array<vec4<f32>>;
+
+fn field_at(id: u32) -> f32 {
+  return packed[id].x;
+}
 
 fn index_of(x: i32, y: i32) -> i32 {
   if (y < 0 || y >= i32(params.height)) {
@@ -28,8 +32,8 @@ fn finite_sample(x: i32, y: i32, fallback: f32) -> f32 {
   if (id < 0) {
     return fallback;
   }
-  let value = field[u32(id)];
-  if (isNan(value) || isInf(value)) {
+  let value = field_at(u32(id));
+  if (value != value || abs(value) > 3.3e38) {
     return fallback;
   }
   return value;
@@ -45,7 +49,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   let width = params.width;
   let x = i32(i % width);
   let y = i32(i / width);
-  let center = field[i];
+  let center = field_at(i);
 
   let left = finite_sample(x - 1, y, center);
   let right = finite_sample(x + 1, y, center);
@@ -60,22 +64,22 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   var count = 0.0;
   let west = index_of(x - 1, y);
   if (west >= 0) {
-    sum += abs(center - field[u32(west)]);
+    sum += abs(center - field_at(u32(west)));
     count += 1.0;
   }
   let east = index_of(x + 1, y);
   if (east >= 0) {
-    sum += abs(center - field[u32(east)]);
+    sum += abs(center - field_at(u32(east)));
     count += 1.0;
   }
   let north = index_of(x, y - 1);
   if (north >= 0) {
-    sum += abs(center - field[u32(north)]);
+    sum += abs(center - field_at(u32(north)));
     count += 1.0;
   }
   let south = index_of(x, y + 1);
   if (south >= 0) {
-    sum += abs(center - field[u32(south)]);
+    sum += abs(center - field_at(u32(south)));
     count += 1.0;
   }
   let ruggedness = select(0.0, sum / count, count > 0.0);

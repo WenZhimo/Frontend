@@ -399,10 +399,14 @@ Phase 2B 当前落地状态：
 - 已新增 `src/gpu/kernels/localFieldsKernel.js` 与 `src/gpu/localFieldsCompute.js`，实现 `slope / aspect / ruggedness / localRelief` 的矩形网格 WebGPU candidate。
 - `tools/gpu-field-compare.mjs` 已支持 `webgpu-local-fields` / `local-fields`，输出 `rmse / maxAbs / p95Abs`，并在 WebGPU 不可用时 safe skip。
 - `tools/gpu-perf-profile.mjs` 已支持 `local-fields`，继续拆分 `uploadMs / kernelMs / downloadMs / totalGpuPathMs`。
+- `src/gpu/computeValidate.js` 已接入 `gpuKernel=local-fields` 浏览器 validate，并为 `slope / aspect / ruggedness / localRelief` 构建 CPU snapshot baseline；浏览器实机验证使用 `topology=cylindrical&projection=equirectangular` 显式走矩形网格路径。
+- `localFields` 浏览器实机曾暴露 Chrome WebGPU 不支持 WGSL `isNan/isInf` 的问题；现已改为 `value != value || abs(value) > 3.3e38` 的兼容检查，并为 pipeline / bind group / dispatch 加入 error scope，避免 shader 失败被误判为全 0 输出。
+- `localFields` 输入已改为 packed `vec4<f32>` storage buffer，和已验证的 dense kernels 保持一致；当前浏览器实机 `local-fields` validate 结果为真执行、非 skip，`slope / aspect / ruggedness / localRelief` 均通过阈值。
 - 该 candidate 仍是只读实验路径，不写回 `world.grid`，也不接入 `stepWorld` / `runGeologyV2Step`。
 - 当前只覆盖矩形网格；真实球面 / cubed-sphere 图拓扑会安全跳过，后续需按图邻域重新设计权重。
 - 已新增 `src/gpu/kernels/marginSmoothKernel.js` 与 `src/gpu/marginSmoothCompute.js`，实现 `passiveMargin / continentalShelf / continentalSlope / continentalRise / sedimentWedge / abyssalPlain` 的一次四邻域平滑 WebGPU candidate。
 - `tools/gpu-field-compare.mjs` 已支持 `webgpu-margin-smooth` / `margin-smooth`，并用 CPU 同等一次平滑结果作为 baseline；`tools/gpu-perf-profile.mjs` 已支持 `margin-smooth`。
+- `src/gpu/computeValidate.js` 已接入 `gpuKernel=margin-smooth` 浏览器 validate，并为 `passiveMargin / continentalShelf / continentalSlope / continentalRise / sedimentWedge / abyssalPlain` 构建 CPU 同等一轮四邻域平滑 baseline；浏览器实机 `margin-smooth` validate 结果为真执行、非 skip，所有字段均通过阈值。
 - `marginSmooth` candidate 只覆盖矩形网格上的 `smoothMarginFields` 平滑候选，不替代距离场、BFS、`clampMarginFields` 或任何 CPU 生产路径；真实球面 / cubed-sphere 图拓扑会安全跳过。
 - `tools/bundle-app.mjs` 已纳入 Phase 3 的 `localFields` 与 `marginSmooth` candidate 文件，确保浏览器 bundle 不遗漏新增 GPU 实验模块。
 - 已新增 `src/gpu/kernels/sedimentCapacityKernel.js` 与 `src/gpu/sedimentCapacityCompute.js`，实现 `sedimentCapacity` 的种子容量公式和两轮 8 邻域 softening WebGPU candidate。
