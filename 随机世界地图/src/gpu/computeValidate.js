@@ -24,6 +24,7 @@ export function createGpuComputeValidator(options = {}) {
   let running = false;
   let reportCount = 0;
   let lastValidatedStep = -1;
+  const validationHistory = [];
 
   return {
     mode,
@@ -51,8 +52,7 @@ export function createGpuComputeValidator(options = {}) {
           : await validateGpuComputeCheckpoint(world, { kernels, fields, globalObject });
       reportCount += 1;
       logValidateResult(logger, result);
-      world.gpuComputeValidation = result;
-      globalObject.__lastGpuComputeValidation = result;
+      publishValidationResult(world, globalObject, validationHistory, result);
       return result;
     } catch (error) {
       const result = {
@@ -69,8 +69,7 @@ export function createGpuComputeValidator(options = {}) {
       };
       reportCount += 1;
       logValidateResult(logger, result);
-      world.gpuComputeValidation = result;
-      globalObject.__lastGpuComputeValidation = result;
+      publishValidationResult(world, globalObject, validationHistory, result);
       return result;
     } finally {
       running = false;
@@ -89,6 +88,14 @@ function scheduleValidationTask(globalObject, task) {
     }
     globalObject?.setTimeout?.(run, 0);
   });
+}
+
+function publishValidationResult(world, globalObject, history, result) {
+  history.push(result);
+  while (history.length > 24) history.shift();
+  world.gpuComputeValidation = result;
+  globalObject.__lastGpuComputeValidation = result;
+  globalObject.__gpuComputeValidationHistory = history;
 }
 
 export async function validateGpuComputeCheckpoint(world, options = {}) {
@@ -280,6 +287,7 @@ function compactCandidateResult(kernel, result) {
     downloadedPacks: result?.downloadedPacks ?? [],
     adapterInfo: result?.adapterInfo ?? null,
     deviceInfo: result?.deviceInfo ?? null,
+    reusedContext: result?.reusedContext ?? false,
     timings: result?.timings ?? emptyTimings(),
   };
 }
@@ -695,9 +703,11 @@ function logValidateResult(logger, result) {
 
 function emptyTimings() {
   return {
+    setupMs: null,
     uploadMs: null,
     kernelMs: null,
     downloadMs: null,
     totalGpuPathMs: null,
+    totalCandidateMs: null,
   };
 }

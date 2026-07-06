@@ -9791,6 +9791,8 @@
     },
   ];
 
+  const isostasyContextCache = new WeakMap();
+
   async function runWebGpuIsostasyCandidate(world, options = {}) {
     const globalObject = options.globalObject ?? globalThis;
     const capabilities = detectGpuCapabilities(globalObject);
@@ -9803,42 +9805,69 @@
       return skippedResult(capabilities, "WebGPU is not available in this environment.");
     }
 
-    let adapter;
-    let device;
-    let adapterInfo = null;
-    let deviceInfo = null;
+    let context;
     try {
-      adapter = await gpu.requestAdapter();
-      if (!adapter) {
-        return skippedResult(capabilities, "WebGPU adapter request returned null.");
-      }
-      adapterInfo = await collectAdapterInfo(adapter);
-      device = await adapter.requestDevice();
-      deviceInfo = collectDeviceInfo(device);
+      context = await getIsostasyGpuContext(globalObject, gpu);
     } catch (error) {
       return skippedResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
     }
 
     try {
-      return await computeIsostasyOnDevice(world, device, capabilities, requestedFields, { adapterInfo, deviceInfo });
+      return await computeIsostasyOnDevice(world, context, capabilities, requestedFields);
     } catch (error) {
       return {
         skipped: true,
         valid: true,
         backend: "webgpu-isostasy",
         gpuCapabilities: capabilities,
-        adapterInfo,
-        deviceInfo,
+        adapterInfo: context?.adapterInfo ?? null,
+        deviceInfo: context?.deviceInfo ?? null,
         reason: `WebGPU isostasy candidate failed safely: ${error?.message ?? "unknown error"}`,
         timings: emptyTimings(),
         fields: {},
       };
-    } finally {
-      device?.destroy?.();
     }
   }
 
-  async function computeIsostasyOnDevice(world, device, capabilities, requestedFields, diagnostics = {}) {
+  async function getIsostasyGpuContext(globalObject, gpu) {
+    const cached = isostasyContextCache.get(globalObject);
+    if (cached?.device && cached?.pipeline) {
+      cached.reused = true;
+      return cached;
+    }
+
+    const setupStartedAt = performance.now();
+    const adapter = await gpu.requestAdapter();
+    if (!adapter) {
+      throw new Error("WebGPU adapter request returned null.");
+    }
+    const adapterInfo = await collectAdapterInfo(adapter);
+    const device = await adapter.requestDevice();
+    const deviceInfo = collectDeviceInfo(device);
+    const shaderModule = device.createShaderModule({ code: ISOSTASY_WGSL });
+    const pipeline = device.createComputePipeline({
+      layout: "auto",
+      compute: { module: shaderModule, entryPoint: "main" },
+    });
+    const context = {
+      device,
+      pipeline,
+      adapterInfo,
+      deviceInfo,
+      setupMs: performance.now() - setupStartedAt,
+      reused: false,
+    };
+    device.lost?.then?.(() => {
+      if (isostasyContextCache.get(globalObject) === context) {
+        isostasyContextCache.delete(globalObject);
+      }
+    });
+    isostasyContextCache.set(globalObject, context);
+    return context;
+  }
+
+  async function computeIsostasyOnDevice(world, context, capabilities, requestedFields) {
+    const { device, pipeline } = context;
     const { grid } = world;
     const size = grid.size;
     const requestedSet = new Set(requestedFields);
@@ -9885,11 +9914,6 @@
     }
     const uploadMs = performance.now() - uploadStartedAt;
 
-    const shaderModule = device.createShaderModule({ code: ISOSTASY_WGSL });
-    const pipeline = device.createComputePipeline({
-      layout: "auto",
-      compute: { module: shaderModule, entryPoint: "main" },
-    });
     const bindGroup = device.createBindGroup({
       layout: pipeline.getBindGroupLayout(0),
       entries: [
@@ -9944,17 +9968,20 @@
       valid: true,
       backend: "webgpu-isostasy",
       gpuCapabilities: capabilities,
-      adapterInfo: diagnostics.adapterInfo ?? null,
-      deviceInfo: diagnostics.deviceInfo ?? null,
+      adapterInfo: context.adapterInfo ?? null,
+      deviceInfo: context.deviceInfo ?? null,
       reason: null,
       timings: {
+        setupMs: context.reused ? 0 : context.setupMs,
         uploadMs,
         kernelMs,
         downloadMs,
         totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+        totalCandidateMs: (context.reused ? 0 : context.setupMs) + uploadMs + kernelMs + downloadMs,
       },
       requestedFields,
       downloadedPacks: requestedPacks.map((pack) => pack.index),
+      reusedContext: context.reused,
       fields,
     };
   }
@@ -10096,10 +10123,12 @@
 
   function emptyTimings() {
     return {
+      setupMs: null,
       uploadMs: null,
       kernelMs: null,
       downloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
     };
   }
 
@@ -11519,6 +11548,7 @@
     let running = false;
     let reportCount = 0;
     let lastValidatedStep = -1;
+    const validationHistory = [];
 
     return {
       mode,
@@ -11546,8 +11576,7 @@
             : await validateGpuComputeCheckpoint(world, { kernels, fields, globalObject });
         reportCount += 1;
         logValidateResult(logger, result);
-        world.gpuComputeValidation = result;
-        globalObject.__lastGpuComputeValidation = result;
+        publishValidationResult(world, globalObject, validationHistory, result);
         return result;
       } catch (error) {
         const result = {
@@ -11564,8 +11593,7 @@
         };
         reportCount += 1;
         logValidateResult(logger, result);
-        world.gpuComputeValidation = result;
-        globalObject.__lastGpuComputeValidation = result;
+        publishValidationResult(world, globalObject, validationHistory, result);
         return result;
       } finally {
         running = false;
@@ -11584,6 +11612,14 @@
       }
       globalObject?.setTimeout?.(run, 0);
     });
+  }
+
+  function publishValidationResult(world, globalObject, history, result) {
+    history.push(result);
+    while (history.length > 24) history.shift();
+    world.gpuComputeValidation = result;
+    globalObject.__lastGpuComputeValidation = result;
+    globalObject.__gpuComputeValidationHistory = history;
   }
 
   async function validateGpuComputeCheckpoint(world, options = {}) {
@@ -11775,6 +11811,7 @@
       downloadedPacks: result?.downloadedPacks ?? [],
       adapterInfo: result?.adapterInfo ?? null,
       deviceInfo: result?.deviceInfo ?? null,
+      reusedContext: result?.reusedContext ?? false,
       timings: result?.timings ?? emptyTimings(),
     };
   }
@@ -12190,10 +12227,12 @@
 
   function emptyTimings() {
     return {
+      setupMs: null,
       uploadMs: null,
       kernelMs: null,
       downloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
     };
   }
 
