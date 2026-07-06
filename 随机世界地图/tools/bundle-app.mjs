@@ -48,6 +48,8 @@ const files = [
   "src/gpu/localFieldsCompute.js",
   "src/gpu/kernels/marginSmoothKernel.js",
   "src/gpu/marginSmoothCompute.js",
+  "src/gpu/kernels/sedimentCapacityKernel.js",
+  "src/gpu/sedimentCapacityCompute.js",
   "src/render/cpuMapRenderer.js",
   "src/render/sphericalProjectionRenderer.js",
   "src/render/gpuMapRenderer.js",

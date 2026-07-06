@@ -403,6 +403,9 @@ Phase 2B 当前落地状态：
 - `tools/gpu-field-compare.mjs` 已支持 `webgpu-margin-smooth` / `margin-smooth`，并用 CPU 同等一次平滑结果作为 baseline；`tools/gpu-perf-profile.mjs` 已支持 `margin-smooth`。
 - `marginSmooth` candidate 只覆盖矩形网格上的 `smoothMarginFields` 平滑候选，不替代距离场、BFS、`clampMarginFields` 或任何 CPU 生产路径；真实球面 / cubed-sphere 图拓扑会安全跳过。
 - `tools/bundle-app.mjs` 已纳入 Phase 3 的 `localFields` 与 `marginSmooth` candidate 文件，确保浏览器 bundle 不遗漏新增 GPU 实验模块。
+- 已新增 `src/gpu/kernels/sedimentCapacityKernel.js` 与 `src/gpu/sedimentCapacityCompute.js`，实现 `sedimentCapacity` 的种子容量公式和两轮 8 邻域 softening WebGPU candidate。
+- `tools/gpu-field-compare.mjs` 已支持 `webgpu-sediment-capacity` / `sediment-capacity`，以 CPU `sedimentCapacity` 字段为权威 baseline；`tools/gpu-perf-profile.mjs` 已支持 `sediment-capacity`。
+- `sedimentCapacity` candidate 只覆盖容量场计算与 softening，不迁移沉积搬运、沉积写回、闭合盆地、外海连通、BFS 或水文图算法；真实球面 / cubed-sphere 图拓扑会安全跳过。
 
 ### Phase 4：Hybrid GPU simulation
 
