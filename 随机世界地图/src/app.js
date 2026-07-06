@@ -10328,8 +10328,12 @@
   };
 
   @group(0) @binding(0) var<uniform> params: Params;
-  @group(0) @binding(1) var<storage, read> field: array<f32>;
+  @group(0) @binding(1) var<storage, read> packed: array<vec4<f32>>;
   @group(0) @binding(2) var<storage, read_write> output0: array<vec4<f32>>;
+
+  fn field_at(id: u32) -> f32 {
+    return packed[id].x;
+  }
 
   fn index_of(x: i32, y: i32) -> i32 {
     if (y < 0 || y >= i32(params.height)) {
@@ -10349,8 +10353,8 @@
     if (id < 0) {
       return fallback;
     }
-    let value = field[u32(id)];
-    if (isNan(value) || isInf(value)) {
+    let value = field_at(u32(id));
+    if (value != value || abs(value) > 3.3e38) {
       return fallback;
     }
     return value;
@@ -10366,7 +10370,7 @@
     let width = params.width;
     let x = i32(i % width);
     let y = i32(i / width);
-    let center = field[i];
+    let center = field_at(i);
 
     let left = finite_sample(x - 1, y, center);
     let right = finite_sample(x + 1, y, center);
@@ -10381,22 +10385,22 @@
     var count = 0.0;
     let west = index_of(x - 1, y);
     if (west >= 0) {
-      sum += abs(center - field[u32(west)]);
+      sum += abs(center - field_at(u32(west)));
       count += 1.0;
     }
     let east = index_of(x + 1, y);
     if (east >= 0) {
-      sum += abs(center - field[u32(east)]);
+      sum += abs(center - field_at(u32(east)));
       count += 1.0;
     }
     let north = index_of(x, y - 1);
     if (north >= 0) {
-      sum += abs(center - field[u32(north)]);
+      sum += abs(center - field_at(u32(north)));
       count += 1.0;
     }
     let south = index_of(x, y + 1);
     if (south >= 0) {
-      sum += abs(center - field[u32(south)]);
+      sum += abs(center - field_at(u32(south)));
       count += 1.0;
     }
     let ruggedness = select(0.0, sum / count, count > 0.0);
@@ -10466,9 +10470,9 @@
     }
 
     const uploadStartedAt = performance.now();
-    const relativeElevation = new Float32Array(size);
+    const relativeElevation = new Float32Array(size * 4);
     for (let i = 0; i < size; i += 1) {
-      relativeElevation[i] = grid.elev[i] - seaLevel;
+      relativeElevation[i * 4] = grid.elev[i] - seaLevel;
     }
 
     const usage = globalThis.GPUBufferUsage;
@@ -10485,11 +10489,19 @@
     const readBuffer = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
     const uploadMs = performance.now() - uploadStartedAt;
 
+    device.pushErrorScope?.("validation");
     const shaderModule = device.createShaderModule({ code: LOCAL_FIELDS_WGSL });
     const pipeline = device.createComputePipeline({
       layout: "auto",
       compute: { module: shaderModule, entryPoint: "main" },
     });
+    const pipelineError = await device.popErrorScope?.();
+    if (pipelineError) {
+      destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
+      return skippedLocalFieldsResult(capabilities, `WebGPU local fields pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
+    }
+
+    device.pushErrorScope?.("validation");
     const bindGroup = device.createBindGroup({
       layout: pipeline.getBindGroupLayout(0),
       entries: [
@@ -10498,8 +10510,14 @@
         { binding: 2, resource: { buffer: outputBuffer } },
       ],
     });
+    const bindGroupError = await device.popErrorScope?.();
+    if (bindGroupError) {
+      destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
+      return skippedLocalFieldsResult(capabilities, `WebGPU local fields bind group validation failed: ${bindGroupError.message ?? bindGroupError}`);
+    }
 
     const kernelStartedAt = performance.now();
+    device.pushErrorScope?.("validation");
     const encoder = device.createCommandEncoder();
     const pass = encoder.beginComputePass();
     pass.setPipeline(pipeline);
@@ -10509,6 +10527,11 @@
     encoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, outputBytes);
     device.queue.submit([encoder.finish()]);
     await device.queue.onSubmittedWorkDone();
+    const dispatchError = await device.popErrorScope?.();
+    if (dispatchError) {
+      destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
+      return skippedLocalFieldsResult(capabilities, `WebGPU local fields dispatch validation failed: ${dispatchError.message ?? dispatchError}`);
+    }
     const kernelMs = performance.now() - kernelStartedAt;
 
     const downloadStartedAt = performance.now();
@@ -11393,6 +11416,7 @@
     const snapshot = createValidationSnapshot(world);
     const candidateResults = [];
     const candidateFields = {};
+    const baselineFields = buildBaselineFieldsForKernels(kernels, snapshot);
 
     for (const kernel of kernels) {
       const result = await runCandidateKernel(kernel, snapshot, options.globalObject);
@@ -11403,7 +11427,7 @@
     }
 
     const fieldResults = fields.map((fieldName) => {
-      const baselineField = snapshot.grid[fieldName];
+      const baselineField = baselineFields[fieldName] ?? snapshot.grid[fieldName];
       const candidateField = candidateFields[fieldName] ?? baselineField;
       return {
         ...compareField(fieldName, baselineField, candidateField, thresholdForField(fieldName)),
@@ -11474,6 +11498,12 @@
     }
     if (kernel === "isostasy" || kernel === "webgpu-isostasy") {
       return runWebGpuIsostasyCandidate(world, { globalObject });
+    }
+    if (kernel === "local-fields" || kernel === "localTerrain" || kernel === "webgpu-local-fields") {
+      return runWebGpuLocalFieldsCandidate(world, { globalObject });
+    }
+    if (kernel === "margin-smooth" || kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") {
+      return runWebGpuMarginSmoothCandidate(world, { globalObject });
     }
     if (kernel === "sediment-capacity" || kernel === "sedimentCapacity" || kernel === "webgpu-sediment-capacity") {
       return runWebGpuSedimentCapacityCandidate(world, { globalObject });
@@ -11576,6 +11606,20 @@
   }
 
   function thresholdForField(fieldName) {
+    if (fieldName === "aspect") return { rmse: 0.00001, maxAbs: 0.0001, p95Abs: 0.00001 };
+    if (fieldName === "slope" || fieldName === "ruggedness" || fieldName === "localRelief") {
+      return { rmse: 0.000001, maxAbs: 0.00001, p95Abs: 0.000001 };
+    }
+    if (
+      fieldName === "passiveMargin" ||
+      fieldName === "continentalShelf" ||
+      fieldName === "continentalSlope" ||
+      fieldName === "continentalRise" ||
+      fieldName === "sedimentWedge" ||
+      fieldName === "abyssalPlain"
+    ) {
+      return { rmse: 0.000001, maxAbs: 0.00001, p95Abs: 0.000001 };
+    }
     if (fieldName === "sedimentCapacity") return { rmse: 0.00001, maxAbs: 0.0001, p95Abs: 0.00002 };
     if (fieldName === "boundaryRelief") return { rmse: 0.003, maxAbs: 0.015, p95Abs: 0.006 };
     if (fieldName === "elev" || fieldName === "baseElev" || fieldName === "relief") {
@@ -11600,6 +11644,122 @@
     const sorted = Array.from(values).sort((a, b) => a - b);
     const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1));
     return sorted[index];
+  }
+
+  function buildBaselineFieldsForKernels(kernels, world) {
+    const baselineFields = {};
+    for (const kernel of kernels) {
+      if (kernel === "local-fields" || kernel === "localTerrain" || kernel === "webgpu-local-fields") {
+        Object.assign(baselineFields, computeCpuLocalFields(world));
+      } else if (kernel === "margin-smooth" || kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") {
+        Object.assign(baselineFields, computeCpuMarginSmooth(world));
+      }
+    }
+    return baselineFields;
+  }
+
+  function computeCpuLocalFields(world) {
+    const { grid, seaLevel } = world;
+    const { size, width, height } = grid;
+    if (!isRectangularGrid(grid)) return {};
+    const slope = new Float32Array(size);
+    const aspect = new Float32Array(size);
+    const ruggedness = new Float32Array(size);
+    const localRelief = new Float32Array(size);
+    const relativeElevation = new Float32Array(size);
+    for (let i = 0; i < size; i += 1) relativeElevation[i] = grid.elev[i] - seaLevel;
+
+    for (let id = 0; id < size; id += 1) {
+      const x = id % width;
+      const y = Math.floor(id / width);
+      const center = relativeElevation[id];
+      const left = finiteSample(relativeElevation, width, height, x - 1, y, center);
+      const right = finiteSample(relativeElevation, width, height, x + 1, y, center);
+      const up = finiteSample(relativeElevation, width, height, x, y - 1, center);
+      const down = finiteSample(relativeElevation, width, height, x, y + 1, center);
+      const dx = (right - left) * 0.5;
+      const dy = (down - up) * 0.5;
+      slope[id] = Math.hypot(dx, dy);
+      aspect[id] = Math.atan2(dy, dx);
+
+      let sum = 0;
+      let count = 0;
+      for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+        const nid = indexOf(width, height, nx, ny);
+        if (nid < 0) continue;
+        sum += Math.abs(center - relativeElevation[nid]);
+        count += 1;
+      }
+      ruggedness[id] = count ? sum / count : 0;
+      localRelief[id] = Math.max(
+        Math.abs(center - left),
+        Math.abs(center - right),
+        Math.abs(center - up),
+        Math.abs(center - down),
+      );
+    }
+    return { slope, aspect, ruggedness, localRelief };
+  }
+
+  function computeCpuMarginSmooth(world) {
+    const { grid } = world;
+    const { size, width, height } = grid;
+    if (!isRectangularGrid(grid)) return {};
+    const fields = {
+      passiveMargin: new Float32Array(grid.passiveMargin),
+      continentalShelf: new Float32Array(grid.continentalShelf),
+      continentalSlope: new Float32Array(grid.continentalSlope),
+      continentalRise: new Float32Array(grid.continentalRise),
+      sedimentWedge: new Float32Array(grid.sedimentWedge),
+      abyssalPlain: new Float32Array(grid.abyssalPlain),
+    };
+    const result = {};
+    for (const [name, source] of Object.entries(fields)) {
+      const output = new Float32Array(size);
+      for (let id = 0; id < size; id += 1) {
+        const x = id % width;
+        const y = Math.floor(id / width);
+        let total = source[id] * 2.5;
+        let weight = 2.5;
+        for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+          const nid = indexOf(width, height, nx, ny);
+          if (nid < 0) continue;
+          total += source[nid];
+          weight += 1;
+        }
+        output[id] = Math.max(0, Math.min(1, total / weight));
+      }
+      result[name] = output;
+    }
+    return result;
+  }
+
+  function finiteSample(field, width, height, x, y, fallback) {
+    const id = indexOf(width, height, x, y);
+    if (id < 0) return fallback;
+    const value = field[id];
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function indexOf(width, height, x, y) {
+    if (y < 0 || y >= height) return -1;
+    const sx = ((x % width) + width) % width;
+    const id = y * width + sx;
+    return id >= 0 && id < width * height ? id : -1;
+  }
+
+  function isRectangularGrid(grid) {
+    const width = grid?.width;
+    const height = grid?.height;
+    return (
+      Number.isFinite(width) &&
+      Number.isFinite(height) &&
+      width > 0 &&
+      height > 0 &&
+      width * height === grid?.size &&
+      !grid?.topologyOptions?.graphBacked &&
+      grid?.topologyKind !== "cubed-sphere"
+    );
   }
 
   function logValidateResult(logger, result) {

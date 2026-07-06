@@ -58,9 +58,9 @@ async function computeLocalFieldsOnDevice(world, device, capabilities) {
   }
 
   const uploadStartedAt = performance.now();
-  const relativeElevation = new Float32Array(size);
+  const relativeElevation = new Float32Array(size * 4);
   for (let i = 0; i < size; i += 1) {
-    relativeElevation[i] = grid.elev[i] - seaLevel;
+    relativeElevation[i * 4] = grid.elev[i] - seaLevel;
   }
 
   const usage = globalThis.GPUBufferUsage;
@@ -77,11 +77,19 @@ async function computeLocalFieldsOnDevice(world, device, capabilities) {
   const readBuffer = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
   const uploadMs = performance.now() - uploadStartedAt;
 
+  device.pushErrorScope?.("validation");
   const shaderModule = device.createShaderModule({ code: LOCAL_FIELDS_WGSL });
   const pipeline = device.createComputePipeline({
     layout: "auto",
     compute: { module: shaderModule, entryPoint: "main" },
   });
+  const pipelineError = await device.popErrorScope?.();
+  if (pipelineError) {
+    destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
+    return skippedLocalFieldsResult(capabilities, `WebGPU local fields pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
+  }
+
+  device.pushErrorScope?.("validation");
   const bindGroup = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: [
@@ -90,8 +98,14 @@ async function computeLocalFieldsOnDevice(world, device, capabilities) {
       { binding: 2, resource: { buffer: outputBuffer } },
     ],
   });
+  const bindGroupError = await device.popErrorScope?.();
+  if (bindGroupError) {
+    destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
+    return skippedLocalFieldsResult(capabilities, `WebGPU local fields bind group validation failed: ${bindGroupError.message ?? bindGroupError}`);
+  }
 
   const kernelStartedAt = performance.now();
+  device.pushErrorScope?.("validation");
   const encoder = device.createCommandEncoder();
   const pass = encoder.beginComputePass();
   pass.setPipeline(pipeline);
@@ -101,6 +115,11 @@ async function computeLocalFieldsOnDevice(world, device, capabilities) {
   encoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, outputBytes);
   device.queue.submit([encoder.finish()]);
   await device.queue.onSubmittedWorkDone();
+  const dispatchError = await device.popErrorScope?.();
+  if (dispatchError) {
+    destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
+    return skippedLocalFieldsResult(capabilities, `WebGPU local fields dispatch validation failed: ${dispatchError.message ?? dispatchError}`);
+  }
   const kernelMs = performance.now() - kernelStartedAt;
 
   const downloadStartedAt = performance.now();
