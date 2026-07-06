@@ -128,7 +128,7 @@ export function createCubedSphereGrid(faceSize = 64) {
     },
     distance: (a, b) =>
       angularDistance3(positionX[a], positionY[a], positionZ[a], positionX[b], positionY[b], positionZ[b]),
-    nearestCell: (x, y, z) => nearestCellByVector({ size, positionX, positionY, positionZ }, x, y, z),
+    nearestCell: (x, y, z) => nearestCellByVector({ faceSize: n, size, positionX, positionY, positionZ }, x, y, z),
   };
 }
 
@@ -183,6 +183,16 @@ export function vec3ToFaceUv(x, y, z) {
 }
 
 export function nearestCellByVector(grid, x, y, z) {
+  if (Number.isFinite(grid?.faceSize) && grid.faceSize > 1) {
+    const mapped = vec3ToFaceUv(x, y, z);
+    return cellId(
+      grid.faceSize,
+      mapped.face,
+      localToIndex(mapped.u, grid.faceSize),
+      localToIndex(mapped.v, grid.faceSize),
+    );
+  }
+
   let best = 0;
   let bestDot = -Infinity;
   for (let id = 0; id < grid.size; id += 1) {

@@ -47,6 +47,7 @@ let world = createWorld(readParams(elements));
 world.gpuCapabilities = gpuCapabilities;
 let playing = false;
 let lastFrame = 0;
+let pendingProjectionRender = false;
 const projectionCamera = {
   lon: 0,
   lat: 0,
@@ -151,7 +152,7 @@ function bindProjectionCameraControls() {
     projectionDrag.lastY = event.clientY;
     projectionCamera.lon = wrapLongitude(projectionCamera.lon - dx * 0.01);
     projectionCamera.lat = clamp(projectionCamera.lat + dy * 0.01, -1.45, 1.45);
-    renderAll();
+    requestProjectionRender();
     event.preventDefault();
   });
 
@@ -160,6 +161,7 @@ function bindProjectionCameraControls() {
     canvas.releasePointerCapture?.(event.pointerId);
     projectionDrag = null;
     updateProjectionCursor(false);
+    renderAll();
   };
   canvas.addEventListener("pointerup", stopDrag);
   canvas.addEventListener("pointercancel", stopDrag);
@@ -175,13 +177,22 @@ function bindProjectionCameraControls() {
       0.55,
       1.85,
     );
-    renderAll();
+    requestProjectionRender();
     event.preventDefault();
   }, { passive: false });
 
   canvas.addEventListener("mouseenter", () => updateProjectionCursor(false));
   canvas.addEventListener("mouseleave", () => {
     if (!projectionDrag) updateProjectionCursor(false);
+  });
+}
+
+function requestProjectionRender() {
+  if (pendingProjectionRender) return;
+  pendingProjectionRender = true;
+  requestAnimationFrame(() => {
+    pendingProjectionRender = false;
+    renderAll();
   });
 }
 
