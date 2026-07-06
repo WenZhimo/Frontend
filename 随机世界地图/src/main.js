@@ -291,6 +291,8 @@ function createBrowserPerfTracker(globalObject, options = {}) {
       skipped: null,
       writebackApplied: false,
       fallbackReason: null,
+      requestedFields: [],
+      downloadedPacks: [],
       upload: summarizeSamples(samples.gpuUploadMs),
       kernel: summarizeSamples(samples.gpuKernelMs),
       download: summarizeSamples(samples.gpuDownloadMs),
@@ -335,6 +337,8 @@ function createBrowserPerfTracker(globalObject, options = {}) {
         skipped: result.skipped ?? null,
         writebackApplied: result.writebackApplied ?? false,
         fallbackReason: result.fallbackReason ?? result.skippedReason ?? null,
+        requestedFields: collectGpuCandidateMetadata(result, "requestedFields"),
+        downloadedPacks: collectGpuCandidateMetadata(result, "downloadedPacks"),
         upload: summarizeSamples(samples.gpuUploadMs),
         kernel: summarizeSamples(samples.gpuKernelMs),
         download: summarizeSamples(samples.gpuDownloadMs),
@@ -405,6 +409,20 @@ function summarizeGpuTimings(result) {
     };
   }
   return totals;
+}
+
+function collectGpuCandidateMetadata(result, key) {
+  const values = [];
+  const seen = new Set();
+  for (const candidate of result?.candidateResults ?? []) {
+    for (const value of candidate?.[key] ?? []) {
+      const id = String(value);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      values.push(value);
+    }
+  }
+  return values;
 }
 
 function recordSample(samplesList, value, limit) {

@@ -149,7 +149,7 @@ async function compareGpuComputeCheckpoint(world, options = {}) {
   const baselineFields = buildBaselineFieldsForKernels(kernels, snapshot);
 
   for (const kernel of kernels) {
-    const result = await runCandidateKernel(kernel, snapshot, options.globalObject);
+    const result = await runCandidateKernel(kernel, snapshot, options.globalObject, fields);
     candidateResults.push(compactCandidateResult(kernel, result));
     if (!result?.skipped && result?.fields) {
       Object.assign(candidateFields, result.fields);
@@ -226,21 +226,21 @@ function defaultFieldsForMode(mode, kernels) {
   return DEFAULT_VALIDATE_FIELDS;
 }
 
-async function runCandidateKernel(kernel, world, globalObject) {
+async function runCandidateKernel(kernel, world, globalObject, fields) {
   if (kernel === "elevation" || kernel === "webgpu-elevation") {
-    return runWebGpuElevationCandidate(world, { globalObject });
+    return runWebGpuElevationCandidate(world, { globalObject, fields });
   }
   if (kernel === "isostasy" || kernel === "webgpu-isostasy") {
-    return runWebGpuIsostasyCandidate(world, { globalObject });
+    return runWebGpuIsostasyCandidate(world, { globalObject, fields });
   }
   if (kernel === "local-fields" || kernel === "localTerrain" || kernel === "webgpu-local-fields") {
-    return runWebGpuLocalFieldsCandidate(world, { globalObject });
+    return runWebGpuLocalFieldsCandidate(world, { globalObject, fields });
   }
   if (kernel === "margin-smooth" || kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") {
-    return runWebGpuMarginSmoothCandidate(world, { globalObject });
+    return runWebGpuMarginSmoothCandidate(world, { globalObject, fields });
   }
   if (kernel === "sediment-capacity" || kernel === "sedimentCapacity" || kernel === "webgpu-sediment-capacity") {
-    return runWebGpuSedimentCapacityCandidate(world, { globalObject });
+    return runWebGpuSedimentCapacityCandidate(world, { globalObject, fields });
   }
   return {
     skipped: true,
@@ -259,6 +259,8 @@ function compactCandidateResult(kernel, result) {
     skipped: Boolean(result?.skipped),
     valid: result?.valid !== false,
     reason: result?.reason ?? null,
+    requestedFields: result?.requestedFields ?? [],
+    downloadedPacks: result?.downloadedPacks ?? [],
     timings: result?.timings ?? emptyTimings(),
   };
 }

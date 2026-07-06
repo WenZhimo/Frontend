@@ -9776,9 +9776,28 @@
     "isostaticReliefSupply",
   ];
 
+  const GPU_ISOSTASY_OUTPUT_PACKS = [
+    {
+      index: 0,
+      fields: ["sedimentFill", "ridgeUplift", "trenchDepression", "crustBuoyancy"],
+    },
+    {
+      index: 1,
+      fields: ["densitySubsidence", "lithosphereCooling", "isostaticBase", "ageSubsidence"],
+    },
+    {
+      index: 2,
+      fields: ["thicknessBuoyancy", "oceanDepthTerms", "isostaticResidual", "isostaticReliefSupply"],
+    },
+  ];
+
   async function runWebGpuIsostasyCandidate(world, options = {}) {
     const globalObject = options.globalObject ?? globalThis;
     const capabilities = detectGpuCapabilities(globalObject);
+    const requestedFields = normalizeRequestedFields(options.fields ?? options.requestedFields, GPU_ISOSTASY_OUTPUT_FIELDS);
+    if (!requestedFields.length) {
+      return skippedResult(capabilities, "No WebGPU isostasy output fields were requested.");
+    }
     const gpu = globalObject?.navigator?.gpu;
     if (!capabilities.secureContext || !capabilities.webgpuAvailable || !gpu?.requestAdapter) {
       return skippedResult(capabilities, "WebGPU is not available in this environment.");
@@ -9797,7 +9816,7 @@
     }
 
     try {
-      return await computeIsostasyOnDevice(world, device, capabilities);
+      return await computeIsostasyOnDevice(world, device, capabilities, requestedFields);
     } catch (error) {
       return {
         skipped: true,
@@ -9813,9 +9832,13 @@
     }
   }
 
-  async function computeIsostasyOnDevice(world, device, capabilities) {
+  async function computeIsostasyOnDevice(world, device, capabilities, requestedFields) {
     const { grid } = world;
     const size = grid.size;
+    const requestedSet = new Set(requestedFields);
+    const requestedPacks = GPU_ISOSTASY_OUTPUT_PACKS.filter((pack) =>
+      pack.fields.some((fieldName) => requestedSet.has(fieldName)),
+    );
     const input0 = new Float32Array(size * 4);
     const input1 = new Float32Array(size * 4);
     const input2 = new Float32Array(size * 4);
@@ -9849,9 +9872,11 @@
     const outputBuffer0 = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
     const outputBuffer1 = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
     const outputBuffer2 = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
-    const readBuffer0 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
-    const readBuffer1 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
-    const readBuffer2 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+    const outputBuffers = [outputBuffer0, outputBuffer1, outputBuffer2];
+    const readBuffers = [null, null, null];
+    for (const pack of requestedPacks) {
+      readBuffers[pack.index] = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+    }
     const uploadMs = performance.now() - uploadStartedAt;
 
     const shaderModule = device.createShaderModule({ code: ISOSTASY_WGSL });
@@ -9879,28 +9904,24 @@
     pass.setBindGroup(0, bindGroup);
     pass.dispatchWorkgroups(Math.ceil(size / 64));
     pass.end();
-    encoder.copyBufferToBuffer(outputBuffer0, 0, readBuffer0, 0, outputBytes);
-    encoder.copyBufferToBuffer(outputBuffer1, 0, readBuffer1, 0, outputBytes);
-    encoder.copyBufferToBuffer(outputBuffer2, 0, readBuffer2, 0, outputBytes);
+    for (const pack of requestedPacks) {
+      encoder.copyBufferToBuffer(outputBuffers[pack.index], 0, readBuffers[pack.index], 0, outputBytes);
+    }
     device.queue.submit([encoder.finish()]);
     await device.queue.onSubmittedWorkDone();
     const kernelMs = performance.now() - kernelStartedAt;
 
     const downloadStartedAt = performance.now();
-    await Promise.all([
-      readBuffer0.mapAsync(mapMode.READ),
-      readBuffer1.mapAsync(mapMode.READ),
-      readBuffer2.mapAsync(mapMode.READ),
-    ]);
-    const packed0 = new Float32Array(readBuffer0.getMappedRange().slice(0));
-    const packed1 = new Float32Array(readBuffer1.getMappedRange().slice(0));
-    const packed2 = new Float32Array(readBuffer2.getMappedRange().slice(0));
-    readBuffer0.unmap();
-    readBuffer1.unmap();
-    readBuffer2.unmap();
+    await Promise.all(readBuffers.filter(Boolean).map((buffer) => buffer.mapAsync(mapMode.READ)));
+    const packed = [null, null, null];
+    for (const pack of requestedPacks) {
+      const readBuffer = readBuffers[pack.index];
+      packed[pack.index] = new Float32Array(readBuffer.getMappedRange().slice(0));
+      readBuffer.unmap();
+    }
     const downloadMs = performance.now() - downloadStartedAt;
 
-    const fields = unpackIsostasyFields(size, packed0, packed1, packed2);
+    const fields = unpackIsostasyFields(size, packed[0], packed[1], packed[2], requestedFields);
     destroyBuffers([
       paramBuffer,
       inputBuffer0,
@@ -9909,9 +9930,7 @@
       outputBuffer0,
       outputBuffer1,
       outputBuffer2,
-      readBuffer0,
-      readBuffer1,
-      readBuffer2,
+      ...readBuffers,
     ]);
 
     return {
@@ -9926,6 +9945,8 @@
         downloadMs,
         totalGpuPathMs: uploadMs + kernelMs + downloadMs,
       },
+      requestedFields,
+      downloadedPacks: requestedPacks.map((pack) => pack.index),
       fields,
     };
   }
@@ -9941,25 +9962,31 @@
     return buffer;
   }
 
-  function unpackIsostasyFields(size, packed0, packed1, packed2) {
+  function unpackIsostasyFields(size, packed0, packed1, packed2, requestedFields) {
     const fields = {};
-    for (const name of GPU_ISOSTASY_OUTPUT_FIELDS) {
+    for (const name of requestedFields) {
       fields[name] = new Float32Array(size);
     }
     for (let i = 0; i < size; i += 1) {
       const offset = i * 4;
-      fields.sedimentFill[i] = packed0[offset];
-      fields.ridgeUplift[i] = packed0[offset + 1];
-      fields.trenchDepression[i] = packed0[offset + 2];
-      fields.crustBuoyancy[i] = packed0[offset + 3];
-      fields.densitySubsidence[i] = packed1[offset];
-      fields.lithosphereCooling[i] = packed1[offset + 1];
-      fields.isostaticBase[i] = packed1[offset + 2];
-      fields.ageSubsidence[i] = packed1[offset + 3];
-      fields.thicknessBuoyancy[i] = packed2[offset];
-      fields.oceanDepthTerms[i] = packed2[offset + 1];
-      fields.isostaticResidual[i] = packed2[offset + 2];
-      fields.isostaticReliefSupply[i] = packed2[offset + 3];
+      if (packed0) {
+        if (fields.sedimentFill) fields.sedimentFill[i] = packed0[offset];
+        if (fields.ridgeUplift) fields.ridgeUplift[i] = packed0[offset + 1];
+        if (fields.trenchDepression) fields.trenchDepression[i] = packed0[offset + 2];
+        if (fields.crustBuoyancy) fields.crustBuoyancy[i] = packed0[offset + 3];
+      }
+      if (packed1) {
+        if (fields.densitySubsidence) fields.densitySubsidence[i] = packed1[offset];
+        if (fields.lithosphereCooling) fields.lithosphereCooling[i] = packed1[offset + 1];
+        if (fields.isostaticBase) fields.isostaticBase[i] = packed1[offset + 2];
+        if (fields.ageSubsidence) fields.ageSubsidence[i] = packed1[offset + 3];
+      }
+      if (packed2) {
+        if (fields.thicknessBuoyancy) fields.thicknessBuoyancy[i] = packed2[offset];
+        if (fields.oceanDepthTerms) fields.oceanDepthTerms[i] = packed2[offset + 1];
+        if (fields.isostaticResidual) fields.isostaticResidual[i] = packed2[offset + 2];
+        if (fields.isostaticReliefSupply) fields.isostaticReliefSupply[i] = packed2[offset + 3];
+      }
     }
     return fields;
   }
@@ -9968,6 +9995,25 @@
     for (const buffer of buffers) {
       buffer?.destroy?.();
     }
+  }
+
+  function normalizeRequestedFields(value, fallback) {
+    const available = new Set(GPU_ISOSTASY_OUTPUT_FIELDS);
+    const raw =
+      value === undefined || value === null || value === ""
+        ? fallback
+        : Array.isArray(value)
+          ? value
+          : String(value).split(",");
+    const fields = [];
+    const seen = new Set();
+    for (const part of raw) {
+      const fieldName = String(part).trim();
+      if (!available.has(fieldName) || seen.has(fieldName)) continue;
+      seen.add(fieldName);
+      fields.push(fieldName);
+    }
+    return fields;
   }
 
   function skippedResult(capabilities, reason) {
@@ -11532,7 +11578,7 @@
     const baselineFields = buildBaselineFieldsForKernels(kernels, snapshot);
 
     for (const kernel of kernels) {
-      const result = await runCandidateKernel(kernel, snapshot, options.globalObject);
+      const result = await runCandidateKernel(kernel, snapshot, options.globalObject, fields);
       candidateResults.push(compactCandidateResult(kernel, result));
       if (!result?.skipped && result?.fields) {
         Object.assign(candidateFields, result.fields);
@@ -11609,21 +11655,21 @@
     return DEFAULT_VALIDATE_FIELDS;
   }
 
-  async function runCandidateKernel(kernel, world, globalObject) {
+  async function runCandidateKernel(kernel, world, globalObject, fields) {
     if (kernel === "elevation" || kernel === "webgpu-elevation") {
-      return runWebGpuElevationCandidate(world, { globalObject });
+      return runWebGpuElevationCandidate(world, { globalObject, fields });
     }
     if (kernel === "isostasy" || kernel === "webgpu-isostasy") {
-      return runWebGpuIsostasyCandidate(world, { globalObject });
+      return runWebGpuIsostasyCandidate(world, { globalObject, fields });
     }
     if (kernel === "local-fields" || kernel === "localTerrain" || kernel === "webgpu-local-fields") {
-      return runWebGpuLocalFieldsCandidate(world, { globalObject });
+      return runWebGpuLocalFieldsCandidate(world, { globalObject, fields });
     }
     if (kernel === "margin-smooth" || kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") {
-      return runWebGpuMarginSmoothCandidate(world, { globalObject });
+      return runWebGpuMarginSmoothCandidate(world, { globalObject, fields });
     }
     if (kernel === "sediment-capacity" || kernel === "sedimentCapacity" || kernel === "webgpu-sediment-capacity") {
-      return runWebGpuSedimentCapacityCandidate(world, { globalObject });
+      return runWebGpuSedimentCapacityCandidate(world, { globalObject, fields });
     }
     return {
       skipped: true,
@@ -11642,6 +11688,8 @@
       skipped: Boolean(result?.skipped),
       valid: result?.valid !== false,
       reason: result?.reason ?? null,
+      requestedFields: result?.requestedFields ?? [],
+      downloadedPacks: result?.downloadedPacks ?? [],
       timings: result?.timings ?? emptyTimings(),
     };
   }
@@ -13238,6 +13286,8 @@
         skipped: null,
         writebackApplied: false,
         fallbackReason: null,
+        requestedFields: [],
+        downloadedPacks: [],
         upload: summarizeSamples(samples.gpuUploadMs),
         kernel: summarizeSamples(samples.gpuKernelMs),
         download: summarizeSamples(samples.gpuDownloadMs),
@@ -13282,6 +13332,8 @@
           skipped: result.skipped ?? null,
           writebackApplied: result.writebackApplied ?? false,
           fallbackReason: result.fallbackReason ?? result.skippedReason ?? null,
+          requestedFields: collectGpuCandidateMetadata(result, "requestedFields"),
+          downloadedPacks: collectGpuCandidateMetadata(result, "downloadedPacks"),
           upload: summarizeSamples(samples.gpuUploadMs),
           kernel: summarizeSamples(samples.gpuKernelMs),
           download: summarizeSamples(samples.gpuDownloadMs),
@@ -13352,6 +13404,20 @@
       };
     }
     return totals;
+  }
+
+  function collectGpuCandidateMetadata(result, key) {
+    const values = [];
+    const seen = new Set();
+    for (const candidate of result?.candidateResults ?? []) {
+      for (const value of candidate?.[key] ?? []) {
+        const id = String(value);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        values.push(value);
+      }
+    }
+    return values;
   }
 
   function recordSample(samplesList, value, limit) {

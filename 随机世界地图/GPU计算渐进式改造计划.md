@@ -621,6 +621,8 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 
 - `file:// + renderBackend=cpu` 可输出性能摘要，step 平均约 `252ms`，render 平均约 `44ms`，Console 无项目错误。
 - `localhost + gpuCompute=experimental + gpuKernel=isostasy` 可真执行并写回，但 GPU 总路径约 `14s`，其中 download/readback 约 `8.9s`，明显慢于当前 CPU 路径；因此 `isostasy` GPU 写回必须继续保留为显式 experimental，不能默认启用。
+- `localhost + gpuCompute=validate/experimental + gpuKernel=isostasy + gpuFields=isostaticBase` 已支持字段级 readback，只下载 `isostaticBase` 所在的 packed output buffer；浏览器 smoke 输出会记录 `requestedFields` 与 `downloadedPacks`，用于确认验证范围没有误报。
+- 字段级 readback 的实机结果仍显示 GPU 总路径约 `15.7s`，download/readback 约 `9.8s`，说明当前瓶颈不只是输出字段数量，后续优化应优先评估 buffer map/readback 固定成本、Chrome/WebGPU 环境开销、kernel 合批和降低验证频率。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
 
 ## 9. GPU 化验收标准
