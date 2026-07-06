@@ -433,7 +433,12 @@ Phase 2B 当前落地状态：
 - 已新增 `tools/gpu-drift-check.mjs`，作为 Phase 4 validate / experimental 前置闸门；它按 checkpoint 采样当前 CPU 权威世界，并在 WebGPU candidate 可用时对比候选字段，不可用时安全输出 skipped reason 与零漂移 CPU 证据。
 - `gpu-drift-check` 支持两种调用形态：计划文档形态 `seed pipeline resolution checkpoints fields`，以及 step-first 形态 `seed step pipeline resolution --gpu-compute validate --gpu-kernel ... --fields ...`。
 - 当前工具输出 `comparedSteps / maxFieldRmse / maxFieldAbs / failedFields / diagnosticDrift / driftOverTime / fieldDrift / skippedReason`，但还没有把任何 GPU candidate 写回 `world.grid`。
-- `gpuCompute=validate` 当前是工具链级验证模式；浏览器运行时 validate 开关和每 N 步双跑摘要尚未接入 UI / 主循环，后续进入 Phase 4 writeback 前必须补齐。
+- 已新增 `src/gpu/computeValidate.js` 与浏览器 URL 参数入口：`?gpuCompute=validate` 会每 N 步采样当前 CPU 权威 world，默认运行已通过浏览器实机采样的 `isostasy` WebGPU candidate，对比 `isostaticBase` 并在 Console 输出 `[gpu-compute-validate]` 摘要；该模式不写回 `world.grid`。
+- `gpuCompute=validate` 的默认采样间隔为 20 步，可用 `gpuValidateInterval` 调整；可用 `gpuKernel` / `gpuKernels` 和 `gpuFields` 缩小验证范围。
+- 浏览器运行时 `isostaticBase` validate 门槛使用 `rmse <= 0.001 / p95Abs <= 0.002 / maxAbs <= 0.0065`；其中 `maxAbs` 比离线候选门槛略宽，用于吸收浏览器 WebGPU f32 的单点边缘差异，不构成默认 GPU 写回许可。
+- 浏览器实机 WebGPU 验证显示 `elevation` 可以作为显式 `gpuKernel=elevation&gpuFields=elev` 实验核触发，但它在当前“步结束 world”后置采样下尚未通过 `elev` parity；后续需要单独对齐 `rebuildGeologyElevation` 的 stage checkpoint 或修正 candidate 输入时序，不能作为默认 validate 门禁。
+- 浏览器实机 WebGPU 验证显示 `sediment-capacity` 可以作为显式 `gpuKernel=sediment-capacity&gpuFields=sedimentCapacity` 实验核触发，但它不适合作为默认后置采样字段：CPU `sedimentCapacity` 在沉积预算流程内生成后，后续沉积/盆地写回会改变下一次容量公式输入，直接用“步结束 world”重算 candidate 会产生预期外漂移。因此它仍保留为显式实验项，后续需要在沉积 stage 内部 checkpoint 或单独 CPU baseline snapshot 下校准。
+- 浏览器运行时 validate 仍属于 Phase 4 前置门禁；后续进入 writeback 前还必须补齐多 seed、多分辨率和 20 / 200 / 739 Myr drift gate。
 
 ### Phase 5：高级 GPU 图算法评估
 
