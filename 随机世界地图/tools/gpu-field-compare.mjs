@@ -6,6 +6,7 @@ import { runWebGpuElevationCandidate } from "../src/gpu/elevationCompute.js";
 import { runWebGpuIsostasyCandidate } from "../src/gpu/isostasyCompute.js";
 import { runWebGpuLocalFieldsCandidate } from "../src/gpu/localFieldsCompute.js";
 import { runWebGpuMarginSmoothCandidate } from "../src/gpu/marginSmoothCompute.js";
+import { runWebGpuSedimentCapacityCandidate } from "../src/gpu/sedimentCapacityCompute.js";
 
 const DEFAULT_SEED = "龙骨海-纪元7";
 
@@ -57,7 +58,9 @@ const result = {
         ? "Phase 3 experimental compare: CPU terrain-derived fields remain authoritative; WebGPU local fields only run when explicitly requested."
         : candidateBackend === "webgpu-margin-smooth"
           ? "Phase 3 experimental compare: CPU margin fields remain authoritative; WebGPU margin smoothing only runs when explicitly requested."
-          : "CPU-vs-CPU compare remains the default path so expected deltas are zero.",
+          : candidateBackend === "webgpu-sediment-capacity"
+            ? "Phase 3 experimental compare: CPU sediment capacity remains authoritative; WebGPU sediment capacity only runs when explicitly requested."
+            : "CPU-vs-CPU compare remains the default path so expected deltas are zero.",
 };
 
 console.log(JSON.stringify(result, null, 2));
@@ -93,6 +96,7 @@ function backendAlias(value) {
   if (value === "webgpu-elevation" || value === "elevation") return "webgpu-elevation";
   if (value === "webgpu-local-fields" || value === "local-fields" || value === "localTerrain") return "webgpu-local-fields";
   if (value === "webgpu-margin-smooth" || value === "margin-smooth" || value === "marginSmooth") return "webgpu-margin-smooth";
+  if (value === "webgpu-sediment-capacity" || value === "sediment-capacity" || value === "sedimentCapacity") return "webgpu-sediment-capacity";
   if (value === "cpu" || value === "cpu-vs-cpu") return "cpu";
   return null;
 }
@@ -123,6 +127,9 @@ function defaultFieldsForBackend(backend) {
       "abyssalPlain",
     ];
   }
+  if (backend === "webgpu-sediment-capacity") {
+    return ["sedimentCapacity"];
+  }
   return ["elev", "isostaticBase", "oceanDepthTerms"];
 }
 
@@ -135,6 +142,7 @@ async function runCandidate(candidateName, world) {
   if (candidateName === "webgpu-elevation") return runWebGpuElevationCandidate(world);
   if (candidateName === "webgpu-local-fields") return runWebGpuLocalFieldsCandidate(world);
   if (candidateName === "webgpu-margin-smooth") return runWebGpuMarginSmoothCandidate(world);
+  if (candidateName === "webgpu-sediment-capacity") return runWebGpuSedimentCapacityCandidate(world);
   return null;
 }
 
@@ -200,6 +208,9 @@ function thresholdForField(fieldName, backend) {
   if (backend === "webgpu-margin-smooth") {
     return { rmse: 0.000001, maxAbs: 0.00001, p95Abs: 0.000001 };
   }
+  if (backend === "webgpu-sediment-capacity") {
+    return { rmse: 0.00001, maxAbs: 0.0001, p95Abs: 0.00002 };
+  }
   if (backend === "webgpu-elevation") {
     if (fieldName === "boundaryRelief") return { rmse: 0.003, maxAbs: 0.015, p95Abs: 0.006 };
     if (fieldName === "baseElev" || fieldName === "relief" || fieldName === "elev") {
@@ -235,7 +246,8 @@ function isWebGpuBackend(backend) {
     backend === "webgpu-isostasy" ||
     backend === "webgpu-elevation" ||
     backend === "webgpu-local-fields" ||
-    backend === "webgpu-margin-smooth"
+    backend === "webgpu-margin-smooth" ||
+    backend === "webgpu-sediment-capacity"
   );
 }
 

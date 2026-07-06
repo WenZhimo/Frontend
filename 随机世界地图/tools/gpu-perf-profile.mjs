@@ -6,6 +6,7 @@ import { runWebGpuElevationCandidate } from "../src/gpu/elevationCompute.js";
 import { runWebGpuIsostasyCandidate } from "../src/gpu/isostasyCompute.js";
 import { runWebGpuLocalFieldsCandidate } from "../src/gpu/localFieldsCompute.js";
 import { runWebGpuMarginSmoothCandidate } from "../src/gpu/marginSmoothCompute.js";
+import { runWebGpuSedimentCapacityCandidate } from "../src/gpu/sedimentCapacityCompute.js";
 
 const DEFAULT_SEED = "龙骨海-纪元7";
 
@@ -45,9 +46,11 @@ const result = {
         ? "webgpu-local-fields"
         : kernel === "margin-smooth"
           ? "webgpu-margin-smooth"
+          : kernel === "sediment-capacity"
+            ? "webgpu-sediment-capacity"
           : gpuCapabilities.recommendedMode,
   kernel,
-  attempted: kernel === "isostasy" || kernel === "elevation" || kernel === "local-fields" || kernel === "margin-smooth",
+  attempted: kernel === "isostasy" || kernel === "elevation" || kernel === "local-fields" || kernel === "margin-smooth" || kernel === "sediment-capacity",
   skipped: gpuCandidate?.skipped ?? false,
   skipReason: gpuCandidate?.reason ?? null,
   gpuCapabilities: gpuCandidate?.gpuCapabilities ?? gpuCapabilities,
@@ -75,7 +78,9 @@ const result = {
         ? "Phase 3 experimental profile: CPU terrain-derived fields remain authoritative; this profiles a single local stencil candidate pass."
         : kernel === "margin-smooth"
           ? "Phase 3 experimental profile: CPU margin fields remain authoritative; this profiles a single margin smoothing candidate pass."
-          : "Default profile keeps the CPU baseline and capability report without requesting a GPU device.",
+          : kernel === "sediment-capacity"
+            ? "Phase 3 experimental profile: CPU sediment capacity remains authoritative; this profiles seed + smoothing candidate passes without transport."
+            : "Default profile keeps the CPU baseline and capability report without requesting a GPU device.",
 };
 
 console.log(JSON.stringify(result, null, 2));
@@ -109,6 +114,7 @@ function kernelAlias(value) {
   if (value === "webgpu-elevation" || value === "elevation") return "elevation";
   if (value === "webgpu-local-fields" || value === "local-fields" || value === "localTerrain") return "local-fields";
   if (value === "webgpu-margin-smooth" || value === "margin-smooth" || value === "marginSmooth") return "margin-smooth";
+  if (value === "webgpu-sediment-capacity" || value === "sediment-capacity" || value === "sedimentCapacity") return "sediment-capacity";
   if (value === "none" || value === "cpu") return null;
   return undefined;
 }
@@ -132,5 +138,6 @@ async function runKernelCandidate(kernelName, world) {
   if (kernelName === "elevation") return runWebGpuElevationCandidate(world);
   if (kernelName === "local-fields") return runWebGpuLocalFieldsCandidate(world);
   if (kernelName === "margin-smooth") return runWebGpuMarginSmoothCandidate(world);
+  if (kernelName === "sediment-capacity") return runWebGpuSedimentCapacityCandidate(world);
   return null;
 }
