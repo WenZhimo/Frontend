@@ -14,6 +14,7 @@ const steps = parseIntOption(options, "steps", 2);
 const requireValidation = parseBoolOption(options, "require-validation");
 const chromePath = String(options.chrome ?? findChromePath());
 const userDataDir = resolve(options["user-data-dir"] ?? ".test-cache/browser-smoke-profile");
+const remoteDebuggingPort = parseIntOption(options, "remote-debugging-port", 9222);
 
 if (!chromePath) {
   throw new Error("Chrome executable was not found. Pass --chrome <path>.");
@@ -29,7 +30,7 @@ if (mode === "http" || mode === "localhost") {
 }
 
 const chrome = spawn(chromePath, [
-  `--remote-debugging-port=0`,
+  `--remote-debugging-port=${remoteDebuggingPort}`,
   `--user-data-dir=${userDataDir}`,
   "--no-first-run",
   "--no-default-browser-check",
