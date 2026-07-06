@@ -13391,10 +13391,12 @@
       stepMs: [],
       renderMs: [],
       projectionRenderMs: [],
+      gpuSetupMs: [],
       gpuUploadMs: [],
       gpuKernelMs: [],
       gpuDownloadMs: [],
       gpuTotalMs: [],
+      gpuCandidateTotalMs: [],
     };
     const summary = {
       valid: true,
@@ -13414,10 +13416,12 @@
         downloadedPacks: [],
         adapterInfo: null,
         deviceInfo: null,
+        setup: summarizeSamples(samples.gpuSetupMs),
         upload: summarizeSamples(samples.gpuUploadMs),
         kernel: summarizeSamples(samples.gpuKernelMs),
         download: summarizeSamples(samples.gpuDownloadMs),
         total: summarizeSamples(samples.gpuTotalMs),
+        candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
       },
       longTask: {
         count: 0,
@@ -13448,10 +13452,14 @@
       },
       recordGpuCompute(result) {
         const timings = summarizeGpuTimings(result);
+        if (Number.isFinite(timings.setupMs)) recordSample(samples.gpuSetupMs, timings.setupMs, sampleLimit);
         if (Number.isFinite(timings.uploadMs)) recordSample(samples.gpuUploadMs, timings.uploadMs, sampleLimit);
         if (Number.isFinite(timings.kernelMs)) recordSample(samples.gpuKernelMs, timings.kernelMs, sampleLimit);
         if (Number.isFinite(timings.downloadMs)) recordSample(samples.gpuDownloadMs, timings.downloadMs, sampleLimit);
         if (Number.isFinite(timings.totalGpuPathMs)) recordSample(samples.gpuTotalMs, timings.totalGpuPathMs, sampleLimit);
+        if (Number.isFinite(timings.totalCandidateMs)) {
+          recordSample(samples.gpuCandidateTotalMs, timings.totalCandidateMs, sampleLimit);
+        }
         summary.gpuCompute = {
           mode: result.mode ?? summary.gpuCompute.mode,
           valid: result.valid ?? null,
@@ -13462,10 +13470,12 @@
           downloadedPacks: collectGpuCandidateMetadata(result, "downloadedPacks"),
           adapterInfo: collectFirstGpuCandidateMetadata(result, "adapterInfo"),
           deviceInfo: collectFirstGpuCandidateMetadata(result, "deviceInfo"),
+          setup: summarizeSamples(samples.gpuSetupMs),
           upload: summarizeSamples(samples.gpuUploadMs),
           kernel: summarizeSamples(samples.gpuKernelMs),
           download: summarizeSamples(samples.gpuDownloadMs),
           total: summarizeSamples(samples.gpuTotalMs),
+          candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
         };
         publish();
       },
@@ -13508,10 +13518,12 @@
 
   function summarizeGpuTimings(result) {
     const totals = {
+      setupMs: 0,
       uploadMs: 0,
       kernelMs: 0,
       downloadMs: 0,
       totalGpuPathMs: 0,
+      totalCandidateMs: 0,
     };
     let count = 0;
     for (const candidate of result?.candidateResults ?? []) {
@@ -13525,10 +13537,12 @@
     }
     if (!count) {
       return {
+        setupMs: null,
         uploadMs: null,
         kernelMs: null,
         downloadMs: null,
         totalGpuPathMs: null,
+        totalCandidateMs: null,
       };
     }
     return totals;

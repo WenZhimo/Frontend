@@ -29,8 +29,9 @@ const cpuBaselineMs = stepMs.reduce((sum, value) => sum + value, 0);
 stepMs.sort((a, b) => a - b);
 const gpuCandidate = await runKernelCandidate(kernel, world, fields);
 const totalGpuPathMs = gpuCandidate?.timings?.totalGpuPathMs;
-const speedup = Number.isFinite(totalGpuPathMs) && totalGpuPathMs > 0
-  ? cpuBaselineMs / totalGpuPathMs
+const totalCandidateMs = gpuCandidate?.timings?.totalCandidateMs ?? totalGpuPathMs;
+const speedup = Number.isFinite(totalCandidateMs) && totalCandidateMs > 0
+  ? cpuBaselineMs / totalCandidateMs
   : null;
 
 const result = {
@@ -61,10 +62,12 @@ const result = {
   cpuBaselineAverageStepMs: round2(cpuBaselineMs / Math.max(1, steps)),
   averageStepMs: round2(cpuBaselineMs / Math.max(1, steps)),
   p95StepMs: round2(percentile(stepMs, 0.95)),
+  setupMs: roundNullable(gpuCandidate?.timings?.setupMs),
   uploadMs: roundNullable(gpuCandidate?.timings?.uploadMs),
   kernelMs: roundNullable(gpuCandidate?.timings?.kernelMs),
   downloadMs: roundNullable(gpuCandidate?.timings?.downloadMs),
   totalGpuPathMs: roundNullable(totalGpuPathMs),
+  totalCandidateMs: roundNullable(totalCandidateMs),
   speedup: roundNullable(speedup),
   slowdown: roundNullable(speedup ? 1 / speedup : null),
   fasterThanCpuBaseline: Number.isFinite(speedup) ? speedup > 1 : null,

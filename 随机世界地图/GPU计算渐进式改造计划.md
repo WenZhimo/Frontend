@@ -610,6 +610,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 12000 --que
 - 涉及 WebGPU compute 的阶段必须额外跑一次 `http` 模式并带 `--require-validation`。
 - `browser-smoke-check` 通过不替代 `interface-check / long-run-check / resolution-check`，而是补足真实浏览器运行证据。
 - `browser-smoke-check` 已可读取 `globalThis.__worldMapPerfSummary`；加 `--require-perf-summary` 时会要求浏览器实机产生 step/render 样本，并在输出中记录 step、render、projection render、GPU upload/kernel/download/total 和 Long Task 摘要。
+- 浏览器 perf summary 与 `gpu-perf-profile` 现在同时记录 `setupMs` 和 `totalCandidateMs`；默认启用 GPU 时应优先看包含 setup 的 `totalCandidateMs`，连续运行时再看 setup 摊薄后的 `totalGpuPathMs`。
 - 性能门禁可选参数：
 
 ```powershell
