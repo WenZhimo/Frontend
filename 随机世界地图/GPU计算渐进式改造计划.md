@@ -623,6 +623,8 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - `localhost + gpuCompute=experimental + gpuKernel=isostasy` 可真执行并写回，但 GPU 总路径约 `14s`，其中 download/readback 约 `8.9s`，明显慢于当前 CPU 路径；因此 `isostasy` GPU 写回必须继续保留为显式 experimental，不能默认启用。
 - `localhost + gpuCompute=validate/experimental + gpuKernel=isostasy + gpuFields=isostaticBase` 已支持字段级 readback，只下载 `isostaticBase` 所在的 packed output buffer；浏览器 smoke 输出会记录 `requestedFields` 与 `downloadedPacks`，用于确认验证范围没有误报。
 - 字段级 readback 的实机结果仍显示 GPU 总路径约 `15.7s`，download/readback 约 `9.8s`，说明当前瓶颈不只是输出字段数量，后续优化应优先评估 buffer map/readback 固定成本、Chrome/WebGPU 环境开销、kernel 合批和降低验证频率。
+- 浏览器 smoke 现在会把 WebGPU candidate 的 `adapterInfo` / `deviceInfo` 一并带出，用来区分真实硬件路径、兼容/软件 fallback、设备 limits 或 feature 缺失造成的异常慢路径。
+- `gpuFields=isostaticBase` 的最新浏览器 validate 显示 adapter 为 `nvidia / lovelace`，不是软件 fallback；单字段路径仍出现约 `20.3s` 总 GPU 路径，其中 kernel 约 `7.3s`、download 约 `12.9s`，因此下一轮应优先做“设备 / pipeline 复用 + 异步低频验证”，而不是继续细分单次 readback 字段。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
 
 ## 9. GPU 化验收标准

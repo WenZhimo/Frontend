@@ -261,6 +261,8 @@ function compactCandidateResult(kernel, result) {
     reason: result?.reason ?? null,
     requestedFields: result?.requestedFields ?? [],
     downloadedPacks: result?.downloadedPacks ?? [],
+    adapterInfo: result?.adapterInfo ?? null,
+    deviceInfo: result?.deviceInfo ?? null,
     timings: result?.timings ?? emptyTimings(),
   };
 }

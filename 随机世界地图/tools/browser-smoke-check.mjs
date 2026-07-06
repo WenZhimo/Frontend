@@ -395,6 +395,8 @@ function summarizeValidation(validation) {
       reason: candidate.reason ?? null,
       requestedFields: candidate.requestedFields ?? [],
       downloadedPacks: candidate.downloadedPacks ?? [],
+      adapterInfo: candidate.adapterInfo ?? null,
+      deviceInfo: candidate.deviceInfo ?? null,
       timings: candidate.timings ?? null,
     })) ?? [],
     fields: validation.fields?.map((field) => ({
