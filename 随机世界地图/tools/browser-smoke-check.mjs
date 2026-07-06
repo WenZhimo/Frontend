@@ -17,6 +17,8 @@ const requirePerfSummary = parseBoolOption(options, "require-perf-summary");
 const requireValidationCount = Math.max(1, parseIntOption(options, "require-validation-count", 1));
 const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
 const maxLongTaskMs = parseIntOption(options, "max-long-task-ms", 0);
+const maxGpuTotalMs = parseIntOption(options, "max-gpu-total-ms", 0);
+const maxGpuCandidateMs = parseIntOption(options, "max-gpu-candidate-ms", 0);
 const chromePath = String(options.chrome ?? findChromePath());
 const userDataDir = resolve(options["user-data-dir"] ?? ".test-cache/browser-smoke-profile");
 const remoteDebuggingPort = parseIntOption(options, "remote-debugging-port", 9222);
@@ -385,6 +387,14 @@ function assertPerformanceSummary(summary) {
   }
   if (maxLongTaskMs > 0 && summary.longTask?.maxMs > maxLongTaskMs) {
     throw new Error(`Long task exceeded ${maxLongTaskMs}ms: ${JSON.stringify(summary.longTask)}`);
+  }
+  const gpuTotal = summary.gpuCompute?.total;
+  if (maxGpuTotalMs > 0 && gpuTotal?.maxMs > maxGpuTotalMs) {
+    throw new Error(`GPU total path exceeded ${maxGpuTotalMs}ms: ${JSON.stringify(gpuTotal)}`);
+  }
+  const gpuCandidateTotal = summary.gpuCompute?.candidateTotal;
+  if (maxGpuCandidateMs > 0 && gpuCandidateTotal?.maxMs > maxGpuCandidateMs) {
+    throw new Error(`GPU candidate total exceeded ${maxGpuCandidateMs}ms: ${JSON.stringify(gpuCandidateTotal)}`);
   }
 }
 
