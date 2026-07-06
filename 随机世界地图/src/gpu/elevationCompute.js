@@ -48,41 +48,41 @@ export async function runWebGpuElevationCandidate(world, options = {}) {
 async function computeElevationOnDevice(world, device, capabilities) {
   const { grid } = world;
   const size = grid.size;
-  const inputs = Array.from({ length: 8 }, () => new Float32Array(size * 4));
+  const inputPacked = new Float32Array(size * 8 * 4);
 
   const uploadStartedAt = performance.now();
   for (let i = 0; i < size; i += 1) {
-    const offset = i * 4;
-    inputs[0][offset] = grid.crustType[i];
-    inputs[0][offset + 1] = grid.orogeny[i];
-    inputs[0][offset + 2] = grid.activeOrogeny?.[i] ?? 0;
-    inputs[0][offset + 3] = grid.oldOrogeny?.[i] ?? 0;
-    inputs[1][offset] = grid.orogenyAge?.[i] ?? 0;
-    inputs[1][offset + 1] = grid.sediment[i];
-    inputs[1][offset + 2] = grid.sedimentLoadSubsidence?.[i] ?? 0;
-    inputs[1][offset + 3] = grid.sedimentFill[i];
-    inputs[2][offset] = grid.ridgeUplift[i];
-    inputs[2][offset + 1] = grid.trenchDepression[i];
-    inputs[2][offset + 2] = grid.isostaticBase[i];
-    inputs[2][offset + 3] = grid.passiveMargin?.[i] ?? 0;
-    inputs[3][offset] = grid.continentalShelf?.[i] ?? 0;
-    inputs[3][offset + 1] = grid.continentalSlope?.[i] ?? 0;
-    inputs[3][offset + 2] = grid.continentalRise?.[i] ?? 0;
-    inputs[3][offset + 3] = grid.abyssalPlain?.[i] ?? 0;
-    inputs[4][offset] = grid.sedimentWedge?.[i] ?? 0;
-    inputs[4][offset + 1] = grid.forelandBasin?.[i] ?? 0;
-    inputs[4][offset + 2] = grid.activeTransform?.[i] ?? 0;
-    inputs[4][offset + 3] = grid.transformMemory?.[i] ?? 0;
-    inputs[5][offset] = grid.fractureZoneMemory?.[i] ?? 0;
-    inputs[5][offset + 1] = grid.inactiveBoundaryRelief?.[i] ?? 0;
-    inputs[5][offset + 2] = grid.geologyBroadNoise[i];
-    inputs[5][offset + 3] = grid.geologyMicroNoise[i];
-    inputs[6][offset] = grid.mountainBelt[i];
-    inputs[6][offset + 1] = grid.trench[i];
-    inputs[6][offset + 2] = grid.ridge[i];
-    inputs[6][offset + 3] = grid.rift[i];
-    inputs[7][offset] = grid.islandArc[i];
-    inputs[7][offset + 1] = grid.basin[i];
+    const offset = i * 8 * 4;
+    inputPacked[offset] = grid.crustType[i];
+    inputPacked[offset + 1] = grid.orogeny[i];
+    inputPacked[offset + 2] = grid.activeOrogeny?.[i] ?? 0;
+    inputPacked[offset + 3] = grid.oldOrogeny?.[i] ?? 0;
+    inputPacked[offset + 4] = grid.orogenyAge?.[i] ?? 0;
+    inputPacked[offset + 5] = grid.sediment[i];
+    inputPacked[offset + 6] = grid.sedimentLoadSubsidence?.[i] ?? 0;
+    inputPacked[offset + 7] = grid.sedimentFill[i];
+    inputPacked[offset + 8] = grid.ridgeUplift[i];
+    inputPacked[offset + 9] = grid.trenchDepression[i];
+    inputPacked[offset + 10] = grid.isostaticBase[i];
+    inputPacked[offset + 11] = grid.passiveMargin?.[i] ?? 0;
+    inputPacked[offset + 12] = grid.continentalShelf?.[i] ?? 0;
+    inputPacked[offset + 13] = grid.continentalSlope?.[i] ?? 0;
+    inputPacked[offset + 14] = grid.continentalRise?.[i] ?? 0;
+    inputPacked[offset + 15] = grid.abyssalPlain?.[i] ?? 0;
+    inputPacked[offset + 16] = grid.sedimentWedge?.[i] ?? 0;
+    inputPacked[offset + 17] = grid.forelandBasin?.[i] ?? 0;
+    inputPacked[offset + 18] = grid.activeTransform?.[i] ?? 0;
+    inputPacked[offset + 19] = grid.transformMemory?.[i] ?? 0;
+    inputPacked[offset + 20] = grid.fractureZoneMemory?.[i] ?? 0;
+    inputPacked[offset + 21] = grid.inactiveBoundaryRelief?.[i] ?? 0;
+    inputPacked[offset + 22] = grid.geologyBroadNoise[i];
+    inputPacked[offset + 23] = grid.geologyMicroNoise[i];
+    inputPacked[offset + 24] = grid.mountainBelt[i];
+    inputPacked[offset + 25] = grid.trench[i];
+    inputPacked[offset + 26] = grid.ridge[i];
+    inputPacked[offset + 27] = grid.rift[i];
+    inputPacked[offset + 28] = grid.islandArc[i];
+    inputPacked[offset + 29] = grid.basin[i];
   }
 
   const usage = globalThis.GPUBufferUsage;
@@ -93,7 +93,7 @@ async function computeElevationOnDevice(world, device, capabilities) {
 
   const paramData = new Uint32Array([size, 0, 0, 0]);
   const paramBuffer = createElevationBufferWithData(device, paramData, usage.UNIFORM | usage.COPY_DST);
-  const inputBuffers = inputs.map((input) => createElevationBufferWithData(device, input, usage.STORAGE | usage.COPY_DST));
+  const inputBuffer = createElevationBufferWithData(device, inputPacked, usage.STORAGE | usage.COPY_DST);
   const outputBytes = size * 4 * Float32Array.BYTES_PER_ELEMENT;
   const outputBuffer = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
   const readBuffer = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
@@ -108,8 +108,8 @@ async function computeElevationOnDevice(world, device, capabilities) {
     layout: pipeline.getBindGroupLayout(0),
     entries: [
       { binding: 0, resource: { buffer: paramBuffer } },
-      ...inputBuffers.map((buffer, index) => ({ binding: index + 1, resource: { buffer } })),
-      { binding: 9, resource: { buffer: outputBuffer } },
+      { binding: 1, resource: { buffer: inputBuffer } },
+      { binding: 2, resource: { buffer: outputBuffer } },
     ],
   });
 
@@ -132,7 +132,7 @@ async function computeElevationOnDevice(world, device, capabilities) {
   const downloadMs = performance.now() - downloadStartedAt;
 
   const fields = unpackElevationFields(size, packed);
-  destroyElevationBuffers([paramBuffer, ...inputBuffers, outputBuffer, readBuffer]);
+  destroyElevationBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
 
   return {
     skipped: false,

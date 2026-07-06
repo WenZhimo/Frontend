@@ -65,11 +65,12 @@ export function createGpuComputeValidator(options = {}) {
 export async function validateGpuComputeCheckpoint(world, options = {}) {
   const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
   const fields = normalizeCsvList(options.fields, DEFAULT_VALIDATE_FIELDS);
+  const snapshot = createValidationSnapshot(world);
   const candidateResults = [];
   const candidateFields = {};
 
   for (const kernel of kernels) {
-    const result = await runCandidateKernel(kernel, world, options.globalObject);
+    const result = await runCandidateKernel(kernel, snapshot, options.globalObject);
     candidateResults.push(compactCandidateResult(kernel, result));
     if (!result?.skipped && result?.fields) {
       Object.assign(candidateFields, result.fields);
@@ -77,9 +78,13 @@ export async function validateGpuComputeCheckpoint(world, options = {}) {
   }
 
   const fieldResults = fields.map((fieldName) => {
-    const baselineField = world.grid[fieldName];
+    const baselineField = snapshot.grid[fieldName];
     const candidateField = candidateFields[fieldName] ?? baselineField;
-    return compareField(fieldName, baselineField, candidateField, thresholdForField(fieldName));
+    return {
+      ...compareField(fieldName, baselineField, candidateField, thresholdForField(fieldName)),
+      baselineSummary: summarizeField(baselineField),
+      candidateSummary: summarizeField(candidateField),
+    };
   });
   const skipped = candidateResults.length > 0 && candidateResults.every((result) => result.skipped);
   const skippedReason = candidateResults
@@ -91,13 +96,33 @@ export async function validateGpuComputeCheckpoint(world, options = {}) {
     valid: fieldResults.every((field) => field.valid),
     skipped,
     skippedReason: skipped ? skippedReason : null,
-    step: world.step,
-    ageYears: world.ageYears,
+    step: snapshot.step,
+    ageYears: snapshot.ageYears,
     mode: "validate",
     kernels,
     fields: fieldResults,
     candidateResults,
     note: "Browser GPU compute validate keeps CPU authoritative; candidate fields are compared but never written back.",
+  };
+}
+
+function createValidationSnapshot(world) {
+  const grid = world?.grid ?? {};
+  const snapshotGrid = {};
+  for (const [key, value] of Object.entries(grid)) {
+    if (ArrayBuffer.isView(value) && typeof value.constructor === "function") {
+      snapshotGrid[key] = new value.constructor(value);
+    } else {
+      snapshotGrid[key] = value;
+    }
+  }
+  return {
+    ...world,
+    grid: snapshotGrid,
+    step: world?.step ?? 0,
+    ageYears: world?.ageYears ?? 0,
+    seaLevel: world?.seaLevel ?? 0,
+    timeScaleFactor: world?.timeScaleFactor ?? 1,
   };
 }
 
@@ -203,6 +228,28 @@ function compareField(fieldName, baselineField, candidateField, threshold) {
   };
 }
 
+function summarizeField(field) {
+  if (!field || !field.length) return null;
+  let min = Infinity;
+  let max = -Infinity;
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < field.length; i += 1) {
+    const value = Number(field[i]);
+    if (!Number.isFinite(value)) continue;
+    if (value < min) min = value;
+    if (value > max) max = value;
+    sum += value;
+    count += 1;
+  }
+  return {
+    min: count ? min : null,
+    max: count ? max : null,
+    mean: count ? sum / count : null,
+    finiteShare: field.length ? count / field.length : 0,
+  };
+}
+
 function thresholdForField(fieldName) {
   if (fieldName === "sedimentCapacity") return { rmse: 0.00001, maxAbs: 0.0001, p95Abs: 0.00002 };
   if (fieldName === "boundaryRelief") return { rmse: 0.003, maxAbs: 0.015, p95Abs: 0.006 };
@@ -244,6 +291,8 @@ function logValidateResult(logger, result) {
       rmse: field.rmse,
       maxAbs: field.maxAbs,
       p95Abs: field.p95Abs,
+      baselineMean: field.baselineSummary?.mean ?? null,
+      candidateMean: field.candidateSummary?.mean ?? null,
     })) ?? [],
   };
   const method = result.valid ? "info" : "warn";

@@ -10002,15 +10002,8 @@
   };
 
   @group(0) @binding(0) var<uniform> params: Params;
-  @group(0) @binding(1) var<storage, read> input0: array<vec4<f32>>;
-  @group(0) @binding(2) var<storage, read> input1: array<vec4<f32>>;
-  @group(0) @binding(3) var<storage, read> input2: array<vec4<f32>>;
-  @group(0) @binding(4) var<storage, read> input3: array<vec4<f32>>;
-  @group(0) @binding(5) var<storage, read> input4: array<vec4<f32>>;
-  @group(0) @binding(6) var<storage, read> input5: array<vec4<f32>>;
-  @group(0) @binding(7) var<storage, read> input6: array<vec4<f32>>;
-  @group(0) @binding(8) var<storage, read> input7: array<vec4<f32>>;
-  @group(0) @binding(9) var<storage, read_write> output0: array<vec4<f32>>;
+  @group(0) @binding(1) var<storage, read> inputPacked: array<vec4<f32>>;
+  @group(0) @binding(2) var<storage, read_write> output0: array<vec4<f32>>;
 
   fn clamp01(value: f32) -> f32 {
     return clamp(value, 0.0, 1.0);
@@ -10023,14 +10016,15 @@
       return;
     }
 
-    let a = input0[i];
-    let b = input1[i];
-    let c = input2[i];
-    let d = input3[i];
-    let e = input4[i];
-    let f = input5[i];
-    let g = input6[i];
-    let h = input7[i];
+    let offset = i * 8u;
+    let a = inputPacked[offset];
+    let b = inputPacked[offset + 1u];
+    let c = inputPacked[offset + 2u];
+    let d = inputPacked[offset + 3u];
+    let e = inputPacked[offset + 4u];
+    let f = inputPacked[offset + 5u];
+    let g = inputPacked[offset + 6u];
+    let h = inputPacked[offset + 7u];
 
     let crust_type = u32(a.x + 0.5);
     let orogeny = a.y;
@@ -10168,41 +10162,41 @@
   async function computeElevationOnDevice(world, device, capabilities) {
     const { grid } = world;
     const size = grid.size;
-    const inputs = Array.from({ length: 8 }, () => new Float32Array(size * 4));
+    const inputPacked = new Float32Array(size * 8 * 4);
 
     const uploadStartedAt = performance.now();
     for (let i = 0; i < size; i += 1) {
-      const offset = i * 4;
-      inputs[0][offset] = grid.crustType[i];
-      inputs[0][offset + 1] = grid.orogeny[i];
-      inputs[0][offset + 2] = grid.activeOrogeny?.[i] ?? 0;
-      inputs[0][offset + 3] = grid.oldOrogeny?.[i] ?? 0;
-      inputs[1][offset] = grid.orogenyAge?.[i] ?? 0;
-      inputs[1][offset + 1] = grid.sediment[i];
-      inputs[1][offset + 2] = grid.sedimentLoadSubsidence?.[i] ?? 0;
-      inputs[1][offset + 3] = grid.sedimentFill[i];
-      inputs[2][offset] = grid.ridgeUplift[i];
-      inputs[2][offset + 1] = grid.trenchDepression[i];
-      inputs[2][offset + 2] = grid.isostaticBase[i];
-      inputs[2][offset + 3] = grid.passiveMargin?.[i] ?? 0;
-      inputs[3][offset] = grid.continentalShelf?.[i] ?? 0;
-      inputs[3][offset + 1] = grid.continentalSlope?.[i] ?? 0;
-      inputs[3][offset + 2] = grid.continentalRise?.[i] ?? 0;
-      inputs[3][offset + 3] = grid.abyssalPlain?.[i] ?? 0;
-      inputs[4][offset] = grid.sedimentWedge?.[i] ?? 0;
-      inputs[4][offset + 1] = grid.forelandBasin?.[i] ?? 0;
-      inputs[4][offset + 2] = grid.activeTransform?.[i] ?? 0;
-      inputs[4][offset + 3] = grid.transformMemory?.[i] ?? 0;
-      inputs[5][offset] = grid.fractureZoneMemory?.[i] ?? 0;
-      inputs[5][offset + 1] = grid.inactiveBoundaryRelief?.[i] ?? 0;
-      inputs[5][offset + 2] = grid.geologyBroadNoise[i];
-      inputs[5][offset + 3] = grid.geologyMicroNoise[i];
-      inputs[6][offset] = grid.mountainBelt[i];
-      inputs[6][offset + 1] = grid.trench[i];
-      inputs[6][offset + 2] = grid.ridge[i];
-      inputs[6][offset + 3] = grid.rift[i];
-      inputs[7][offset] = grid.islandArc[i];
-      inputs[7][offset + 1] = grid.basin[i];
+      const offset = i * 8 * 4;
+      inputPacked[offset] = grid.crustType[i];
+      inputPacked[offset + 1] = grid.orogeny[i];
+      inputPacked[offset + 2] = grid.activeOrogeny?.[i] ?? 0;
+      inputPacked[offset + 3] = grid.oldOrogeny?.[i] ?? 0;
+      inputPacked[offset + 4] = grid.orogenyAge?.[i] ?? 0;
+      inputPacked[offset + 5] = grid.sediment[i];
+      inputPacked[offset + 6] = grid.sedimentLoadSubsidence?.[i] ?? 0;
+      inputPacked[offset + 7] = grid.sedimentFill[i];
+      inputPacked[offset + 8] = grid.ridgeUplift[i];
+      inputPacked[offset + 9] = grid.trenchDepression[i];
+      inputPacked[offset + 10] = grid.isostaticBase[i];
+      inputPacked[offset + 11] = grid.passiveMargin?.[i] ?? 0;
+      inputPacked[offset + 12] = grid.continentalShelf?.[i] ?? 0;
+      inputPacked[offset + 13] = grid.continentalSlope?.[i] ?? 0;
+      inputPacked[offset + 14] = grid.continentalRise?.[i] ?? 0;
+      inputPacked[offset + 15] = grid.abyssalPlain?.[i] ?? 0;
+      inputPacked[offset + 16] = grid.sedimentWedge?.[i] ?? 0;
+      inputPacked[offset + 17] = grid.forelandBasin?.[i] ?? 0;
+      inputPacked[offset + 18] = grid.activeTransform?.[i] ?? 0;
+      inputPacked[offset + 19] = grid.transformMemory?.[i] ?? 0;
+      inputPacked[offset + 20] = grid.fractureZoneMemory?.[i] ?? 0;
+      inputPacked[offset + 21] = grid.inactiveBoundaryRelief?.[i] ?? 0;
+      inputPacked[offset + 22] = grid.geologyBroadNoise[i];
+      inputPacked[offset + 23] = grid.geologyMicroNoise[i];
+      inputPacked[offset + 24] = grid.mountainBelt[i];
+      inputPacked[offset + 25] = grid.trench[i];
+      inputPacked[offset + 26] = grid.ridge[i];
+      inputPacked[offset + 27] = grid.rift[i];
+      inputPacked[offset + 28] = grid.islandArc[i];
+      inputPacked[offset + 29] = grid.basin[i];
     }
 
     const usage = globalThis.GPUBufferUsage;
@@ -10213,7 +10207,7 @@
 
     const paramData = new Uint32Array([size, 0, 0, 0]);
     const paramBuffer = createElevationBufferWithData(device, paramData, usage.UNIFORM | usage.COPY_DST);
-    const inputBuffers = inputs.map((input) => createElevationBufferWithData(device, input, usage.STORAGE | usage.COPY_DST));
+    const inputBuffer = createElevationBufferWithData(device, inputPacked, usage.STORAGE | usage.COPY_DST);
     const outputBytes = size * 4 * Float32Array.BYTES_PER_ELEMENT;
     const outputBuffer = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
     const readBuffer = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
@@ -10228,8 +10222,8 @@
       layout: pipeline.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: { buffer: paramBuffer } },
-        ...inputBuffers.map((buffer, index) => ({ binding: index + 1, resource: { buffer } })),
-        { binding: 9, resource: { buffer: outputBuffer } },
+        { binding: 1, resource: { buffer: inputBuffer } },
+        { binding: 2, resource: { buffer: outputBuffer } },
       ],
     });
 
@@ -10252,7 +10246,7 @@
     const downloadMs = performance.now() - downloadStartedAt;
 
     const fields = unpackElevationFields(size, packed);
-    destroyElevationBuffers([paramBuffer, ...inputBuffers, outputBuffer, readBuffer]);
+    destroyElevationBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
 
     return {
       skipped: false,
@@ -11396,11 +11390,12 @@
   async function validateGpuComputeCheckpoint(world, options = {}) {
     const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
     const fields = normalizeCsvList(options.fields, DEFAULT_VALIDATE_FIELDS);
+    const snapshot = createValidationSnapshot(world);
     const candidateResults = [];
     const candidateFields = {};
 
     for (const kernel of kernels) {
-      const result = await runCandidateKernel(kernel, world, options.globalObject);
+      const result = await runCandidateKernel(kernel, snapshot, options.globalObject);
       candidateResults.push(compactCandidateResult(kernel, result));
       if (!result?.skipped && result?.fields) {
         Object.assign(candidateFields, result.fields);
@@ -11408,9 +11403,13 @@
     }
 
     const fieldResults = fields.map((fieldName) => {
-      const baselineField = world.grid[fieldName];
+      const baselineField = snapshot.grid[fieldName];
       const candidateField = candidateFields[fieldName] ?? baselineField;
-      return compareField(fieldName, baselineField, candidateField, thresholdForField(fieldName));
+      return {
+        ...compareField(fieldName, baselineField, candidateField, thresholdForField(fieldName)),
+        baselineSummary: summarizeField(baselineField),
+        candidateSummary: summarizeField(candidateField),
+      };
     });
     const skipped = candidateResults.length > 0 && candidateResults.every((result) => result.skipped);
     const skippedReason = candidateResults
@@ -11422,13 +11421,33 @@
       valid: fieldResults.every((field) => field.valid),
       skipped,
       skippedReason: skipped ? skippedReason : null,
-      step: world.step,
-      ageYears: world.ageYears,
+      step: snapshot.step,
+      ageYears: snapshot.ageYears,
       mode: "validate",
       kernels,
       fields: fieldResults,
       candidateResults,
       note: "Browser GPU compute validate keeps CPU authoritative; candidate fields are compared but never written back.",
+    };
+  }
+
+  function createValidationSnapshot(world) {
+    const grid = world?.grid ?? {};
+    const snapshotGrid = {};
+    for (const [key, value] of Object.entries(grid)) {
+      if (ArrayBuffer.isView(value) && typeof value.constructor === "function") {
+        snapshotGrid[key] = new value.constructor(value);
+      } else {
+        snapshotGrid[key] = value;
+      }
+    }
+    return {
+      ...world,
+      grid: snapshotGrid,
+      step: world?.step ?? 0,
+      ageYears: world?.ageYears ?? 0,
+      seaLevel: world?.seaLevel ?? 0,
+      timeScaleFactor: world?.timeScaleFactor ?? 1,
     };
   }
 
@@ -11534,6 +11553,28 @@
     };
   }
 
+  function summarizeField(field) {
+    if (!field || !field.length) return null;
+    let min = Infinity;
+    let max = -Infinity;
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < field.length; i += 1) {
+      const value = Number(field[i]);
+      if (!Number.isFinite(value)) continue;
+      if (value < min) min = value;
+      if (value > max) max = value;
+      sum += value;
+      count += 1;
+    }
+    return {
+      min: count ? min : null,
+      max: count ? max : null,
+      mean: count ? sum / count : null,
+      finiteShare: field.length ? count / field.length : 0,
+    };
+  }
+
   function thresholdForField(fieldName) {
     if (fieldName === "sedimentCapacity") return { rmse: 0.00001, maxAbs: 0.0001, p95Abs: 0.00002 };
     if (fieldName === "boundaryRelief") return { rmse: 0.003, maxAbs: 0.015, p95Abs: 0.006 };
@@ -11575,6 +11616,8 @@
         rmse: field.rmse,
         maxAbs: field.maxAbs,
         p95Abs: field.p95Abs,
+        baselineMean: field.baselineSummary?.mean ?? null,
+        candidateMean: field.candidateSummary?.mean ?? null,
       })) ?? [],
     };
     const method = result.valid ? "info" : "warn";

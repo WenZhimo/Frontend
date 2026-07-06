@@ -357,8 +357,10 @@ Phase 2B 当前落地状态：
 
 - 已新增 `src/gpu/kernels/elevationKernel.js`，以 WGSL compute shader 对齐 CPU `rebuildGeologyElevationV2` 的核心逐 cell 公式。
 - 已新增 `src/gpu/elevationCompute.js`，只在显式 experimental compare/profile 调用时申请 WebGPU device；默认不写回 `world.grid`，只返回 `baseElev / relief / boundaryRelief / elev` candidate 字段。
+- `elevation` candidate 已改为单 packed input storage buffer + 单 output storage buffer，避免浏览器实机因过多 storage buffer 绑定导致 shader 输出全 0；这是 Phase 2B 浏览器 parity 的关键修复。
 - `tools/gpu-field-compare.mjs` 已支持 `--candidate=webgpu-elevation`；默认不带 candidate 时仍是 CPU-vs-CPU，`--candidate=webgpu-isostasy` 继续保持 Phase 2A 行为。
 - `tools/gpu-perf-profile.mjs` 已支持 `--kernel=elevation`，并拆分 `uploadMs / kernelMs / downloadMs / totalGpuPathMs`；WebGPU 不可用时安全 `skipped`。
+- `tools/browser-smoke-check.mjs` 已验证浏览器实机 `gpuKernel=elevation&gpuFields=baseElev,relief,boundaryRelief,elev`；当前 `baseElev / relief / boundaryRelief / elev` 均通过运行时阈值，且 CPU 仍保持权威。
 - CPU `rebuildGeologyElevation` 仍是生产路径；`stepWorld`、`runGeologyV2Step`、生产 `updateIsostasy` 均未接入 GPU elevation。
 - 当前仍未把 Phase 2A isostasy kernel 与 Phase 2B elevation kernel 合批接入 pipeline。
 - 下一步可进入 Phase 2C（isostasy + elevation combined profile / batching experiment）或 Phase 3（local terrain stencil experimental），具体取决于 Phase 2B compare/profile 结果。
@@ -436,7 +438,7 @@ Phase 2B 当前落地状态：
 - 已新增 `src/gpu/computeValidate.js` 与浏览器 URL 参数入口：`?gpuCompute=validate` 会每 N 步采样当前 CPU 权威 world，默认运行已通过浏览器实机采样的 `isostasy` WebGPU candidate，对比 `isostaticBase` 并在 Console 输出 `[gpu-compute-validate]` 摘要；该模式不写回 `world.grid`。
 - `gpuCompute=validate` 的默认采样间隔为 20 步，可用 `gpuValidateInterval` 调整；可用 `gpuKernel` / `gpuKernels` 和 `gpuFields` 缩小验证范围。
 - 浏览器运行时 `isostaticBase` validate 门槛使用 `rmse <= 0.001 / p95Abs <= 0.002 / maxAbs <= 0.0065`；其中 `maxAbs` 比离线候选门槛略宽，用于吸收浏览器 WebGPU f32 的单点边缘差异，不构成默认 GPU 写回许可。
-- 浏览器实机 WebGPU 验证显示 `elevation` 可以作为显式 `gpuKernel=elevation&gpuFields=elev` 实验核触发，但它在当前“步结束 world”后置采样下尚未通过 `elev` parity；后续需要单独对齐 `rebuildGeologyElevation` 的 stage checkpoint 或修正 candidate 输入时序，不能作为默认 validate 门禁。
+- 浏览器实机 WebGPU 验证显示 `elevation` 已可作为显式 `gpuKernel=elevation&gpuFields=baseElev,relief,boundaryRelief,elev` validate 核触发；当前修复使用 validation snapshot 对齐 CPU 权威 checkpoint，并把 elevation 输入打包到单 storage buffer，避免多 storage buffer 绑定限制导致全 0 输出。
 - 浏览器实机 WebGPU 验证显示 `sediment-capacity` 可以作为显式 `gpuKernel=sediment-capacity&gpuFields=sedimentCapacity` 实验核触发，但它不适合作为默认后置采样字段：CPU `sedimentCapacity` 在沉积预算流程内生成后，后续沉积/盆地写回会改变下一次容量公式输入，直接用“步结束 world”重算 candidate 会产生预期外漂移。因此它仍保留为显式实验项，后续需要在沉积 stage 内部 checkpoint 或单独 CPU baseline snapshot 下校准。
 - 浏览器运行时 validate 仍属于 Phase 4 前置门禁；后续进入 writeback 前还必须补齐多 seed、多分辨率和 20 / 200 / 739 Myr drift gate。
 

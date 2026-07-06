@@ -7,15 +7,8 @@ struct Params {
 };
 
 @group(0) @binding(0) var<uniform> params: Params;
-@group(0) @binding(1) var<storage, read> input0: array<vec4<f32>>;
-@group(0) @binding(2) var<storage, read> input1: array<vec4<f32>>;
-@group(0) @binding(3) var<storage, read> input2: array<vec4<f32>>;
-@group(0) @binding(4) var<storage, read> input3: array<vec4<f32>>;
-@group(0) @binding(5) var<storage, read> input4: array<vec4<f32>>;
-@group(0) @binding(6) var<storage, read> input5: array<vec4<f32>>;
-@group(0) @binding(7) var<storage, read> input6: array<vec4<f32>>;
-@group(0) @binding(8) var<storage, read> input7: array<vec4<f32>>;
-@group(0) @binding(9) var<storage, read_write> output0: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> inputPacked: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read_write> output0: array<vec4<f32>>;
 
 fn clamp01(value: f32) -> f32 {
   return clamp(value, 0.0, 1.0);
@@ -28,14 +21,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     return;
   }
 
-  let a = input0[i];
-  let b = input1[i];
-  let c = input2[i];
-  let d = input3[i];
-  let e = input4[i];
-  let f = input5[i];
-  let g = input6[i];
-  let h = input7[i];
+  let offset = i * 8u;
+  let a = inputPacked[offset];
+  let b = inputPacked[offset + 1u];
+  let c = inputPacked[offset + 2u];
+  let d = inputPacked[offset + 3u];
+  let e = inputPacked[offset + 4u];
+  let f = inputPacked[offset + 5u];
+  let g = inputPacked[offset + 6u];
+  let h = inputPacked[offset + 7u];
 
   let crust_type = u32(a.x + 0.5);
   let orogeny = a.y;
