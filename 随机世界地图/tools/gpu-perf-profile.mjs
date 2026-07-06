@@ -4,6 +4,7 @@ import { stepWorld } from "../src/sim/evolution.js";
 import { detectGpuCapabilities } from "../src/gpu/capability.js";
 import { runWebGpuElevationCandidate } from "../src/gpu/elevationCompute.js";
 import { runWebGpuIsostasyCandidate } from "../src/gpu/isostasyCompute.js";
+import { runWebGpuLocalFieldsCandidate } from "../src/gpu/localFieldsCompute.js";
 
 const DEFAULT_SEED = "龙骨海-纪元7";
 
@@ -35,9 +36,9 @@ const result = {
   pipelineMode,
   resolution,
   steps,
-  backend: kernel === "isostasy" ? "webgpu-isostasy" : kernel === "elevation" ? "webgpu-elevation" : gpuCapabilities.recommendedMode,
+  backend: kernel === "isostasy" ? "webgpu-isostasy" : kernel === "elevation" ? "webgpu-elevation" : kernel === "local-fields" ? "webgpu-local-fields" : gpuCapabilities.recommendedMode,
   kernel,
-  attempted: kernel === "isostasy" || kernel === "elevation",
+  attempted: kernel === "isostasy" || kernel === "elevation" || kernel === "local-fields",
   skipped: gpuCandidate?.skipped ?? false,
   skipReason: gpuCandidate?.reason ?? null,
   gpuCapabilities: gpuCandidate?.gpuCapabilities ?? gpuCapabilities,
@@ -61,6 +62,8 @@ const result = {
     ? "Phase 2A experimental profile: CPU step path remains authoritative; GPU timing includes upload, compute, and download when available."
     : kernel === "elevation"
       ? "Phase 2B experimental profile: CPU step path remains authoritative; this is a single elevation candidate pass, not a production pipeline profile."
+      : kernel === "local-fields"
+        ? "Phase 3 experimental profile: CPU terrain-derived fields remain authoritative; this profiles a single local stencil candidate pass."
       : "Default profile keeps the CPU baseline and capability report without requesting a GPU device.",
 };
 
@@ -93,6 +96,7 @@ function kernelAlias(value) {
   if (value === undefined || value === null) return undefined;
   if (value === "webgpu-isostasy" || value === "isostasy") return "isostasy";
   if (value === "webgpu-elevation" || value === "elevation") return "elevation";
+  if (value === "webgpu-local-fields" || value === "local-fields" || value === "localTerrain") return "local-fields";
   if (value === "none" || value === "cpu") return null;
   return undefined;
 }
@@ -114,5 +118,6 @@ function roundNullable(value) {
 async function runKernelCandidate(kernelName, world) {
   if (kernelName === "isostasy") return runWebGpuIsostasyCandidate(world);
   if (kernelName === "elevation") return runWebGpuElevationCandidate(world);
+  if (kernelName === "local-fields") return runWebGpuLocalFieldsCandidate(world);
   return null;
 }
