@@ -11389,11 +11389,17 @@
 
   const DEFAULT_VALIDATE_FIELDS = ["isostaticBase"];
   const DEFAULT_VALIDATE_KERNELS = ["isostasy"];
+  const DEFAULT_EXPERIMENTAL_KERNELS = ["isostasy"];
+  const DEFAULT_EXPERIMENTAL_FIELDS = GPU_ISOSTASY_OUTPUT_FIELDS;
+  const EXPERIMENTAL_WRITEBACK_FIELDS = new Set(GPU_ISOSTASY_OUTPUT_FIELDS);
 
   function createGpuComputeValidator(options = {}) {
     const mode = normalizeMode(options.mode);
-    const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
-    const fields = normalizeCsvList(options.fields, DEFAULT_VALIDATE_FIELDS);
+    const kernels = normalizeCsvList(
+      options.kernels,
+      mode === "experimental" ? DEFAULT_EXPERIMENTAL_KERNELS : DEFAULT_VALIDATE_KERNELS,
+    );
+    const fields = normalizeCsvList(options.fields, defaultFieldsForMode(mode, kernels));
     const interval = Math.max(1, Math.trunc(Number(options.interval ?? 20)) || 20);
     const maxReports = Math.max(1, Math.trunc(Number(options.maxReports ?? 12)) || 12);
     const globalObject = options.globalObject ?? globalThis;
@@ -11404,22 +11410,23 @@
 
     return {
       mode,
-      enabled: mode === "validate",
+      enabled: mode === "validate" || mode === "experimental",
       kernels,
       fields,
       interval,
       async maybeValidate(world) {
-        if (mode !== "validate" || !world?.grid || running || reportCount >= maxReports) return null;
+        if ((mode !== "validate" && mode !== "experimental") || !world?.grid || running || reportCount >= maxReports) {
+          return null;
+        }
         if (!Number.isFinite(world.step) || world.step <= 0 || world.step === lastValidatedStep) return null;
         if (world.step % interval !== 0) return null;
         running = true;
         lastValidatedStep = world.step;
         try {
-          const result = await validateGpuComputeCheckpoint(world, {
-            kernels,
-            fields,
-            globalObject,
-          });
+          const result =
+            mode === "experimental"
+              ? await applyExperimentalGpuComputeCheckpoint(world, { kernels, fields, globalObject })
+              : await validateGpuComputeCheckpoint(world, { kernels, fields, globalObject });
           reportCount += 1;
           logValidateResult(logger, result);
           world.gpuComputeValidation = result;
@@ -11432,6 +11439,9 @@
             step: world.step,
             mode,
             reason: `GPU compute validate failed safely: ${error?.message ?? "unknown error"}`,
+            fallbackReason: `GPU compute ${mode} failed safely: ${error?.message ?? "unknown error"}`,
+            writebackApplied: false,
+            writebackFields: [],
             fields: [],
             candidateResults: [],
           };
@@ -11449,7 +11459,73 @@
 
   async function validateGpuComputeCheckpoint(world, options = {}) {
     const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
-    const fields = normalizeCsvList(options.fields, DEFAULT_VALIDATE_FIELDS);
+    const fields = normalizeCsvList(options.fields, defaultFieldsForMode("validate", kernels));
+    const comparison = await compareGpuComputeCheckpoint(world, { ...options, kernels, fields });
+    return {
+      valid: comparison.fieldResults.every((field) => field.valid),
+      skipped: comparison.skipped,
+      skippedReason: comparison.skipped ? comparison.skippedReason : null,
+      step: comparison.snapshot.step,
+      ageYears: comparison.snapshot.ageYears,
+      mode: "validate",
+      kernels,
+      fields: comparison.fieldResults,
+      candidateResults: comparison.candidateResults,
+      writebackApplied: false,
+      writebackFields: [],
+      note: "Browser GPU compute validate keeps CPU authoritative; candidate fields are compared but never written back.",
+    };
+  }
+
+  async function applyExperimentalGpuComputeCheckpoint(world, options = {}) {
+    const kernels = normalizeCsvList(options.kernels, DEFAULT_EXPERIMENTAL_KERNELS);
+    const fields = normalizeCsvList(options.fields, defaultFieldsForMode("experimental", kernels));
+    const comparison = await compareGpuComputeCheckpoint(world, { ...options, kernels, fields });
+    const invalidFields = comparison.fieldResults.filter((field) => !field.valid);
+    const writebackFields = [];
+    let fallbackReason = null;
+
+    if (comparison.skipped) {
+      fallbackReason = comparison.skippedReason || "GPU candidate skipped.";
+    } else if (invalidFields.length > 0) {
+      fallbackReason = `GPU candidate exceeded thresholds for: ${invalidFields.map((field) => field.field).join(", ")}.`;
+    } else {
+      for (const field of comparison.fieldResults) {
+        const fieldName = field.field;
+        const candidate = comparison.candidateFields[fieldName];
+        const target = world.grid?.[fieldName];
+        if (!EXPERIMENTAL_WRITEBACK_FIELDS.has(fieldName) || !candidate || !target || target.length !== candidate.length) {
+          continue;
+        }
+        target.set(candidate);
+        writebackFields.push(fieldName);
+      }
+      if (!writebackFields.length) {
+        fallbackReason = "No requested fields are enabled for experimental GPU writeback.";
+      }
+    }
+
+    return {
+      valid: invalidFields.length === 0,
+      skipped: comparison.skipped,
+      skippedReason: comparison.skipped ? comparison.skippedReason : null,
+      step: comparison.snapshot.step,
+      ageYears: comparison.snapshot.ageYears,
+      mode: "experimental",
+      kernels,
+      fields: comparison.fieldResults,
+      candidateResults: comparison.candidateResults,
+      writebackApplied: writebackFields.length > 0,
+      writebackFields,
+      fallbackReason,
+      note:
+        "Browser GPU compute experimental mode writes back only explicitly validated low-risk derived fields; CPU remains the fallback when validation fails or WebGPU is unavailable.",
+    };
+  }
+
+  async function compareGpuComputeCheckpoint(world, options = {}) {
+    const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
+    const fields = normalizeCsvList(options.fields, defaultFieldsForMode("validate", kernels));
     const snapshot = createValidationSnapshot(world);
     const candidateResults = [];
     const candidateFields = {};
@@ -11479,16 +11555,12 @@
       .join("; ");
 
     return {
-      valid: fieldResults.every((field) => field.valid),
+      snapshot,
+      fieldResults,
+      candidateFields,
+      candidateResults,
       skipped,
       skippedReason: skipped ? skippedReason : null,
-      step: snapshot.step,
-      ageYears: snapshot.ageYears,
-      mode: "validate",
-      kernels,
-      fields: fieldResults,
-      candidateResults,
-      note: "Browser GPU compute validate keeps CPU authoritative; candidate fields are compared but never written back.",
     };
   }
 
@@ -11527,6 +11599,14 @@
       .split(",")
       .map((part) => part.trim())
       .filter(Boolean);
+  }
+
+  function defaultFieldsForMode(mode, kernels) {
+    const normalized = normalizeCsvList(kernels, []);
+    if (mode === "experimental" && normalized.some((kernel) => kernel === "isostasy" || kernel === "webgpu-isostasy")) {
+      return DEFAULT_EXPERIMENTAL_FIELDS;
+    }
+    return DEFAULT_VALIDATE_FIELDS;
   }
 
   async function runCandidateKernel(kernel, world, globalObject) {
@@ -11952,9 +12032,13 @@
     const summary = {
       step: result.step,
       ageYears: result.ageYears,
+      mode: result.mode,
       valid: result.valid,
       skipped: result.skipped,
       skippedReason: result.skippedReason ?? result.reason ?? null,
+      fallbackReason: result.fallbackReason ?? null,
+      writebackApplied: result.writebackApplied ?? false,
+      writebackFields: result.writebackFields ?? [],
       kernels: result.kernels,
       fields: result.fields?.map((field) => ({
         field: field.field,
@@ -11967,7 +12051,8 @@
       })) ?? [],
     };
     const method = result.valid ? "info" : "warn";
-    logger?.[method]?.("[gpu-compute-validate]", summary);
+    const label = result.mode === "experimental" ? "[gpu-compute-experimental]" : "[gpu-compute-validate]";
+    logger?.[method]?.(label, summary);
   }
 
   function emptyTimings() {
@@ -12903,7 +12988,7 @@
   console.info("[gpu]", gpuCapabilities.recommendedMode, gpuCapabilities.reason);
   const gpuComputeValidator = createGpuComputeValidator(readGpuComputeOptions());
   if (gpuComputeValidator.enabled) {
-    console.info("[gpu-compute]", "validate", {
+    console.info("[gpu-compute]", gpuComputeValidator.mode, {
       kernels: gpuComputeValidator.kernels,
       fields: gpuComputeValidator.fields,
       interval: gpuComputeValidator.interval,

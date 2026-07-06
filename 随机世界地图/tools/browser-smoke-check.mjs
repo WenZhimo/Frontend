@@ -12,6 +12,7 @@ const query = String(options.query ?? "");
 const waitMs = parseIntOption(options, "wait-ms", 12000);
 const steps = parseIntOption(options, "steps", 2);
 const requireValidation = parseBoolOption(options, "require-validation");
+const requireWriteback = parseBoolOption(options, "require-writeback");
 const chromePath = String(options.chrome ?? findChromePath());
 const userDataDir = resolve(options["user-data-dir"] ?? ".test-cache/browser-smoke-profile");
 const remoteDebuggingPort = parseIntOption(options, "remote-debugging-port", 9222);
@@ -91,6 +92,12 @@ try {
     validation = await waitForValidation(cdp, sessionId, waitMs);
     if (!validation?.valid) {
       throw new Error(`GPU validation did not pass: ${JSON.stringify(validation)}`);
+    }
+    if (validation.skipped) {
+      throw new Error(`GPU validation was skipped: ${JSON.stringify(validation)}`);
+    }
+    if (requireWriteback && !validation.writebackApplied) {
+      throw new Error(`GPU experimental writeback did not occur: ${JSON.stringify(validation)}`);
     }
   }
 
@@ -346,6 +353,10 @@ function summarizeValidation(validation) {
     valid: validation.valid,
     skipped: validation.skipped,
     skippedReason: validation.skippedReason ?? null,
+    mode: validation.mode ?? null,
+    writebackApplied: validation.writebackApplied ?? false,
+    writebackFields: validation.writebackFields ?? [],
+    fallbackReason: validation.fallbackReason ?? null,
     kernels: validation.kernels,
     fields: validation.fields?.map((field) => ({
       field: field.field,
