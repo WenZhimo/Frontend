@@ -554,6 +554,50 @@ node .\tools\gpu-drift-check.mjs '龙骨海-纪元7' 20 geology-v2 256x128 --gpu
 }
 ```
 
+### 8.5 `tools/browser-smoke-check.mjs`
+
+用途：
+
+- 把每个 GPU 改造阶段的“真实浏览器验收”固化为可重复工具，而不是只依赖后台 Node 检查。
+- 通过 Chrome DevTools Protocol 打开 `file://` 或本地 HTTP 页面，点击播放，确认 canvas 非空、步数推进、Console 无项目自身错误。
+- 在涉及 WebGPU compute 时，可读取 `globalThis.__lastGpuComputeValidation`，确认浏览器实机 validate 结果。
+- 过滤 React DevTools、浏览器扩展、拦截请求、favicon、`[Violation]` 等非项目噪声，但把 `Uncaught`、`SyntaxError`、`TypeError`、`ReferenceError`、`Cannot read properties`、`Unexpected token`、关键字段 `NaN/Infinity` 视为失败。
+
+命令示例：
+
+```powershell
+node .\tools\browser-smoke-check.mjs --mode file --steps 1 --wait-ms 8000 --query "renderBackend=cpu"
+node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 12000 --query "gpuCompute=validate&gpuValidateInterval=1&gpuValidateReports=1&gpuKernel=isostasy&gpuFields=isostaticBase&renderBackend=cpu" --require-validation
+```
+
+建议输出：
+
+```json
+{
+  "valid": true,
+  "mode": "http",
+  "canvas": { "w": 512, "h": 256, "colorSpread": 425 },
+  "step": 49,
+  "gpuValidation": {
+    "valid": true,
+    "skipped": false,
+    "kernels": ["isostasy"],
+    "fields": [
+      { "field": "isostaticBase", "valid": true, "rmse": 0.00064 }
+    ]
+  },
+  "consoleSummary": {
+    "projectErrors": 0
+  }
+}
+```
+
+阶段门禁：
+
+- 每次修改渲染、浏览器入口、GPU validate、GPU candidate 或默认运行模式后，都必须至少跑一次 `file` 模式。
+- 涉及 WebGPU compute 的阶段必须额外跑一次 `http` 模式并带 `--require-validation`。
+- `browser-smoke-check` 通过不替代 `interface-check / long-run-check / resolution-check`，而是补足真实浏览器运行证据。
+
 ## 9. GPU 化验收标准
 
 ### 正确性
