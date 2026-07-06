@@ -392,6 +392,14 @@ Phase 2B 当前落地状态：
 - y 方向不能 wrap。
 - 极区附近后续如果迁移球面拓扑，需要重新校准邻域权重。
 
+当前落地状态：
+
+- 已新增 `src/gpu/kernels/localFieldsKernel.js` 与 `src/gpu/localFieldsCompute.js`，实现 `slope / aspect / ruggedness / localRelief` 的矩形网格 WebGPU candidate。
+- `tools/gpu-field-compare.mjs` 已支持 `webgpu-local-fields` / `local-fields`，输出 `rmse / maxAbs / p95Abs`，并在 WebGPU 不可用时 safe skip。
+- `tools/gpu-perf-profile.mjs` 已支持 `local-fields`，继续拆分 `uploadMs / kernelMs / downloadMs / totalGpuPathMs`。
+- 该 candidate 仍是只读实验路径，不写回 `world.grid`，也不接入 `stepWorld` / `runGeologyV2Step`。
+- 当前只覆盖矩形网格；真实球面 / cubed-sphere 图拓扑会安全跳过，后续需按图邻域重新设计权重。
+
 ### Phase 4：Hybrid GPU simulation
 
 目标：把 geology-v2 中一部分高频字段常驻 GPU，但仍由 CPU 控制 pipeline。

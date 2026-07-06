@@ -4,6 +4,7 @@ import { stepWorld } from "../src/sim/evolution.js";
 import { detectGpuCapabilities } from "../src/gpu/capability.js";
 import { runWebGpuElevationCandidate } from "../src/gpu/elevationCompute.js";
 import { runWebGpuIsostasyCandidate } from "../src/gpu/isostasyCompute.js";
+import { runWebGpuLocalFieldsCandidate } from "../src/gpu/localFieldsCompute.js";
 
 const DEFAULT_SEED = "龙骨海-纪元7";
 
@@ -19,11 +20,14 @@ runSteps(candidate, steps);
 
 const gpuCapabilities = detectGpuCapabilities(globalThis);
 const candidateResult = await runCandidate(candidateBackend, candidate);
+const baselineLocalFields = candidateBackend === "webgpu-local-fields" ? computeCpuLocalFields(baseline) : null;
+const candidateLocalFields = candidateBackend === "webgpu-local-fields" ? computeCpuLocalFields(candidate) : null;
 const fieldResults = fields.map((fieldName) => {
   const candidateField = candidateResult?.skipped
-    ? candidate.grid[fieldName]
-    : candidateResult?.fields?.[fieldName] ?? candidate.grid[fieldName];
-  return compareField(fieldName, baseline.grid[fieldName], candidateField, thresholdForField(fieldName, candidateBackend));
+    ? candidateLocalFields?.[fieldName] ?? candidate.grid[fieldName]
+    : candidateResult?.fields?.[fieldName] ?? candidateLocalFields?.[fieldName] ?? candidate.grid[fieldName];
+  const baselineField = baselineLocalFields?.[fieldName] ?? baseline.grid[fieldName];
+  return compareField(fieldName, baselineField, candidateField, thresholdForField(fieldName, candidateBackend));
 });
 
 const result = {
@@ -46,6 +50,8 @@ const result = {
     ? "Phase 2A experimental compare: CPU remains authoritative; WebGPU isostasy only runs when explicitly requested."
     : candidateBackend === "webgpu-elevation"
       ? "Phase 2B experimental compare: CPU remains authoritative; WebGPU elevation only runs when explicitly requested."
+      : candidateBackend === "webgpu-local-fields"
+        ? "Phase 3 experimental compare: CPU terrain-derived fields remain authoritative; WebGPU local fields only run when explicitly requested."
       : "CPU-vs-CPU compare remains the default path so expected deltas are zero.",
 };
 
@@ -80,6 +86,7 @@ function parseInvocation(positional, options) {
 function backendAlias(value) {
   if (value === "webgpu-isostasy" || value === "isostasy") return "webgpu-isostasy";
   if (value === "webgpu-elevation" || value === "elevation") return "webgpu-elevation";
+  if (value === "webgpu-local-fields" || value === "local-fields" || value === "localTerrain") return "webgpu-local-fields";
   if (value === "cpu" || value === "cpu-vs-cpu") return "cpu";
   return null;
 }
@@ -97,6 +104,9 @@ function defaultFieldsForBackend(backend) {
   if (backend === "webgpu-elevation") {
     return ["baseElev", "relief", "boundaryRelief", "elev"];
   }
+  if (backend === "webgpu-local-fields") {
+    return ["slope", "aspect", "ruggedness", "localRelief"];
+  }
   return ["elev", "isostaticBase", "oceanDepthTerms"];
 }
 
@@ -107,6 +117,7 @@ function runSteps(world, count) {
 async function runCandidate(candidateName, world) {
   if (candidateName === "webgpu-isostasy") return runWebGpuIsostasyCandidate(world);
   if (candidateName === "webgpu-elevation") return runWebGpuElevationCandidate(world);
+  if (candidateName === "webgpu-local-fields") return runWebGpuLocalFieldsCandidate(world);
   return null;
 }
 
@@ -165,6 +176,10 @@ function compareField(fieldName, baselineField, candidateField, threshold = { rm
 }
 
 function thresholdForField(fieldName, backend) {
+  if (backend === "webgpu-local-fields") {
+    if (fieldName === "aspect") return { rmse: 0.00001, maxAbs: 0.0001, p95Abs: 0.00001 };
+    return { rmse: 0.000001, maxAbs: 0.00001, p95Abs: 0.000001 };
+  }
   if (backend === "webgpu-elevation") {
     if (fieldName === "boundaryRelief") return { rmse: 0.003, maxAbs: 0.015, p95Abs: 0.006 };
     if (fieldName === "baseElev" || fieldName === "relief" || fieldName === "elev") {
@@ -196,5 +211,61 @@ function percentile(values, p) {
 }
 
 function isWebGpuBackend(backend) {
-  return backend === "webgpu-isostasy" || backend === "webgpu-elevation";
+  return backend === "webgpu-isostasy" || backend === "webgpu-elevation" || backend === "webgpu-local-fields";
+}
+
+function computeCpuLocalFields(world) {
+  const { grid, seaLevel } = world;
+  const { size, width, height } = grid;
+  const slope = new Float32Array(size);
+  const aspect = new Float32Array(size);
+  const ruggedness = new Float32Array(size);
+  const localRelief = new Float32Array(size);
+  const relativeElevation = new Float32Array(size);
+  for (let i = 0; i < size; i += 1) relativeElevation[i] = grid.elev[i] - seaLevel;
+
+  for (let id = 0; id < size; id += 1) {
+    const x = id % width;
+    const y = Math.floor(id / width);
+    const center = relativeElevation[id];
+    const left = finiteSample(relativeElevation, width, height, x - 1, y, center);
+    const right = finiteSample(relativeElevation, width, height, x + 1, y, center);
+    const up = finiteSample(relativeElevation, width, height, x, y - 1, center);
+    const down = finiteSample(relativeElevation, width, height, x, y + 1, center);
+    const dx = (right - left) * 0.5;
+    const dy = (down - up) * 0.5;
+    slope[id] = Math.hypot(dx, dy);
+    aspect[id] = Math.atan2(dy, dx);
+
+    let sum = 0;
+    let count = 0;
+    for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+      const nid = indexOf(width, height, nx, ny);
+      if (nid < 0) continue;
+      sum += Math.abs(center - relativeElevation[nid]);
+      count += 1;
+    }
+    ruggedness[id] = count ? sum / count : 0;
+    localRelief[id] = Math.max(
+      Math.abs(center - left),
+      Math.abs(center - right),
+      Math.abs(center - up),
+      Math.abs(center - down),
+    );
+  }
+  return { slope, aspect, ruggedness, localRelief };
+}
+
+function finiteSample(field, width, height, x, y, fallback) {
+  const id = indexOf(width, height, x, y);
+  if (id < 0) return fallback;
+  const value = field[id];
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function indexOf(width, height, x, y) {
+  if (y < 0 || y >= height) return -1;
+  const sx = ((x % width) + width) % width;
+  const id = y * width + sx;
+  return id >= 0 && id < width * height ? id : -1;
 }
