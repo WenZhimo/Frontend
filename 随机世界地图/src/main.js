@@ -1,5 +1,6 @@
 import { createMapRenderer } from "./render/map2d.js";
 import { detectGpuCapabilities } from "./gpu/capability.js";
+import { createGpuComputeValidator } from "./gpu/computeValidate.js";
 import { stepWorld } from "./sim/evolution.js";
 import { createWorld, updateWorldParams } from "./sim/world.js";
 import { bindControlLabels, randomSeedText, readParams } from "./ui/controls.js";
@@ -38,6 +39,14 @@ const elements = {
 bindControlLabels(elements);
 const gpuCapabilities = detectGpuCapabilities(globalThis);
 console.info("[gpu]", gpuCapabilities.recommendedMode, gpuCapabilities.reason);
+const gpuComputeValidator = createGpuComputeValidator(readGpuComputeOptions());
+if (gpuComputeValidator.enabled) {
+  console.info("[gpu-compute]", "validate", {
+    kernels: gpuComputeValidator.kernels,
+    fields: gpuComputeValidator.fields,
+    interval: gpuComputeValidator.interval,
+  });
+}
 const renderer = createMapRenderer(elements.canvas, {
   gpuCapabilities,
   experimentalGpuRender: readExperimentalGpuRenderFlag(),
@@ -67,6 +76,7 @@ elements.playPause.addEventListener("click", () => {
 elements.stepOnce.addEventListener("click", () => {
   updateWorldParams(world, readParams(elements));
   stepWorld(world);
+  gpuComputeValidator.maybeValidate(world);
   renderAll();
 });
 
@@ -101,6 +111,7 @@ function loop(now) {
   if (now - lastFrame > 32) {
     updateWorldParams(world, readParams(elements));
     stepWorld(world);
+    gpuComputeValidator.maybeValidate(world);
     renderAll();
     lastFrame = now;
   }
@@ -261,5 +272,21 @@ function readExperimentalGpuRenderFlag() {
     return true;
   } catch {
     return true;
+  }
+}
+
+function readGpuComputeOptions() {
+  try {
+    const params = new URLSearchParams(globalThis.location?.search ?? "");
+    return {
+      mode: params.get("gpuCompute") ?? "off",
+      kernels: params.get("gpuKernel") ?? params.get("gpuKernels") ?? "",
+      fields: params.get("gpuFields") ?? "",
+      interval: params.get("gpuValidateInterval") ?? 20,
+      maxReports: params.get("gpuValidateReports") ?? 12,
+      globalObject: globalThis,
+    };
+  } catch {
+    return { mode: "off", globalObject: globalThis };
   }
 }

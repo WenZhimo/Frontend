@@ -73,6 +73,10 @@ function readUrlOnlyParams() {
   assignNumberParam(result, "faceSize", firstParam(params, ["faceSize", "face-size"]));
   assignNumberParam(result, "renderWidth", firstParam(params, ["renderWidth", "render-width"]));
   assignNumberParam(result, "renderHeight", firstParam(params, ["renderHeight", "render-height"]));
+  assignStringParam(result, "gpuCompute", firstParam(params, ["gpuCompute", "gpu-compute"]));
+  assignStringParam(result, "gpuKernel", firstParam(params, ["gpuKernel", "gpuKernels", "gpu-kernel", "gpu-kernels"]));
+  assignStringParam(result, "gpuFields", firstParam(params, ["gpuFields", "gpu-fields"]));
+  assignNumberParam(result, "gpuValidateInterval", firstParam(params, ["gpuValidateInterval", "gpu-validate-interval"]));
   return result;
 }
 
