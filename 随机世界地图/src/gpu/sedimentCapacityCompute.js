@@ -98,24 +98,38 @@ async function computeSedimentCapacityOnDevice(world, device, capabilities) {
   const readBuffer = device.createBuffer({ size: capacityBytes, usage: usage.COPY_DST | usage.MAP_READ });
   const uploadMs = performance.now() - uploadStartedAt;
 
+  device.pushErrorScope?.("validation");
   const shaderModule = device.createShaderModule({ code: SEDIMENT_CAPACITY_WGSL });
+  const bindGroupLayout = createSedimentCapacityBindGroupLayout(device, usage);
+  const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
   const seedPipeline = device.createComputePipeline({
-    layout: "auto",
+    layout: pipelineLayout,
     compute: { module: shaderModule, entryPoint: "seed_capacity" },
   });
   const smoothPipeline = device.createComputePipeline({
-    layout: "auto",
+    layout: pipelineLayout,
     compute: { module: shaderModule, entryPoint: "smooth_capacity" },
   });
+  const pipelineError = await device.popErrorScope?.();
+  if (pipelineError) {
+    destroyBuffers([paramBuffer, ...inputBuffers, zeroSource, capacityA, capacityB, outputBuffer, readBuffer]);
+    return skippedSedimentCapacityResult(capabilities, `WebGPU sediment capacity pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
+  }
 
   const kernelStartedAt = performance.now();
+  device.pushErrorScope?.("validation");
   const encoder = device.createCommandEncoder();
-  encodeSedimentPass(encoder, seedPipeline, device, paramBuffer, inputBuffers, zeroSource, capacityA, size);
-  encodeSedimentPass(encoder, smoothPipeline, device, paramBuffer, inputBuffers, capacityA, capacityB, size);
-  encodeSedimentPass(encoder, smoothPipeline, device, paramBuffer, inputBuffers, capacityB, outputBuffer, size);
+  encodeSedimentPass(encoder, seedPipeline, bindGroupLayout, device, paramBuffer, inputBuffers, zeroSource, capacityA, size);
+  encodeSedimentPass(encoder, smoothPipeline, bindGroupLayout, device, paramBuffer, inputBuffers, capacityA, capacityB, size);
+  encodeSedimentPass(encoder, smoothPipeline, bindGroupLayout, device, paramBuffer, inputBuffers, capacityB, outputBuffer, size);
   encoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, capacityBytes);
   device.queue.submit([encoder.finish()]);
   await device.queue.onSubmittedWorkDone();
+  const dispatchError = await device.popErrorScope?.();
+  if (dispatchError) {
+    destroyBuffers([paramBuffer, ...inputBuffers, zeroSource, capacityA, capacityB, outputBuffer, readBuffer]);
+    return skippedSedimentCapacityResult(capabilities, `WebGPU sediment capacity dispatch validation failed: ${dispatchError.message ?? dispatchError}`);
+  }
   const kernelMs = performance.now() - kernelStartedAt;
 
   const downloadStartedAt = performance.now();
@@ -142,11 +156,11 @@ async function computeSedimentCapacityOnDevice(world, device, capabilities) {
   };
 }
 
-function encodeSedimentPass(encoder, pipeline, device, paramBuffer, inputBuffers, sourceBuffer, outputBuffer, size) {
+function encodeSedimentPass(encoder, pipeline, bindGroupLayout, device, paramBuffer, inputBuffers, sourceBuffer, outputBuffer, size) {
   const pass = encoder.beginComputePass();
   pass.setPipeline(pipeline);
   pass.setBindGroup(0, device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(0),
+    layout: bindGroupLayout,
     entries: [
       { binding: 0, resource: { buffer: paramBuffer } },
       ...inputBuffers.map((buffer, index) => ({ binding: index + 1, resource: { buffer } })),
@@ -156,6 +170,29 @@ function encodeSedimentPass(encoder, pipeline, device, paramBuffer, inputBuffers
   }));
   pass.dispatchWorkgroups(Math.ceil(size / 64));
   pass.end();
+}
+
+function createSedimentCapacityBindGroupLayout(device) {
+  const entries = [
+    {
+      binding: 0,
+      visibility: globalThis.GPUShaderStage.COMPUTE,
+      buffer: { type: "uniform" },
+    },
+  ];
+  for (let binding = 1; binding <= 7; binding += 1) {
+    entries.push({
+      binding,
+      visibility: globalThis.GPUShaderStage.COMPUTE,
+      buffer: { type: "read-only-storage" },
+    });
+  }
+  entries.push({
+    binding: 8,
+    visibility: globalThis.GPUShaderStage.COMPUTE,
+    buffer: { type: "storage" },
+  });
+  return device.createBindGroupLayout({ entries });
 }
 
 function createParamData(size, width, height, seaLevel) {

@@ -307,6 +307,8 @@ function buildBaselineFieldsForKernels(kernels, world) {
       Object.assign(baselineFields, computeCpuLocalFields(world));
     } else if (kernel === "margin-smooth" || kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") {
       Object.assign(baselineFields, computeCpuMarginSmooth(world));
+    } else if (kernel === "sediment-capacity" || kernel === "sedimentCapacity" || kernel === "webgpu-sediment-capacity") {
+      Object.assign(baselineFields, computeCpuSedimentCapacity(world));
     }
   }
   return baselineFields;
@@ -386,6 +388,153 @@ function computeCpuMarginSmooth(world) {
     result[name] = output;
   }
   return result;
+}
+
+function computeCpuSedimentCapacity(world) {
+  const { grid, seaLevel } = world;
+  const { size, width, height } = grid;
+  if (!isRectangularGrid(grid)) return {};
+  const sedimentCapacity = new Float32Array(size);
+  for (let i = 0; i < size; i += 1) {
+    const rel = grid.elev[i] - seaLevel;
+    const nearOrBelowSea = clamp01((seaLevel + 0.08 - grid.elev[i]) / 0.16);
+    const shelfCapacity =
+      (grid.continentalShelf?.[i] ?? 0) * 0.34 +
+      (grid.continentalRise?.[i] ?? 0) * 0.24 +
+      (grid.sedimentWedge?.[i] ?? 0) * 0.22 +
+      (grid.passiveMargin?.[i] ?? 0) * 0.16;
+    const naturalCapacitySupport = clamp01(
+      nearOrBelowSea * 0.28 +
+        (grid.continentalShelf?.[i] ?? 0) * 0.55 +
+        (grid.continentalRise?.[i] ?? 0) * 0.42 +
+        (grid.sedimentWedge?.[i] ?? 0) * 0.36 +
+        (grid.passiveMargin?.[i] ?? 0) * 0.28 +
+        (grid.forelandBasin?.[i] ?? 0) * 0.34 +
+        (grid.inlandWaterCandidate?.[i] ?? 0) * 0.42 +
+        (grid.abyssalPlain?.[i] ?? 0) * 0.12,
+    );
+    const structuralLine = sedimentStructuralLineMemory(grid, i);
+    const broadBasin = localAverage8(grid, grid.basin, i);
+    const basinCapacity =
+      broadBasin * (0.11 + naturalCapacitySupport * 0.2) +
+      (grid.basin?.[i] ?? 0) * (0.035 + naturalCapacitySupport * 0.065) * (1 - structuralLine * 0.55) +
+      (grid.forelandBasin?.[i] ?? 0) * 0.27 +
+      (grid.riftAxis?.[i] ?? 0) * 0.052 +
+      (grid.inlandWaterCandidate?.[i] ?? 0) * 0.2;
+    const trenchForearcCapacity =
+      (grid.trench?.[i] ?? 0) * 0.055 +
+      (grid.trenchAxis?.[i] ?? 0) * 0.045 +
+      (grid.islandArc?.[i] ?? 0) * 0.04;
+    const isOceanic = Math.trunc((grid.crustType?.[i] ?? 1) + 0.5) === 0;
+    const deepOceanCapacity = (grid.abyssalPlain?.[i] ?? 0) * 0.075 * (isOceanic ? clamp01(grid.crustAge?.[i] ?? 0) : 0);
+    const activeConstructivePenalty =
+      (grid.ridgeAxis?.[i] ?? 0) * 0.34 +
+      (grid.ridge?.[i] ?? 0) * 0.24 +
+      (grid.activeOrogeny?.[i] ?? 0) * 0.18 +
+      (rel > 0.12 ? smoothstep(0.12, 0.32, rel) * 0.08 : 0);
+    sedimentCapacity[i] = clamp01(
+      shelfCapacity +
+        basinCapacity +
+        trenchForearcCapacity +
+        deepOceanCapacity +
+        nearOrBelowSea * 0.08 -
+        activeConstructivePenalty,
+    );
+  }
+  softenCpuSedimentCapacity(world, sedimentCapacity);
+  return { sedimentCapacity };
+}
+
+function softenCpuSedimentCapacity(world, sedimentCapacity) {
+  const { grid } = world;
+  const scratch = new Float32Array(sedimentCapacity.length);
+  for (let pass = 0; pass < 2; pass += 1) {
+    scratch.set(sedimentCapacity);
+    for (let id = 0; id < sedimentCapacity.length; id += 1) {
+      let total = scratch[id] * 1.8;
+      let weight = 1.8;
+      visitNeighbor8(grid, id, (nid, diagonal) => {
+        const w = diagonal ? 0.38 : 0.72;
+        total += scratch[nid] * w;
+        weight += w;
+      });
+      const local = scratch[id];
+      const smoothed = total / weight;
+      const naturalSink = cpuSoftDepositionalSink(grid, id);
+      const structuralLine = clamp01(
+        Math.max(0, (grid.boundaryInfluence?.[id] ?? 0) - 0.14) * 1.8 +
+          (grid.fractureZoneMemory?.[id] ?? 0) * 0.65 +
+          (grid.transformMemory?.[id] ?? 0) * 0.42 +
+          (grid.inactiveBoundaryRelief?.[id] ?? 0) * 2.2,
+      );
+      const blend = clamp01(0.16 + naturalSink * 0.16 + structuralLine * 0.22);
+      const edgeClamp = 0.06 + naturalSink * 0.04;
+      sedimentCapacity[id] = clamp01(mix(local, Math.min(local + edgeClamp, smoothed), blend));
+    }
+  }
+}
+
+function cpuSoftDepositionalSink(grid, id) {
+  const broadBasin = localAverage8(grid, grid.basin, id);
+  const structuralLine = sedimentStructuralLineMemory(grid, id);
+  const natural =
+    (grid.passiveMargin?.[id] ?? 0) * 0.54 +
+    (grid.continentalShelf?.[id] ?? 0) * 0.72 +
+    (grid.continentalRise?.[id] ?? 0) * 0.54 +
+    (grid.sedimentWedge?.[id] ?? 0) * 0.5 +
+    (grid.forelandBasin?.[id] ?? 0) * 0.62 +
+    (grid.inlandWaterCandidate?.[id] ?? 0) * 0.44 +
+    (grid.abyssalPlain?.[id] ?? 0) * 0.22;
+  const basinPart = (broadBasin * 0.2 + (grid.basin?.[id] ?? 0) * 0.08) * (0.35 + natural * 0.65) * (1 - structuralLine * 0.55);
+  return clamp01(natural + basinPart);
+}
+
+function sedimentStructuralLineMemory(grid, id) {
+  return clamp01(
+    Math.max(0, (grid.boundaryInfluence?.[id] ?? 0) - 0.12) * 1.25 +
+      (grid.inactiveBoundaryRelief?.[id] ?? 0) * 2.2 +
+      (grid.fractureZoneMemory?.[id] ?? 0) * 0.9 +
+      (grid.transformMemory?.[id] ?? 0) * 0.55,
+  );
+}
+
+function localAverage8(grid, field, id) {
+  if (!field) return 0;
+  let total = field[id] * 1.5;
+  let weight = 1.5;
+  visitNeighbor8(grid, id, (nid, diagonal) => {
+    const w = diagonal ? 0.45 : 0.8;
+    total += field[nid] * w;
+    weight += w;
+  });
+  return total / weight;
+}
+
+function visitNeighbor8(grid, id, visit) {
+  const width = grid.width;
+  const x = id % width;
+  const y = Math.floor(id / width);
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      const nid = indexOf(width, grid.height, x + dx, y + dy);
+      if (nid < 0) continue;
+      visit(nid, dx !== 0 && dy !== 0);
+    }
+  }
+}
+
+function smoothstep(edge0, edge1, value) {
+  const t = clamp01((value - edge0) / Math.max(0.000001, edge1 - edge0));
+  return t * t * (3 - 2 * t);
+}
+
+function mix(a, b, t) {
+  return a * (1 - t) + b * t;
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
 }
 
 function finiteSample(field, width, height, x, y, fallback) {
