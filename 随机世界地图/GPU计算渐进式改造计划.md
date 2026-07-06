@@ -399,6 +399,10 @@ Phase 2B 当前落地状态：
 - `tools/gpu-perf-profile.mjs` 已支持 `local-fields`，继续拆分 `uploadMs / kernelMs / downloadMs / totalGpuPathMs`。
 - 该 candidate 仍是只读实验路径，不写回 `world.grid`，也不接入 `stepWorld` / `runGeologyV2Step`。
 - 当前只覆盖矩形网格；真实球面 / cubed-sphere 图拓扑会安全跳过，后续需按图邻域重新设计权重。
+- 已新增 `src/gpu/kernels/marginSmoothKernel.js` 与 `src/gpu/marginSmoothCompute.js`，实现 `passiveMargin / continentalShelf / continentalSlope / continentalRise / sedimentWedge / abyssalPlain` 的一次四邻域平滑 WebGPU candidate。
+- `tools/gpu-field-compare.mjs` 已支持 `webgpu-margin-smooth` / `margin-smooth`，并用 CPU 同等一次平滑结果作为 baseline；`tools/gpu-perf-profile.mjs` 已支持 `margin-smooth`。
+- `marginSmooth` candidate 只覆盖矩形网格上的 `smoothMarginFields` 平滑候选，不替代距离场、BFS、`clampMarginFields` 或任何 CPU 生产路径；真实球面 / cubed-sphere 图拓扑会安全跳过。
+- `tools/bundle-app.mjs` 已纳入 Phase 3 的 `localFields` 与 `marginSmooth` candidate 文件，确保浏览器 bundle 不遗漏新增 GPU 实验模块。
 
 ### Phase 4：Hybrid GPU simulation
 

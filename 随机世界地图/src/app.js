@@ -10324,6 +10324,556 @@
   }
 
 
+  // ---- src/gpu/kernels/localFieldsKernel.js ----
+  const LOCAL_FIELDS_WGSL = String.raw`
+  struct Params {
+    size: u32,
+    width: u32,
+    height: u32,
+    _pad0: u32,
+  };
+
+  @group(0) @binding(0) var<uniform> params: Params;
+  @group(0) @binding(1) var<storage, read> field: array<f32>;
+  @group(0) @binding(2) var<storage, read_write> output0: array<vec4<f32>>;
+
+  fn index_of(x: i32, y: i32) -> i32 {
+    if (y < 0 || y >= i32(params.height)) {
+      return -1;
+    }
+    let width = i32(params.width);
+    let wrapped_x = ((x % width) + width) % width;
+    let id = y * width + wrapped_x;
+    if (id < 0 || id >= i32(params.size)) {
+      return -1;
+    }
+    return id;
+  }
+
+  fn finite_sample(x: i32, y: i32, fallback: f32) -> f32 {
+    let id = index_of(x, y);
+    if (id < 0) {
+      return fallback;
+    }
+    let value = field[u32(id)];
+    if (isNan(value) || isInf(value)) {
+      return fallback;
+    }
+    return value;
+  }
+
+  @compute @workgroup_size(64)
+  fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let i = global_id.x;
+    if (i >= params.size) {
+      return;
+    }
+
+    let width = params.width;
+    let x = i32(i % width);
+    let y = i32(i / width);
+    let center = field[i];
+
+    let left = finite_sample(x - 1, y, center);
+    let right = finite_sample(x + 1, y, center);
+    let up = finite_sample(x, y - 1, center);
+    let down = finite_sample(x, y + 1, center);
+    let dx = (right - left) * 0.5;
+    let dy = (down - up) * 0.5;
+    let slope = sqrt(dx * dx + dy * dy);
+    let aspect = atan2(dy, dx);
+
+    var sum = 0.0;
+    var count = 0.0;
+    let west = index_of(x - 1, y);
+    if (west >= 0) {
+      sum += abs(center - field[u32(west)]);
+      count += 1.0;
+    }
+    let east = index_of(x + 1, y);
+    if (east >= 0) {
+      sum += abs(center - field[u32(east)]);
+      count += 1.0;
+    }
+    let north = index_of(x, y - 1);
+    if (north >= 0) {
+      sum += abs(center - field[u32(north)]);
+      count += 1.0;
+    }
+    let south = index_of(x, y + 1);
+    if (south >= 0) {
+      sum += abs(center - field[u32(south)]);
+      count += 1.0;
+    }
+    let ruggedness = select(0.0, sum / count, count > 0.0);
+    let local_relief = max(max(abs(center - left), abs(center - right)), max(abs(center - up), abs(center - down)));
+
+    output0[i] = vec4<f32>(slope, aspect, ruggedness, local_relief);
+  }
+  `;
+
+
+  // ---- src/gpu/localFieldsCompute.js ----
+
+  const GPU_LOCAL_FIELDS_OUTPUT_FIELDS = [
+    "slope",
+    "aspect",
+    "ruggedness",
+    "localRelief",
+  ];
+
+  async function runWebGpuLocalFieldsCandidate(world, options = {}) {
+    const globalObject = options.globalObject ?? globalThis;
+    const capabilities = detectGpuCapabilities(globalObject);
+    const gpu = globalObject?.navigator?.gpu;
+    if (world?.grid?.topologyOptions?.graphBacked || world?.grid?.topologyKind === "cubed-sphere") {
+      return skippedLocalFieldsResult(capabilities, "WebGPU local fields candidate currently supports rectangular grids only.");
+    }
+    if (!capabilities.secureContext || !capabilities.webgpuAvailable || !gpu?.requestAdapter) {
+      return skippedLocalFieldsResult(capabilities, "WebGPU is not available in this environment.");
+    }
+
+    let adapter;
+    let device;
+    try {
+      adapter = await gpu.requestAdapter();
+      if (!adapter) {
+        return skippedLocalFieldsResult(capabilities, "WebGPU adapter request returned null.");
+      }
+      device = await adapter.requestDevice();
+    } catch (error) {
+      return skippedLocalFieldsResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
+    }
+
+    try {
+      return await computeLocalFieldsOnDevice(world, device, capabilities);
+    } catch (error) {
+      return {
+        skipped: true,
+        valid: true,
+        backend: "webgpu-local-fields",
+        gpuCapabilities: capabilities,
+        reason: `WebGPU local fields candidate failed safely: ${error?.message ?? "unknown error"}`,
+        timings: emptyLocalFieldsTimings(),
+        fields: {},
+      };
+    } finally {
+      device?.destroy?.();
+    }
+  }
+
+  async function computeLocalFieldsOnDevice(world, device, capabilities) {
+    const { grid, seaLevel } = world;
+    const size = grid.size;
+    const width = grid.width;
+    const height = grid.height;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width * height !== size) {
+      return skippedLocalFieldsResult(capabilities, "World grid is not a rectangular width x height layout.");
+    }
+
+    const uploadStartedAt = performance.now();
+    const relativeElevation = new Float32Array(size);
+    for (let i = 0; i < size; i += 1) {
+      relativeElevation[i] = grid.elev[i] - seaLevel;
+    }
+
+    const usage = globalThis.GPUBufferUsage;
+    const mapMode = globalThis.GPUMapMode;
+    if (!usage || !mapMode) {
+      return skippedLocalFieldsResult(capabilities, "WebGPU constants are unavailable in this JavaScript runtime.");
+    }
+
+    const paramData = new Uint32Array([size, width, height, 0]);
+    const paramBuffer = createBufferWithData(device, paramData, usage.UNIFORM | usage.COPY_DST);
+    const inputBuffer = createBufferWithData(device, relativeElevation, usage.STORAGE | usage.COPY_DST);
+    const outputBytes = size * 4 * Float32Array.BYTES_PER_ELEMENT;
+    const outputBuffer = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
+    const readBuffer = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+    const uploadMs = performance.now() - uploadStartedAt;
+
+    const shaderModule = device.createShaderModule({ code: LOCAL_FIELDS_WGSL });
+    const pipeline = device.createComputePipeline({
+      layout: "auto",
+      compute: { module: shaderModule, entryPoint: "main" },
+    });
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: paramBuffer } },
+        { binding: 1, resource: { buffer: inputBuffer } },
+        { binding: 2, resource: { buffer: outputBuffer } },
+      ],
+    });
+
+    const kernelStartedAt = performance.now();
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(size / 64));
+    pass.end();
+    encoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, outputBytes);
+    device.queue.submit([encoder.finish()]);
+    await device.queue.onSubmittedWorkDone();
+    const kernelMs = performance.now() - kernelStartedAt;
+
+    const downloadStartedAt = performance.now();
+    await readBuffer.mapAsync(mapMode.READ);
+    const packed = new Float32Array(readBuffer.getMappedRange().slice(0));
+    readBuffer.unmap();
+    const downloadMs = performance.now() - downloadStartedAt;
+
+    const fields = unpackLocalFields(size, packed);
+    destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
+
+    return {
+      skipped: false,
+      valid: true,
+      backend: "webgpu-local-fields",
+      gpuCapabilities: capabilities,
+      reason: null,
+      timings: {
+        uploadMs,
+        kernelMs,
+        downloadMs,
+        totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+      },
+      fields,
+    };
+  }
+
+  function createBufferWithData(device, typedArray, usage) {
+    const buffer = device.createBuffer({
+      size: typedArray.byteLength,
+      usage,
+      mappedAtCreation: true,
+    });
+    new typedArray.constructor(buffer.getMappedRange()).set(typedArray);
+    buffer.unmap();
+    return buffer;
+  }
+
+  function unpackLocalFields(size, packed) {
+    const fields = {};
+    for (const name of GPU_LOCAL_FIELDS_OUTPUT_FIELDS) {
+      fields[name] = new Float32Array(size);
+    }
+    for (let i = 0; i < size; i += 1) {
+      const offset = i * 4;
+      fields.slope[i] = packed[offset];
+      fields.aspect[i] = packed[offset + 1];
+      fields.ruggedness[i] = packed[offset + 2];
+      fields.localRelief[i] = packed[offset + 3];
+    }
+    return fields;
+  }
+
+  function destroyBuffers(buffers) {
+    for (const buffer of buffers) {
+      buffer?.destroy?.();
+    }
+  }
+
+  function skippedLocalFieldsResult(capabilities, reason) {
+    return {
+      skipped: true,
+      valid: true,
+      backend: "webgpu-local-fields",
+      gpuCapabilities: capabilities,
+      reason,
+      timings: emptyLocalFieldsTimings(),
+      fields: {},
+    };
+  }
+
+  function emptyLocalFieldsTimings() {
+    return {
+      uploadMs: null,
+      kernelMs: null,
+      downloadMs: null,
+      totalGpuPathMs: null,
+    };
+  }
+
+
+  // ---- src/gpu/kernels/marginSmoothKernel.js ----
+  const MARGIN_SMOOTH_WGSL = String.raw`
+  struct Params {
+    size: u32,
+    width: u32,
+    height: u32,
+    _pad0: u32,
+  };
+
+  @group(0) @binding(0) var<uniform> params: Params;
+  @group(0) @binding(1) var<storage, read> input0: array<vec4<f32>>;
+  @group(0) @binding(2) var<storage, read> input1: array<vec4<f32>>;
+  @group(0) @binding(3) var<storage, read_write> output0: array<vec4<f32>>;
+  @group(0) @binding(4) var<storage, read_write> output1: array<vec4<f32>>;
+
+  fn index_of(x: i32, y: i32) -> i32 {
+    if (y < 0 || y >= i32(params.height)) {
+      return -1;
+    }
+    let width = i32(params.width);
+    let wrapped_x = ((x % width) + width) % width;
+    let id = y * width + wrapped_x;
+    if (id < 0 || id >= i32(params.size)) {
+      return -1;
+    }
+    return id;
+  }
+
+  fn smooth_vec4(center: vec4<f32>, x: i32, y: i32, source: ptr<storage, array<vec4<f32>>, read>) -> vec4<f32> {
+    var total = center * 2.5;
+    var weight = 2.5;
+    let west = index_of(x - 1, y);
+    if (west >= 0) {
+      total += (*source)[u32(west)];
+      weight += 1.0;
+    }
+    let east = index_of(x + 1, y);
+    if (east >= 0) {
+      total += (*source)[u32(east)];
+      weight += 1.0;
+    }
+    let north = index_of(x, y - 1);
+    if (north >= 0) {
+      total += (*source)[u32(north)];
+      weight += 1.0;
+    }
+    let south = index_of(x, y + 1);
+    if (south >= 0) {
+      total += (*source)[u32(south)];
+      weight += 1.0;
+    }
+    return clamp(total / weight, vec4<f32>(0.0), vec4<f32>(1.0));
+  }
+
+  @compute @workgroup_size(64)
+  fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let i = global_id.x;
+    if (i >= params.size) {
+      return;
+    }
+
+    let width = params.width;
+    let x = i32(i % width);
+    let y = i32(i / width);
+
+    let a = input0[i];
+    let b = input1[i];
+    output0[i] = smooth_vec4(a, x, y, &input0);
+    output1[i] = smooth_vec4(b, x, y, &input1);
+  }
+  `;
+
+
+  // ---- src/gpu/marginSmoothCompute.js ----
+
+  const GPU_MARGIN_SMOOTH_OUTPUT_FIELDS = [
+    "passiveMargin",
+    "continentalShelf",
+    "continentalSlope",
+    "continentalRise",
+    "sedimentWedge",
+    "abyssalPlain",
+  ];
+
+  async function runWebGpuMarginSmoothCandidate(world, options = {}) {
+    const globalObject = options.globalObject ?? globalThis;
+    const capabilities = detectGpuCapabilities(globalObject);
+    const gpu = globalObject?.navigator?.gpu;
+    if (world?.grid?.topologyOptions?.graphBacked || world?.grid?.topologyKind === "cubed-sphere") {
+      return skippedMarginSmoothResult(capabilities, "WebGPU margin smoothing candidate currently supports rectangular grids only.");
+    }
+    if (!capabilities.secureContext || !capabilities.webgpuAvailable || !gpu?.requestAdapter) {
+      return skippedMarginSmoothResult(capabilities, "WebGPU is not available in this environment.");
+    }
+
+    let adapter;
+    let device;
+    try {
+      adapter = await gpu.requestAdapter();
+      if (!adapter) {
+        return skippedMarginSmoothResult(capabilities, "WebGPU adapter request returned null.");
+      }
+      device = await adapter.requestDevice();
+    } catch (error) {
+      return skippedMarginSmoothResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
+    }
+
+    try {
+      return await computeMarginSmoothOnDevice(world, device, capabilities);
+    } catch (error) {
+      return {
+        skipped: true,
+        valid: true,
+        backend: "webgpu-margin-smooth",
+        gpuCapabilities: capabilities,
+        reason: `WebGPU margin smoothing candidate failed safely: ${error?.message ?? "unknown error"}`,
+        timings: emptyMarginSmoothTimings(),
+        fields: {},
+      };
+    } finally {
+      device?.destroy?.();
+    }
+  }
+
+  async function computeMarginSmoothOnDevice(world, device, capabilities) {
+    const { grid } = world;
+    const size = grid.size;
+    const width = grid.width;
+    const height = grid.height;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width * height !== size) {
+      return skippedMarginSmoothResult(capabilities, "World grid is not a rectangular width x height layout.");
+    }
+
+    const uploadStartedAt = performance.now();
+    const input0 = new Float32Array(size * 4);
+    const input1 = new Float32Array(size * 4);
+    for (let i = 0; i < size; i += 1) {
+      const offset = i * 4;
+      input0[offset] = grid.passiveMargin?.[i] ?? 0;
+      input0[offset + 1] = grid.continentalShelf?.[i] ?? 0;
+      input0[offset + 2] = grid.continentalSlope?.[i] ?? 0;
+      input0[offset + 3] = grid.continentalRise?.[i] ?? 0;
+      input1[offset] = grid.sedimentWedge?.[i] ?? 0;
+      input1[offset + 1] = grid.abyssalPlain?.[i] ?? 0;
+    }
+
+    const usage = globalThis.GPUBufferUsage;
+    const mapMode = globalThis.GPUMapMode;
+    if (!usage || !mapMode) {
+      return skippedMarginSmoothResult(capabilities, "WebGPU constants are unavailable in this JavaScript runtime.");
+    }
+
+    const paramData = new Uint32Array([size, width, height, 0]);
+    const paramBuffer = createBufferWithData(device, paramData, usage.UNIFORM | usage.COPY_DST);
+    const inputBuffer0 = createBufferWithData(device, input0, usage.STORAGE | usage.COPY_DST);
+    const inputBuffer1 = createBufferWithData(device, input1, usage.STORAGE | usage.COPY_DST);
+    const outputBytes = size * 4 * Float32Array.BYTES_PER_ELEMENT;
+    const outputBuffer0 = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
+    const outputBuffer1 = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
+    const readBuffer0 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+    const readBuffer1 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+    const uploadMs = performance.now() - uploadStartedAt;
+
+    const shaderModule = device.createShaderModule({ code: MARGIN_SMOOTH_WGSL });
+    const pipeline = device.createComputePipeline({
+      layout: "auto",
+      compute: { module: shaderModule, entryPoint: "main" },
+    });
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: paramBuffer } },
+        { binding: 1, resource: { buffer: inputBuffer0 } },
+        { binding: 2, resource: { buffer: inputBuffer1 } },
+        { binding: 3, resource: { buffer: outputBuffer0 } },
+        { binding: 4, resource: { buffer: outputBuffer1 } },
+      ],
+    });
+
+    const kernelStartedAt = performance.now();
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(size / 64));
+    pass.end();
+    encoder.copyBufferToBuffer(outputBuffer0, 0, readBuffer0, 0, outputBytes);
+    encoder.copyBufferToBuffer(outputBuffer1, 0, readBuffer1, 0, outputBytes);
+    device.queue.submit([encoder.finish()]);
+    await device.queue.onSubmittedWorkDone();
+    const kernelMs = performance.now() - kernelStartedAt;
+
+    const downloadStartedAt = performance.now();
+    await Promise.all([
+      readBuffer0.mapAsync(mapMode.READ),
+      readBuffer1.mapAsync(mapMode.READ),
+    ]);
+    const packed0 = new Float32Array(readBuffer0.getMappedRange().slice(0));
+    const packed1 = new Float32Array(readBuffer1.getMappedRange().slice(0));
+    readBuffer0.unmap();
+    readBuffer1.unmap();
+    const downloadMs = performance.now() - downloadStartedAt;
+
+    const fields = unpackMarginSmoothFields(size, packed0, packed1);
+    destroyBuffers([paramBuffer, inputBuffer0, inputBuffer1, outputBuffer0, outputBuffer1, readBuffer0, readBuffer1]);
+
+    return {
+      skipped: false,
+      valid: true,
+      backend: "webgpu-margin-smooth",
+      gpuCapabilities: capabilities,
+      reason: null,
+      timings: {
+        uploadMs,
+        kernelMs,
+        downloadMs,
+        totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+      },
+      fields,
+    };
+  }
+
+  function createBufferWithData(device, typedArray, usage) {
+    const buffer = device.createBuffer({
+      size: typedArray.byteLength,
+      usage,
+      mappedAtCreation: true,
+    });
+    new typedArray.constructor(buffer.getMappedRange()).set(typedArray);
+    buffer.unmap();
+    return buffer;
+  }
+
+  function unpackMarginSmoothFields(size, packed0, packed1) {
+    const fields = {};
+    for (const name of GPU_MARGIN_SMOOTH_OUTPUT_FIELDS) {
+      fields[name] = new Float32Array(size);
+    }
+    for (let i = 0; i < size; i += 1) {
+      const offset = i * 4;
+      fields.passiveMargin[i] = packed0[offset];
+      fields.continentalShelf[i] = packed0[offset + 1];
+      fields.continentalSlope[i] = packed0[offset + 2];
+      fields.continentalRise[i] = packed0[offset + 3];
+      fields.sedimentWedge[i] = packed1[offset];
+      fields.abyssalPlain[i] = packed1[offset + 1];
+    }
+    return fields;
+  }
+
+  function destroyBuffers(buffers) {
+    for (const buffer of buffers) {
+      buffer?.destroy?.();
+    }
+  }
+
+  function skippedMarginSmoothResult(capabilities, reason) {
+    return {
+      skipped: true,
+      valid: true,
+      backend: "webgpu-margin-smooth",
+      gpuCapabilities: capabilities,
+      reason,
+      timings: emptyMarginSmoothTimings(),
+      fields: {},
+    };
+  }
+
+  function emptyMarginSmoothTimings() {
+    return {
+      uploadMs: null,
+      kernelMs: null,
+      downloadMs: null,
+      totalGpuPathMs: null,
+    };
+  }
+
+
   // ---- src/render/cpuMapRenderer.js ----
 
   const SPHERICAL_DEBUG_PROJECTION_MODES = new Set([
