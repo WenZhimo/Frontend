@@ -625,6 +625,8 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - 字段级 readback 的实机结果仍显示 GPU 总路径约 `15.7s`，download/readback 约 `9.8s`，说明当前瓶颈不只是输出字段数量，后续优化应优先评估 buffer map/readback 固定成本、Chrome/WebGPU 环境开销、kernel 合批和降低验证频率。
 - 浏览器 smoke 现在会把 WebGPU candidate 的 `adapterInfo` / `deviceInfo` 一并带出，用来区分真实硬件路径、兼容/软件 fallback、设备 limits 或 feature 缺失造成的异常慢路径。
 - `gpuFields=isostaticBase` 的最新浏览器 validate 显示 adapter 为 `nvidia / lovelace`，不是软件 fallback；单字段路径仍出现约 `20.3s` 总 GPU 路径，其中 kernel 约 `7.3s`、download 约 `12.9s`，因此下一轮应优先做“设备 / pipeline 复用 + 异步低频验证”，而不是继续细分单次 readback 字段。
+- `isostasy` WebGPU candidate 已开始复用 device / pipeline；输出增加 `setupMs`、`totalCandidateMs` 与 `reusedContext`，后续应在多次 validation 或更低频 validation 中观察 setup 成本是否被摊薄。
+- 两次连续浏览器 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`，首次 setup 约 `19.2s` 已被消除；但复用后的单次 `totalGpuPathMs` 仍约 `13.6s`，kernel 与 readback 仍各约 `6-7s`，因此该路径继续保持 experimental，不进入默认。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
 
 ## 9. GPU 化验收标准

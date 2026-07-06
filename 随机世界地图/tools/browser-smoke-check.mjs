@@ -14,6 +14,7 @@ const steps = parseIntOption(options, "steps", 2);
 const requireValidation = parseBoolOption(options, "require-validation");
 const requireWriteback = parseBoolOption(options, "require-writeback");
 const requirePerfSummary = parseBoolOption(options, "require-perf-summary");
+const requireValidationCount = Math.max(1, parseIntOption(options, "require-validation-count", 1));
 const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
 const maxLongTaskMs = parseIntOption(options, "max-long-task-ms", 0);
 const chromePath = String(options.chrome ?? findChromePath());
@@ -92,7 +93,7 @@ try {
 
   let validation = null;
   if (requireValidation) {
-    validation = await waitForValidation(cdp, sessionId, waitMs);
+    validation = await waitForValidation(cdp, sessionId, waitMs, requireValidationCount);
     if (!validation?.valid) {
       throw new Error(`GPU validation did not pass: ${JSON.stringify(validation)}`);
     }
@@ -101,6 +102,9 @@ try {
     }
     if (requireWriteback && !validation.writebackApplied) {
       throw new Error(`GPU experimental writeback did not occur: ${JSON.stringify(validation)}`);
+    }
+    if ((validation.historyLength ?? 1) < requireValidationCount) {
+      throw new Error(`GPU validation count did not reach ${requireValidationCount}: ${JSON.stringify(validation)}`);
     }
   }
   const performanceSummary = await evaluate(cdp, sessionId, "globalThis.__worldMapPerfSummary ?? null");
@@ -317,10 +321,16 @@ function pageProbeScript({ requireStep = 0 } = {}) {
   })()`;
 }
 
-async function waitForValidation(cdp, sessionId, timeoutMs) {
+async function waitForValidation(cdp, sessionId, timeoutMs, requiredCount = 1) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    const result = await evaluate(cdp, sessionId, "globalThis.__lastGpuComputeValidation ?? null");
+    const result = await evaluate(cdp, sessionId, `(() => {
+      const history = globalThis.__gpuComputeValidationHistory ?? [];
+      const latest = globalThis.__lastGpuComputeValidation ?? null;
+      if (!latest) return null;
+      if (history.length < ${Number(requiredCount)}) return null;
+      return { ...latest, historyLength: history.length, history };
+    })()`);
     if (result) return result;
     await wait(250);
   }
@@ -388,6 +398,26 @@ function summarizeValidation(validation) {
     writebackFields: validation.writebackFields ?? [],
     fallbackReason: validation.fallbackReason ?? null,
     kernels: validation.kernels,
+    historyLength: validation.historyLength ?? null,
+    history: validation.history?.map((entry) => ({
+      valid: entry.valid,
+      skipped: entry.skipped,
+      mode: entry.mode ?? null,
+      writebackApplied: entry.writebackApplied ?? false,
+      writebackFields: entry.writebackFields ?? [],
+      candidateResults: entry.candidateResults?.map((candidate) => ({
+        kernel: candidate.kernel,
+        backend: candidate.backend,
+        skipped: candidate.skipped,
+        reason: candidate.reason ?? null,
+        requestedFields: candidate.requestedFields ?? [],
+        downloadedPacks: candidate.downloadedPacks ?? [],
+        adapterInfo: candidate.adapterInfo ?? null,
+        deviceInfo: candidate.deviceInfo ?? null,
+        reusedContext: candidate.reusedContext ?? false,
+        timings: candidate.timings ?? null,
+      })) ?? [],
+    })) ?? [],
     candidateResults: validation.candidateResults?.map((candidate) => ({
       kernel: candidate.kernel,
       backend: candidate.backend,
@@ -397,6 +427,7 @@ function summarizeValidation(validation) {
       downloadedPacks: candidate.downloadedPacks ?? [],
       adapterInfo: candidate.adapterInfo ?? null,
       deviceInfo: candidate.deviceInfo ?? null,
+      reusedContext: candidate.reusedContext ?? false,
       timings: candidate.timings ?? null,
     })) ?? [],
     fields: validation.fields?.map((field) => ({
