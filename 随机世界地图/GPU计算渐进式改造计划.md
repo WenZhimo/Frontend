@@ -441,13 +441,16 @@ Phase 2B 当前落地状态：
 
 - 已新增 `tools/gpu-drift-check.mjs`，作为 Phase 4 validate / experimental 前置闸门；它按 checkpoint 采样当前 CPU 权威世界，并在 WebGPU candidate 可用时对比候选字段，不可用时安全输出 skipped reason 与零漂移 CPU 证据。
 - `gpu-drift-check` 支持两种调用形态：计划文档形态 `seed pipeline resolution checkpoints fields`，以及 step-first 形态 `seed step pipeline resolution --gpu-compute validate --gpu-kernel ... --fields ...`。
-- 当前工具输出 `comparedSteps / maxFieldRmse / maxFieldAbs / failedFields / diagnosticDrift / driftOverTime / fieldDrift / skippedReason`，但还没有把任何 GPU candidate 写回 `world.grid`。
+- 当前工具输出 `comparedSteps / maxFieldRmse / maxFieldAbs / failedFields / diagnosticDrift / driftOverTime / fieldDrift / skippedReason`；离线 drift gate 仍保持 CPU 权威 checkpoint 对比，不把 GPU candidate 写回生产 pipeline。
 - 已新增 `src/gpu/computeValidate.js` 与浏览器 URL 参数入口：`?gpuCompute=validate` 会每 N 步采样当前 CPU 权威 world，默认运行已通过浏览器实机采样的 `isostasy` WebGPU candidate，对比 `isostaticBase` 并在 Console 输出 `[gpu-compute-validate]` 摘要；该模式不写回 `world.grid`。
 - `gpuCompute=validate` 的默认采样间隔为 20 步，可用 `gpuValidateInterval` 调整；可用 `gpuKernel` / `gpuKernels` 和 `gpuFields` 缩小验证范围。
 - 浏览器运行时 `isostaticBase` validate 门槛使用 `rmse <= 0.001 / p95Abs <= 0.002 / maxAbs <= 0.0065`；其中 `maxAbs` 比离线候选门槛略宽，用于吸收浏览器 WebGPU f32 的单点边缘差异，不构成默认 GPU 写回许可。
 - 浏览器实机 WebGPU 验证显示 `elevation` 已可作为显式 `gpuKernel=elevation&gpuFields=baseElev,relief,boundaryRelief,elev` validate 核触发；当前修复使用 validation snapshot 对齐 CPU 权威 checkpoint，并把 elevation 输入打包到单 storage buffer，避免多 storage buffer 绑定限制导致全 0 输出。
 - 浏览器实机 WebGPU 验证显示 `sediment-capacity` 可以作为显式 `gpuKernel=sediment-capacity&gpuFields=sedimentCapacity` validate 核触发；当前已用同 checkpoint CPU 公式 baseline 校准，避免直接和沉积流程后续改写过的 step-end `grid.sedimentCapacity` 错位比较。它仍保留为显式实验项，不进入默认 GPU 写回。
-- 浏览器运行时 validate 仍属于 Phase 4 前置门禁；后续进入 writeback 前还必须补齐多 seed、多分辨率和 20 / 200 / 739 Myr drift gate。
+- 已新增浏览器运行时 `gpuCompute=experimental`：目前只允许 `isostasy` 低风险派生字段写回，且写回前会先对同 checkpoint CPU baseline 与 WebGPU candidate 做误差门禁；若 WebGPU 不可用、candidate skipped、字段超阈值或请求字段不在 allowlist 内，会自动保留 CPU 字段并报告 `fallbackReason`。
+- `gpuCompute=experimental&gpuKernel=isostasy` 当前允许写回 `sedimentFill / ridgeUplift / trenchDepression / crustBuoyancy / densitySubsidence / lithosphereCooling / isostaticBase / ageSubsidence / thicknessBuoyancy / oceanDepthTerms / isostaticResidual / isostaticReliefSupply`，仍不写回 `crustAge / sediment / basin / crustThickness` 等长期记忆字段。
+- 浏览器 smoke gate 已增加 `--require-writeback`，用于确认 WebGPU experimental 不是 safe-skip 误报；实机验证中 `isostasy` 12 个写回字段均通过阈值，最大误差约 `2.98e-8`，Console 输出 `[gpu-compute-experimental]` 摘要且无项目错误。
+- 当前 experimental writeback 仍不是默认生产路径；进入默认 GPU compute 前还必须补齐多 seed、多分辨率和更长程 20 / 200 / 739 Myr drift gate，并证明总路径性能收益高于 CPU。
 
 ### Phase 5：高级 GPU 图算法评估
 

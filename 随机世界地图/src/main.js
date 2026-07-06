@@ -41,7 +41,7 @@ const gpuCapabilities = detectGpuCapabilities(globalThis);
 console.info("[gpu]", gpuCapabilities.recommendedMode, gpuCapabilities.reason);
 const gpuComputeValidator = createGpuComputeValidator(readGpuComputeOptions());
 if (gpuComputeValidator.enabled) {
-  console.info("[gpu-compute]", "validate", {
+  console.info("[gpu-compute]", gpuComputeValidator.mode, {
     kernels: gpuComputeValidator.kernels,
     fields: gpuComputeValidator.fields,
     interval: gpuComputeValidator.interval,
