@@ -428,6 +428,13 @@ Phase 2B 当前落地状态：
 - 只有当 `gpu-perf-profile` 证明 upload + compute + download 明显快于 CPU 时，才默认启用。
 - 否则作为实验 backend 保留。
 
+当前落地状态：
+
+- 已新增 `tools/gpu-drift-check.mjs`，作为 Phase 4 validate / experimental 前置闸门；它按 checkpoint 采样当前 CPU 权威世界，并在 WebGPU candidate 可用时对比候选字段，不可用时安全输出 skipped reason 与零漂移 CPU 证据。
+- `gpu-drift-check` 支持两种调用形态：计划文档形态 `seed pipeline resolution checkpoints fields`，以及 step-first 形态 `seed step pipeline resolution --gpu-compute validate --gpu-kernel ... --fields ...`。
+- 当前工具输出 `comparedSteps / maxFieldRmse / maxFieldAbs / failedFields / diagnosticDrift / driftOverTime / fieldDrift / skippedReason`，但还没有把任何 GPU candidate 写回 `world.grid`。
+- `gpuCompute=validate` 当前是工具链级验证模式；浏览器运行时 validate 开关和每 N 步双跑摘要尚未接入 UI / 主循环，后续进入 Phase 4 writeback 前必须补齐。
+
 ### Phase 5：高级 GPU 图算法评估
 
 目标：只在前几阶段稳定后评估图算法 GPU 化。
@@ -512,11 +519,13 @@ node .\tools\gpu-field-compare.mjs '龙骨海-纪元7' geology-v2 512x256 200 el
 - 检查 GPU 写回字段是否会在长期演化中放大微小浮点差异。
 - 对比 CPU-only 与 GPU-experimental 在同 seed、同参数、同 step 下的核心诊断。
 - 只在 GPU kernel 准备从 experimental 升级为默认路径前运行。
+- 当前阶段先用于 CPU 权威 checkpoint 采样与 GPU candidate 对比；WebGPU 不可用时应 `valid: true` 并给出 safe-skip 原因。
 
 建议参数：
 
 ```powershell
 node .\tools\gpu-drift-check.mjs '龙骨海-纪元7' geology-v2 512x256 20,200,739 elev,isostaticBase,sedimentCapacity
+node .\tools\gpu-drift-check.mjs '龙骨海-纪元7' 20 geology-v2 256x128 --gpu-compute validate --gpu-kernel sediment-capacity --fields sedimentCapacity
 ```
 
 建议输出：
