@@ -1,5 +1,6 @@
 import { BoundaryType } from "../sim/tectonics.js";
-import { boundaryOverlayStrength } from "./cpuMapRenderer.js";
+import { boundaryOverlayStrength, colorForElevation } from "./cpuMapRenderer.js";
+import { renderSphericalField } from "./sphericalProjectionRenderer.js";
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -85,14 +86,55 @@ export function createExperimentalWebGlMapRenderer(canvas) {
   function render(world) {
     const { grid } = world;
     if (isGraphBackedGrid(grid)) {
-      throw new Error(
-        "Experimental WebGL2 renderer only accepts rectangular grids; graph-backed spherical grids must use CPU/projection rendering.",
-      );
+      renderSphericalProjection(world);
+      return;
     }
     ensureSize(grid.width, grid.height);
     elevationUpload.set(grid.elev);
     writeBoundaryOverlay(world, boundaryUpload);
 
+    drawUploadedTextures(world.seaLevel);
+    world.renderBackend = "webgl2-render-experimental";
+    world.renderFallbackReason = null;
+  }
+
+  function renderSphericalProjection(world) {
+    const { grid } = world;
+    const width = Number.isFinite(world.params?.renderWidth) ? world.params.renderWidth : 512;
+    const height = Number.isFinite(world.params?.renderHeight) ? world.params.renderHeight : 256;
+    const projectionMode = world.params?.projectionMode ?? "equirectangular";
+    const rendered = renderSphericalField(grid, grid.elev, {
+      width,
+      height,
+      projectionMode,
+      cameraLon: world.params?.cameraLon,
+      cameraLat: world.params?.cameraLat,
+      zoom: world.params?.projectionZoom,
+      colorRamp: (value, cell) => {
+        const color = colorForElevation(value - world.seaLevel);
+        if (world.params.showBoundaries === false) return color;
+        const overlay = sphericalBoundaryOverlay(grid, cell);
+        if (!overlay) return color;
+        const { type, strength } = overlay;
+        if (type === BoundaryType.CONVERGENT) {
+          return blendedColor(color, [231, 86, 66], 0.55 * strength);
+        }
+        if (type === BoundaryType.DIVERGENT) {
+          return blendedColor(color, [77, 195, 215], 0.5 * strength);
+        }
+        return blendedColor(color, [236, 196, 83], 0.46 * strength);
+      },
+    });
+
+    ensureSize(width, height);
+    elevationUpload.fill(0);
+    boundaryUpload.set(rendered.pixels);
+    drawUploadedTextures(0);
+    world.renderBackend = "webgl2-spherical-projection-experimental";
+    world.renderFallbackReason = null;
+  }
+
+  function drawUploadedTextures(seaLevel) {
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.useProgram(program);
     gl.bindVertexArray(vao);
@@ -105,11 +147,8 @@ export function createExperimentalWebGlMapRenderer(canvas) {
     gl.bindTexture(gl.TEXTURE_2D, boundaryTexture);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, boundaryUpload);
     gl.uniform1i(boundaryOverlayLocation, 1);
-    gl.uniform1f(seaLevelLocation, world.seaLevel);
+    gl.uniform1f(seaLevelLocation, seaLevel);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-    world.renderBackend = "webgl2-render-experimental";
-    world.renderFallbackReason = null;
   }
 
   function ensureSize(nextWidth, nextHeight) {
@@ -161,6 +200,47 @@ function writeOverlayPixel(upload, offset, r, g, b, alpha) {
   upload[offset + 1] = g;
   upload[offset + 2] = b;
   upload[offset + 3] = Math.round(Math.max(0, Math.min(1, alpha)) * 255);
+}
+
+function sphericalBoundaryOverlay(grid, id) {
+  if (hasActiveBoundary(grid, id)) {
+    return {
+      type: grid.btype[id],
+      strength: Math.max(0.45, boundaryOverlayStrength(grid, id)),
+    };
+  }
+
+  const start = grid.neighborStart?.[id];
+  const count = grid.neighborCount?.[id];
+  const neighbors = grid.neighbors;
+  if (!neighbors || start === undefined || count === undefined) return null;
+
+  let bestType = BoundaryType.INTERIOR;
+  let bestStrength = 0;
+  for (let n = 0; n < count; n += 1) {
+    const neighbor = neighbors[start + n];
+    if (!hasActiveBoundary(grid, neighbor)) continue;
+    const strength = Math.max(0.28, boundaryOverlayStrength(grid, neighbor) * 0.55);
+    if (strength > bestStrength) {
+      bestStrength = strength;
+      bestType = grid.btype[neighbor];
+    }
+  }
+  if (bestStrength <= 0) return null;
+  return { type: bestType, strength: bestStrength };
+}
+
+function hasActiveBoundary(grid, id) {
+  return grid.btype?.[id] !== BoundaryType.INTERIOR && Boolean(grid.activeBoundary?.[id]);
+}
+
+function blendedColor(base, overlay, alpha) {
+  const k = Math.max(0, Math.min(1, alpha));
+  return [
+    Math.round(base[0] * (1 - k) + overlay[0] * k),
+    Math.round(base[1] * (1 - k) + overlay[1] * k),
+    Math.round(base[2] * (1 - k) + overlay[2] * k),
+  ];
 }
 
 function isGraphBackedGrid(grid) {
