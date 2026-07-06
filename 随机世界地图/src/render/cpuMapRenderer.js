@@ -73,6 +73,11 @@ export function createCpuMapRenderer(canvas) {
     }
     if (!imageData) imageData = ctx.createImageData(width, height);
     const projectionMode = world.params?.projectionMode ?? "equirectangular";
+    const projectionOptions = {
+      cameraLon: world.params?.cameraLon,
+      cameraLat: world.params?.cameraLat,
+      zoom: world.params?.projectionZoom,
+    };
     const rendered = SPHERICAL_DEBUG_PROJECTION_MODES.has(projectionMode)
       ? renderSphericalDebugLayer(grid, projectionMode, {
           width,
@@ -83,15 +88,18 @@ export function createCpuMapRenderer(canvas) {
           width,
           height,
           projectionMode,
+          ...projectionOptions,
           colorRamp: (value, cell) => {
             const color = colorForElevation(value - world.seaLevel);
-            if (world.params.showBoundaries === false || !hasActiveBoundary(grid, cell)) return color;
-            const overlayStrength = boundaryOverlayStrength(grid, cell);
+            if (world.params.showBoundaries === false) return color;
+            const overlay = sphericalBoundaryOverlay(grid, cell);
+            if (!overlay) return color;
+            const { type, strength: overlayStrength } = overlay;
             if (overlayStrength <= 0) return color;
-            if (grid.btype[cell] === BoundaryType.CONVERGENT) {
+            if (type === BoundaryType.CONVERGENT) {
               return blendedColor(color, [231, 86, 66], 0.55 * overlayStrength);
             }
-            if (grid.btype[cell] === BoundaryType.DIVERGENT) {
+            if (type === BoundaryType.DIVERGENT) {
               return blendedColor(color, [77, 195, 215], 0.5 * overlayStrength);
             }
             return blendedColor(color, [236, 196, 83], 0.46 * overlayStrength);
@@ -136,6 +144,34 @@ function blendedColor(base, overlay, alpha) {
 
 function hasActiveBoundary(grid, id) {
   return grid.btype?.[id] !== BoundaryType.INTERIOR && Boolean(grid.activeBoundary?.[id]);
+}
+
+function sphericalBoundaryOverlay(grid, id) {
+  if (hasActiveBoundary(grid, id)) {
+    return {
+      type: grid.btype[id],
+      strength: Math.max(0.45, boundaryOverlayStrength(grid, id)),
+    };
+  }
+
+  const start = grid.neighborStart?.[id];
+  const count = grid.neighborCount?.[id];
+  const neighbors = grid.neighbors;
+  if (!neighbors || start === undefined || count === undefined) return null;
+
+  let bestType = BoundaryType.INTERIOR;
+  let bestStrength = 0;
+  for (let n = 0; n < count; n += 1) {
+    const neighbor = neighbors[start + n];
+    if (!hasActiveBoundary(grid, neighbor)) continue;
+    const strength = Math.max(0.28, boundaryOverlayStrength(grid, neighbor) * 0.55);
+    if (strength > bestStrength) {
+      bestStrength = strength;
+      bestType = grid.btype[neighbor];
+    }
+  }
+  if (bestStrength <= 0) return null;
+  return { type: bestType, strength: bestStrength };
 }
 
 function isGraphBackedGrid(grid) {
