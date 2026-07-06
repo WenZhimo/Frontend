@@ -47,7 +47,14 @@ let world = createWorld(readParams(elements));
 world.gpuCapabilities = gpuCapabilities;
 let playing = false;
 let lastFrame = 0;
+const projectionCamera = {
+  lon: 0,
+  lat: 0,
+  zoom: 0.92,
+};
+let projectionDrag = null;
 
+bindProjectionCameraControls();
 renderAll();
 
 elements.playPause.addEventListener("click", () => {
@@ -114,8 +121,102 @@ function rebuildWorld() {
 }
 
 function renderAll() {
+  applyProjectionCamera(world);
+  updateProjectionCursor();
   renderer.render(world);
   updateStats(world);
+}
+
+function bindProjectionCameraControls() {
+  const canvas = elements.canvas;
+  if (!canvas) return;
+
+  canvas.addEventListener("pointerdown", (event) => {
+    if (!usesInteractiveOrthographicProjection()) return;
+    projectionDrag = {
+      pointerId: event.pointerId,
+      lastX: event.clientX,
+      lastY: event.clientY,
+    };
+    canvas.setPointerCapture?.(event.pointerId);
+    updateProjectionCursor(true);
+    event.preventDefault();
+  });
+
+  canvas.addEventListener("pointermove", (event) => {
+    if (!projectionDrag || projectionDrag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - projectionDrag.lastX;
+    const dy = event.clientY - projectionDrag.lastY;
+    projectionDrag.lastX = event.clientX;
+    projectionDrag.lastY = event.clientY;
+    projectionCamera.lon = wrapLongitude(projectionCamera.lon - dx * 0.01);
+    projectionCamera.lat = clamp(projectionCamera.lat + dy * 0.01, -1.45, 1.45);
+    renderAll();
+    event.preventDefault();
+  });
+
+  const stopDrag = (event) => {
+    if (!projectionDrag || projectionDrag.pointerId !== event.pointerId) return;
+    canvas.releasePointerCapture?.(event.pointerId);
+    projectionDrag = null;
+    updateProjectionCursor(false);
+  };
+  canvas.addEventListener("pointerup", stopDrag);
+  canvas.addEventListener("pointercancel", stopDrag);
+  canvas.addEventListener("lostpointercapture", () => {
+    projectionDrag = null;
+    updateProjectionCursor(false);
+  });
+
+  canvas.addEventListener("wheel", (event) => {
+    if (!usesInteractiveOrthographicProjection()) return;
+    projectionCamera.zoom = clamp(
+      projectionCamera.zoom * Math.exp(-event.deltaY * 0.001),
+      0.55,
+      1.85,
+    );
+    renderAll();
+    event.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener("mouseenter", () => updateProjectionCursor(false));
+  canvas.addEventListener("mouseleave", () => {
+    if (!projectionDrag) updateProjectionCursor(false);
+  });
+}
+
+function applyProjectionCamera(currentWorld) {
+  if (!currentWorld?.params) return;
+  currentWorld.params.cameraLon = projectionCamera.lon;
+  currentWorld.params.cameraLat = projectionCamera.lat;
+  currentWorld.params.projectionZoom = projectionCamera.zoom;
+}
+
+function updateProjectionCursor(forceDragging = false) {
+  const canvas = elements.canvas;
+  if (!canvas) return;
+  if (!usesInteractiveOrthographicProjection()) {
+    canvas.style.cursor = "";
+    return;
+  }
+  canvas.style.cursor = forceDragging || projectionDrag ? "grabbing" : "grab";
+}
+
+function usesInteractiveOrthographicProjection() {
+  return world?.params?.projectionMode === "orthographic" && isGraphBackedGrid(world?.grid);
+}
+
+function isGraphBackedGrid(grid) {
+  return Boolean(grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere");
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function wrapLongitude(value) {
+  const tau = Math.PI * 2;
+  return ((value + Math.PI) % tau + tau) % tau - Math.PI;
 }
 
 function updateStats(currentWorld) {
@@ -145,8 +246,9 @@ function formatYears(years) {
 function readExperimentalGpuRenderFlag() {
   try {
     const params = new URLSearchParams(globalThis.location?.search ?? "");
-    return params.get("gpuRender") === "1" || params.get("renderBackend") === "webgl2";
+    if (params.get("gpuRender") === "0" || params.get("renderBackend") === "cpu") return false;
+    return true;
   } catch {
-    return false;
+    return true;
   }
 }

@@ -43,17 +43,19 @@ expect(world.grid.topologyOptions?.graphBacked === true, "cubed-sphere productio
 expect(world.grid.size === 6 * 24 * 24, "cubed-sphere grid size matches face size");
 
 const autoElements = createMockElements({
-  topologyMode: "cylindrical",
-  projectionMode: "equirectangular",
+  topologyMode: "cubed-sphere",
+  projectionMode: "orthographic",
   faceSize: "",
 });
 bindControlLabels(autoElements);
 const autoParams = readParams(autoElements);
 const autoWorld = createWorld(autoParams);
-expect(autoParams.faceSize === undefined, "blank face-size selector remains automatic");
+expect(autoParams.faceSize === 24, "blank default spherical face-size selector uses fast automatic mode");
 expect(autoElements.faceSizeLabel.textContent === "自动", "blank face-size selector labels automatic mode");
-expect(autoWorld.params.topologyMode === "cylindrical", "default UI topology remains cylindrical");
-expect(autoWorld.grid.topologyKind !== "cubed-sphere", "default UI path keeps legacy cylindrical grid");
+expect(autoWorld.params.topologyMode === "cubed-sphere", "default UI topology uses true spherical core");
+expect(autoWorld.params.projectionMode === "orthographic", "default UI projection uses draggable orthographic globe");
+expect(autoWorld.grid.topologyKind === "cubed-sphere", "default UI path uses cubed-sphere production grid");
+expect(autoWorld.grid.topologyOptions?.graphBacked === true, "default UI spherical grid is graph-backed");
 
 const sphericalAutoElements = createMockElements({
   topologyMode: "cubed-sphere",
