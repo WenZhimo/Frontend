@@ -13,6 +13,9 @@ const waitMs = parseIntOption(options, "wait-ms", 12000);
 const steps = parseIntOption(options, "steps", 2);
 const requireValidation = parseBoolOption(options, "require-validation");
 const requireWriteback = parseBoolOption(options, "require-writeback");
+const requirePerfSummary = parseBoolOption(options, "require-perf-summary");
+const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
+const maxLongTaskMs = parseIntOption(options, "max-long-task-ms", 0);
 const chromePath = String(options.chrome ?? findChromePath());
 const userDataDir = resolve(options["user-data-dir"] ?? ".test-cache/browser-smoke-profile");
 const remoteDebuggingPort = parseIntOption(options, "remote-debugging-port", 9222);
@@ -86,6 +89,8 @@ try {
 
   const afterPlay = await evaluate(cdp, sessionId, pageProbeScript({ requireStep: steps }));
   if (!afterPlay.ok) throw new Error(`Page probe failed after play: ${afterPlay.reason}`);
+  const performanceSummary = await evaluate(cdp, sessionId, "globalThis.__worldMapPerfSummary ?? null");
+  assertPerformanceSummary(performanceSummary);
 
   let validation = null;
   if (requireValidation) {
@@ -112,10 +117,11 @@ try {
     url: targetUrl,
     canvas: afterPlay.canvas,
     step: afterPlay.step,
+    performance: performanceSummary,
     gpuValidation: validation ? summarizeValidation(validation) : null,
     consoleSummary: summarizeConsole(consoleMessages),
   }, null, 2));
-  await cdp.send("Browser.close");
+  await closeBrowserSafely(cdp);
 } finally {
   chrome.kill();
   server?.close();
@@ -325,6 +331,17 @@ function wait(ms) {
   return new Promise((resolveWait) => setTimeout(resolveWait, ms));
 }
 
+async function closeBrowserSafely(cdp) {
+  try {
+    await Promise.race([
+      cdp.send("Browser.close"),
+      wait(2000),
+    ]);
+  } catch {
+    // Chrome is already killed in finally; smoke output should not hang on teardown.
+  }
+}
+
 function formatRemoteArg(arg) {
   if (arg?.value !== undefined) return String(arg.value);
   if (arg?.description) return arg.description;
@@ -346,6 +363,19 @@ function summarizeConsole(messages) {
     projectErrors,
     gpu: messages.filter((message) => /\[gpu|\[render|\[gpu-compute/.test(message.text)).map((message) => message.text).slice(0, 8),
   };
+}
+
+function assertPerformanceSummary(summary) {
+  if (!requirePerfSummary && !summary) return;
+  if (!summary?.step?.count || !summary?.render?.count) {
+    throw new Error(`Browser performance summary is missing step/render samples: ${JSON.stringify(summary)}`);
+  }
+  if (maxAverageRenderMs > 0 && summary.render.averageMs > maxAverageRenderMs) {
+    throw new Error(`Average render time exceeded ${maxAverageRenderMs}ms: ${JSON.stringify(summary.render)}`);
+  }
+  if (maxLongTaskMs > 0 && summary.longTask?.maxMs > maxLongTaskMs) {
+    throw new Error(`Long task exceeded ${maxLongTaskMs}ms: ${JSON.stringify(summary.longTask)}`);
+  }
 }
 
 function summarizeValidation(validation) {
