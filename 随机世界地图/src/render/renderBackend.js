@@ -9,7 +9,7 @@ export function createRenderBackend(canvas, options = {}) {
   if (allowExperimentalGpuRender && capabilities.recommendedMode !== GpuRecommendedMode.CPU) {
     const gpuResult = createExperimentalWebGlMapRenderer(canvas);
     if (gpuResult.ok) {
-      return withRuntimeFallback(gpuResult.renderer, createCpuMapRenderer(canvas), capabilities);
+      return withRuntimeFallback(gpuResult.renderer, capabilities);
     }
     const cpu = createCpuMapRenderer(canvas);
     return withFallback(cpu, capabilities, gpuResult.reason);
@@ -37,10 +37,8 @@ function withFallback(renderer, capabilities, reason) {
   };
 }
 
-function withRuntimeFallback(gpuRenderer, cpuRenderer, capabilities) {
+function withRuntimeFallback(gpuRenderer, capabilities) {
   let fallbackReason = null;
-  const sphericalCpuReason =
-    "Graph-backed spherical grids use CPU projection rendering; experimental rectangular WebGL2 rendering is skipped.";
   return {
     ...gpuRenderer,
     capabilities,
@@ -49,29 +47,18 @@ function withRuntimeFallback(gpuRenderer, cpuRenderer, capabilities) {
       return fallbackReason;
     },
     render(world) {
-      if (isGraphBackedGrid(world.grid)) {
-        cpuRenderer.render(world);
-        world.renderBackend = "cpu-spherical-projection";
-        world.renderFallbackReason = sphericalCpuReason;
-        return;
-      }
       if (!fallbackReason) {
         try {
           gpuRenderer.render(world);
-          world.renderBackend = gpuRenderer.kind;
+          if (!world.renderBackend) world.renderBackend = gpuRenderer.kind;
           world.renderFallbackReason = null;
           return;
         } catch (error) {
           fallbackReason = `Experimental GPU render failed; CPU fallback is active: ${error?.message ?? "unknown error"}`;
         }
       }
-      cpuRenderer.render(world);
-      world.renderBackend = "cpu-canvas";
+      world.renderBackend = "webgl2-render-experimental-failed";
       world.renderFallbackReason = fallbackReason;
     },
   };
-}
-
-function isGraphBackedGrid(grid) {
-  return Boolean(grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere");
 }

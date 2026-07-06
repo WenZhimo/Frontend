@@ -79,9 +79,9 @@ const checks = {
   defaultDidNotDrawWebgl: defaultCanvas.gl.drawCalls === 0,
   defaultExplainsGpuDisabled: /disabled/i.test(defaultRectangularWorld.renderFallbackReason ?? ""),
   backendCreatedAsWebgl: backend.kind === "webgl2-render-experimental",
-  sphericalUsesCpuProjection: sphericalWorld.renderBackend === "cpu-spherical-projection",
-  sphericalExplainsGpuSkip: /spherical grids/i.test(sphericalWorld.renderFallbackReason ?? ""),
-  sphericalDidNotDrawWebgl: drawCallsAfterSpherical === 0,
+  sphericalUsesWebglProjection: sphericalWorld.renderBackend === "webgl2-spherical-projection-experimental",
+  sphericalHasNoFallbackReason: sphericalWorld.renderFallbackReason === null,
+  sphericalDrewWebgl: drawCallsAfterSpherical > 0,
   sphericalGpuMirrorGraphBacked: sphericalGpuMirrorSnapshot.graphBacked === true,
   sphericalGpuMirrorHidesRectangularTextureDimensions:
     sphericalGpuMirrorSnapshot.width === null && sphericalGpuMirrorSnapshot.height === null,
@@ -125,7 +125,10 @@ function createFakeCanvas() {
     width: 0,
     height: 0,
     gl,
+    contextKind: null,
     getContext(kind) {
+      if (this.contextKind && this.contextKind !== kind) return null;
+      this.contextKind = kind;
       if (kind === "webgl2") return gl;
       if (kind === "2d") return ctx2d;
       return null;
