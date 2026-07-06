@@ -63,6 +63,9 @@ const projectionCamera = {
   zoom: 0.92,
 };
 let projectionDrag = null;
+const perfTracker = createBrowserPerfTracker(globalThis, {
+  gpuComputeMode: gpuComputeValidator.mode,
+});
 
 bindProjectionCameraControls();
 renderAll();
@@ -75,8 +78,7 @@ elements.playPause.addEventListener("click", () => {
 
 elements.stepOnce.addEventListener("click", () => {
   updateWorldParams(world, readParams(elements));
-  stepWorld(world);
-  gpuComputeValidator.maybeValidate(world);
+  runSimulationStep();
   renderAll();
 });
 
@@ -110,12 +112,31 @@ function loop(now) {
   if (!playing) return;
   if (now - lastFrame > 32) {
     updateWorldParams(world, readParams(elements));
-    stepWorld(world);
-    gpuComputeValidator.maybeValidate(world);
+    runSimulationStep();
     renderAll();
     lastFrame = now;
   }
   requestAnimationFrame(loop);
+}
+
+function runSimulationStep() {
+  const startedAt = performance.now();
+  stepWorld(world);
+  const measuredStepMs = Number.isFinite(world.lastStepMs)
+    ? world.lastStepMs
+    : performance.now() - startedAt;
+  perfTracker.recordStep(measuredStepMs, world);
+  trackGpuCompute(gpuComputeValidator.maybeValidate(world));
+}
+
+function trackGpuCompute(maybeResult) {
+  Promise.resolve(maybeResult)
+    .then((result) => {
+      if (result) perfTracker.recordGpuCompute(result);
+    })
+    .catch((error) => {
+      perfTracker.recordGpuError(error);
+    });
 }
 
 function rebuildWorld() {
@@ -133,9 +154,13 @@ function rebuildWorld() {
 }
 
 function renderAll() {
+  const startedAt = performance.now();
   applyProjectionCamera(world);
   updateProjectionCursor();
   renderer.render(world);
+  perfTracker.recordRender(performance.now() - startedAt, world, {
+    projection: usesInteractiveOrthographicProjection(),
+  });
   updateStats(world);
 }
 
@@ -239,6 +264,178 @@ function clamp(value, min, max) {
 function wrapLongitude(value) {
   const tau = Math.PI * 2;
   return ((value + Math.PI) % tau + tau) % tau - Math.PI;
+}
+
+function createBrowserPerfTracker(globalObject, options = {}) {
+  const sampleLimit = 180;
+  const samples = {
+    stepMs: [],
+    renderMs: [],
+    projectionRenderMs: [],
+    gpuUploadMs: [],
+    gpuKernelMs: [],
+    gpuDownloadMs: [],
+    gpuTotalMs: [],
+  };
+  const summary = {
+    valid: true,
+    gpuComputeMode: options.gpuComputeMode ?? "off",
+    lastStep: 0,
+    renderBackend: null,
+    step: summarizeSamples(samples.stepMs),
+    render: summarizeSamples(samples.renderMs),
+    projectionRender: summarizeSamples(samples.projectionRenderMs),
+    gpuCompute: {
+      mode: options.gpuComputeMode ?? "off",
+      valid: null,
+      skipped: null,
+      writebackApplied: false,
+      fallbackReason: null,
+      upload: summarizeSamples(samples.gpuUploadMs),
+      kernel: summarizeSamples(samples.gpuKernelMs),
+      download: summarizeSamples(samples.gpuDownloadMs),
+      total: summarizeSamples(samples.gpuTotalMs),
+    },
+    longTask: {
+      count: 0,
+      totalMs: 0,
+      maxMs: 0,
+      lastMs: null,
+    },
+    updatedAt: 0,
+  };
+
+  installLongTaskObserver(globalObject, summary, publish);
+  publish();
+
+  return {
+    recordStep(ms, currentWorld) {
+      recordSample(samples.stepMs, ms, sampleLimit);
+      summary.lastStep = currentWorld?.step ?? summary.lastStep;
+      summary.step = summarizeSamples(samples.stepMs);
+      publish();
+    },
+    recordRender(ms, currentWorld, renderOptions = {}) {
+      recordSample(samples.renderMs, ms, sampleLimit);
+      if (renderOptions.projection) recordSample(samples.projectionRenderMs, ms, sampleLimit);
+      summary.renderBackend = currentWorld?.renderBackend ?? null;
+      summary.render = summarizeSamples(samples.renderMs);
+      summary.projectionRender = summarizeSamples(samples.projectionRenderMs);
+      publish();
+    },
+    recordGpuCompute(result) {
+      const timings = summarizeGpuTimings(result);
+      if (Number.isFinite(timings.uploadMs)) recordSample(samples.gpuUploadMs, timings.uploadMs, sampleLimit);
+      if (Number.isFinite(timings.kernelMs)) recordSample(samples.gpuKernelMs, timings.kernelMs, sampleLimit);
+      if (Number.isFinite(timings.downloadMs)) recordSample(samples.gpuDownloadMs, timings.downloadMs, sampleLimit);
+      if (Number.isFinite(timings.totalGpuPathMs)) recordSample(samples.gpuTotalMs, timings.totalGpuPathMs, sampleLimit);
+      summary.gpuCompute = {
+        mode: result.mode ?? summary.gpuCompute.mode,
+        valid: result.valid ?? null,
+        skipped: result.skipped ?? null,
+        writebackApplied: result.writebackApplied ?? false,
+        fallbackReason: result.fallbackReason ?? result.skippedReason ?? null,
+        upload: summarizeSamples(samples.gpuUploadMs),
+        kernel: summarizeSamples(samples.gpuKernelMs),
+        download: summarizeSamples(samples.gpuDownloadMs),
+        total: summarizeSamples(samples.gpuTotalMs),
+      };
+      publish();
+    },
+    recordGpuError(error) {
+      summary.gpuCompute = {
+        ...summary.gpuCompute,
+        valid: false,
+        fallbackReason: `GPU compute timing sample failed safely: ${error?.message ?? "unknown error"}`,
+      };
+      publish();
+    },
+  };
+
+  function publish() {
+    summary.updatedAt = performance.now();
+    globalObject.__worldMapPerfSummary = summary;
+  }
+}
+
+function installLongTaskObserver(globalObject, summary, publish) {
+  try {
+    const Observer = globalObject.PerformanceObserver;
+    if (!Observer?.supportedEntryTypes?.includes("longtask")) return;
+    const observer = new Observer((list) => {
+      for (const entry of list.getEntries()) {
+        const duration = Number(entry.duration);
+        if (!Number.isFinite(duration)) continue;
+        summary.longTask.count += 1;
+        summary.longTask.totalMs += duration;
+        summary.longTask.maxMs = Math.max(summary.longTask.maxMs, duration);
+        summary.longTask.lastMs = duration;
+      }
+      publish();
+    });
+    observer.observe({ entryTypes: ["longtask"] });
+  } catch {
+    // Long Task API is optional; smoke tests still use step/render samples.
+  }
+}
+
+function summarizeGpuTimings(result) {
+  const totals = {
+    uploadMs: 0,
+    kernelMs: 0,
+    downloadMs: 0,
+    totalGpuPathMs: 0,
+  };
+  let count = 0;
+  for (const candidate of result?.candidateResults ?? []) {
+    const timings = candidate?.timings;
+    if (!timings) continue;
+    for (const key of Object.keys(totals)) {
+      const value = Number(timings[key]);
+      if (Number.isFinite(value)) totals[key] += value;
+    }
+    count += 1;
+  }
+  if (!count) {
+    return {
+      uploadMs: null,
+      kernelMs: null,
+      downloadMs: null,
+      totalGpuPathMs: null,
+    };
+  }
+  return totals;
+}
+
+function recordSample(samplesList, value, limit) {
+  if (!Number.isFinite(value)) return;
+  samplesList.push(value);
+  while (samplesList.length > limit) samplesList.shift();
+}
+
+function summarizeSamples(values) {
+  if (!values.length) {
+    return {
+      count: 0,
+      lastMs: null,
+      averageMs: null,
+      p95Ms: null,
+      maxMs: null,
+    };
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const sum = values.reduce((total, value) => total + value, 0);
+  return {
+    count: values.length,
+    lastMs: roundPerf(values[values.length - 1]),
+    averageMs: roundPerf(sum / values.length),
+    p95Ms: roundPerf(sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)]),
+    maxMs: roundPerf(sorted[sorted.length - 1]),
+  };
+}
+
+function roundPerf(value) {
+  return Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
 }
 
 function updateStats(currentWorld) {
