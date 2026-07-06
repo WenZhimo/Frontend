@@ -86,7 +86,7 @@ async function inspectCheckpoint(checkpoint) {
   const candidateResults = [];
   const candidateFields = new Map();
   for (const kernel of kernels) {
-    const candidateResult = await runKernelCandidate(kernel, world);
+    const candidateResult = await runKernelCandidate(kernel, world, fields);
     candidateResults.push({
       kernel,
       backend: candidateResult?.backend ?? kernel,
@@ -215,12 +215,12 @@ function kernelsForField(fieldName) {
   return [];
 }
 
-async function runKernelCandidate(kernelName, world) {
-  if (kernelName === "isostasy") return runWebGpuIsostasyCandidate(world);
-  if (kernelName === "elevation") return runWebGpuElevationCandidate(world);
-  if (kernelName === "local-fields") return runWebGpuLocalFieldsCandidate(world);
-  if (kernelName === "margin-smooth") return runWebGpuMarginSmoothCandidate(world);
-  if (kernelName === "sediment-capacity") return runWebGpuSedimentCapacityCandidate(world);
+async function runKernelCandidate(kernelName, world, fields) {
+  if (kernelName === "isostasy") return runWebGpuIsostasyCandidate(world, { fields });
+  if (kernelName === "elevation") return runWebGpuElevationCandidate(world, { fields });
+  if (kernelName === "local-fields") return runWebGpuLocalFieldsCandidate(world, { fields });
+  if (kernelName === "margin-smooth") return runWebGpuMarginSmoothCandidate(world, { fields });
+  if (kernelName === "sediment-capacity") return runWebGpuSedimentCapacityCandidate(world, { fields });
   return null;
 }
 

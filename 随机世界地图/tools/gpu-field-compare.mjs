@@ -21,7 +21,7 @@ runSteps(baseline, steps);
 runSteps(candidate, steps);
 
 const gpuCapabilities = detectGpuCapabilities(globalThis);
-const candidateResult = await runCandidate(candidateBackend, candidate);
+const candidateResult = await runCandidate(candidateBackend, candidate, fields);
 const baselineLocalFields = candidateBackend === "webgpu-local-fields" ? computeCpuLocalFields(baseline) : null;
 const candidateLocalFields = candidateBackend === "webgpu-local-fields" ? computeCpuLocalFields(candidate) : null;
 const baselineMarginSmooth = candidateBackend === "webgpu-margin-smooth" ? computeCpuMarginSmooth(baseline) : null;
@@ -137,12 +137,12 @@ function runSteps(world, count) {
   for (let i = 0; i < count; i += 1) stepWorld(world);
 }
 
-async function runCandidate(candidateName, world) {
-  if (candidateName === "webgpu-isostasy") return runWebGpuIsostasyCandidate(world);
-  if (candidateName === "webgpu-elevation") return runWebGpuElevationCandidate(world);
-  if (candidateName === "webgpu-local-fields") return runWebGpuLocalFieldsCandidate(world);
-  if (candidateName === "webgpu-margin-smooth") return runWebGpuMarginSmoothCandidate(world);
-  if (candidateName === "webgpu-sediment-capacity") return runWebGpuSedimentCapacityCandidate(world);
+async function runCandidate(candidateName, world, fields) {
+  if (candidateName === "webgpu-isostasy") return runWebGpuIsostasyCandidate(world, { fields });
+  if (candidateName === "webgpu-elevation") return runWebGpuElevationCandidate(world, { fields });
+  if (candidateName === "webgpu-local-fields") return runWebGpuLocalFieldsCandidate(world, { fields });
+  if (candidateName === "webgpu-margin-smooth") return runWebGpuMarginSmoothCandidate(world, { fields });
+  if (candidateName === "webgpu-sediment-capacity") return runWebGpuSedimentCapacityCandidate(world, { fields });
   return null;
 }
 

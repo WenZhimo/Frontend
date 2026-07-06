@@ -388,6 +388,15 @@ function summarizeValidation(validation) {
     writebackFields: validation.writebackFields ?? [],
     fallbackReason: validation.fallbackReason ?? null,
     kernels: validation.kernels,
+    candidateResults: validation.candidateResults?.map((candidate) => ({
+      kernel: candidate.kernel,
+      backend: candidate.backend,
+      skipped: candidate.skipped,
+      reason: candidate.reason ?? null,
+      requestedFields: candidate.requestedFields ?? [],
+      downloadedPacks: candidate.downloadedPacks ?? [],
+      timings: candidate.timings ?? null,
+    })) ?? [],
     fields: validation.fields?.map((field) => ({
       field: field.field,
       valid: field.valid,

@@ -1,4 +1,4 @@
-import { parseIntOption, parseOptions } from "./lib/cli.mjs";
+import { parseCsv, parseIntOption, parseOptions } from "./lib/cli.mjs";
 import { createCheckWorld } from "./lib/world-runner.mjs";
 import { stepWorld } from "../src/sim/evolution.js";
 import { detectGpuCapabilities } from "../src/gpu/capability.js";
@@ -12,7 +12,7 @@ const DEFAULT_SEED = "龙骨海-纪元7";
 
 const { positional, options } = parseOptions(process.argv.slice(2));
 const invocation = parseInvocation(positional, options);
-const { seedText, pipelineMode, resolution, steps, kernel } = invocation;
+const { seedText, pipelineMode, resolution, steps, kernel, fields } = invocation;
 
 const gpuCapabilities = detectGpuCapabilities(globalThis);
 const world = createCheckWorld({ seedText, pipelineMode, resolution });
@@ -27,7 +27,7 @@ for (let i = 0; i < steps; i += 1) {
 const totalMs = performance.now() - startedAt;
 const cpuBaselineMs = stepMs.reduce((sum, value) => sum + value, 0);
 stepMs.sort((a, b) => a - b);
-const gpuCandidate = await runKernelCandidate(kernel, world);
+const gpuCandidate = await runKernelCandidate(kernel, world, fields);
 const totalGpuPathMs = gpuCandidate?.timings?.totalGpuPathMs;
 const speedup = Number.isFinite(totalGpuPathMs) && totalGpuPathMs > 0
   ? cpuBaselineMs / totalGpuPathMs
@@ -50,6 +50,7 @@ const result = {
             ? "webgpu-sediment-capacity"
           : gpuCapabilities.recommendedMode,
   kernel,
+  fields,
   attempted: kernel === "isostasy" || kernel === "elevation" || kernel === "local-fields" || kernel === "margin-smooth" || kernel === "sediment-capacity",
   skipped: gpuCandidate?.skipped ?? false,
   skipReason: gpuCandidate?.reason ?? null,
@@ -95,6 +96,7 @@ function parseInvocation(positional, options) {
       steps: parseIntOption(options, "steps", Number(positional[2]) || 20),
       pipelineMode: positional[3] ?? "geology-v2",
       resolution: positional[4] ?? "256x128",
+      fields: parseCsv(positional[5] ?? options.fields, defaultFieldsForKernel(kernelAlias(options.kernel) ?? firstKernel)),
     };
   }
 
@@ -105,6 +107,7 @@ function parseInvocation(positional, options) {
     resolution: positional[2] ?? "256x128",
     steps: parseIntOption(options, "steps", Number(positional[3]) || 20),
     kernel: kernelAlias(options.kernel) ?? null,
+    fields: parseCsv(positional[4] ?? options.fields, defaultFieldsForKernel(kernelAlias(options.kernel) ?? null)),
   };
 }
 
@@ -117,6 +120,24 @@ function kernelAlias(value) {
   if (value === "webgpu-sediment-capacity" || value === "sediment-capacity" || value === "sedimentCapacity") return "sediment-capacity";
   if (value === "none" || value === "cpu") return null;
   return undefined;
+}
+
+function defaultFieldsForKernel(kernel) {
+  if (kernel === "isostasy") return ["isostaticBase"];
+  if (kernel === "elevation") return ["baseElev", "relief", "boundaryRelief", "elev"];
+  if (kernel === "local-fields") return ["slope", "aspect", "ruggedness", "localRelief"];
+  if (kernel === "margin-smooth") {
+    return [
+      "passiveMargin",
+      "continentalShelf",
+      "continentalSlope",
+      "continentalRise",
+      "sedimentWedge",
+      "abyssalPlain",
+    ];
+  }
+  if (kernel === "sediment-capacity") return ["sedimentCapacity"];
+  return [];
 }
 
 function percentile(values, p) {
@@ -133,11 +154,11 @@ function roundNullable(value) {
   return Number.isFinite(value) ? round2(value) : null;
 }
 
-async function runKernelCandidate(kernelName, world) {
-  if (kernelName === "isostasy") return runWebGpuIsostasyCandidate(world);
-  if (kernelName === "elevation") return runWebGpuElevationCandidate(world);
-  if (kernelName === "local-fields") return runWebGpuLocalFieldsCandidate(world);
-  if (kernelName === "margin-smooth") return runWebGpuMarginSmoothCandidate(world);
-  if (kernelName === "sediment-capacity") return runWebGpuSedimentCapacityCandidate(world);
+async function runKernelCandidate(kernelName, world, fields) {
+  if (kernelName === "isostasy") return runWebGpuIsostasyCandidate(world, { fields });
+  if (kernelName === "elevation") return runWebGpuElevationCandidate(world, { fields });
+  if (kernelName === "local-fields") return runWebGpuLocalFieldsCandidate(world, { fields });
+  if (kernelName === "margin-smooth") return runWebGpuMarginSmoothCandidate(world, { fields });
+  if (kernelName === "sediment-capacity") return runWebGpuSedimentCapacityCandidate(world, { fields });
   return null;
 }
