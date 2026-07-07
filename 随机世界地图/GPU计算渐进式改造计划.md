@@ -621,6 +621,26 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 12000 --que
 - GPU compute 性能门禁可选参数：`--max-gpu-total-ms` 检查不含 setup 的 upload+kernel+download，`--max-gpu-candidate-ms` 检查包含 setup 的完整 candidate 成本；进入默认启用前应使用这两个阈值证明浏览器真实运行不退化。
 - GPU warm-run 性能门禁可选参数：`--max-warm-gpu-total-ms` / `--max-warm-gpu-candidate-ms` 只检查 `reusedContext: true` 的 validation candidate，用来区分首次 setup 成本与复用后仍然过慢的 kernel/readback 成本；这些门禁必须和 `--require-validation` 一起使用。
 
+### 8.6 `tools/browser-gpu-perf-matrix.mjs`
+
+用途：
+
+- 串行调用 `browser-smoke-check`，对多个 seed、resolution、kernel 组合执行真实浏览器 WebGPU validate。
+- 汇总每个 case 的 warm GPU cost、canvas 尺寸、step 推进、Console 项目错误数和失败原因。
+- 作为默认 GPU compute 前的多 seed / 多分辨率性能门禁，而不是只看单次 smoke。
+
+命令示例：
+
+```powershell
+node .\tools\browser-gpu-perf-matrix.mjs --seeds '龙骨海-纪元7,artifact-seed-3' --resolutions 256x128,512x256 --kernels local-fields --max-warm-gpu-total-ms 2000
+```
+
+当前状态：
+
+- `local-fields` 单 seed / `256x128` 可通过宽 warm-run 门禁，并输出 `warmGpuTotalMs`。
+- `sediment-capacity` 在严格 warm-run 阈值下会失败，失败 JSON 仍会提取 warm candidate timing，便于判断是 setup、kernel 还是 download 慢。
+- 工具当前串行运行浏览器 case，避免多个 Chrome/WebGPU 实例并发争用 GPU。
+
 ```powershell
 node .\tools\browser-smoke-check.mjs --mode file --steps 1 --wait-ms 8000 --query "renderBackend=cpu" --require-perf-summary
 node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --query "gpuCompute=experimental&gpuValidateInterval=1&gpuValidateReports=1&gpuKernel=isostasy&renderBackend=cpu" --require-validation --require-writeback --require-perf-summary
