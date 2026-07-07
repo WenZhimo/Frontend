@@ -10396,10 +10396,12 @@
       gpuCapabilities: capabilities,
       reason: null,
       timings: {
+        setupMs: 0,
         uploadMs,
         kernelMs,
         downloadMs,
         totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+        totalCandidateMs: uploadMs + kernelMs + downloadMs,
       },
       fields,
     };
@@ -10451,10 +10453,12 @@
 
   function emptyElevationTimings() {
     return {
+      setupMs: null,
       uploadMs: null,
       kernelMs: null,
       downloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
     };
   }
 
@@ -10691,10 +10695,12 @@
       gpuCapabilities: capabilities,
       reason: null,
       timings: {
+        setupMs: 0,
         uploadMs,
         kernelMs,
         downloadMs,
         totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+        totalCandidateMs: uploadMs + kernelMs + downloadMs,
       },
       fields,
     };
@@ -10746,10 +10752,12 @@
 
   function emptyLocalFieldsTimings() {
     return {
+      setupMs: null,
       uploadMs: null,
       kernelMs: null,
       downloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
     };
   }
 
@@ -10967,10 +10975,12 @@
       gpuCapabilities: capabilities,
       reason: null,
       timings: {
+        setupMs: 0,
         uploadMs,
         kernelMs,
         downloadMs,
         totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+        totalCandidateMs: uploadMs + kernelMs + downloadMs,
       },
       fields,
     };
@@ -11024,10 +11034,12 @@
 
   function emptyMarginSmoothTimings() {
     return {
+      setupMs: null,
       uploadMs: null,
       kernelMs: null,
       downloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
     };
   }
 
@@ -11428,10 +11440,12 @@
       gpuCapabilities: capabilities,
       reason: null,
       timings: {
+        setupMs: 0,
         uploadMs,
         kernelMs,
         downloadMs,
         totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+        totalCandidateMs: uploadMs + kernelMs + downloadMs,
       },
       fields: { sedimentCapacity },
     };
@@ -11518,10 +11532,12 @@
 
   function emptySedimentCapacityTimings() {
     return {
+      setupMs: null,
       uploadMs: null,
       kernelMs: null,
       downloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
     };
   }
 

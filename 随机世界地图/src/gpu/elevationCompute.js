@@ -141,10 +141,12 @@ async function computeElevationOnDevice(world, device, capabilities) {
     gpuCapabilities: capabilities,
     reason: null,
     timings: {
+      setupMs: 0,
       uploadMs,
       kernelMs,
       downloadMs,
       totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+      totalCandidateMs: uploadMs + kernelMs + downloadMs,
     },
     fields,
   };
@@ -196,9 +198,11 @@ function skippedElevationResult(capabilities, reason) {
 
 function emptyElevationTimings() {
   return {
+    setupMs: null,
     uploadMs: null,
     kernelMs: null,
     downloadMs: null,
     totalGpuPathMs: null,
+    totalCandidateMs: null,
   };
 }

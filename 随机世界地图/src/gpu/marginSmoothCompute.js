@@ -139,10 +139,12 @@ async function computeMarginSmoothOnDevice(world, device, capabilities) {
     gpuCapabilities: capabilities,
     reason: null,
     timings: {
+      setupMs: 0,
       uploadMs,
       kernelMs,
       downloadMs,
       totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+      totalCandidateMs: uploadMs + kernelMs + downloadMs,
     },
     fields,
   };
@@ -196,9 +198,11 @@ function skippedMarginSmoothResult(capabilities, reason) {
 
 function emptyMarginSmoothTimings() {
   return {
+    setupMs: null,
     uploadMs: null,
     kernelMs: null,
     downloadMs: null,
     totalGpuPathMs: null,
+    totalCandidateMs: null,
   };
 }

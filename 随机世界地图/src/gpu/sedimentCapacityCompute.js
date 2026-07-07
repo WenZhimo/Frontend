@@ -147,10 +147,12 @@ async function computeSedimentCapacityOnDevice(world, device, capabilities) {
     gpuCapabilities: capabilities,
     reason: null,
     timings: {
+      setupMs: 0,
       uploadMs,
       kernelMs,
       downloadMs,
       totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+      totalCandidateMs: uploadMs + kernelMs + downloadMs,
     },
     fields: { sedimentCapacity },
   };
@@ -237,9 +239,11 @@ function skippedSedimentCapacityResult(capabilities, reason) {
 
 function emptySedimentCapacityTimings() {
   return {
+    setupMs: null,
     uploadMs: null,
     kernelMs: null,
     downloadMs: null,
     totalGpuPathMs: null,
+    totalCandidateMs: null,
   };
 }
