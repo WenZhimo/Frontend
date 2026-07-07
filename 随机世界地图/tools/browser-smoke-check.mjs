@@ -15,6 +15,7 @@ const requireValidation = parseBoolOption(options, "require-validation");
 const requireWriteback = parseBoolOption(options, "require-writeback");
 const requirePerfSummary = parseBoolOption(options, "require-perf-summary");
 const requireReusedGpuContext = parseBoolOption(options, "require-reused-gpu-context");
+const requiredGpuKernels = parseCsvOption(options, "require-gpu-kernels");
 const requireValidationCount = Math.max(1, parseIntOption(options, "require-validation-count", 1));
 const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
 const maxLongTaskMs = parseIntOption(options, "max-long-task-ms", 0);
@@ -112,6 +113,10 @@ try {
     if (requireReusedGpuContext && !hasReusedGpuContext(validation)) {
       throw new Error(`GPU context reuse was not observed: ${JSON.stringify(validation)}`);
     }
+    const missingKernels = missingRequiredGpuKernels(validation, requiredGpuKernels);
+    if (missingKernels.length > 0) {
+      throw new Error(`Required GPU kernels were not observed (${missingKernels.join(", ")}): ${JSON.stringify(validation)}`);
+    }
   }
   const performanceSummary = await evaluate(cdp, sessionId, "globalThis.__worldMapPerfSummary ?? null");
   assertPerformanceSummary(performanceSummary);
@@ -140,6 +145,26 @@ try {
 function normalizeQuery(value) {
   if (!value) return "";
   return value.startsWith("?") ? value : `?${value}`;
+}
+
+function parseCsvOption(optionBag, name) {
+  const raw = optionBag[name];
+  if (!raw) return [];
+  return String(raw)
+    .split(",")
+    .map((value) => normalizeKernelName(value.trim()))
+    .filter(Boolean);
+}
+
+function normalizeKernelName(value) {
+  if (!value) return "";
+  const normalized = String(value).trim();
+  if (normalized === "webgpu-local-fields" || normalized === "localTerrain") return "local-fields";
+  if (normalized === "webgpu-margin-smooth" || normalized === "marginSmooth") return "margin-smooth";
+  if (normalized === "webgpu-sediment-capacity" || normalized === "sedimentCapacity") return "sediment-capacity";
+  if (normalized === "webgpu-isostasy") return "isostasy";
+  if (normalized === "webgpu-elevation") return "elevation";
+  return normalized;
 }
 
 function findChromePath() {
@@ -355,6 +380,21 @@ function hasReusedGpuContext(validation) {
   return candidates.some((candidate) => !candidate.skipped && candidate.reusedContext === true);
 }
 
+function missingRequiredGpuKernels(validation, requiredKernels) {
+  if (!requiredKernels.length) return [];
+  const observed = new Set();
+  const candidates = [
+    ...(validation.candidateResults ?? []),
+    ...(validation.history ?? []).flatMap((entry) => entry.candidateResults ?? []),
+  ];
+  for (const candidate of candidates) {
+    if (candidate?.skipped) continue;
+    const kernel = normalizeKernelName(candidate?.kernel);
+    if (kernel) observed.add(kernel);
+  }
+  return requiredKernels.filter((kernel) => !observed.has(kernel));
+}
+
 async function closeBrowserSafely(cdp) {
   try {
     await Promise.race([
@@ -412,6 +452,13 @@ function assertPerformanceSummary(summary) {
 
 function summarizeValidation(validation) {
   const reusedGpuContextObserved = hasReusedGpuContext(validation);
+  const observedGpuKernels = Array.from(new Set([
+    ...(validation.candidateResults ?? []),
+    ...(validation.history ?? []).flatMap((entry) => entry.candidateResults ?? []),
+  ]
+    .filter((candidate) => !candidate.skipped)
+    .map((candidate) => normalizeKernelName(candidate.kernel))
+    .filter(Boolean)));
   return {
     valid: validation.valid,
     skipped: validation.skipped,
@@ -423,6 +470,7 @@ function summarizeValidation(validation) {
     kernels: validation.kernels,
     historyLength: validation.historyLength ?? null,
     reusedGpuContextObserved,
+    observedGpuKernels,
     history: validation.history?.map((entry) => ({
       valid: entry.valid,
       skipped: entry.skipped,
