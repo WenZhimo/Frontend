@@ -634,6 +634,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - `isostasy` WebGPU candidate 已开始复用 device / pipeline；输出增加 `setupMs`、`totalCandidateMs` 与 `reusedContext`，后续应在多次 validation 或更低频 validation 中观察 setup 成本是否被摊薄。
 - 两次连续浏览器 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`，首次 setup 约 `19.2s` 已被消除；但复用后的单次 `totalGpuPathMs` 仍约 `13.6s`，kernel 与 readback 仍各约 `6-7s`，因此该路径继续保持 experimental，不进入默认。
 - `local-fields` 两次连续浏览器 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`，`slope / ruggedness / localRelief` 误差约 `1e-9` 到 `0`；但复用后 `totalGpuPathMs` 仍约 `12s`，kernel 约 `8s`、download 约 `4s`，因此它仍是 validate/candidate 证据路径，不应默认写回。
+- `gpuValidateInterval=20` 的低频浏览器 smoke 曾在 90s 内未触发 validation：诊断显示页面仅推进到 step 15，说明该配置下基础浏览器 step 已约 7s/步，不能用低频 validate 单独证明 GPU 体验改善；后续性能门禁应同时报告“触发前 step 推进速度”和“触发后的 GPU path 成本”。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
 
 ## 9. GPU 化验收标准

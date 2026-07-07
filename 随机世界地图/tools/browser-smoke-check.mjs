@@ -100,7 +100,12 @@ try {
   if (requireValidation) {
     validation = await waitForValidation(cdp, sessionId, waitMs, requireValidationCount);
     if (!validation?.valid) {
-      throw new Error(`GPU validation did not pass: ${JSON.stringify(validation)}`);
+      throw new Error(`GPU validation did not pass: ${JSON.stringify({
+        validation,
+        page: await safePageProbe(cdp, sessionId),
+        performance: await safeEvaluate(cdp, sessionId, "globalThis.__worldMapPerfSummary ?? null"),
+        consoleSummary: summarizeConsole(consoleMessages),
+      })}`);
     }
     if (validation.skipped) {
       throw new Error(`GPU validation was skipped: ${JSON.stringify(validation)}`);
@@ -324,6 +329,18 @@ async function evaluate(cdp, sessionId, expression) {
     throw new Error(result.exceptionDetails.text ?? "Evaluation failed.");
   }
   return result.result?.value;
+}
+
+async function safeEvaluate(cdp, sessionId, expression) {
+  try {
+    return await evaluate(cdp, sessionId, expression);
+  } catch (error) {
+    return { ok: false, reason: error?.message ?? "evaluation failed" };
+  }
+}
+
+function safePageProbe(cdp, sessionId) {
+  return safeEvaluate(cdp, sessionId, pageProbeScript());
 }
 
 function clickScript(selector) {
