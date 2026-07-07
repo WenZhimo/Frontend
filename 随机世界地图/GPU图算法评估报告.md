@@ -154,6 +154,16 @@ node .\tools\browser-smoke-check.mjs --mode file --steps 1 --wait-ms 8000 --quer
 node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --query "gpuCompute=validate&gpuKernel=<graph-candidate>&gpuValidateInterval=1&gpuValidateReports=1&renderBackend=cpu" --require-validation --require-perf-summary
 ```
 
+当前已新增前置 safe-skip 工具：
+
+```powershell
+node .\tools\gpu-graph-candidate-check.mjs distance-field '龙骨海-纪元7' 20 geology-v2 256x128
+node .\tools\gpu-graph-candidate-check.mjs external-sea '龙骨海-纪元7' 20 geology-v2 256x128
+node .\tools\gpu-graph-candidate-check.mjs distance-field '龙骨海-纪元7' 5 geology-v2 256x128 --topology cubed-sphere --projection orthographic --face-size 24
+```
+
+该工具当前不运行 WebGPU 图算法，而是输出 CPU 权威 baseline 字段摘要、拓扑诊断和 `skipped: true`，用于保证图算法在没有明确 candidate 前只能 safe skip。已验证 `distance-field / external-sea` 在 cylindrical 下可输出 baseline，`distance-field` 在 cubed-sphere 下也能使用 graph-backed 拓扑字段并保持 safe skip。
+
 图算法 candidate 额外要求：
 
 - Console 无项目自身 `Uncaught / TypeError / SyntaxError / Cannot read properties / NaN / Infinity`。
@@ -175,5 +185,5 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 ## 7. 下一步建议
 
 - 立即下一步不应是图算法 GPU 化，而应是优化 `isostasy` experimental 的 readback：减少下载字段、批量合并 validate、降低 validate 频率，或把多个 dense kernel 合批。
-- 若仍要推进图算法研究，建议先新增 `tools/gpu-graph-candidate-check.mjs` 的空框架，只支持 CPU baseline + safe skip，再接入 `distance-field` candidate。
+- 若仍要推进图算法研究，下一步是在 `tools/gpu-graph-candidate-check.mjs` 现有 CPU baseline + safe skip 框架中接入第一个只读 `distance-field` candidate。
 - 所有图算法相关字段必须继续在公共接口中由 CPU 权威路径提供，直到 candidate 通过浏览器、long-run、resolution 和 debug-render 的完整门禁。

@@ -467,6 +467,12 @@ Phase 2B 当前落地状态：
 
 这些算法对正确性和调试成本要求高，不应阻塞下一阶段地质质量改造。
 
+当前落地状态：
+
+- 已完成 `GPU图算法评估报告.md`，结论是外海连通、闭合盆地、陆块编号、水文汇流和流域编号暂不进入默认 GPU 路径。
+- 已新增 `tools/gpu-graph-candidate-check.mjs` 作为前置 safe-skip 框架；当前只输出 CPU 权威 baseline 字段摘要、拓扑诊断、`skipped: true` 和推荐结论，不运行任何 WebGPU 图算法，也不写回生产字段。
+- 已验证 `distance-field / external-sea` 在 cylindrical 下可输出 baseline，`distance-field` 在 cubed-sphere 下可读取 graph-backed 拓扑字段并保持 safe skip。
+
 ## 7. 近期优先级清单
 
 1. 建立 `gpu capability + fallback`，不改变现有模拟结果。
