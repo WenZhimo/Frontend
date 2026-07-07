@@ -614,6 +614,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 12000 --que
 - `browser-smoke-check` 已可读取 `globalThis.__worldMapPerfSummary`；加 `--require-perf-summary` 时会要求浏览器实机产生 step/render 样本，并在输出中记录 step、render、projection render、GPU upload/kernel/download/total 和 Long Task 摘要。
 - 浏览器 perf summary 与 `gpu-perf-profile` 现在同时记录 `setupMs` 和 `totalCandidateMs`；默认启用 GPU 时应优先看包含 setup 的 `totalCandidateMs`，连续运行时再看 setup 摊薄后的 `totalGpuPathMs`。
 - `browser-smoke-check` 已禁用页面缓存，避免验证旧 bundle；新增 `--require-reused-gpu-setup-zero`，可要求所有 `reusedContext: true` 的 candidate 报告 `setupMs: 0`，用于防止 pipeline/device 复用退化或 bundle helper 覆盖造成计时误报。
+- 涉及 WebGPU validate 的 smoke 会先等待 validation 结果，再用 `--post-validation-wait-ms` 给页面恢复一小段时间后探测 canvas 和 step；这样能区分“validation 没完成”和“validation 后页面无法继续推进”，避免长任务期间提前误报。
 - 性能门禁可选参数：
 - GPU compute 性能门禁可选参数：`--max-gpu-total-ms` 检查不含 setup 的 upload+kernel+download，`--max-gpu-candidate-ms` 检查包含 setup 的完整 candidate 成本；进入默认启用前应使用这两个阈值证明浏览器真实运行不退化。
 

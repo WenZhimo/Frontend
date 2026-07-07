@@ -12,6 +12,7 @@ const query = String(options.query ?? "");
 const waitMs = parseIntOption(options, "wait-ms", 12000);
 const steps = parseIntOption(options, "steps", 2);
 const requireValidation = parseBoolOption(options, "require-validation");
+const postValidationWaitMs = parseIntOption(options, "post-validation-wait-ms", requireValidation ? 1000 : 0);
 const requireWriteback = parseBoolOption(options, "require-writeback");
 const requirePerfSummary = parseBoolOption(options, "require-perf-summary");
 const requireReusedGpuContext = parseBoolOption(options, "require-reused-gpu-context");
@@ -94,10 +95,6 @@ try {
   if (!initial.ok) throw new Error(`Page probe failed before play: ${initial.reason}`);
 
   await evaluate(cdp, sessionId, clickScript("#playPause"));
-  await wait(waitMs);
-
-  const afterPlay = await evaluate(cdp, sessionId, pageProbeScript({ requireStep: steps }));
-  if (!afterPlay.ok) throw new Error(`Page probe failed after play: ${afterPlay.reason}`);
 
   let validation = null;
   if (requireValidation) {
@@ -128,7 +125,13 @@ try {
     if (missingFields.length > 0) {
       throw new Error(`Required GPU fields were not validated (${missingFields.join(", ")}): ${JSON.stringify(validation)}`);
     }
+    if (postValidationWaitMs > 0) await wait(postValidationWaitMs);
+  } else {
+    await wait(waitMs);
   }
+
+  const afterPlay = await evaluate(cdp, sessionId, pageProbeScript({ requireStep: steps }));
+  if (!afterPlay.ok) throw new Error(`Page probe failed after play: ${afterPlay.reason}`);
   const performanceSummary = await evaluate(cdp, sessionId, "globalThis.__worldMapPerfSummary ?? null");
   assertPerformanceSummary(performanceSummary);
 
