@@ -14,6 +14,7 @@ const steps = parseIntOption(options, "steps", 2);
 const requireValidation = parseBoolOption(options, "require-validation");
 const requireWriteback = parseBoolOption(options, "require-writeback");
 const requirePerfSummary = parseBoolOption(options, "require-perf-summary");
+const requireReusedGpuContext = parseBoolOption(options, "require-reused-gpu-context");
 const requireValidationCount = Math.max(1, parseIntOption(options, "require-validation-count", 1));
 const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
 const maxLongTaskMs = parseIntOption(options, "max-long-task-ms", 0);
@@ -107,6 +108,9 @@ try {
     }
     if ((validation.historyLength ?? 1) < requireValidationCount) {
       throw new Error(`GPU validation count did not reach ${requireValidationCount}: ${JSON.stringify(validation)}`);
+    }
+    if (requireReusedGpuContext && !hasReusedGpuContext(validation)) {
+      throw new Error(`GPU context reuse was not observed: ${JSON.stringify(validation)}`);
     }
   }
   const performanceSummary = await evaluate(cdp, sessionId, "globalThis.__worldMapPerfSummary ?? null");
@@ -343,6 +347,14 @@ function wait(ms) {
   return new Promise((resolveWait) => setTimeout(resolveWait, ms));
 }
 
+function hasReusedGpuContext(validation) {
+  const candidates = [
+    ...(validation.candidateResults ?? []),
+    ...(validation.history ?? []).flatMap((entry) => entry.candidateResults ?? []),
+  ];
+  return candidates.some((candidate) => !candidate.skipped && candidate.reusedContext === true);
+}
+
 async function closeBrowserSafely(cdp) {
   try {
     await Promise.race([
@@ -399,6 +411,7 @@ function assertPerformanceSummary(summary) {
 }
 
 function summarizeValidation(validation) {
+  const reusedGpuContextObserved = hasReusedGpuContext(validation);
   return {
     valid: validation.valid,
     skipped: validation.skipped,
@@ -409,6 +422,7 @@ function summarizeValidation(validation) {
     fallbackReason: validation.fallbackReason ?? null,
     kernels: validation.kernels,
     historyLength: validation.historyLength ?? null,
+    reusedGpuContextObserved,
     history: validation.history?.map((entry) => ({
       valid: entry.valid,
       skipped: entry.skipped,
