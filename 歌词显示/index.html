@@ -169,7 +169,7 @@
     </div>
 
     <footer class="player-bar" aria-label="播放控制">
-      <audio id="audioPlayer" preload="metadata" crossorigin="anonymous"></audio>
+      <audio id="audioPlayer" preload="metadata"></audio>
 
       <div class="mini-now">
         <div class="mini-cover" id="miniCover">L</div>
@@ -218,6 +218,11 @@
       </div>
 
       <div class="utility-controls">
+        <button class="icon-button" id="queueToggle" type="button" aria-label="播放队列">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h11M4 12h9M4 17h7M17 15l3 2-3 2v-4Z" />
+          </svg>
+        </button>
         <button class="icon-button" id="lyricsToggle" type="button" aria-label="显示歌词">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M7 7h10M7 12h10M7 17h6M4.5 21A2.5 2.5 0 0 1 2 18.5v-13A2.5 2.5 0 0 1 4.5 3h15A2.5 2.5 0 0 1 22 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-15Z" />
@@ -231,6 +236,21 @@
         <input id="volumeSlider" type="range" min="0" max="1" value="0.82" step="0.01" aria-label="音量" />
       </div>
     </footer>
+
+    <section class="queue-drawer" id="queueDrawer" aria-label="当前播放队列" aria-hidden="true">
+      <div class="queue-drawer-head">
+        <div>
+          <span class="eyebrow">Up Next</span>
+          <h2>播放队列</h2>
+        </div>
+        <button class="icon-button" id="queueClose" type="button" aria-label="关闭播放队列">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </div>
+      <div class="queue-list compact" id="miniQueueList" aria-label="底部播放队列"></div>
+    </section>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="./app.js"></script>
