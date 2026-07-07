@@ -84,7 +84,7 @@ svg {
   grid-template-columns: 280px minmax(0, 1fr);
   gap: 24px;
   min-height: calc(100vh - 116px);
-  padding: 24px 24px 132px;
+  padding: 24px 24px 126px;
 }
 
 .sidebar,
@@ -516,21 +516,20 @@ kbd {
 }
 
 .content-grid {
-  display: grid;
-  grid-template-columns: minmax(360px, 1.35fr) minmax(300px, 0.9fr);
-  gap: 20px;
+  display: block;
   margin-top: 20px;
 }
 
 .panel {
+  display: none;
   min-width: 0;
   border-radius: var(--radius-lg);
   background: rgba(17, 20, 30, 0.68);
   overflow: hidden;
 }
 
-.library-panel {
-  grid-row: span 2;
+.panel.active-view {
+  display: block;
 }
 
 .panel-heading {
@@ -563,7 +562,7 @@ select {
 .queue-list {
   display: grid;
   gap: 8px;
-  max-height: 625px;
+  max-height: min(625px, calc(100vh - 520px));
   padding: 0 12px 14px;
   overflow: auto;
   scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
@@ -617,6 +616,14 @@ select {
   font-weight: 900;
 }
 
+.track-cover.has-art,
+.mini-cover.has-art,
+.disc-core.has-art {
+  background-position: center;
+  background-size: cover;
+  color: transparent;
+}
+
 .queue-index {
   width: 28px;
   height: 28px;
@@ -659,7 +666,7 @@ select {
 
 .lyrics-view {
   position: relative;
-  max-height: 322px;
+  max-height: min(625px, calc(100vh - 520px));
   padding: 4px 20px 22px;
   overflow: auto;
   scroll-behavior: smooth;
@@ -697,9 +704,9 @@ select {
 
 .player-bar {
   position: fixed;
-  right: 20px;
-  bottom: 18px;
-  left: 20px;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 20;
   display: grid;
   grid-template-columns: minmax(220px, 0.8fr) minmax(330px, 1.35fr) minmax(190px, 0.55fr);
@@ -709,6 +716,10 @@ select {
   padding: 16px 18px;
   border-radius: 26px;
   background: rgba(13, 15, 22, 0.88);
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 26px 26px 0 0;
 }
 
 .mini-now {
@@ -784,10 +795,56 @@ input[type="range"] {
 
 .utility-controls {
   display: grid;
-  grid-template-columns: 44px 44px minmax(80px, 1fr);
+  grid-template-columns: 44px 44px 44px minmax(80px, 1fr);
   gap: 10px;
   align-items: center;
   min-width: 0;
+}
+
+.queue-drawer {
+  position: fixed;
+  right: 18px;
+  bottom: 106px;
+  z-index: 19;
+  width: min(420px, calc(100vw - 36px));
+  max-height: min(520px, calc(100vh - 140px));
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(13, 15, 22, 0.94);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(28px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(18px) scale(0.98);
+  transform-origin: right bottom;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.queue-drawer.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.queue-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 10px;
+}
+
+.queue-drawer-head h2 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.queue-list.compact {
+  max-height: min(408px, calc(100vh - 238px));
+  padding: 0 10px 12px;
 }
 
 .toast {
@@ -835,6 +892,7 @@ body.light {
 }
 
 body.light .player-bar,
+body.light .queue-drawer,
 body.light .toast {
   background: rgba(255, 255, 255, 0.88);
 }
@@ -876,26 +934,25 @@ body.light .lyric-line.past {
     display: none;
   }
 
-  .content-grid,
   .hero-player,
   .player-bar {
     grid-template-columns: 1fr;
   }
 
   .player-bar {
-    position: static;
-    margin: 0 20px 20px;
+    position: fixed;
+    margin: 0;
   }
 
   .app-shell {
     min-height: auto;
-    padding-bottom: 24px;
+    padding-bottom: 300px;
   }
 }
 
 @media (max-width: 720px) {
   .app-shell {
-    padding: 12px 12px 18px;
+    padding: 12px 12px 300px;
   }
 
   .main-panel,
@@ -918,10 +975,6 @@ body.light .lyric-line.past {
     grid-template-columns: 1fr;
   }
 
-  .content-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .track-item {
     grid-template-columns: 40px minmax(0, 1fr);
   }
@@ -939,16 +992,24 @@ body.light .lyric-line.past {
   .lyrics-view,
   .track-list,
   .queue-list {
-    max-height: 420px;
+    max-height: 520px;
   }
 
   .player-bar {
-    margin: 0 12px 12px;
     padding: 14px;
   }
 
   .utility-controls {
-    grid-template-columns: 44px 44px 1fr;
+    grid-template-columns: 44px 44px 44px 1fr;
+  }
+
+  .queue-drawer {
+    right: 12px;
+    bottom: 278px;
+    left: 12px;
+    width: auto;
+    max-height: 360px;
+    transform-origin: center bottom;
   }
 }
 
