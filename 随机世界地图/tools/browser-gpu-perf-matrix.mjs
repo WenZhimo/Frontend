@@ -13,10 +13,16 @@ const baselineWaitMs = parseIntOption(options, "baseline-wait-ms", 8000);
 const postValidationWaitMs = parseIntOption(options, "post-validation-wait-ms", 1000);
 const validationCount = parseIntOption(options, "validation-count", 2);
 const startPort = parseIntOption(options, "start-port", 9600);
-const includeCpuBaseline = parseBoolOption(options, "include-cpu-baseline");
 const maxAverageStepMs = parseIntOption(options, "max-average-step-ms", 0);
 const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
 const maxLongTaskMs = parseIntOption(options, "max-long-task-ms", 0);
+const maxStepRatio = parseNumberOption(options, "max-step-ratio", 0);
+const maxRenderRatio = parseNumberOption(options, "max-render-ratio", 0);
+const maxLongTaskRatio = parseNumberOption(options, "max-long-task-ratio", 0);
+const includeCpuBaseline = parseBoolOption(options, "include-cpu-baseline")
+  || maxStepRatio > 0
+  || maxRenderRatio > 0
+  || maxLongTaskRatio > 0;
 const maxWarmGpuTotalMs = parseIntOption(options, "max-warm-gpu-total-ms", 0);
 const maxWarmGpuCandidateMs = parseIntOption(options, "max-warm-gpu-candidate-ms", 0);
 const renderBackend = String(options["render-backend"] ?? options.renderBackend ?? "cpu");
@@ -59,6 +65,9 @@ const summary = {
   maxAverageStepMs: maxAverageStepMs || null,
   maxAverageRenderMs: maxAverageRenderMs || null,
   maxLongTaskMs: maxLongTaskMs || null,
+  maxStepRatio: maxStepRatio || null,
+  maxRenderRatio: maxRenderRatio || null,
+  maxLongTaskRatio: maxLongTaskRatio || null,
   maxWarmGpuTotalMs: maxWarmGpuTotalMs || null,
   maxWarmGpuCandidateMs: maxWarmGpuCandidateMs || null,
 };
@@ -130,8 +139,10 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
     const valid = child.status === 0 && parsed?.valid === true && !pageStateMismatch && baselineValid;
     const performance = summarizePerformance(parsed?.performance);
     const baselinePerformance = summarizePerformance(baseline?.parsed?.performance);
+    const performanceRatio = comparePerformance(performance, baselinePerformance);
+    const ratioFailure = describePerformanceRatioFailure(performanceRatio);
     return {
-      valid,
+      valid: valid && !ratioFailure,
       seed,
       resolution,
       kernel,
@@ -154,11 +165,12 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
             error: baselineMismatch ?? (baseline?.child.status === 0 ? null : summarizeFailure(baseline?.child.stderr, baseline?.child.stdout)),
           }
         : null,
-      performanceRatio: comparePerformance(performance, baselinePerformance),
+      performanceRatio,
       step: parsed?.step ?? null,
       consoleProjectErrors: parsed?.consoleSummary?.projectErrors ?? null,
       error: pageStateMismatch
         ?? baselineMismatch
+        ?? ratioFailure
         ?? (child.status === 0 ? null : summarizeFailure(child.stderr, child.stdout))
         ?? (baselineValid ? null : summarizeFailure(baseline?.child.stderr, baseline?.child.stdout)),
     };
@@ -223,6 +235,29 @@ function comparePerformance(gpuPerformance, cpuPerformance) {
     renderAverage: ratio(gpuPerformance.render?.averageMs, cpuPerformance.render?.averageMs),
     longTaskMax: ratio(gpuPerformance.longTask?.maxMs, cpuPerformance.longTask?.maxMs),
   };
+}
+
+function describePerformanceRatioFailure(performanceRatio) {
+  const failures = [];
+  if (maxStepRatio > 0) {
+    if (!Number.isFinite(performanceRatio?.stepAverage)) failures.push("stepAverage ratio is unavailable");
+    else if (performanceRatio.stepAverage > maxStepRatio) {
+      failures.push(`stepAverage ratio ${performanceRatio.stepAverage} exceeded ${maxStepRatio}`);
+    }
+  }
+  if (maxRenderRatio > 0) {
+    if (!Number.isFinite(performanceRatio?.renderAverage)) failures.push("renderAverage ratio is unavailable");
+    else if (performanceRatio.renderAverage > maxRenderRatio) {
+      failures.push(`renderAverage ratio ${performanceRatio.renderAverage} exceeded ${maxRenderRatio}`);
+    }
+  }
+  if (maxLongTaskRatio > 0) {
+    if (!Number.isFinite(performanceRatio?.longTaskMax)) failures.push("longTaskMax ratio is unavailable");
+    else if (performanceRatio.longTaskMax > maxLongTaskRatio) {
+      failures.push(`longTaskMax ratio ${performanceRatio.longTaskMax} exceeded ${maxLongTaskRatio}`);
+    }
+  }
+  return failures.length ? `GPU/CPU performance ratio gate failed: ${failures.join("; ")}` : null;
 }
 
 function ratio(numerator, denominator) {
@@ -296,6 +331,11 @@ function collectWarmCandidates(validation) {
 function maxNumber(values) {
   const finite = values.map(Number).filter(Number.isFinite);
   return finite.length ? round2(Math.max(...finite)) : null;
+}
+
+function parseNumberOption(optionBag, name, fallback) {
+  const value = Number(optionBag[name]);
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function round2(value) {
