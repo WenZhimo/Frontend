@@ -630,6 +630,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 12000 --que
 - 汇总每个 case 的 warm GPU cost、canvas 尺寸、step 推进、Console 项目错误数和失败原因。
 - 校验每个 case 的浏览器 `pageState.seedText` 与 `pageState.resolution` 必须匹配矩阵参数；不匹配时即使 smoke 本身成功也视为失败。
 - 汇总每个 case 的浏览器性能摘要：step 平均 / p95 / 最大耗时、render 平均 / p95 / 最大耗时、projection render 摘要和 long task 总量 / 最大值。
+- 可用 `--include-cpu-baseline` 为每个 GPU case 追加同 seed / resolution / topology / projection / render backend 的 CPU-only 浏览器 smoke，并输出 `cpuBaseline` 与 `performanceRatio`，用于判断 GPU validate 是否真的改善页面体验。
 - 作为默认 GPU compute 前的多 seed / 多分辨率性能门禁，而不是只看单次 smoke。
 
 命令示例：
@@ -665,6 +666,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - 后续 warm-run 门禁复测显示 `local-fields` 复用后仍可能抖动到约 `1.7s`，而 `sediment-capacity` 在 `--max-warm-gpu-total-ms 1000` 下会被明确拦截；因此进入默认 GPU compute 前，不能只凭单次低延迟样本判断收益，必须使用 warm-run 门禁和多次浏览器样本证明稳定性。
 - `browser-gpu-perf-matrix` 已用真实 runtime state 复核 URL 参数：`龙骨海-纪元7` 与 `artifact-seed-3` 在 `256x128 + local-fields` 下均通过，`pageState.seedText` / `pageState.resolution` 与矩阵参数一致，Console 项目错误为 0；本次 warm GPU total 约 `2.56s` 与 `5.78s`，仍提示默认 GPU compute 前需要继续看多样本稳定性。
 - `browser-gpu-perf-matrix` 现在会把浏览器 step/render/long task 摘要带入每个 case；复测 `256x128 + local-fields` 时 warm GPU total 约 `3.64s..4.77s`，step 平均约 `1.89s..1.94s`，render 平均约 `3ms`，long task 最大约 `3.1s`。这类数据必须和字段误差一起用于默认 GPU compute 判断。
+- `browser-gpu-perf-matrix --include-cpu-baseline` 已可输出同参数 CPU-only 浏览器 baseline 与 `performanceRatio`；单 seed 复测中 `local-fields` warm GPU total 曾降到约 `10ms`，但页面 step 平均仍约 `2s` 量级，因此默认启用判断仍必须看整体浏览器 step/render/long task，而不是单次 warm kernel 成本。
 - `gpuValidateInterval=20` 的低频浏览器 smoke 曾在 90s 内未触发 validation：诊断显示页面仅推进到 step 15，说明该配置下基础浏览器 step 已约 7s/步，不能用低频 validate 单独证明 GPU 体验改善；后续性能门禁应同时报告“触发前 step 推进速度”和“触发后的 GPU path 成本”。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
 

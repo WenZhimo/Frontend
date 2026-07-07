@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
-import { parseCsv, parseIntOption, parseOptions } from "./lib/cli.mjs";
+import { parseBoolOption, parseCsv, parseIntOption, parseOptions } from "./lib/cli.mjs";
 
 const { options } = parseOptions(process.argv.slice(2));
 
@@ -9,9 +9,11 @@ const resolutions = parseCsv(options.resolutions ?? options.resolution, ["256x12
 const kernels = parseCsv(options.kernels ?? options.kernel, ["local-fields"]);
 const steps = parseIntOption(options, "steps", 2);
 const waitMs = parseIntOption(options, "wait-ms", 120000);
+const baselineWaitMs = parseIntOption(options, "baseline-wait-ms", 8000);
 const postValidationWaitMs = parseIntOption(options, "post-validation-wait-ms", 1000);
 const validationCount = parseIntOption(options, "validation-count", 2);
 const startPort = parseIntOption(options, "start-port", 9600);
+const includeCpuBaseline = parseBoolOption(options, "include-cpu-baseline");
 const maxAverageStepMs = parseIntOption(options, "max-average-step-ms", 0);
 const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
 const maxLongTaskMs = parseIntOption(options, "max-long-task-ms", 0);
@@ -53,6 +55,7 @@ const summary = {
   seeds,
   resolutions,
   kernels: kernels.map(normalizeKernelName),
+  includeCpuBaseline,
   maxAverageStepMs: maxAverageStepMs || null,
   maxAverageRenderMs: maxAverageRenderMs || null,
   maxLongTaskMs: maxLongTaskMs || null,
@@ -109,14 +112,24 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       windowsHide: true,
       maxBuffer: 64 * 1024 * 1024,
     });
+    const baseline = includeCpuBaseline
+      ? runCpuBaselineCase({ seed, resolution, port: port + 10000, caseIndex })
+      : null;
     const parsed = parseSmokeOutput(child.stdout);
     const pageStateMismatch = parsed
       ? describePageStateMismatch(parsed.pageState, { seed, resolution })
       : null;
+    const baselineMismatch = baseline?.parsed
+      ? describePageStateMismatch(baseline.parsed.pageState, { seed, resolution })
+      : null;
     const warmCandidates = parsed
       ? collectWarmCandidates(parsed.gpuValidation)
       : parseWarmCandidatesFromFailure(child.stderr);
-    const valid = child.status === 0 && parsed?.valid === true && !pageStateMismatch;
+    const baselineValid = !includeCpuBaseline
+      || (baseline?.child.status === 0 && baseline?.parsed?.valid === true && !baselineMismatch);
+    const valid = child.status === 0 && parsed?.valid === true && !pageStateMismatch && baselineValid;
+    const performance = summarizePerformance(parsed?.performance);
+    const baselinePerformance = summarizePerformance(baseline?.parsed?.performance);
     return {
       valid,
       seed,
@@ -129,11 +142,61 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       reusedContextObserved: parsed?.gpuValidation?.reusedGpuContextObserved ?? warmCandidates.length > 0,
       canvas: parsed?.canvas ?? null,
       pageState: parsed?.pageState ?? null,
-      performance: summarizePerformance(parsed?.performance),
+      performance,
+      cpuBaseline: includeCpuBaseline
+        ? {
+            valid: baselineValid,
+            exitCode: baseline?.child.status ?? null,
+            canvas: baseline?.parsed?.canvas ?? null,
+            pageState: baseline?.parsed?.pageState ?? null,
+            performance: baselinePerformance,
+            consoleProjectErrors: baseline?.parsed?.consoleSummary?.projectErrors ?? null,
+            error: baselineMismatch ?? (baseline?.child.status === 0 ? null : summarizeFailure(baseline?.child.stderr, baseline?.child.stdout)),
+          }
+        : null,
+      performanceRatio: comparePerformance(performance, baselinePerformance),
       step: parsed?.step ?? null,
       consoleProjectErrors: parsed?.consoleSummary?.projectErrors ?? null,
-      error: pageStateMismatch ?? (child.status === 0 ? null : summarizeFailure(child.stderr, child.stdout)),
+      error: pageStateMismatch
+        ?? baselineMismatch
+        ?? (child.status === 0 ? null : summarizeFailure(child.stderr, child.stdout))
+        ?? (baselineValid ? null : summarizeFailure(baseline?.child.stderr, baseline?.child.stdout)),
     };
+  };
+}
+
+function runCpuBaselineCase({ seed, resolution, port, caseIndex }) {
+  const query = new URLSearchParams({
+    topology,
+    projection,
+    resolution,
+    renderBackend,
+    seedText: seed,
+    cacheBust: `gpuPerfMatrixBaseline${Date.now()}_${caseIndex}`,
+  }).toString();
+  const args = [
+    ".\\tools\\browser-smoke-check.mjs",
+    "--mode", "http",
+    "--steps", String(steps),
+    "--wait-ms", String(baselineWaitMs),
+    "--remote-debugging-port", String(port),
+    "--user-data-dir", `.test-cache/browser-gpu-perf-matrix-baseline-${caseIndex}`,
+    "--query", query,
+    "--require-perf-summary",
+  ];
+  if (maxAverageStepMs > 0) args.push("--max-average-step-ms", String(maxAverageStepMs));
+  if (maxAverageRenderMs > 0) args.push("--max-average-render-ms", String(maxAverageRenderMs));
+  if (maxLongTaskMs > 0) args.push("--max-long-task-ms", String(maxLongTaskMs));
+  if (chrome) args.push("--chrome", String(chrome));
+  const child = spawnSync(process.execPath, args, {
+    cwd: root,
+    encoding: "utf8",
+    windowsHide: true,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  return {
+    child,
+    parsed: parseSmokeOutput(child.stdout),
   };
 }
 
@@ -151,6 +214,22 @@ function summarizePerformance(performance) {
         }
       : null,
   };
+}
+
+function comparePerformance(gpuPerformance, cpuPerformance) {
+  if (!gpuPerformance || !cpuPerformance) return null;
+  return {
+    stepAverage: ratio(gpuPerformance.step?.averageMs, cpuPerformance.step?.averageMs),
+    renderAverage: ratio(gpuPerformance.render?.averageMs, cpuPerformance.render?.averageMs),
+    longTaskMax: ratio(gpuPerformance.longTask?.maxMs, cpuPerformance.longTask?.maxMs),
+  };
+}
+
+function ratio(numerator, denominator) {
+  const top = Number(numerator);
+  const bottom = Number(denominator);
+  if (!Number.isFinite(top) || !Number.isFinite(bottom) || Math.abs(bottom) < 0.000001) return null;
+  return round2(top / bottom);
 }
 
 function summarizeSample(sample) {
