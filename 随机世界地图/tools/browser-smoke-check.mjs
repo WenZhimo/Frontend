@@ -24,6 +24,8 @@ const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
 const maxLongTaskMs = parseIntOption(options, "max-long-task-ms", 0);
 const maxGpuTotalMs = parseIntOption(options, "max-gpu-total-ms", 0);
 const maxGpuCandidateMs = parseIntOption(options, "max-gpu-candidate-ms", 0);
+const maxWarmGpuTotalMs = parseIntOption(options, "max-warm-gpu-total-ms", 0);
+const maxWarmGpuCandidateMs = parseIntOption(options, "max-warm-gpu-candidate-ms", 0);
 const chromePath = String(options.chrome ?? findChromePath());
 const userDataDir = resolve(options["user-data-dir"] ?? ".test-cache/browser-smoke-profile");
 const remoteDebuggingPort = parseIntOption(options, "remote-debugging-port", 9222);
@@ -130,8 +132,12 @@ try {
     if (missingFields.length > 0) {
       throw new Error(`Required GPU fields were not validated (${missingFields.join(", ")}): ${JSON.stringify(validation)}`);
     }
+    assertWarmGpuTiming(validation);
     if (postValidationWaitMs > 0) await wait(postValidationWaitMs);
   } else {
+    if (maxWarmGpuTotalMs > 0 || maxWarmGpuCandidateMs > 0) {
+      throw new Error("Warm GPU timing gates require --require-validation so candidate history can be inspected.");
+    }
     await wait(waitMs);
   }
 
@@ -420,21 +426,15 @@ function hasReusedGpuContext(validation) {
 }
 
 function reusedGpuSetupIsZero(validation) {
-  const candidates = [
-    ...(validation.candidateResults ?? []),
-    ...(validation.history ?? []).flatMap((entry) => entry.candidateResults ?? []),
-  ].filter((candidate) => !candidate?.skipped && candidate?.reusedContext === true);
+  const candidates = collectCandidateResults(validation)
+    .filter((candidate) => !candidate?.skipped && candidate?.reusedContext === true);
   return candidates.length > 0 && candidates.every((candidate) => Math.abs(Number(candidate.timings?.setupMs ?? 0)) <= 0.000001);
 }
 
 function missingRequiredGpuKernels(validation, requiredKernels) {
   if (!requiredKernels.length) return [];
   const observed = new Set();
-  const candidates = [
-    ...(validation.candidateResults ?? []),
-    ...(validation.history ?? []).flatMap((entry) => entry.candidateResults ?? []),
-  ];
-  for (const candidate of candidates) {
+  for (const candidate of collectCandidateResults(validation)) {
     if (candidate?.skipped) continue;
     const kernel = normalizeKernelName(candidate?.kernel);
     if (kernel) observed.add(kernel);
@@ -504,6 +504,42 @@ function assertPerformanceSummary(summary) {
   if (maxGpuCandidateMs > 0 && gpuCandidateTotal?.maxMs > maxGpuCandidateMs) {
     throw new Error(`GPU candidate total exceeded ${maxGpuCandidateMs}ms: ${JSON.stringify(gpuCandidateTotal)}`);
   }
+}
+
+function assertWarmGpuTiming(validation) {
+  if (maxWarmGpuTotalMs <= 0 && maxWarmGpuCandidateMs <= 0) return;
+  const warmCandidates = collectCandidateResults(validation)
+    .filter((candidate) => !candidate?.skipped && candidate?.reusedContext === true);
+  if (!warmCandidates.length) {
+    throw new Error(`Warm GPU timing gate requires at least one reused GPU candidate: ${JSON.stringify(validation)}`);
+  }
+  const totalViolations = maxWarmGpuTotalMs > 0
+    ? warmCandidates.filter((candidate) => Number(candidate.timings?.totalGpuPathMs) > maxWarmGpuTotalMs)
+    : [];
+  if (totalViolations.length > 0) {
+    throw new Error(`Warm GPU total path exceeded ${maxWarmGpuTotalMs}ms: ${JSON.stringify(summarizeCandidatesForError(totalViolations))}`);
+  }
+  const candidateViolations = maxWarmGpuCandidateMs > 0
+    ? warmCandidates.filter((candidate) => Number(candidate.timings?.totalCandidateMs ?? candidate.timings?.totalGpuPathMs) > maxWarmGpuCandidateMs)
+    : [];
+  if (candidateViolations.length > 0) {
+    throw new Error(`Warm GPU candidate total exceeded ${maxWarmGpuCandidateMs}ms: ${JSON.stringify(summarizeCandidatesForError(candidateViolations))}`);
+  }
+}
+
+function collectCandidateResults(validation) {
+  const historyCandidates = (validation?.history ?? []).flatMap((entry) => entry.candidateResults ?? []);
+  if (historyCandidates.length > 0) return historyCandidates;
+  return validation?.candidateResults ?? [];
+}
+
+function summarizeCandidatesForError(candidates) {
+  return candidates.map((candidate) => ({
+    kernel: candidate.kernel,
+    backend: candidate.backend,
+    reusedContext: candidate.reusedContext ?? false,
+    timings: candidate.timings ?? null,
+  }));
 }
 
 function summarizeValidation(validation) {

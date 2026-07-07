@@ -619,6 +619,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 12000 --que
 - 涉及 WebGPU validate 的 smoke 会先等待 validation 结果，再用 `--post-validation-wait-ms` 给页面恢复一小段时间后探测 canvas 和 step；这样能区分“validation 没完成”和“validation 后页面无法继续推进”，避免长任务期间提前误报。
 - 性能门禁可选参数：
 - GPU compute 性能门禁可选参数：`--max-gpu-total-ms` 检查不含 setup 的 upload+kernel+download，`--max-gpu-candidate-ms` 检查包含 setup 的完整 candidate 成本；进入默认启用前应使用这两个阈值证明浏览器真实运行不退化。
+- GPU warm-run 性能门禁可选参数：`--max-warm-gpu-total-ms` / `--max-warm-gpu-candidate-ms` 只检查 `reusedContext: true` 的 validation candidate，用来区分首次 setup 成本与复用后仍然过慢的 kernel/readback 成本；这些门禁必须和 `--require-validation` 一起使用。
 
 ```powershell
 node .\tools\browser-smoke-check.mjs --mode file --steps 1 --wait-ms 8000 --query "renderBackend=cpu" --require-perf-summary
@@ -638,6 +639,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - 两次连续浏览器 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`，首次 setup 约 `19.2s` 已被消除；但复用后的单次 `totalGpuPathMs` 仍约 `13.6s`，kernel 与 readback 仍各约 `6-7s`，因此该路径继续保持 experimental，不进入默认。
 - `resolution=256x128` 生效后重新验证 `local-fields`：两次连续浏览器 validate 中第二次 `reusedContext: true` 且 `setupMs: 0`，`slope / ruggedness / localRelief` 误差仍约 `1e-9` 到 `0`，复用后 `totalGpuPathMs` 约 `8.3ms`；这说明 local-fields 的 device/pipeline 复用路径已经可作为后续 Phase 3 性能基线。
 - `sediment-capacity` 与 `margin-smooth` 在 `resolution=256x128` 下复用后字段误差均在阈值内，且第二次 `setupMs: 0`；但复用后的 `sediment-capacity` 仍约 `4.3s`、`margin-smooth` 仍约 `3.5s`，说明这两条路径正确性和复用门禁已过，性能仍不足以进入默认写回或默认高频 validate。
+- 后续 warm-run 门禁复测显示 `local-fields` 复用后仍可能抖动到约 `1.7s`，而 `sediment-capacity` 在 `--max-warm-gpu-total-ms 1000` 下会被明确拦截；因此进入默认 GPU compute 前，不能只凭单次低延迟样本判断收益，必须使用 warm-run 门禁和多次浏览器样本证明稳定性。
 - `gpuValidateInterval=20` 的低频浏览器 smoke 曾在 90s 内未触发 validation：诊断显示页面仅推进到 step 15，说明该配置下基础浏览器 step 已约 7s/步，不能用低频 validate 单独证明 GPU 体验改善；后续性能门禁应同时报告“触发前 step 推进速度”和“触发后的 GPU path 成本”。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
 
