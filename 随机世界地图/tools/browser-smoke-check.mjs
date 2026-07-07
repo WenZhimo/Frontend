@@ -20,6 +20,7 @@ const requireReusedGpuSetupZero = parseBoolOption(options, "require-reused-gpu-s
 const requiredGpuKernels = parseCsvOption(options, "require-gpu-kernels");
 const requiredGpuFields = parseCsvOption(options, "require-gpu-fields", { normalize: false });
 const requireValidationCount = Math.max(1, parseIntOption(options, "require-validation-count", 1));
+const maxAverageStepMs = parseIntOption(options, "max-average-step-ms", 0);
 const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
 const maxLongTaskMs = parseIntOption(options, "max-long-task-ms", 0);
 const maxGpuTotalMs = parseIntOption(options, "max-gpu-total-ms", 0);
@@ -502,6 +503,9 @@ function assertPerformanceSummary(summary) {
   if (!requirePerfSummary && !summary) return;
   if (!summary?.step?.count || !summary?.render?.count) {
     throw new Error(`Browser performance summary is missing step/render samples: ${JSON.stringify(summary)}`);
+  }
+  if (maxAverageStepMs > 0 && summary.step.averageMs > maxAverageStepMs) {
+    throw new Error(`Average step time exceeded ${maxAverageStepMs}ms: ${JSON.stringify(summary.step)}`);
   }
   if (maxAverageRenderMs > 0 && summary.render.averageMs > maxAverageRenderMs) {
     throw new Error(`Average render time exceeded ${maxAverageRenderMs}ms: ${JSON.stringify(summary.render)}`);

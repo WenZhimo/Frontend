@@ -12,6 +12,9 @@ const waitMs = parseIntOption(options, "wait-ms", 120000);
 const postValidationWaitMs = parseIntOption(options, "post-validation-wait-ms", 1000);
 const validationCount = parseIntOption(options, "validation-count", 2);
 const startPort = parseIntOption(options, "start-port", 9600);
+const maxAverageStepMs = parseIntOption(options, "max-average-step-ms", 0);
+const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
+const maxLongTaskMs = parseIntOption(options, "max-long-task-ms", 0);
 const maxWarmGpuTotalMs = parseIntOption(options, "max-warm-gpu-total-ms", 0);
 const maxWarmGpuCandidateMs = parseIntOption(options, "max-warm-gpu-candidate-ms", 0);
 const renderBackend = String(options["render-backend"] ?? options.renderBackend ?? "cpu");
@@ -50,6 +53,9 @@ const summary = {
   seeds,
   resolutions,
   kernels: kernels.map(normalizeKernelName),
+  maxAverageStepMs: maxAverageStepMs || null,
+  maxAverageRenderMs: maxAverageRenderMs || null,
+  maxLongTaskMs: maxLongTaskMs || null,
   maxWarmGpuTotalMs: maxWarmGpuTotalMs || null,
   maxWarmGpuCandidateMs: maxWarmGpuCandidateMs || null,
 };
@@ -90,6 +96,9 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       "--require-gpu-fields", fields.join(","),
       "--require-perf-summary",
     ];
+    if (maxAverageStepMs > 0) args.push("--max-average-step-ms", String(maxAverageStepMs));
+    if (maxAverageRenderMs > 0) args.push("--max-average-render-ms", String(maxAverageRenderMs));
+    if (maxLongTaskMs > 0) args.push("--max-long-task-ms", String(maxLongTaskMs));
     if (maxWarmGpuTotalMs > 0) args.push("--max-warm-gpu-total-ms", String(maxWarmGpuTotalMs));
     if (maxWarmGpuCandidateMs > 0) args.push("--max-warm-gpu-candidate-ms", String(maxWarmGpuCandidateMs));
     if (chrome) args.push("--chrome", String(chrome));
@@ -120,11 +129,43 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       reusedContextObserved: parsed?.gpuValidation?.reusedGpuContextObserved ?? warmCandidates.length > 0,
       canvas: parsed?.canvas ?? null,
       pageState: parsed?.pageState ?? null,
+      performance: summarizePerformance(parsed?.performance),
       step: parsed?.step ?? null,
       consoleProjectErrors: parsed?.consoleSummary?.projectErrors ?? null,
       error: pageStateMismatch ?? (child.status === 0 ? null : summarizeFailure(child.stderr, child.stdout)),
     };
   };
+}
+
+function summarizePerformance(performance) {
+  if (!performance) return null;
+  return {
+    step: summarizeSample(performance.step),
+    render: summarizeSample(performance.render),
+    projectionRender: summarizeSample(performance.projectionRender),
+    longTask: performance.longTask
+      ? {
+          count: performance.longTask.count ?? 0,
+          totalMs: round2(Number(performance.longTask.totalMs ?? 0)),
+          maxMs: round2(Number(performance.longTask.maxMs ?? 0)),
+        }
+      : null,
+  };
+}
+
+function summarizeSample(sample) {
+  if (!sample) return null;
+  return {
+    count: sample.count ?? 0,
+    averageMs: nullableRound2(sample.averageMs),
+    p95Ms: nullableRound2(sample.p95Ms),
+    maxMs: nullableRound2(sample.maxMs),
+  };
+}
+
+function nullableRound2(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? round2(number) : null;
 }
 
 function describePageStateMismatch(pageState, expected) {
