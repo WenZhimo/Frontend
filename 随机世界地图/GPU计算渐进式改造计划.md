@@ -402,6 +402,8 @@ Phase 2B 当前落地状态：
 - `src/gpu/computeValidate.js` 已接入 `gpuKernel=local-fields` 浏览器 validate，并为 `slope / aspect / ruggedness / localRelief` 构建 CPU snapshot baseline；浏览器实机验证使用 `topology=cylindrical&projection=equirectangular` 显式走矩形网格路径。
 - `localFields` 浏览器实机曾暴露 Chrome WebGPU 不支持 WGSL `isNan/isInf` 的问题；现已改为 `value != value || abs(value) > 3.3e38` 的兼容检查，并为 pipeline / bind group / dispatch 加入 error scope，避免 shader 失败被误判为全 0 输出。
 - `localFields` 输入已改为 packed `vec4<f32>` storage buffer，和已验证的 dense kernels 保持一致；当前浏览器实机 `local-fields` validate 结果为真执行、非 skip，`slope / aspect / ruggedness / localRelief` 均通过阈值。
+- `localFields` WebGPU candidate 已开始复用 device / pipeline，并输出 `adapterInfo / deviceInfo / setupMs / totalCandidateMs / reusedContext`；浏览器实机两次连续 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`。
+- `localFields` 复用修复曾暴露 classic bundle 作用域中的同名 `withCandidateTiming` 函数覆盖问题；当前已改用 `withLocalFieldsCandidateTiming`，后续新增 GPU candidate 时应避免跨模块顶层 helper 同名，或在 bundler 中隔离模块作用域。
 - 该 candidate 仍是只读实验路径，不写回 `world.grid`，也不接入 `stepWorld` / `runGeologyV2Step`。
 - 当前只覆盖矩形网格；真实球面 / cubed-sphere 图拓扑会安全跳过，后续需按图邻域重新设计权重。
 - 已新增 `src/gpu/kernels/marginSmoothKernel.js` 与 `src/gpu/marginSmoothCompute.js`，实现 `passiveMargin / continentalShelf / continentalSlope / continentalRise / sedimentWedge / abyssalPlain` 的一次四邻域平滑 WebGPU candidate。
@@ -611,6 +613,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 12000 --que
 - `browser-smoke-check` 通过不替代 `interface-check / long-run-check / resolution-check`，而是补足真实浏览器运行证据。
 - `browser-smoke-check` 已可读取 `globalThis.__worldMapPerfSummary`；加 `--require-perf-summary` 时会要求浏览器实机产生 step/render 样本，并在输出中记录 step、render、projection render、GPU upload/kernel/download/total 和 Long Task 摘要。
 - 浏览器 perf summary 与 `gpu-perf-profile` 现在同时记录 `setupMs` 和 `totalCandidateMs`；默认启用 GPU 时应优先看包含 setup 的 `totalCandidateMs`，连续运行时再看 setup 摊薄后的 `totalGpuPathMs`。
+- `browser-smoke-check` 已禁用页面缓存，避免验证旧 bundle；新增 `--require-reused-gpu-setup-zero`，可要求所有 `reusedContext: true` 的 candidate 报告 `setupMs: 0`，用于防止 pipeline/device 复用退化或 bundle helper 覆盖造成计时误报。
 - 性能门禁可选参数：
 - GPU compute 性能门禁可选参数：`--max-gpu-total-ms` 检查不含 setup 的 upload+kernel+download，`--max-gpu-candidate-ms` 检查包含 setup 的完整 candidate 成本；进入默认启用前应使用这两个阈值证明浏览器真实运行不退化。
 
@@ -629,6 +632,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - `gpuFields=isostaticBase` 的最新浏览器 validate 显示 adapter 为 `nvidia / lovelace`，不是软件 fallback；单字段路径仍出现约 `20.3s` 总 GPU 路径，其中 kernel 约 `7.3s`、download 约 `12.9s`，因此下一轮应优先做“设备 / pipeline 复用 + 异步低频验证”，而不是继续细分单次 readback 字段。
 - `isostasy` WebGPU candidate 已开始复用 device / pipeline；输出增加 `setupMs`、`totalCandidateMs` 与 `reusedContext`，后续应在多次 validation 或更低频 validation 中观察 setup 成本是否被摊薄。
 - 两次连续浏览器 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`，首次 setup 约 `19.2s` 已被消除；但复用后的单次 `totalGpuPathMs` 仍约 `13.6s`，kernel 与 readback 仍各约 `6-7s`，因此该路径继续保持 experimental，不进入默认。
+- `local-fields` 两次连续浏览器 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`，`slope / ruggedness / localRelief` 误差约 `1e-9` 到 `0`；但复用后 `totalGpuPathMs` 仍约 `12s`，kernel 约 `8s`、download 约 `4s`，因此它仍是 validate/candidate 证据路径，不应默认写回。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
 
 ## 9. GPU 化验收标准
