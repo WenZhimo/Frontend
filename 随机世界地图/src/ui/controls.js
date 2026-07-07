@@ -7,7 +7,7 @@ export function readParams(elements) {
     ?? optionalNumber(elements.faceSize?.value)
     ?? interactiveAutoFaceSize(topologyMode, urlParams.productionTopologyMode, resolution);
   return {
-    seedText: elements.seedText.value,
+    seedText: urlParams.seedText ?? elements.seedText.value,
     waterLevel: Number(elements.waterLevel.value),
     intensity: Number(elements.intensity.value),
     plateCount: Number(elements.plateCount.value),
@@ -63,6 +63,7 @@ function readUrlOnlyParams() {
   }
 
   const result = {};
+  assignStringParam(result, "seedText", firstParam(params, ["seed", "seedText", "seed-text"]));
   assignStringParam(result, "topologyMode", firstParam(params, ["topology", "topologyMode", "topology-mode"]));
   assignStringParam(result, "projectionMode", firstParam(params, ["projection", "projectionMode", "projection-mode"]));
   assignStringParam(result, "resolution", firstParam(params, ["resolution", "res"]));

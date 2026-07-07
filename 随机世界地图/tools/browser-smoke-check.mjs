@@ -165,6 +165,8 @@ try {
     url: targetUrl,
     canvas: afterPlay.canvas,
     step: afterPlay.step,
+    pageState: afterPlay.pageState ?? null,
+    controlState: afterPlay.controlState ?? null,
     performance: performanceSummary,
     gpuValidation: validation ? summarizeValidation(validation) : null,
     consoleSummary: summarizeConsole(consoleMessages),
@@ -393,7 +395,18 @@ function pageProbeScript({ requireStep = 0 } = {}) {
       nonBlank = alphaSum > 0 && colorSpread > 12;
     }
     if (!nonBlank) return { ok: false, reason: "canvas appears blank", step, canvas: { w, h, alphaSum, colorSpread } };
-    return { ok: true, step, canvas: { w, h, alphaSum, colorSpread } };
+    const runtimeState = globalThis.__worldMapRuntimeState ?? null;
+    const controlState = {
+      seedText: document.querySelector("#seedText")?.value ?? null,
+      resolution: document.querySelector("#resolution")?.value ?? null,
+    };
+    return {
+      ok: true,
+      step,
+      canvas: { w, h, alphaSum, colorSpread },
+      pageState: runtimeState ?? controlState,
+      controlState,
+    };
   })()`;
 }
 

@@ -13432,7 +13432,7 @@
       ?? optionalNumber(elements.faceSize?.value)
       ?? interactiveAutoFaceSize(topologyMode, urlParams.productionTopologyMode, resolution);
     return {
-      seedText: elements.seedText.value,
+      seedText: urlParams.seedText ?? elements.seedText.value,
       waterLevel: Number(elements.waterLevel.value),
       intensity: Number(elements.intensity.value),
       plateCount: Number(elements.plateCount.value),
@@ -13488,6 +13488,7 @@
     }
 
     const result = {};
+    assignStringParam(result, "seedText", firstParam(params, ["seed", "seedText", "seed-text"]));
     assignStringParam(result, "topologyMode", firstParam(params, ["topology", "topologyMode", "topology-mode"]));
     assignStringParam(result, "projectionMode", firstParam(params, ["projection", "projectionMode", "projection-mode"]));
     assignStringParam(result, "resolution", firstParam(params, ["resolution", "res"]));
@@ -13695,6 +13696,7 @@
       projection: usesInteractiveOrthographicProjection(),
     });
     updateStats(world);
+    publishRuntimeState(world);
   }
 
   function bindProjectionCameraControls() {
@@ -14030,6 +14032,33 @@
       `${sign}：陆块汇聚造山带均高 ${stats.avgMountainConvergent.toFixed(3)}，陆块内部均高 ${stats.avgContinentalInterior.toFixed(3)}，差值 ${mountainDelta.toFixed(3)}。` +
       ` 全部汇聚边界均值 ${stats.avgConvergent.toFixed(3)}，其中包含会降低均值的海沟。` +
       " 红色边界附近应逐步形成当前山带或海沟；蓝色离散边界在海洋抬升、陆内弱下陷；边界会随板块中心漂移。";
+  }
+
+  function publishRuntimeState(currentWorld) {
+    const params = currentWorld?.params ?? {};
+    const grid = currentWorld?.grid ?? {};
+    globalThis.__worldMapRuntimeState = {
+      seedText: params.seedText ?? null,
+      seedUint32: currentWorld?.seedUint32 ?? null,
+      resolution: params.resolution ?? null,
+      topologyMode: params.topologyMode ?? null,
+      productionTopologyMode: params.productionTopologyMode ?? null,
+      projectionMode: params.projectionMode ?? null,
+      pipelineMode: params.pipelineMode ?? null,
+      faceSize: params.faceSize ?? null,
+      renderWidth: params.renderWidth ?? null,
+      renderHeight: params.renderHeight ?? null,
+      step: currentWorld?.step ?? null,
+      ageYears: currentWorld?.ageYears ?? null,
+      renderBackend: currentWorld?.renderBackend ?? null,
+      grid: {
+        width: grid.width ?? null,
+        height: grid.height ?? null,
+        size: grid.size ?? null,
+        topologyKind: grid.topologyKind ?? null,
+        graphBacked: Boolean(grid.topologyOptions?.graphBacked),
+      },
+    };
   }
 
   function formatYears(years) {

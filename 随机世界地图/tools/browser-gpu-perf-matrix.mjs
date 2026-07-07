@@ -70,7 +70,7 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       gpuKernel: kernel,
       gpuFields: fields.join(","),
       renderBackend,
-      seed,
+      seedText: seed,
       cacheBust: `gpuPerfMatrix${Date.now()}_${caseIndex}`,
     }).toString();
     const args = [
@@ -101,11 +101,15 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       maxBuffer: 64 * 1024 * 1024,
     });
     const parsed = parseSmokeOutput(child.stdout);
+    const pageStateMismatch = parsed
+      ? describePageStateMismatch(parsed.pageState, { seed, resolution })
+      : null;
     const warmCandidates = parsed
       ? collectWarmCandidates(parsed.gpuValidation)
       : parseWarmCandidatesFromFailure(child.stderr);
+    const valid = child.status === 0 && parsed?.valid === true && !pageStateMismatch;
     return {
-      valid: child.status === 0 && parsed?.valid === true,
+      valid,
       seed,
       resolution,
       kernel,
@@ -115,11 +119,24 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       warmGpuCandidateMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalCandidateMs ?? candidate.timings?.totalGpuPathMs)),
       reusedContextObserved: parsed?.gpuValidation?.reusedGpuContextObserved ?? warmCandidates.length > 0,
       canvas: parsed?.canvas ?? null,
+      pageState: parsed?.pageState ?? null,
       step: parsed?.step ?? null,
       consoleProjectErrors: parsed?.consoleSummary?.projectErrors ?? null,
-      error: child.status === 0 ? null : summarizeFailure(child.stderr, child.stdout),
+      error: pageStateMismatch ?? (child.status === 0 ? null : summarizeFailure(child.stderr, child.stdout)),
     };
   };
+}
+
+function describePageStateMismatch(pageState, expected) {
+  if (!pageState) return "Browser smoke did not expose runtime pageState.";
+  const mismatches = [];
+  if (pageState.seedText !== expected.seed) {
+    mismatches.push(`seedText expected ${JSON.stringify(expected.seed)} got ${JSON.stringify(pageState.seedText)}`);
+  }
+  if (pageState.resolution !== expected.resolution) {
+    mismatches.push(`resolution expected ${JSON.stringify(expected.resolution)} got ${JSON.stringify(pageState.resolution)}`);
+  }
+  return mismatches.length ? `Runtime pageState mismatch: ${mismatches.join("; ")}` : null;
 }
 
 function parseSmokeOutput(stdout) {
