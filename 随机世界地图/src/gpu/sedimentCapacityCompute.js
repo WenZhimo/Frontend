@@ -4,6 +4,7 @@ import { SEDIMENT_CAPACITY_WGSL } from "./kernels/sedimentCapacityKernel.js";
 export const GPU_SEDIMENT_CAPACITY_OUTPUT_FIELDS = ["sedimentCapacity"];
 
 export async function runWebGpuSedimentCapacityCandidate(world, options = {}) {
+  const candidateStartedAt = performance.now();
   const globalObject = options.globalObject ?? globalThis;
   const capabilities = detectGpuCapabilities(globalObject);
   const gpu = globalObject?.navigator?.gpu;
@@ -27,7 +28,7 @@ export async function runWebGpuSedimentCapacityCandidate(world, options = {}) {
   }
 
   try {
-    return await computeSedimentCapacityOnDevice(world, device, capabilities);
+    return withCandidateTiming(await computeSedimentCapacityOnDevice(world, device, capabilities), candidateStartedAt);
   } catch (error) {
     return {
       skipped: true,
@@ -41,6 +42,20 @@ export async function runWebGpuSedimentCapacityCandidate(world, options = {}) {
   } finally {
     device?.destroy?.();
   }
+}
+
+function withCandidateTiming(result, candidateStartedAt) {
+  if (!result || result.skipped) return result;
+  const totalCandidateMs = performance.now() - candidateStartedAt;
+  const totalGpuPathMs = Number(result.timings?.totalGpuPathMs);
+  return {
+    ...result,
+    timings: {
+      ...result.timings,
+      setupMs: Number.isFinite(totalGpuPathMs) ? Math.max(0, totalCandidateMs - totalGpuPathMs) : null,
+      totalCandidateMs,
+    },
+  };
 }
 
 async function computeSedimentCapacityOnDevice(world, device, capabilities) {
@@ -147,12 +162,10 @@ async function computeSedimentCapacityOnDevice(world, device, capabilities) {
     gpuCapabilities: capabilities,
     reason: null,
     timings: {
-      setupMs: 0,
       uploadMs,
       kernelMs,
       downloadMs,
       totalGpuPathMs: uploadMs + kernelMs + downloadMs,
-      totalCandidateMs: uploadMs + kernelMs + downloadMs,
     },
     fields: { sedimentCapacity },
   };

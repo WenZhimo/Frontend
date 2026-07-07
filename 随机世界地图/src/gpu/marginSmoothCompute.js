@@ -11,6 +11,7 @@ export const GPU_MARGIN_SMOOTH_OUTPUT_FIELDS = [
 ];
 
 export async function runWebGpuMarginSmoothCandidate(world, options = {}) {
+  const candidateStartedAt = performance.now();
   const globalObject = options.globalObject ?? globalThis;
   const capabilities = detectGpuCapabilities(globalObject);
   const gpu = globalObject?.navigator?.gpu;
@@ -34,7 +35,7 @@ export async function runWebGpuMarginSmoothCandidate(world, options = {}) {
   }
 
   try {
-    return await computeMarginSmoothOnDevice(world, device, capabilities);
+    return withCandidateTiming(await computeMarginSmoothOnDevice(world, device, capabilities), candidateStartedAt);
   } catch (error) {
     return {
       skipped: true,
@@ -48,6 +49,20 @@ export async function runWebGpuMarginSmoothCandidate(world, options = {}) {
   } finally {
     device?.destroy?.();
   }
+}
+
+function withCandidateTiming(result, candidateStartedAt) {
+  if (!result || result.skipped) return result;
+  const totalCandidateMs = performance.now() - candidateStartedAt;
+  const totalGpuPathMs = Number(result.timings?.totalGpuPathMs);
+  return {
+    ...result,
+    timings: {
+      ...result.timings,
+      setupMs: Number.isFinite(totalGpuPathMs) ? Math.max(0, totalCandidateMs - totalGpuPathMs) : null,
+      totalCandidateMs,
+    },
+  };
 }
 
 async function computeMarginSmoothOnDevice(world, device, capabilities) {
@@ -139,12 +154,10 @@ async function computeMarginSmoothOnDevice(world, device, capabilities) {
     gpuCapabilities: capabilities,
     reason: null,
     timings: {
-      setupMs: 0,
       uploadMs,
       kernelMs,
       downloadMs,
       totalGpuPathMs: uploadMs + kernelMs + downloadMs,
-      totalCandidateMs: uploadMs + kernelMs + downloadMs,
     },
     fields,
   };
