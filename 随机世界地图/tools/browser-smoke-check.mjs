@@ -16,6 +16,7 @@ const requireWriteback = parseBoolOption(options, "require-writeback");
 const requirePerfSummary = parseBoolOption(options, "require-perf-summary");
 const requireReusedGpuContext = parseBoolOption(options, "require-reused-gpu-context");
 const requiredGpuKernels = parseCsvOption(options, "require-gpu-kernels");
+const requiredGpuFields = parseCsvOption(options, "require-gpu-fields", { normalize: false });
 const requireValidationCount = Math.max(1, parseIntOption(options, "require-validation-count", 1));
 const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
 const maxLongTaskMs = parseIntOption(options, "max-long-task-ms", 0);
@@ -117,6 +118,10 @@ try {
     if (missingKernels.length > 0) {
       throw new Error(`Required GPU kernels were not observed (${missingKernels.join(", ")}): ${JSON.stringify(validation)}`);
     }
+    const missingFields = missingRequiredGpuFields(validation, requiredGpuFields);
+    if (missingFields.length > 0) {
+      throw new Error(`Required GPU fields were not validated (${missingFields.join(", ")}): ${JSON.stringify(validation)}`);
+    }
   }
   const performanceSummary = await evaluate(cdp, sessionId, "globalThis.__worldMapPerfSummary ?? null");
   assertPerformanceSummary(performanceSummary);
@@ -147,12 +152,12 @@ function normalizeQuery(value) {
   return value.startsWith("?") ? value : `?${value}`;
 }
 
-function parseCsvOption(optionBag, name) {
+function parseCsvOption(optionBag, name, { normalize = true } = {}) {
   const raw = optionBag[name];
   if (!raw) return [];
   return String(raw)
     .split(",")
-    .map((value) => normalizeKernelName(value.trim()))
+    .map((value) => normalize ? normalizeKernelName(value.trim()) : value.trim())
     .filter(Boolean);
 }
 
@@ -395,6 +400,15 @@ function missingRequiredGpuKernels(validation, requiredKernels) {
   return requiredKernels.filter((kernel) => !observed.has(kernel));
 }
 
+function missingRequiredGpuFields(validation, requiredFields) {
+  if (!requiredFields.length) return [];
+  const observed = new Set((validation.fields ?? [])
+    .filter((field) => field?.valid !== false)
+    .map((field) => field.field)
+    .filter(Boolean));
+  return requiredFields.filter((field) => !observed.has(field));
+}
+
 async function closeBrowserSafely(cdp) {
   try {
     await Promise.race([
@@ -459,6 +473,10 @@ function summarizeValidation(validation) {
     .filter((candidate) => !candidate.skipped)
     .map((candidate) => normalizeKernelName(candidate.kernel))
     .filter(Boolean)));
+  const observedGpuFields = (validation.fields ?? [])
+    .filter((field) => field?.valid !== false)
+    .map((field) => field.field)
+    .filter(Boolean);
   return {
     valid: validation.valid,
     skipped: validation.skipped,
@@ -471,6 +489,7 @@ function summarizeValidation(validation) {
     historyLength: validation.historyLength ?? null,
     reusedGpuContextObserved,
     observedGpuKernels,
+    observedGpuFields,
     history: validation.history?.map((entry) => ({
       valid: entry.valid,
       skipped: entry.skipped,
