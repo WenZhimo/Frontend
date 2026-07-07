@@ -404,6 +404,7 @@ Phase 2B 当前落地状态：
 - `localFields` 输入已改为 packed `vec4<f32>` storage buffer，和已验证的 dense kernels 保持一致；当前浏览器实机 `local-fields` validate 结果为真执行、非 skip，`slope / aspect / ruggedness / localRelief` 均通过阈值。
 - `localFields` WebGPU candidate 已开始复用 device / pipeline，并输出 `adapterInfo / deviceInfo / setupMs / totalCandidateMs / reusedContext`；浏览器实机两次连续 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`。
 - `localFields` 复用修复曾暴露 classic bundle 作用域中的同名 `withCandidateTiming` 函数覆盖问题；当前已改用 `withLocalFieldsCandidateTiming`，后续新增 GPU candidate 时应避免跨模块顶层 helper 同名，或在 bundler 中隔离模块作用域。
+- `sediment-capacity` 与 `margin-smooth` 已补齐和 `localFields` 一致的 device / pipeline context 复用，并输出 `adapterInfo / deviceInfo / setupMs / totalCandidateMs / reusedContext`；浏览器实机两次连续 validate 均已确认第二次 `reusedContext: true` 且 `setupMs: 0`。
 - 该 candidate 仍是只读实验路径，不写回 `world.grid`，也不接入 `stepWorld` / `runGeologyV2Step`。
 - 当前只覆盖矩形网格；真实球面 / cubed-sphere 图拓扑会安全跳过，后续需按图邻域重新设计权重。
 - 已新增 `src/gpu/kernels/marginSmoothKernel.js` 与 `src/gpu/marginSmoothCompute.js`，实现 `passiveMargin / continentalShelf / continentalSlope / continentalRise / sedimentWedge / abyssalPlain` 的一次四邻域平滑 WebGPU candidate。
@@ -635,7 +636,8 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - `gpuFields=isostaticBase` 的最新浏览器 validate 显示 adapter 为 `nvidia / lovelace`，不是软件 fallback；单字段路径仍出现约 `20.3s` 总 GPU 路径，其中 kernel 约 `7.3s`、download 约 `12.9s`，因此下一轮应优先做“设备 / pipeline 复用 + 异步低频验证”，而不是继续细分单次 readback 字段。
 - `isostasy` WebGPU candidate 已开始复用 device / pipeline；输出增加 `setupMs`、`totalCandidateMs` 与 `reusedContext`，后续应在多次 validation 或更低频 validation 中观察 setup 成本是否被摊薄。
 - 两次连续浏览器 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`，首次 setup 约 `19.2s` 已被消除；但复用后的单次 `totalGpuPathMs` 仍约 `13.6s`，kernel 与 readback 仍各约 `6-7s`，因此该路径继续保持 experimental，不进入默认。
-- `local-fields` 两次连续浏览器 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`，`slope / ruggedness / localRelief` 误差约 `1e-9` 到 `0`；但复用后 `totalGpuPathMs` 仍约 `12s`，kernel 约 `8s`、download 约 `4s`，因此它仍是 validate/candidate 证据路径，不应默认写回。
+- `resolution=256x128` 生效后重新验证 `local-fields`：两次连续浏览器 validate 中第二次 `reusedContext: true` 且 `setupMs: 0`，`slope / ruggedness / localRelief` 误差仍约 `1e-9` 到 `0`，复用后 `totalGpuPathMs` 约 `8.3ms`；这说明 local-fields 的 device/pipeline 复用路径已经可作为后续 Phase 3 性能基线。
+- `sediment-capacity` 与 `margin-smooth` 在 `resolution=256x128` 下复用后字段误差均在阈值内，且第二次 `setupMs: 0`；但复用后的 `sediment-capacity` 仍约 `4.3s`、`margin-smooth` 仍约 `3.5s`，说明这两条路径正确性和复用门禁已过，性能仍不足以进入默认写回或默认高频 validate。
 - `gpuValidateInterval=20` 的低频浏览器 smoke 曾在 90s 内未触发 validation：诊断显示页面仅推进到 step 15，说明该配置下基础浏览器 step 已约 7s/步，不能用低频 validate 单独证明 GPU 体验改善；后续性能门禁应同时报告“触发前 step 推进速度”和“触发后的 GPU path 成本”。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
 
