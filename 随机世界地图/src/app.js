@@ -11919,6 +11919,86 @@
   const DEFAULT_EXPERIMENTAL_KERNELS = ["isostasy"];
   const DEFAULT_EXPERIMENTAL_FIELDS = GPU_ISOSTASY_OUTPUT_FIELDS;
   const EXPERIMENTAL_WRITEBACK_FIELDS = new Set(GPU_ISOSTASY_OUTPUT_FIELDS);
+  const REQUIRED_SNAPSHOT_FIELDS_BY_KERNEL = {
+    isostasy: [
+      "crustType",
+      "crustThickness",
+      "crustAge",
+      "crustDensity",
+      "sediment",
+      "sedimentLoadSubsidence",
+      "ridge",
+      "trench",
+      "elev",
+    ],
+    elevation: [
+      "crustType",
+      "orogeny",
+      "activeOrogeny",
+      "oldOrogeny",
+      "orogenyAge",
+      "sediment",
+      "sedimentLoadSubsidence",
+      "sedimentFill",
+      "ridgeUplift",
+      "trenchDepression",
+      "isostaticBase",
+      "passiveMargin",
+      "continentalShelf",
+      "continentalSlope",
+      "continentalRise",
+      "abyssalPlain",
+      "sedimentWedge",
+      "forelandBasin",
+      "activeTransform",
+      "transformMemory",
+      "fractureZoneMemory",
+      "inactiveBoundaryRelief",
+      "geologyBroadNoise",
+      "geologyMicroNoise",
+      "mountainBelt",
+      "trench",
+      "ridge",
+      "rift",
+      "islandArc",
+      "basin",
+    ],
+    "local-fields": [
+      "elev",
+    ],
+    "margin-smooth": [
+      "passiveMargin",
+      "continentalShelf",
+      "continentalSlope",
+      "continentalRise",
+      "sedimentWedge",
+      "abyssalPlain",
+    ],
+    "sediment-capacity": [
+      "elev",
+      "continentalShelf",
+      "continentalRise",
+      "sedimentWedge",
+      "passiveMargin",
+      "forelandBasin",
+      "inlandWaterCandidate",
+      "abyssalPlain",
+      "basin",
+      "riftAxis",
+      "trench",
+      "trenchAxis",
+      "islandArc",
+      "crustType",
+      "crustAge",
+      "ridgeAxis",
+      "ridge",
+      "activeOrogeny",
+      "boundaryInfluence",
+      "fractureZoneMemory",
+      "transformMemory",
+      "inactiveBoundaryRelief",
+    ],
+  };
 
   function createGpuComputeValidator(options = {}) {
     const mode = normalizeMode(options.mode);
@@ -12099,7 +12179,7 @@
   async function compareGpuComputeCheckpoint(world, options = {}) {
     const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
     const fields = normalizeCsvList(options.fields, defaultFieldsForMode("validate", kernels));
-    const snapshot = createValidationSnapshot(world);
+    const snapshot = createValidationSnapshot(world, kernels, fields);
     const candidateResults = [];
     const candidateFields = {};
     const baselineFields = buildBaselineFieldsForKernels(kernels, snapshot);
@@ -12137,12 +12217,13 @@
     };
   }
 
-  function createValidationSnapshot(world) {
+  function createValidationSnapshot(world, kernels = [], fields = []) {
     const grid = world?.grid ?? {};
     const snapshotGrid = {};
+    const requiredFields = requiredSnapshotFieldsForKernels(kernels, fields);
     for (const [key, value] of Object.entries(grid)) {
       if (ArrayBuffer.isView(value) && typeof value.constructor === "function") {
-        snapshotGrid[key] = new value.constructor(value);
+        if (requiredFields.has(key)) snapshotGrid[key] = new value.constructor(value);
       } else {
         snapshotGrid[key] = value;
       }
@@ -12155,6 +12236,26 @@
       seaLevel: world?.seaLevel ?? 0,
       timeScaleFactor: world?.timeScaleFactor ?? 1,
     };
+  }
+
+  function requiredSnapshotFieldsForKernels(kernels, fields) {
+    const required = new Set(fields);
+    for (const kernel of normalizeCsvList(kernels, [])) {
+      const normalized = normalizeKernelName(kernel);
+      for (const fieldName of REQUIRED_SNAPSHOT_FIELDS_BY_KERNEL[normalized] ?? []) {
+        required.add(fieldName);
+      }
+    }
+    return required;
+  }
+
+  function normalizeKernelName(kernel) {
+    if (kernel === "webgpu-isostasy") return "isostasy";
+    if (kernel === "webgpu-elevation") return "elevation";
+    if (kernel === "localTerrain" || kernel === "webgpu-local-fields") return "local-fields";
+    if (kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") return "margin-smooth";
+    if (kernel === "sedimentCapacity" || kernel === "webgpu-sediment-capacity") return "sediment-capacity";
+    return String(kernel ?? "").trim();
   }
 
   function normalizeMode(value) {

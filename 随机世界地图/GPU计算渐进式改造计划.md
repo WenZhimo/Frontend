@@ -453,6 +453,8 @@ Phase 2B 当前落地状态：
 - 已新增浏览器运行时 `gpuCompute=experimental`：目前只允许 `isostasy` 低风险派生字段写回，且写回前会先对同 checkpoint CPU baseline 与 WebGPU candidate 做误差门禁；若 WebGPU 不可用、candidate skipped、字段超阈值或请求字段不在 allowlist 内，会自动保留 CPU 字段并报告 `fallbackReason`。
 - `gpuCompute=experimental&gpuKernel=isostasy` 当前允许写回 `sedimentFill / ridgeUplift / trenchDepression / crustBuoyancy / densitySubsidence / lithosphereCooling / isostaticBase / ageSubsidence / thicknessBuoyancy / oceanDepthTerms / isostaticResidual / isostaticReliefSupply`，仍不写回 `crustAge / sediment / basin / crustThickness` 等长期记忆字段。
 - 浏览器 smoke gate 已增加 `--require-writeback`，用于确认 WebGPU experimental 不是 safe-skip 误报；实机验证中 `isostasy` 12 个写回字段均通过阈值，最大误差约 `2.98e-8`，Console 输出 `[gpu-compute-experimental]` 摘要且无项目错误。
+- `src/gpu/computeValidate.js` 的 checkpoint 快照已改为按 kernel 裁剪 TypedArray 字段：`local-fields` 只复制 `elev` 与请求字段，`margin-smooth`、`sediment-capacity`、`isostasy`、`elevation` 只复制各自声明的输入/比较字段，避免每次 validate 都复制整个 `world.grid`。
+- 选择性快照已用真实浏览器验证：`local-fields` 与 `sediment-capacity` validate 均通过字段误差阈值且 Console 项目错误为 0；但实机结果仍显示 kernel/readback 远大于 CPU step 成本，说明默认启用前的主要瓶颈仍是 WebGPU 执行/读回，而不是快照复制。
 - 当前 experimental writeback 仍不是默认生产路径；进入默认 GPU compute 前还必须补齐多 seed、多分辨率和更长程 20 / 200 / 739 Myr drift gate，并证明总路径性能收益高于 CPU。
 
 ### Phase 5：高级 GPU 图算法评估
