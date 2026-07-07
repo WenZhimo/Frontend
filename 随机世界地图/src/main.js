@@ -279,6 +279,10 @@ function createBrowserPerfTracker(globalObject, options = {}) {
     gpuDownloadMs: [],
     gpuTotalMs: [],
     gpuCandidateTotalMs: [],
+    gpuValidationSnapshotMs: [],
+    gpuValidationBaselineMs: [],
+    gpuValidationCompareMs: [],
+    gpuValidationTotalMs: [],
   };
   const summary = {
     valid: true,
@@ -304,6 +308,12 @@ function createBrowserPerfTracker(globalObject, options = {}) {
       download: summarizeSamples(samples.gpuDownloadMs),
       total: summarizeSamples(samples.gpuTotalMs),
       candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
+      validation: {
+        snapshot: summarizeSamples(samples.gpuValidationSnapshotMs),
+        baseline: summarizeSamples(samples.gpuValidationBaselineMs),
+        compare: summarizeSamples(samples.gpuValidationCompareMs),
+        total: summarizeSamples(samples.gpuValidationTotalMs),
+      },
     },
     longTask: {
       count: 0,
@@ -342,6 +352,19 @@ function createBrowserPerfTracker(globalObject, options = {}) {
       if (Number.isFinite(timings.totalCandidateMs)) {
         recordSample(samples.gpuCandidateTotalMs, timings.totalCandidateMs, sampleLimit);
       }
+      const validationTimings = result?.validationTimings ?? {};
+      if (Number.isFinite(validationTimings.snapshotMs)) {
+        recordSample(samples.gpuValidationSnapshotMs, validationTimings.snapshotMs, sampleLimit);
+      }
+      if (Number.isFinite(validationTimings.baselineMs)) {
+        recordSample(samples.gpuValidationBaselineMs, validationTimings.baselineMs, sampleLimit);
+      }
+      if (Number.isFinite(validationTimings.compareMs)) {
+        recordSample(samples.gpuValidationCompareMs, validationTimings.compareMs, sampleLimit);
+      }
+      if (Number.isFinite(validationTimings.totalValidationMs)) {
+        recordSample(samples.gpuValidationTotalMs, validationTimings.totalValidationMs, sampleLimit);
+      }
       summary.gpuCompute = {
         mode: result.mode ?? summary.gpuCompute.mode,
         valid: result.valid ?? null,
@@ -358,6 +381,12 @@ function createBrowserPerfTracker(globalObject, options = {}) {
         download: summarizeSamples(samples.gpuDownloadMs),
         total: summarizeSamples(samples.gpuTotalMs),
         candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
+        validation: {
+          snapshot: summarizeSamples(samples.gpuValidationSnapshotMs),
+          baseline: summarizeSamples(samples.gpuValidationBaselineMs),
+          compare: summarizeSamples(samples.gpuValidationCompareMs),
+          total: summarizeSamples(samples.gpuValidationTotalMs),
+        },
       };
       publish();
     },

@@ -626,6 +626,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 12000 --que
 - 浏览器 perf summary 与 `gpu-perf-profile` 现在同时记录 `setupMs` 和 `totalCandidateMs`；默认启用 GPU 时应优先看包含 setup 的 `totalCandidateMs`，连续运行时再看 setup 摊薄后的 `totalGpuPathMs`。
 - `browser-smoke-check` 已禁用页面缓存，避免验证旧 bundle；新增 `--require-reused-gpu-setup-zero`，可要求所有 `reusedContext: true` 的 candidate 报告 `setupMs: 0`，用于防止 pipeline/device 复用退化或 bundle helper 覆盖造成计时误报。
 - 涉及 WebGPU validate 的 smoke 会先等待 validation 结果，再用 `--post-validation-wait-ms` 给页面恢复一小段时间后探测 canvas 和 step；这样能区分“validation 没完成”和“validation 后页面无法继续推进”，避免长任务期间提前误报。
+- `browser-smoke-check` 的 `gpuValidation` 与浏览器 `__worldMapPerfSummary.gpuCompute.validation` 已输出 CPU 侧 validation 分段：`snapshotMs / baselineMs / compareMs / totalValidationMs`。这些指标用于区分验证框架开销和 WebGPU candidate 自身开销。
 - 性能门禁可选参数：`--max-average-step-ms` 检查浏览器真实 step 平均耗时，`--max-average-render-ms` 检查渲染平均耗时，`--max-long-task-ms` 检查交互线程最大 long task；这些门禁用于发现“字段正确但页面体验退化”的情况。
 - GPU compute 性能门禁可选参数：`--max-gpu-total-ms` 检查不含 setup 的 upload+kernel+download，`--max-gpu-candidate-ms` 检查包含 setup 的完整 candidate 成本；进入默认启用前应使用这两个阈值证明浏览器真实运行不退化。
 - GPU warm-run 性能门禁可选参数：`--max-warm-gpu-total-ms` / `--max-warm-gpu-candidate-ms` 只检查 `reusedContext: true` 的 validation candidate，用来区分首次 setup 成本与复用后仍然过慢的 kernel/readback 成本；这些门禁必须和 `--require-validation` 一起使用。
@@ -678,6 +679,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - `browser-gpu-perf-matrix --include-cpu-baseline` 已可输出同参数 CPU-only 浏览器 baseline 与 `performanceRatio`；单 seed 复测中 `local-fields` warm GPU total 曾降到约 `10ms`，但页面 step 平均仍约 `2s` 量级，因此默认启用判断仍必须看整体浏览器 step/render/long task，而不是单次 warm kernel 成本。
 - `browser-gpu-perf-matrix` 已支持 GPU/CPU 比例门禁；单 seed `256x128 + local-fields` 复测中，`--max-step-ratio 10 --max-render-ratio 10 --max-long-task-ratio 10` 会自动跑 CPU baseline 并通过，输出 `performanceRatio.stepAverage ~= 0.65`、`renderAverage ~= 0.72`、`longTaskMax ~= 0.79`。进入默认启用前应把这些阈值收紧到计划中的收益门槛。
 - `gpuValidateInterval=20` 的低频浏览器 smoke 曾在 90s 内未触发 validation：诊断显示页面仅推进到 step 15，说明该配置下基础浏览器 step 已约 7s/步，不能用低频 validate 单独证明 GPU 体验改善；后续性能门禁应同时报告“触发前 step 推进速度”和“触发后的 GPU path 成本”。
+- `local-fields` 的最新浏览器 validate 分段显示：选择性快照后 `snapshotMs` 约 `0.2ms`，CPU baseline / compare 为几十毫秒级，而 `candidateMs` 为数秒级；因此当前默认启用瓶颈已明确集中在 WebGPU candidate 执行与读回，不在 CPU 侧 checkpoint 复制或字段比较。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
 
 ### 8.7 `tools/gpu-default-readiness-check.mjs`

@@ -581,6 +581,7 @@ function summarizeValidation(validation) {
     writebackFields: validation.writebackFields ?? [],
     fallbackReason: validation.fallbackReason ?? null,
     kernels: validation.kernels,
+    validationTimings: validation.validationTimings ?? null,
     historyLength: validation.historyLength ?? null,
     reusedGpuContextObserved,
     observedGpuKernels,
@@ -589,6 +590,7 @@ function summarizeValidation(validation) {
       valid: entry.valid,
       skipped: entry.skipped,
       mode: entry.mode ?? null,
+      validationTimings: entry.validationTimings ?? null,
       writebackApplied: entry.writebackApplied ?? false,
       writebackFields: entry.writebackFields ?? [],
       candidateResults: entry.candidateResults?.map((candidate) => ({

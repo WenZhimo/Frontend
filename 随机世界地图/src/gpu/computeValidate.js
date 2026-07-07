@@ -148,6 +148,7 @@ export function createGpuComputeValidator(options = {}) {
         writebackFields: [],
         fields: [],
         candidateResults: [],
+        validationTimings: emptyValidationTimings(),
       };
       reportCount += 1;
       logValidateResult(logger, result);
@@ -194,6 +195,7 @@ export async function candidateGpuComputeCheckpoint(world, options = {}) {
     kernels,
     fields: comparison.fieldResults,
     candidateResults: comparison.candidateResults,
+    validationTimings: comparison.validationTimings,
     writebackApplied: false,
     writebackFields: [],
     note: "Browser GPU compute candidate mode samples WebGPU fields for inspection; CPU remains authoritative and no writeback occurs.",
@@ -214,6 +216,7 @@ export async function validateGpuComputeCheckpoint(world, options = {}) {
     kernels,
     fields: comparison.fieldResults,
     candidateResults: comparison.candidateResults,
+    validationTimings: comparison.validationTimings,
     writebackApplied: false,
     writebackFields: [],
     note: "Browser GPU compute validate keeps CPU authoritative; candidate fields are compared but never written back.",
@@ -258,6 +261,7 @@ export async function applyExperimentalGpuComputeCheckpoint(world, options = {})
     kernels,
     fields: comparison.fieldResults,
     candidateResults: comparison.candidateResults,
+    validationTimings: comparison.validationTimings,
     writebackApplied: writebackFields.length > 0,
     writebackFields,
     fallbackReason,
@@ -267,13 +271,19 @@ export async function applyExperimentalGpuComputeCheckpoint(world, options = {})
 }
 
 async function compareGpuComputeCheckpoint(world, options = {}) {
+  const totalStartedAt = performance.now();
   const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
   const fields = normalizeCsvList(options.fields, defaultFieldsForMode("validate", kernels));
+  const snapshotStartedAt = performance.now();
   const snapshot = createValidationSnapshot(world, kernels, fields);
+  const snapshotMs = performance.now() - snapshotStartedAt;
   const candidateResults = [];
   const candidateFields = {};
+  const baselineStartedAt = performance.now();
   const baselineFields = buildBaselineFieldsForKernels(kernels, snapshot);
+  const baselineMs = performance.now() - baselineStartedAt;
 
+  const candidateStartedAt = performance.now();
   for (const kernel of kernels) {
     const result = await runCandidateKernel(kernel, snapshot, options.globalObject, fields);
     candidateResults.push(compactCandidateResult(kernel, result));
@@ -281,7 +291,9 @@ async function compareGpuComputeCheckpoint(world, options = {}) {
       Object.assign(candidateFields, result.fields);
     }
   }
+  const candidateMs = performance.now() - candidateStartedAt;
 
+  const compareStartedAt = performance.now();
   const fieldResults = fields.map((fieldName) => {
     const baselineField = baselineFields[fieldName] ?? snapshot.grid[fieldName];
     const candidateField = candidateFields[fieldName] ?? baselineField;
@@ -291,6 +303,7 @@ async function compareGpuComputeCheckpoint(world, options = {}) {
       candidateSummary: summarizeField(candidateField),
     };
   });
+  const compareMs = performance.now() - compareStartedAt;
   const skipped = candidateResults.length > 0 && candidateResults.every((result) => result.skipped);
   const skippedReason = candidateResults
     .filter((result) => result.skipped)
@@ -302,6 +315,13 @@ async function compareGpuComputeCheckpoint(world, options = {}) {
     fieldResults,
     candidateFields,
     candidateResults,
+    validationTimings: {
+      snapshotMs,
+      baselineMs,
+      candidateMs,
+      compareMs,
+      totalValidationMs: performance.now() - totalStartedAt,
+    },
     skipped,
     skippedReason: skipped ? skippedReason : null,
   };
@@ -809,6 +829,7 @@ function logValidateResult(logger, result) {
     writebackApplied: result.writebackApplied ?? false,
     writebackFields: result.writebackFields ?? [],
     kernels: result.kernels,
+    validationTimings: result.validationTimings ?? null,
     fields: result.fields?.map((field) => ({
       field: field.field,
       valid: field.valid,
@@ -837,5 +858,15 @@ function emptyTimings() {
     downloadMs: null,
     totalGpuPathMs: null,
     totalCandidateMs: null,
+  };
+}
+
+function emptyValidationTimings() {
+  return {
+    snapshotMs: null,
+    baselineMs: null,
+    candidateMs: null,
+    compareMs: null,
+    totalValidationMs: null,
   };
 }

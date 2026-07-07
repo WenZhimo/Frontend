@@ -148,6 +148,10 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       kernel,
       fields,
       exitCode: child.status,
+      validationTotalMs: maxNumber(collectValidationTimings(parsed?.gpuValidation).map((timing) => timing.totalValidationMs)),
+      validationSnapshotMs: maxNumber(collectValidationTimings(parsed?.gpuValidation).map((timing) => timing.snapshotMs)),
+      validationBaselineMs: maxNumber(collectValidationTimings(parsed?.gpuValidation).map((timing) => timing.baselineMs)),
+      validationCompareMs: maxNumber(collectValidationTimings(parsed?.gpuValidation).map((timing) => timing.compareMs)),
       warmGpuTotalMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalGpuPathMs)),
       warmGpuCandidateMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalCandidateMs ?? candidate.timings?.totalGpuPathMs)),
       reusedContextObserved: parsed?.gpuValidation?.reusedGpuContextObserved ?? warmCandidates.length > 0,
@@ -326,6 +330,14 @@ function collectWarmCandidates(validation) {
     ...(validation?.history?.length ? [] : validation?.candidateResults ?? []),
   ];
   return candidates.filter((candidate) => !candidate?.skipped && candidate?.reusedContext === true);
+}
+
+function collectValidationTimings(validation) {
+  const timings = [
+    ...(validation?.history ?? []).map((entry) => entry.validationTimings),
+    ...(validation?.history?.length ? [] : [validation?.validationTimings]),
+  ];
+  return timings.filter(Boolean);
 }
 
 function maxNumber(values) {

@@ -12058,6 +12058,7 @@
           writebackFields: [],
           fields: [],
           candidateResults: [],
+          validationTimings: emptyValidationTimings(),
         };
         reportCount += 1;
         logValidateResult(logger, result);
@@ -12104,6 +12105,7 @@
       kernels,
       fields: comparison.fieldResults,
       candidateResults: comparison.candidateResults,
+      validationTimings: comparison.validationTimings,
       writebackApplied: false,
       writebackFields: [],
       note: "Browser GPU compute candidate mode samples WebGPU fields for inspection; CPU remains authoritative and no writeback occurs.",
@@ -12124,6 +12126,7 @@
       kernels,
       fields: comparison.fieldResults,
       candidateResults: comparison.candidateResults,
+      validationTimings: comparison.validationTimings,
       writebackApplied: false,
       writebackFields: [],
       note: "Browser GPU compute validate keeps CPU authoritative; candidate fields are compared but never written back.",
@@ -12168,6 +12171,7 @@
       kernels,
       fields: comparison.fieldResults,
       candidateResults: comparison.candidateResults,
+      validationTimings: comparison.validationTimings,
       writebackApplied: writebackFields.length > 0,
       writebackFields,
       fallbackReason,
@@ -12177,13 +12181,19 @@
   }
 
   async function compareGpuComputeCheckpoint(world, options = {}) {
+    const totalStartedAt = performance.now();
     const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
     const fields = normalizeCsvList(options.fields, defaultFieldsForMode("validate", kernels));
+    const snapshotStartedAt = performance.now();
     const snapshot = createValidationSnapshot(world, kernels, fields);
+    const snapshotMs = performance.now() - snapshotStartedAt;
     const candidateResults = [];
     const candidateFields = {};
+    const baselineStartedAt = performance.now();
     const baselineFields = buildBaselineFieldsForKernels(kernels, snapshot);
+    const baselineMs = performance.now() - baselineStartedAt;
 
+    const candidateStartedAt = performance.now();
     for (const kernel of kernels) {
       const result = await runCandidateKernel(kernel, snapshot, options.globalObject, fields);
       candidateResults.push(compactCandidateResult(kernel, result));
@@ -12191,7 +12201,9 @@
         Object.assign(candidateFields, result.fields);
       }
     }
+    const candidateMs = performance.now() - candidateStartedAt;
 
+    const compareStartedAt = performance.now();
     const fieldResults = fields.map((fieldName) => {
       const baselineField = baselineFields[fieldName] ?? snapshot.grid[fieldName];
       const candidateField = candidateFields[fieldName] ?? baselineField;
@@ -12201,6 +12213,7 @@
         candidateSummary: summarizeField(candidateField),
       };
     });
+    const compareMs = performance.now() - compareStartedAt;
     const skipped = candidateResults.length > 0 && candidateResults.every((result) => result.skipped);
     const skippedReason = candidateResults
       .filter((result) => result.skipped)
@@ -12212,6 +12225,13 @@
       fieldResults,
       candidateFields,
       candidateResults,
+      validationTimings: {
+        snapshotMs,
+        baselineMs,
+        candidateMs,
+        compareMs,
+        totalValidationMs: performance.now() - totalStartedAt,
+      },
       skipped,
       skippedReason: skipped ? skippedReason : null,
     };
@@ -12719,6 +12739,7 @@
       writebackApplied: result.writebackApplied ?? false,
       writebackFields: result.writebackFields ?? [],
       kernels: result.kernels,
+      validationTimings: result.validationTimings ?? null,
       fields: result.fields?.map((field) => ({
         field: field.field,
         valid: field.valid,
@@ -12747,6 +12768,16 @@
       downloadMs: null,
       totalGpuPathMs: null,
       totalCandidateMs: null,
+    };
+  }
+
+  function emptyValidationTimings() {
+    return {
+      snapshotMs: null,
+      baselineMs: null,
+      candidateMs: null,
+      compareMs: null,
+      totalValidationMs: null,
     };
   }
 
@@ -13914,6 +13945,10 @@
       gpuDownloadMs: [],
       gpuTotalMs: [],
       gpuCandidateTotalMs: [],
+      gpuValidationSnapshotMs: [],
+      gpuValidationBaselineMs: [],
+      gpuValidationCompareMs: [],
+      gpuValidationTotalMs: [],
     };
     const summary = {
       valid: true,
@@ -13939,6 +13974,12 @@
         download: summarizeSamples(samples.gpuDownloadMs),
         total: summarizeSamples(samples.gpuTotalMs),
         candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
+        validation: {
+          snapshot: summarizeSamples(samples.gpuValidationSnapshotMs),
+          baseline: summarizeSamples(samples.gpuValidationBaselineMs),
+          compare: summarizeSamples(samples.gpuValidationCompareMs),
+          total: summarizeSamples(samples.gpuValidationTotalMs),
+        },
       },
       longTask: {
         count: 0,
@@ -13977,6 +14018,19 @@
         if (Number.isFinite(timings.totalCandidateMs)) {
           recordSample(samples.gpuCandidateTotalMs, timings.totalCandidateMs, sampleLimit);
         }
+        const validationTimings = result?.validationTimings ?? {};
+        if (Number.isFinite(validationTimings.snapshotMs)) {
+          recordSample(samples.gpuValidationSnapshotMs, validationTimings.snapshotMs, sampleLimit);
+        }
+        if (Number.isFinite(validationTimings.baselineMs)) {
+          recordSample(samples.gpuValidationBaselineMs, validationTimings.baselineMs, sampleLimit);
+        }
+        if (Number.isFinite(validationTimings.compareMs)) {
+          recordSample(samples.gpuValidationCompareMs, validationTimings.compareMs, sampleLimit);
+        }
+        if (Number.isFinite(validationTimings.totalValidationMs)) {
+          recordSample(samples.gpuValidationTotalMs, validationTimings.totalValidationMs, sampleLimit);
+        }
         summary.gpuCompute = {
           mode: result.mode ?? summary.gpuCompute.mode,
           valid: result.valid ?? null,
@@ -13993,6 +14047,12 @@
           download: summarizeSamples(samples.gpuDownloadMs),
           total: summarizeSamples(samples.gpuTotalMs),
           candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
+          validation: {
+            snapshot: summarizeSamples(samples.gpuValidationSnapshotMs),
+            baseline: summarizeSamples(samples.gpuValidationBaselineMs),
+            compare: summarizeSamples(samples.gpuValidationCompareMs),
+            total: summarizeSamples(samples.gpuValidationTotalMs),
+          },
         };
         publish();
       },
