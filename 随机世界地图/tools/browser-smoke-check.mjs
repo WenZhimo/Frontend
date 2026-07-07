@@ -15,6 +15,7 @@ const requireValidation = parseBoolOption(options, "require-validation");
 const requireWriteback = parseBoolOption(options, "require-writeback");
 const requirePerfSummary = parseBoolOption(options, "require-perf-summary");
 const requireReusedGpuContext = parseBoolOption(options, "require-reused-gpu-context");
+const requireReusedGpuSetupZero = parseBoolOption(options, "require-reused-gpu-setup-zero");
 const requiredGpuKernels = parseCsvOption(options, "require-gpu-kernels");
 const requiredGpuFields = parseCsvOption(options, "require-gpu-fields", { normalize: false });
 const requireValidationCount = Math.max(1, parseIntOption(options, "require-validation-count", 1));
@@ -84,6 +85,8 @@ try {
   });
   await cdp.send("Runtime.enable", {}, sessionId);
   await cdp.send("Page.enable", {}, sessionId);
+  await cdp.send("Network.enable", {}, sessionId);
+  await cdp.send("Network.setCacheDisabled", { cacheDisabled: true }, sessionId);
   await cdp.send("Page.navigate", { url: targetUrl }, sessionId);
   await waitForPageLoad(cdp, sessionId, waitMs);
 
@@ -113,6 +116,9 @@ try {
     }
     if (requireReusedGpuContext && !hasReusedGpuContext(validation)) {
       throw new Error(`GPU context reuse was not observed: ${JSON.stringify(validation)}`);
+    }
+    if (requireReusedGpuSetupZero && !reusedGpuSetupIsZero(validation)) {
+      throw new Error(`Reused GPU contexts did not report zero setup cost: ${JSON.stringify(validation)}`);
     }
     const missingKernels = missingRequiredGpuKernels(validation, requiredGpuKernels);
     if (missingKernels.length > 0) {
@@ -383,6 +389,14 @@ function hasReusedGpuContext(validation) {
     ...(validation.history ?? []).flatMap((entry) => entry.candidateResults ?? []),
   ];
   return candidates.some((candidate) => !candidate.skipped && candidate.reusedContext === true);
+}
+
+function reusedGpuSetupIsZero(validation) {
+  const candidates = [
+    ...(validation.candidateResults ?? []),
+    ...(validation.history ?? []).flatMap((entry) => entry.candidateResults ?? []),
+  ].filter((candidate) => !candidate?.skipped && candidate?.reusedContext === true);
+  return candidates.length > 0 && candidates.every((candidate) => Math.abs(Number(candidate.timings?.setupMs ?? 0)) <= 0.000001);
 }
 
 function missingRequiredGpuKernels(validation, requiredKernels) {

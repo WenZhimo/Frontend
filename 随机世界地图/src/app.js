@@ -10578,6 +10578,8 @@
     "localRelief",
   ];
 
+  const localFieldsContextCache = new WeakMap();
+
   async function runWebGpuLocalFieldsCandidate(world, options = {}) {
     const candidateStartedAt = performance.now();
     const globalObject = options.globalObject ?? globalThis;
@@ -10590,37 +10592,33 @@
       return skippedLocalFieldsResult(capabilities, "WebGPU is not available in this environment.");
     }
 
-    let adapter;
-    let device;
+    let context;
     try {
-      adapter = await gpu.requestAdapter();
-      if (!adapter) {
-        return skippedLocalFieldsResult(capabilities, "WebGPU adapter request returned null.");
-      }
-      device = await adapter.requestDevice();
+      context = await getLocalFieldsGpuContext(globalObject, gpu);
     } catch (error) {
       return skippedLocalFieldsResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
     }
 
     try {
-      return withCandidateTiming(await computeLocalFieldsOnDevice(world, device, capabilities), candidateStartedAt);
+      return withLocalFieldsCandidateTiming(await computeLocalFieldsOnDevice(world, context, capabilities), candidateStartedAt);
     } catch (error) {
       return {
         skipped: true,
         valid: true,
         backend: "webgpu-local-fields",
         gpuCapabilities: capabilities,
+        adapterInfo: context?.adapterInfo ?? null,
+        deviceInfo: context?.deviceInfo ?? null,
         reason: `WebGPU local fields candidate failed safely: ${error?.message ?? "unknown error"}`,
         timings: emptyLocalFieldsTimings(),
         fields: {},
       };
-    } finally {
-      device?.destroy?.();
     }
   }
 
-  function withCandidateTiming(result, candidateStartedAt) {
+  function withLocalFieldsCandidateTiming(result, candidateStartedAt) {
     if (!result || result.skipped) return result;
+    if (Number.isFinite(result.timings?.totalCandidateMs)) return result;
     const totalCandidateMs = performance.now() - candidateStartedAt;
     const totalGpuPathMs = Number(result.timings?.totalGpuPathMs);
     return {
@@ -10633,7 +10631,57 @@
     };
   }
 
-  async function computeLocalFieldsOnDevice(world, device, capabilities) {
+  async function getLocalFieldsGpuContext(globalObject, gpu) {
+    const cached = localFieldsContextCache.get(globalObject);
+    if (cached?.device && cached?.pipeline) {
+      return {
+        ...cached,
+        reused: true,
+      };
+    }
+
+    const setupStartedAt = performance.now();
+    const adapter = await gpu.requestAdapter();
+    if (!adapter) {
+      throw new Error("WebGPU adapter request returned null.");
+    }
+    const adapterInfo = await collectAdapterInfo(adapter);
+    const device = await adapter.requestDevice();
+    const deviceInfo = collectDeviceInfo(device);
+
+    device.pushErrorScope?.("validation");
+    const shaderModule = device.createShaderModule({ code: LOCAL_FIELDS_WGSL });
+    const pipeline = device.createComputePipeline({
+      layout: "auto",
+      compute: { module: shaderModule, entryPoint: "main" },
+    });
+    const pipelineError = await device.popErrorScope?.();
+    if (pipelineError) {
+      device?.destroy?.();
+      throw new Error(`WebGPU local fields pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
+    }
+
+    const context = {
+      device,
+      pipeline,
+      adapterInfo,
+      deviceInfo,
+      setupMs: performance.now() - setupStartedAt,
+    };
+    device.lost?.then?.(() => {
+      if (localFieldsContextCache.get(globalObject) === context) {
+        localFieldsContextCache.delete(globalObject);
+      }
+    });
+    localFieldsContextCache.set(globalObject, context);
+    return {
+      ...context,
+      reused: false,
+    };
+  }
+
+  async function computeLocalFieldsOnDevice(world, context, capabilities) {
+    const { device, pipeline } = context;
     const { grid, seaLevel } = world;
     const size = grid.size;
     const width = grid.width;
@@ -10661,18 +10709,6 @@
     const outputBuffer = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
     const readBuffer = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
     const uploadMs = performance.now() - uploadStartedAt;
-
-    device.pushErrorScope?.("validation");
-    const shaderModule = device.createShaderModule({ code: LOCAL_FIELDS_WGSL });
-    const pipeline = device.createComputePipeline({
-      layout: "auto",
-      compute: { module: shaderModule, entryPoint: "main" },
-    });
-    const pipelineError = await device.popErrorScope?.();
-    if (pipelineError) {
-      destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
-      return skippedLocalFieldsResult(capabilities, `WebGPU local fields pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
-    }
 
     device.pushErrorScope?.("validation");
     const bindGroup = device.createBindGroup({
@@ -10721,15 +10757,78 @@
       valid: true,
       backend: "webgpu-local-fields",
       gpuCapabilities: capabilities,
+      adapterInfo: context.adapterInfo ?? null,
+      deviceInfo: context.deviceInfo ?? null,
       reason: null,
       timings: {
+        setupMs: context.reused ? 0 : context.setupMs,
         uploadMs,
         kernelMs,
         downloadMs,
         totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+        totalCandidateMs: (context.reused ? 0 : context.setupMs) + uploadMs + kernelMs + downloadMs,
       },
+      reusedContext: context.reused,
       fields,
     };
+  }
+
+  async function collectAdapterInfo(adapter) {
+    try {
+      const rawInfo =
+        adapter?.info ??
+        (typeof adapter?.requestAdapterInfo === "function" ? await adapter.requestAdapterInfo() : null);
+      const info = {};
+      for (const key of [
+        "vendor",
+        "architecture",
+        "device",
+        "description",
+        "subgroupMinSize",
+        "subgroupMaxSize",
+      ]) {
+        const value = rawInfo?.[key];
+        if (value !== undefined && value !== "") info[key] = value;
+      }
+      if (typeof adapter?.isFallbackAdapter === "boolean") {
+        info.isFallbackAdapter = adapter.isFallbackAdapter;
+      }
+      return Object.keys(info).length ? info : null;
+    } catch (error) {
+      return {
+        unavailableReason: `GPU adapter info unavailable: ${error?.message ?? "unknown error"}`,
+      };
+    }
+  }
+
+  function collectDeviceInfo(device) {
+    try {
+      return {
+        features: [...(device?.features ?? [])].sort(),
+        limits: pickDeviceLimits(device?.limits),
+      };
+    } catch (error) {
+      return {
+        unavailableReason: `GPU device info unavailable: ${error?.message ?? "unknown error"}`,
+      };
+    }
+  }
+
+  function pickDeviceLimits(limits) {
+    if (!limits) return {};
+    const keys = [
+      "maxBindGroups",
+      "maxBufferSize",
+      "maxComputeInvocationsPerWorkgroup",
+      "maxComputeWorkgroupSizeX",
+      "maxStorageBufferBindingSize",
+    ];
+    const picked = {};
+    for (const key of keys) {
+      const value = limits[key];
+      if (Number.isFinite(value)) picked[key] = value;
+    }
+    return picked;
   }
 
   function createBufferWithData(device, typedArray, usage) {
