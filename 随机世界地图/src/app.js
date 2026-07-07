@@ -13208,7 +13208,7 @@
     const urlParams = readUrlOnlyParams();
     const topologyMode = urlParams.topologyMode ?? elements.topologyMode?.value;
     const projectionMode = urlParams.projectionMode ?? elements.projectionMode?.value;
-    const resolution = elements.resolution.value;
+    const resolution = urlParams.resolution ?? elements.resolution.value;
     const faceSize = urlParams.faceSize
       ?? optionalNumber(elements.faceSize?.value)
       ?? interactiveAutoFaceSize(topologyMode, urlParams.productionTopologyMode, resolution);
@@ -13271,6 +13271,7 @@
     const result = {};
     assignStringParam(result, "topologyMode", firstParam(params, ["topology", "topologyMode", "topology-mode"]));
     assignStringParam(result, "projectionMode", firstParam(params, ["projection", "projectionMode", "projection-mode"]));
+    assignStringParam(result, "resolution", firstParam(params, ["resolution", "res"]));
     assignStringParam(
       result,
       "productionTopologyMode",

@@ -612,6 +612,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 12000 --que
 - 涉及 WebGPU compute 的阶段必须额外跑一次 `http` 模式并带 `--require-validation`。
 - `browser-smoke-check` 通过不替代 `interface-check / long-run-check / resolution-check`，而是补足真实浏览器运行证据。
 - `browser-smoke-check` 已可读取 `globalThis.__worldMapPerfSummary`；加 `--require-perf-summary` 时会要求浏览器实机产生 step/render 样本，并在输出中记录 step、render、projection render、GPU upload/kernel/download/total 和 Long Task 摘要。
+- 浏览器 smoke 已支持通过 URL `resolution` / `res` 覆盖 UI 分辨率；后续性能对比命令必须显式写入目标分辨率（例如 `resolution=256x128`），避免页面实际使用默认 `512x256` 而污染 CPU/GPU 性能判断。
 - 浏览器 perf summary 与 `gpu-perf-profile` 现在同时记录 `setupMs` 和 `totalCandidateMs`；默认启用 GPU 时应优先看包含 setup 的 `totalCandidateMs`，连续运行时再看 setup 摊薄后的 `totalGpuPathMs`。
 - `browser-smoke-check` 已禁用页面缓存，避免验证旧 bundle；新增 `--require-reused-gpu-setup-zero`，可要求所有 `reusedContext: true` 的 candidate 报告 `setupMs: 0`，用于防止 pipeline/device 复用退化或 bundle helper 覆盖造成计时误报。
 - 涉及 WebGPU validate 的 smoke 会先等待 validation 结果，再用 `--post-validation-wait-ms` 给页面恢复一小段时间后探测 canvas 和 step；这样能区分“validation 没完成”和“validation 后页面无法继续推进”，避免长任务期间提前误报。
@@ -626,6 +627,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 当前浏览器实机性能观测：
 
 - `file:// + renderBackend=cpu` 可输出性能摘要，step 平均约 `252ms`，render 平均约 `44ms`，Console 无项目错误。
+- `localhost + topology=cylindrical + projection=equirectangular + resolution=256x128 + renderBackend=cpu` 已确认 canvas 为 `256x128`，URL 分辨率参数会真实影响浏览器运行；此前未显式传入或未生效的性能样本可能实际跑在默认 `512x256`，后续基线需重新注明分辨率。
 - `localhost + gpuCompute=experimental + gpuKernel=isostasy` 可真执行并写回，但 GPU 总路径约 `14s`，其中 download/readback 约 `8.9s`，明显慢于当前 CPU 路径；因此 `isostasy` GPU 写回必须继续保留为显式 experimental，不能默认启用。
 - `localhost + gpuCompute=validate/experimental + gpuKernel=isostasy + gpuFields=isostaticBase` 已支持字段级 readback，只下载 `isostaticBase` 所在的 packed output buffer；浏览器 smoke 输出会记录 `requestedFields` 与 `downloadedPacks`，用于确认验证范围没有误报。
 - 字段级 readback 的实机结果仍显示 GPU 总路径约 `15.7s`，download/readback 约 `9.8s`，说明当前瓶颈不只是输出字段数量，后续优化应优先评估 buffer map/readback 固定成本、Chrome/WebGPU 环境开销、kernel 合批和降低验证频率。

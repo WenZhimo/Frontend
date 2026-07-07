@@ -136,7 +136,15 @@ try {
   }
 
   const afterPlay = await evaluate(cdp, sessionId, pageProbeScript({ requireStep: steps }));
-  if (!afterPlay.ok) throw new Error(`Page probe failed after play: ${afterPlay.reason}`);
+  if (!afterPlay.ok) {
+    throw new Error(`Page probe failed after play: ${JSON.stringify({
+      probe: afterPlay,
+      expectedStep: steps,
+      performance: await safeEvaluate(cdp, sessionId, "globalThis.__worldMapPerfSummary ?? null"),
+      validation: await safeEvaluate(cdp, sessionId, "globalThis.__lastGpuComputeValidation ?? null"),
+      consoleSummary: summarizeConsole(consoleMessages),
+    })}`);
+  }
   const performanceSummary = await evaluate(cdp, sessionId, "globalThis.__worldMapPerfSummary ?? null");
   assertPerformanceSummary(performanceSummary);
 
