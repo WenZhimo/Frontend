@@ -678,6 +678,27 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - `gpuValidateInterval=20` 的低频浏览器 smoke 曾在 90s 内未触发 validation：诊断显示页面仅推进到 step 15，说明该配置下基础浏览器 step 已约 7s/步，不能用低频 validate 单独证明 GPU 体验改善；后续性能门禁应同时报告“触发前 step 推进速度”和“触发后的 GPU path 成本”。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
 
+### 8.7 `tools/gpu-default-readiness-check.mjs`
+
+用途：
+
+- 调用 `browser-gpu-perf-matrix`，把多 seed / 多分辨率 / 多 kernel 的真实浏览器 validate 结果汇总成默认启用判定。
+- 默认强制包含 CPU-only 浏览器 baseline，不允许只凭 WebGPU kernel 时间判断收益。
+- 同时检查浏览器 case 是否有效、CPU baseline 是否有效、Console 项目错误数、GPU context 复用、warm GPU timing、step/render/long task GPU/CPU 比例。
+- 默认判定为“报告工具”：GPU 不满足默认启用条件时输出 `ready: false` 但不改变生产路径；需要作为 CI/门禁失败时可加 `--fail-on-not-ready`。
+
+命令示例：
+
+```powershell
+node .\tools\gpu-default-readiness-check.mjs --seeds '龙骨海-纪元7,artifact-seed-3' --resolutions 256x128,512x256 --kernels local-fields --max-gpu-to-cpu-step-ratio 0.8
+```
+
+当前状态：
+
+- 已新增 `tools/gpu-default-readiness-check.mjs`，作为 Phase 6 默认 GPU compute 前的保守 readiness gate。
+- 默认门槛为：step GPU/CPU ratio `<= 1.0`、render ratio `<= 1.1`、long task ratio `<= 1.0`，且 `warmGpuTotalMs <= cpuStepAverageMs * 0.8`。
+- 该工具只读取浏览器实测结果并输出 `ready / not-ready`，不会启用默认 GPU compute，也不会写回模拟状态。
+
 ## 9. GPU 化验收标准
 
 ### 正确性
