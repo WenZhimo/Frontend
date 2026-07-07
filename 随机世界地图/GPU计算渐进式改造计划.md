@@ -447,6 +447,7 @@ Phase 2B 当前落地状态：
 - 当前工具输出 `comparedSteps / maxFieldRmse / maxFieldAbs / failedFields / diagnosticDrift / driftOverTime / fieldDrift / skippedReason`；离线 drift gate 仍保持 CPU 权威 checkpoint 对比，不把 GPU candidate 写回生产 pipeline。
 - 已新增 `src/gpu/computeValidate.js` 与浏览器 URL 参数入口：`?gpuCompute=candidate/validate` 会每 N 步采样当前 CPU 权威 world，默认运行已通过浏览器实机采样的 `isostasy` WebGPU candidate，对比 `isostaticBase` 并在 Console 输出 `[gpu-compute-candidate]` 或 `[gpu-compute-validate]` 摘要；这两种模式都不写回 `world.grid`。
 - `gpuCompute=validate` 的默认采样间隔为 20 步，可用 `gpuValidateInterval` 调整；可用 `gpuKernel` / `gpuKernels` 和 `gpuFields` 缩小验证范围。
+- `gpuCompute=validate` 已支持显式慢路径保护参数：`gpuValidateMaxCandidateMs`、`gpuValidateMaxTotalMs`、`gpuValidateCooldownSteps`。默认不启用冷却，避免影响既有验证计数；当传入阈值且真实浏览器 candidate 超预算时，后续若干 step 会发布 `throttled/skipped` 结果，CPU 继续保持权威，页面不会反复执行过慢 WebGPU candidate。
 - 浏览器运行时 `isostaticBase` validate 门槛使用 `rmse <= 0.001 / p95Abs <= 0.002 / maxAbs <= 0.0065`；其中 `maxAbs` 比离线候选门槛略宽，用于吸收浏览器 WebGPU f32 的单点边缘差异，不构成默认 GPU 写回许可。
 - 浏览器实机 WebGPU 验证显示 `elevation` 已可作为显式 `gpuKernel=elevation&gpuFields=baseElev,relief,boundaryRelief,elev` validate 核触发；当前修复使用 validation snapshot 对齐 CPU 权威 checkpoint，并把 elevation 输入打包到单 storage buffer，避免多 storage buffer 绑定限制导致全 0 输出。
 - 浏览器实机 WebGPU 验证显示 `sediment-capacity` 可以作为显式 `gpuKernel=sediment-capacity&gpuFields=sedimentCapacity` validate 核触发；当前已用同 checkpoint CPU 公式 baseline 校准，避免直接和沉积流程后续改写过的 step-end `grid.sedimentCapacity` 错位比较。它仍保留为显式实验项，不进入默认 GPU 写回。
@@ -627,6 +628,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 12000 --que
 - `browser-smoke-check` 已禁用页面缓存，避免验证旧 bundle；新增 `--require-reused-gpu-setup-zero`，可要求所有 `reusedContext: true` 的 candidate 报告 `setupMs: 0`，用于防止 pipeline/device 复用退化或 bundle helper 覆盖造成计时误报。
 - 涉及 WebGPU validate 的 smoke 会先等待 validation 结果，再用 `--post-validation-wait-ms` 给页面恢复一小段时间后探测 canvas 和 step；这样能区分“validation 没完成”和“validation 后页面无法继续推进”，避免长任务期间提前误报。
 - `browser-smoke-check` 的 `gpuValidation` 与浏览器 `__worldMapPerfSummary.gpuCompute.validation` 已输出 CPU 侧 validation 分段：`snapshotMs / baselineMs / compareMs / totalValidationMs`。这些指标用于区分验证框架开销和 WebGPU candidate 自身开销。
+- `browser-smoke-check` 已支持 `--require-validation-throttle`，用于验证慢路径保护是否在真实浏览器中触发；普通 `--require-validation` 仍不接受 skipped validation，只有显式要求 throttle 时才把冷却跳过视为合格。
 - 性能门禁可选参数：`--max-average-step-ms` 检查浏览器真实 step 平均耗时，`--max-average-render-ms` 检查渲染平均耗时，`--max-long-task-ms` 检查交互线程最大 long task；这些门禁用于发现“字段正确但页面体验退化”的情况。
 - GPU compute 性能门禁可选参数：`--max-gpu-total-ms` 检查不含 setup 的 upload+kernel+download，`--max-gpu-candidate-ms` 检查包含 setup 的完整 candidate 成本；进入默认启用前应使用这两个阈值证明浏览器真实运行不退化。
 - GPU warm-run 性能门禁可选参数：`--max-warm-gpu-total-ms` / `--max-warm-gpu-candidate-ms` 只检查 `reusedContext: true` 的 validation candidate，用来区分首次 setup 成本与复用后仍然过慢的 kernel/readback 成本；这些门禁必须和 `--require-validation` 一起使用。
@@ -680,6 +682,7 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - `browser-gpu-perf-matrix` 已支持 GPU/CPU 比例门禁；单 seed `256x128 + local-fields` 复测中，`--max-step-ratio 10 --max-render-ratio 10 --max-long-task-ratio 10` 会自动跑 CPU baseline 并通过，输出 `performanceRatio.stepAverage ~= 0.65`、`renderAverage ~= 0.72`、`longTaskMax ~= 0.79`。进入默认启用前应把这些阈值收紧到计划中的收益门槛。
 - `gpuValidateInterval=20` 的低频浏览器 smoke 曾在 90s 内未触发 validation：诊断显示页面仅推进到 step 15，说明该配置下基础浏览器 step 已约 7s/步，不能用低频 validate 单独证明 GPU 体验改善；后续性能门禁应同时报告“触发前 step 推进速度”和“触发后的 GPU path 成本”。
 - `local-fields` 的最新浏览器 validate 分段显示：选择性快照后 `snapshotMs` 约 `0.2ms`，CPU baseline / compare 为几十毫秒级，而 `candidateMs` 为数秒级；因此当前默认启用瓶颈已明确集中在 WebGPU candidate 执行与读回，不在 CPU 侧 checkpoint 复制或字段比较。
+- 慢路径保护已用真实浏览器验证：`local-fields` 在 `gpuValidateMaxCandidateMs=1&gpuValidateCooldownSteps=5` 下第一次 validate 真实执行并超预算，第二次 validation 被标记为 `throttled/skipped`，`__worldMapPerfSummary.gpuCompute.throttled=true`，Console 项目错误为 0。该机制只保护 validate/candidate 体验，不构成默认 GPU 写回许可。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
 
 ### 8.7 `tools/gpu-default-readiness-check.mjs`

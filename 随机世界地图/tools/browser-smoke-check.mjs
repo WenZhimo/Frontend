@@ -17,6 +17,7 @@ const requireWriteback = parseBoolOption(options, "require-writeback");
 const requirePerfSummary = parseBoolOption(options, "require-perf-summary");
 const requireReusedGpuContext = parseBoolOption(options, "require-reused-gpu-context");
 const requireReusedGpuSetupZero = parseBoolOption(options, "require-reused-gpu-setup-zero");
+const requireValidationThrottle = parseBoolOption(options, "require-validation-throttle");
 const requiredGpuKernels = parseCsvOption(options, "require-gpu-kernels");
 const requiredGpuFields = parseCsvOption(options, "require-gpu-fields", { normalize: false });
 const requireValidationCount = Math.max(1, parseIntOption(options, "require-validation-count", 1));
@@ -110,7 +111,7 @@ try {
         consoleSummary: summarizeConsole(consoleMessages),
       })}`);
     }
-    if (validation.skipped) {
+    if (validation.skipped && !(requireValidationThrottle && validationThrottleObserved(validation))) {
       throw new Error(`GPU validation was skipped: ${JSON.stringify(validation)}`);
     }
     if (requireWriteback && !validation.writebackApplied) {
@@ -118,6 +119,9 @@ try {
     }
     if ((validation.historyLength ?? 1) < requireValidationCount) {
       throw new Error(`GPU validation count did not reach ${requireValidationCount}: ${JSON.stringify(validation)}`);
+    }
+    if (requireValidationThrottle && !validationThrottleObserved(validation)) {
+      throw new Error(`GPU validation throttle was not observed: ${JSON.stringify(validation)}`);
     }
     if (requireReusedGpuContext && !hasReusedGpuContext(validation)) {
       throw new Error(`GPU context reuse was not observed: ${JSON.stringify(validation)}`);
@@ -465,6 +469,11 @@ function missingRequiredGpuFields(validation, requiredFields) {
   return requiredFields.filter((field) => !observed.has(field));
 }
 
+function validationThrottleObserved(validation) {
+  if (validation?.throttled) return true;
+  return (validation?.history ?? []).some((entry) => entry?.throttled);
+}
+
 async function closeBrowserSafely(cdp) {
   try {
     await Promise.race([
@@ -580,6 +589,10 @@ function summarizeValidation(validation) {
     writebackApplied: validation.writebackApplied ?? false,
     writebackFields: validation.writebackFields ?? [],
     fallbackReason: validation.fallbackReason ?? null,
+    throttled: validation.throttled ?? false,
+    throttleReason: validation.throttleReason ?? null,
+    suppressUntilStep: validation.suppressUntilStep ?? null,
+    throttleCount: validation.throttleCount ?? 0,
     kernels: validation.kernels,
     validationTimings: validation.validationTimings ?? null,
     historyLength: validation.historyLength ?? null,
@@ -589,6 +602,10 @@ function summarizeValidation(validation) {
     history: validation.history?.map((entry) => ({
       valid: entry.valid,
       skipped: entry.skipped,
+      throttled: entry.throttled ?? false,
+      throttleReason: entry.throttleReason ?? null,
+      suppressUntilStep: entry.suppressUntilStep ?? null,
+      throttleCount: entry.throttleCount ?? 0,
       mode: entry.mode ?? null,
       validationTimings: entry.validationTimings ?? null,
       writebackApplied: entry.writebackApplied ?? false,

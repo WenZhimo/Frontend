@@ -99,11 +99,17 @@ export function createGpuComputeValidator(options = {}) {
   const fields = normalizeCsvList(options.fields, defaultFieldsForMode(mode, kernels));
   const interval = Math.max(1, Math.trunc(Number(options.interval ?? 20)) || 20);
   const maxReports = Math.max(1, Math.trunc(Number(options.maxReports ?? 12)) || 12);
+  const maxCandidateMs = nonNegativeNumber(options.maxCandidateMs);
+  const maxTotalMs = nonNegativeNumber(options.maxTotalMs);
+  const cooldownSteps = Math.max(0, Math.trunc(Number(options.cooldownSteps ?? 0)) || 0);
   const globalObject = options.globalObject ?? globalThis;
   const logger = options.logger ?? console;
   let running = false;
   let reportCount = 0;
   let lastValidatedStep = -1;
+  let suppressUntilStep = -1;
+  let throttleCount = 0;
+  let lastThrottleReason = null;
   const validationHistory = [];
 
   return {
@@ -112,12 +118,30 @@ export function createGpuComputeValidator(options = {}) {
     kernels,
     fields,
     interval,
+    maxCandidateMs,
+    maxTotalMs,
+    cooldownSteps,
     maybeValidate(world) {
       if ((mode !== "candidate" && mode !== "validate" && mode !== "experimental") || !world?.grid || running || reportCount >= maxReports) {
         return null;
       }
       if (!Number.isFinite(world.step) || world.step <= 0 || world.step === lastValidatedStep) return null;
       if (world.step % interval !== 0) return null;
+      if (cooldownSteps > 0 && world.step < suppressUntilStep) {
+        lastValidatedStep = world.step;
+        const result = createThrottledValidationResult(world, {
+          mode,
+          kernels,
+          fields,
+          suppressUntilStep,
+          throttleCount,
+          throttleReason: lastThrottleReason,
+        });
+        reportCount += 1;
+        logValidateResult(logger, result);
+        publishValidationResult(world, globalObject, validationHistory, result);
+        return Promise.resolve(result);
+      }
       running = true;
       lastValidatedStep = world.step;
       return scheduleValidationTask(globalObject, () => runScheduledValidation(world));
@@ -133,6 +157,21 @@ export function createGpuComputeValidator(options = {}) {
             ? await candidateGpuComputeCheckpoint(world, { kernels, fields, globalObject })
           : await validateGpuComputeCheckpoint(world, { kernels, fields, globalObject });
       reportCount += 1;
+      const throttle = updateValidationThrottle(world, result, {
+        maxCandidateMs,
+        maxTotalMs,
+        cooldownSteps,
+        throttleCount,
+      });
+      if (throttle.throttled) {
+        throttleCount = throttle.throttleCount;
+        suppressUntilStep = throttle.suppressUntilStep;
+        lastThrottleReason = throttle.throttleReason;
+        result.throttled = true;
+        result.throttleReason = throttle.throttleReason;
+        result.suppressUntilStep = throttle.suppressUntilStep;
+        result.throttleCount = throttle.throttleCount;
+      }
       logValidateResult(logger, result);
       publishValidationResult(world, globalObject, validationHistory, result);
       return result;
@@ -179,6 +218,55 @@ function publishValidationResult(world, globalObject, history, result) {
   world.gpuComputeValidation = result;
   globalObject.__lastGpuComputeValidation = result;
   globalObject.__gpuComputeValidationHistory = history;
+}
+
+function createThrottledValidationResult(world, options = {}) {
+  return {
+    valid: true,
+    skipped: true,
+    throttled: true,
+    step: world.step,
+    ageYears: world.ageYears,
+    mode: options.mode ?? "validate",
+    kernels: options.kernels ?? [],
+    fields: [],
+    candidateResults: [],
+    validationTimings: emptyValidationTimings(),
+    writebackApplied: false,
+    writebackFields: [],
+    skippedReason: options.throttleReason ?? "GPU validation is cooling down after an over-budget candidate.",
+    fallbackReason: options.throttleReason ?? "GPU validation is cooling down after an over-budget candidate.",
+    throttleReason: options.throttleReason ?? "GPU validation is cooling down after an over-budget candidate.",
+    suppressUntilStep: options.suppressUntilStep ?? null,
+    throttleCount: options.throttleCount ?? 0,
+    note: "GPU compute validation was skipped on this step to keep the browser responsive; CPU remains authoritative.",
+  };
+}
+
+function updateValidationThrottle(world, result, options = {}) {
+  const cooldownSteps = Math.max(0, Math.trunc(Number(options.cooldownSteps ?? 0)) || 0);
+  if (cooldownSteps <= 0) return { throttled: false };
+
+  const maxCandidateMs = nonNegativeNumber(options.maxCandidateMs);
+  const maxTotalMs = nonNegativeNumber(options.maxTotalMs);
+  if (maxCandidateMs <= 0 && maxTotalMs <= 0) return { throttled: false };
+
+  const candidateMs = Number(result?.validationTimings?.candidateMs);
+  const totalMs = Number(result?.validationTimings?.totalValidationMs);
+  const candidateOver = maxCandidateMs > 0 && Number.isFinite(candidateMs) && candidateMs > maxCandidateMs;
+  const totalOver = maxTotalMs > 0 && Number.isFinite(totalMs) && totalMs > maxTotalMs;
+  if (!candidateOver && !totalOver) return { throttled: false };
+
+  const reasons = [];
+  if (candidateOver) reasons.push(`candidate ${candidateMs.toFixed(1)}ms > ${maxCandidateMs}ms`);
+  if (totalOver) reasons.push(`total ${totalMs.toFixed(1)}ms > ${maxTotalMs}ms`);
+  const throttleCount = (options.throttleCount ?? 0) + 1;
+  return {
+    throttled: true,
+    throttleCount,
+    suppressUntilStep: (world?.step ?? 0) + cooldownSteps,
+    throttleReason: `GPU validation over budget (${reasons.join("; ")}); cooling down for ${cooldownSteps} step(s).`,
+  };
 }
 
 export async function candidateGpuComputeCheckpoint(world, options = {}) {
@@ -374,6 +462,11 @@ function normalizeMode(value) {
   if (mode === "candidate") return "candidate";
   if (mode === "experimental") return "experimental";
   return "off";
+}
+
+function nonNegativeNumber(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
 }
 
 function normalizeCsvList(value, fallback) {
@@ -826,6 +919,10 @@ function logValidateResult(logger, result) {
     skipped: result.skipped,
     skippedReason: result.skippedReason ?? result.reason ?? null,
     fallbackReason: result.fallbackReason ?? null,
+    throttled: result.throttled ?? false,
+    throttleReason: result.throttleReason ?? null,
+    suppressUntilStep: result.suppressUntilStep ?? null,
+    throttleCount: result.throttleCount ?? 0,
     writebackApplied: result.writebackApplied ?? false,
     writebackFields: result.writebackFields ?? [],
     kernels: result.kernels,
