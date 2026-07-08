@@ -12,6 +12,10 @@ const waitMs = parseIntOption(options, "wait-ms", 120000);
 const baselineWaitMs = parseIntOption(options, "baseline-wait-ms", 8000);
 const postValidationWaitMs = parseIntOption(options, "post-validation-wait-ms", 1000);
 const validationCount = parseIntOption(options, "validation-count", 2);
+const gpuValidateMaxCandidateMs = parseIntOption(options, "gpu-validate-max-candidate-ms", parseIntOption(options, "gpuValidateMaxCandidateMs", 0));
+const gpuValidateMaxTotalMs = parseIntOption(options, "gpu-validate-max-total-ms", parseIntOption(options, "gpuValidateMaxTotalMs", 0));
+const gpuValidateCooldownSteps = parseIntOption(options, "gpu-validate-cooldown-steps", parseIntOption(options, "gpuValidateCooldownSteps", 0));
+const requireValidationThrottle = parseBoolOption(options, "require-validation-throttle");
 const startPort = parseIntOption(options, "start-port", 9600);
 const maxAverageStepMs = parseIntOption(options, "max-average-step-ms", 0);
 const maxAverageRenderMs = parseIntOption(options, "max-average-render-ms", 0);
@@ -70,6 +74,10 @@ const summary = {
   maxLongTaskRatio: maxLongTaskRatio || null,
   maxWarmGpuTotalMs: maxWarmGpuTotalMs || null,
   maxWarmGpuCandidateMs: maxWarmGpuCandidateMs || null,
+  gpuValidateMaxCandidateMs: gpuValidateMaxCandidateMs || null,
+  gpuValidateMaxTotalMs: gpuValidateMaxTotalMs || null,
+  gpuValidateCooldownSteps: gpuValidateCooldownSteps || null,
+  requireValidationThrottle,
 };
 
 console.log(JSON.stringify({ summary, results }, null, 2));
@@ -78,7 +86,7 @@ if (failed.length > 0) process.exitCode = 1;
 function runCase({ seed, resolution, kernel, port, caseIndex }) {
   return () => {
     const fields = defaultFieldsForKernel(kernel);
-    const query = new URLSearchParams({
+    const queryParams = new URLSearchParams({
       topology,
       projection,
       resolution,
@@ -90,7 +98,11 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       renderBackend,
       seedText: seed,
       cacheBust: `gpuPerfMatrix${Date.now()}_${caseIndex}`,
-    }).toString();
+    });
+    if (gpuValidateMaxCandidateMs > 0) queryParams.set("gpuValidateMaxCandidateMs", String(gpuValidateMaxCandidateMs));
+    if (gpuValidateMaxTotalMs > 0) queryParams.set("gpuValidateMaxTotalMs", String(gpuValidateMaxTotalMs));
+    if (gpuValidateCooldownSteps > 0) queryParams.set("gpuValidateCooldownSteps", String(gpuValidateCooldownSteps));
+    const queryString = queryParams.toString();
     const args = [
       ".\\tools\\browser-smoke-check.mjs",
       "--mode", "http",
@@ -99,15 +111,18 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       "--post-validation-wait-ms", String(postValidationWaitMs),
       "--remote-debugging-port", String(port),
       "--user-data-dir", `.test-cache/browser-gpu-perf-matrix-${caseIndex}`,
-      "--query", query,
+      "--query", queryString,
       "--require-validation",
       "--require-validation-count", String(validationCount),
-      "--require-reused-gpu-context",
-      "--require-reused-gpu-setup-zero",
       "--require-gpu-kernels", kernel,
       "--require-gpu-fields", fields.join(","),
       "--require-perf-summary",
     ];
+    if (requireValidationThrottle) {
+      args.push("--require-validation-throttle");
+    } else {
+      args.push("--require-reused-gpu-context", "--require-reused-gpu-setup-zero");
+    }
     if (maxAverageStepMs > 0) args.push("--max-average-step-ms", String(maxAverageStepMs));
     if (maxAverageRenderMs > 0) args.push("--max-average-render-ms", String(maxAverageRenderMs));
     if (maxLongTaskMs > 0) args.push("--max-long-task-ms", String(maxLongTaskMs));
@@ -126,10 +141,10 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       : null;
     const parsed = parseSmokeOutput(child.stdout);
     const pageStateMismatch = parsed
-      ? describePageStateMismatch(parsed.pageState, { seed, resolution })
+      ? describePageStateMismatch(parsed.pageState, { seed, resolution, topology, projection })
       : null;
     const baselineMismatch = baseline?.parsed
-      ? describePageStateMismatch(baseline.parsed.pageState, { seed, resolution })
+      ? describePageStateMismatch(baseline.parsed.pageState, { seed, resolution, topology, projection })
       : null;
     const warmCandidates = parsed
       ? collectWarmCandidates(parsed.gpuValidation)
@@ -152,6 +167,8 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       validationSnapshotMs: maxNumber(collectValidationTimings(parsed?.gpuValidation).map((timing) => timing.snapshotMs)),
       validationBaselineMs: maxNumber(collectValidationTimings(parsed?.gpuValidation).map((timing) => timing.baselineMs)),
       validationCompareMs: maxNumber(collectValidationTimings(parsed?.gpuValidation).map((timing) => timing.compareMs)),
+      validationThrottled: validationThrottleObserved(parsed?.gpuValidation),
+      validationThrottleReason: latestThrottleReason(parsed?.gpuValidation),
       warmGpuTotalMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalGpuPathMs)),
       warmGpuCandidateMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalCandidateMs ?? candidate.timings?.totalGpuPathMs)),
       reusedContextObserved: parsed?.gpuValidation?.reusedGpuContextObserved ?? warmCandidates.length > 0,
@@ -295,6 +312,12 @@ function describePageStateMismatch(pageState, expected) {
   if (pageState.resolution !== expected.resolution) {
     mismatches.push(`resolution expected ${JSON.stringify(expected.resolution)} got ${JSON.stringify(pageState.resolution)}`);
   }
+  if (expected.topology && pageState.topologyMode !== expected.topology) {
+    mismatches.push(`topologyMode expected ${JSON.stringify(expected.topology)} got ${JSON.stringify(pageState.topologyMode)}`);
+  }
+  if (expected.projection && pageState.projectionMode !== expected.projection) {
+    mismatches.push(`projectionMode expected ${JSON.stringify(expected.projection)} got ${JSON.stringify(pageState.projectionMode)}`);
+  }
   return mismatches.length ? `Runtime pageState mismatch: ${mismatches.join("; ")}` : null;
 }
 
@@ -338,6 +361,17 @@ function collectValidationTimings(validation) {
     ...(validation?.history?.length ? [] : [validation?.validationTimings]),
   ];
   return timings.filter(Boolean);
+}
+
+function validationThrottleObserved(validation) {
+  if (validation?.throttled) return true;
+  return (validation?.history ?? []).some((entry) => entry?.throttled);
+}
+
+function latestThrottleReason(validation) {
+  if (validation?.throttleReason) return validation.throttleReason;
+  const throttled = [...(validation?.history ?? [])].reverse().find((entry) => entry?.throttleReason);
+  return throttled?.throttleReason ?? null;
 }
 
 function maxNumber(values) {

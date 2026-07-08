@@ -404,6 +404,8 @@ function pageProbeScript({ requireStep = 0 } = {}) {
     const controlState = {
       seedText: document.querySelector("#seedText")?.value ?? null,
       resolution: document.querySelector("#resolution")?.value ?? null,
+      topologyMode: document.querySelector("#topologyMode")?.value ?? null,
+      projectionMode: document.querySelector("#projectionMode")?.value ?? null,
     };
     return {
       ok: true,
@@ -462,11 +464,18 @@ function missingRequiredGpuKernels(validation, requiredKernels) {
 
 function missingRequiredGpuFields(validation, requiredFields) {
   if (!requiredFields.length) return [];
-  const observed = new Set((validation.fields ?? [])
+  const observed = collectObservedGpuFields(validation);
+  return requiredFields.filter((field) => !observed.has(field));
+}
+
+function collectObservedGpuFields(validation) {
+  return new Set([
+    ...(validation?.fields ?? []),
+    ...(validation?.history ?? []).flatMap((entry) => entry?.fields ?? []),
+  ]
     .filter((field) => field?.valid !== false)
     .map((field) => field.field)
     .filter(Boolean));
-  return requiredFields.filter((field) => !observed.has(field));
 }
 
 function validationThrottleObserved(validation) {
@@ -577,10 +586,7 @@ function summarizeValidation(validation) {
     .filter((candidate) => !candidate.skipped)
     .map((candidate) => normalizeKernelName(candidate.kernel))
     .filter(Boolean)));
-  const observedGpuFields = (validation.fields ?? [])
-    .filter((field) => field?.valid !== false)
-    .map((field) => field.field)
-    .filter(Boolean);
+  const observedGpuFields = Array.from(collectObservedGpuFields(validation));
   return {
     valid: validation.valid,
     skipped: validation.skipped,

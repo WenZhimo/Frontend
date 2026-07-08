@@ -10,6 +10,10 @@ const resolutions = parseCsv(options.resolutions ?? options.resolution, ["256x12
 const kernels = parseCsv(options.kernels ?? options.kernel, ["local-fields"]);
 const steps = parseIntOption(options, "steps", 2);
 const validationCount = parseIntOption(options, "validation-count", 2);
+const gpuValidateMaxCandidateMs = parseIntOption(options, "gpu-validate-max-candidate-ms", parseIntOption(options, "gpuValidateMaxCandidateMs", 0));
+const gpuValidateMaxTotalMs = parseIntOption(options, "gpu-validate-max-total-ms", parseIntOption(options, "gpuValidateMaxTotalMs", 0));
+const gpuValidateCooldownSteps = parseIntOption(options, "gpu-validate-cooldown-steps", parseIntOption(options, "gpuValidateCooldownSteps", 0));
+const requireValidationThrottle = parseBoolOption(options, "require-validation-throttle");
 const waitMs = parseIntOption(options, "wait-ms", 120000);
 const baselineWaitMs = parseIntOption(options, "baseline-wait-ms", 8000);
 const startPort = parseIntOption(options, "start-port", 9800);
@@ -56,6 +60,10 @@ if (!matrixOutput) {
       maxGpuToCpuStepRatio,
       maxWarmGpuTotalMs: maxWarmGpuTotalMs || null,
       maxWarmGpuCandidateMs: maxWarmGpuCandidateMs || null,
+      gpuValidateMaxCandidateMs: gpuValidateMaxCandidateMs || null,
+      gpuValidateMaxTotalMs: gpuValidateMaxTotalMs || null,
+      gpuValidateCooldownSteps: gpuValidateCooldownSteps || null,
+      requireValidationThrottle,
     },
     matrixSummary: matrixOutput.summary ?? null,
     totalCases: readinessCases.length,
@@ -86,6 +94,10 @@ function runMatrix() {
   ];
   if (maxWarmGpuTotalMs > 0) args.push("--max-warm-gpu-total-ms", String(maxWarmGpuTotalMs));
   if (maxWarmGpuCandidateMs > 0) args.push("--max-warm-gpu-candidate-ms", String(maxWarmGpuCandidateMs));
+  if (gpuValidateMaxCandidateMs > 0) args.push("--gpu-validate-max-candidate-ms", String(gpuValidateMaxCandidateMs));
+  if (gpuValidateMaxTotalMs > 0) args.push("--gpu-validate-max-total-ms", String(gpuValidateMaxTotalMs));
+  if (gpuValidateCooldownSteps > 0) args.push("--gpu-validate-cooldown-steps", String(gpuValidateCooldownSteps));
+  if (requireValidationThrottle) args.push("--require-validation-throttle");
   if (chrome) args.push("--chrome", String(chrome));
   return spawnSync(process.execPath, args, {
     cwd: root,
@@ -101,15 +113,19 @@ function evaluateCase(entry) {
     && entry?.cpuBaseline?.valid === true
     && Number(entry?.consoleProjectErrors ?? 0) === 0
     && Number(entry?.cpuBaseline?.consoleProjectErrors ?? 0) === 0
-    && entry?.reusedContextObserved === true
-    && entry?.warmGpuTotalMs !== null;
+    && (requireValidationThrottle || entry?.reusedContextObserved === true)
+    && (requireValidationThrottle || entry?.warmGpuTotalMs !== null);
 
   if (entry?.valid !== true) reasons.push(entry?.error ?? "Browser GPU validation case failed.");
   if (entry?.cpuBaseline?.valid !== true) reasons.push(entry?.cpuBaseline?.error ?? "CPU browser baseline failed.");
   if (Number(entry?.consoleProjectErrors ?? 0) !== 0) reasons.push("GPU browser case reported project console errors.");
   if (Number(entry?.cpuBaseline?.consoleProjectErrors ?? 0) !== 0) reasons.push("CPU browser baseline reported project console errors.");
-  if (entry?.reusedContextObserved !== true) reasons.push("Reused GPU context was not observed.");
-  if (entry?.warmGpuTotalMs === null) reasons.push("Warm GPU total path timing is unavailable.");
+  if (requireValidationThrottle && entry?.validationThrottled === true) {
+    reasons.push(`GPU validation throttle was observed; keep this path experimental. ${entry.validationThrottleReason ?? ""}`.trim());
+  } else {
+    if (entry?.reusedContextObserved !== true) reasons.push("Reused GPU context was not observed.");
+    if (entry?.warmGpuTotalMs === null) reasons.push("Warm GPU total path timing is unavailable.");
+  }
 
   const ratioFailures = evaluateRatios(entry);
   reasons.push(...ratioFailures);
@@ -117,7 +133,9 @@ function evaluateCase(entry) {
   const cpuStepAverage = Number(entry?.cpuBaseline?.performance?.step?.averageMs);
   const warmGpuTotal = Number(entry?.warmGpuTotalMs);
   const warmGpuCandidate = Number(entry?.warmGpuCandidateMs);
-  if (!Number.isFinite(cpuStepAverage) || cpuStepAverage <= 0) {
+  if (requireValidationThrottle && entry?.validationThrottled === true) {
+    // Throttle diagnostics prove responsiveness protection, not default-readiness.
+  } else if (!Number.isFinite(cpuStepAverage) || cpuStepAverage <= 0) {
     reasons.push("CPU step average is unavailable, so GPU total path cannot be compared.");
   } else if (!Number.isFinite(warmGpuTotal)) {
     reasons.push("Warm GPU total path is unavailable.");
@@ -144,6 +162,8 @@ function evaluateCase(entry) {
     validationSnapshotMs: entry.validationSnapshotMs ?? null,
     validationBaselineMs: entry.validationBaselineMs ?? null,
     validationCompareMs: entry.validationCompareMs ?? null,
+    validationThrottled: entry.validationThrottled ?? false,
+    validationThrottleReason: entry.validationThrottleReason ?? null,
     cpuStepAverageMs: nullableRound2(cpuStepAverage),
     performanceRatio: entry.performanceRatio ?? null,
     gpuPerformance: entry.performance ?? null,
