@@ -29,6 +29,7 @@ const includeCpuBaseline = parseBoolOption(options, "include-cpu-baseline")
   || maxLongTaskRatio > 0;
 const maxWarmGpuTotalMs = parseIntOption(options, "max-warm-gpu-total-ms", 0);
 const maxWarmGpuCandidateMs = parseIntOption(options, "max-warm-gpu-candidate-ms", 0);
+const gpuTimingMode = normalizeTimingMode(options["gpu-timing-mode"] ?? options.gpuTimingMode);
 const renderBackend = String(options["render-backend"] ?? options.renderBackend ?? "cpu");
 const topology = String(options.topology ?? "cylindrical");
 const projection = String(options.projection ?? "equirectangular");
@@ -78,6 +79,7 @@ const summary = {
   gpuValidateMaxTotalMs: gpuValidateMaxTotalMs || null,
   gpuValidateCooldownSteps: gpuValidateCooldownSteps || null,
   requireValidationThrottle,
+  gpuTimingMode,
 };
 
 console.log(JSON.stringify({ summary, results }, null, 2));
@@ -95,6 +97,7 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       gpuValidateReports: String(validationCount),
       gpuKernel: kernel,
       gpuFields: fields.join(","),
+      gpuTimingMode,
       renderBackend,
       seedText: seed,
       cacheBust: `gpuPerfMatrix${Date.now()}_${caseIndex}`,
@@ -149,9 +152,14 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
     const warmCandidates = parsed
       ? collectWarmCandidates(parsed.gpuValidation)
       : parseWarmCandidatesFromFailure(child.stderr);
+    const timingModeMismatch = describeTimingModeMismatch(kernel, warmCandidates);
     const baselineValid = !includeCpuBaseline
       || (baseline?.child.status === 0 && baseline?.parsed?.valid === true && !baselineMismatch);
-    const valid = child.status === 0 && parsed?.valid === true && !pageStateMismatch && baselineValid;
+    const valid = child.status === 0
+      && parsed?.valid === true
+      && !pageStateMismatch
+      && !timingModeMismatch
+      && baselineValid;
     const performance = summarizePerformance(parsed?.performance);
     const baselinePerformance = summarizePerformance(baseline?.parsed?.performance);
     const performanceRatio = comparePerformance(performance, baselinePerformance);
@@ -162,6 +170,7 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       resolution,
       kernel,
       fields,
+      gpuTimingMode,
       exitCode: child.status,
       validationTotalMs: maxNumber(collectValidationTimings(parsed?.gpuValidation).map((timing) => timing.totalValidationMs)),
       validationSnapshotMs: maxNumber(collectValidationTimings(parsed?.gpuValidation).map((timing) => timing.snapshotMs)),
@@ -172,6 +181,10 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       warmGpuTotalMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalGpuPathMs)),
       warmGpuCandidateMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalCandidateMs ?? candidate.timings?.totalGpuPathMs)),
       warmGpuBufferSetupMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.bufferSetupMs)),
+      warmGpuUploadMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.uploadMs)),
+      warmGpuSubmitMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.submitMs)),
+      warmGpuKernelMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.kernelMs)),
+      warmGpuDownloadMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.downloadMs)),
       warmGpuExecuteDownloadMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.executeAndDownloadMs)),
       warmGpuTimingModes: uniqueStrings(warmCandidates.map((candidate) => candidate.timings?.timingMode)),
       reusedContextObserved: parsed?.gpuValidation?.reusedGpuContextObserved ?? warmCandidates.length > 0,
@@ -196,6 +209,7 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       consoleProjectErrors: parsed?.consoleSummary?.projectErrors ?? null,
       error: pageStateMismatch
         ?? baselineMismatch
+        ?? timingModeMismatch
         ?? ratioFailure
         ?? (child.status === 0 ? null : summarizeFailure(child.stderr, child.stdout))
         ?? (baselineValid ? null : summarizeFailure(baseline?.child.stderr, baseline?.child.stdout)),
@@ -304,6 +318,7 @@ function summarizeSample(sample) {
 }
 
 function nullableRound2(value) {
+  if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? round2(number) : null;
 }
@@ -324,6 +339,17 @@ function describePageStateMismatch(pageState, expected) {
     mismatches.push(`projectionMode expected ${JSON.stringify(expected.projection)} got ${JSON.stringify(pageState.projectionMode)}`);
   }
   return mismatches.length ? `Runtime pageState mismatch: ${mismatches.join("; ")}` : null;
+}
+
+function describeTimingModeMismatch(kernel, candidates) {
+  if (normalizeKernelName(kernel) !== "local-fields" || candidates.length === 0) return null;
+  const observed = uniqueStrings(candidates.map((candidate) => candidate.timings?.timingMode));
+  if (observed.length === 1 && observed[0] === gpuTimingMode) return null;
+  return `GPU timing mode expected ${JSON.stringify(gpuTimingMode)} got ${JSON.stringify(observed)}.`;
+}
+
+function normalizeTimingMode(value) {
+  return value === "split" ? "split" : "overlapped";
 }
 
 function parseSmokeOutput(stdout) {
@@ -380,7 +406,10 @@ function latestThrottleReason(validation) {
 }
 
 function maxNumber(values) {
-  const finite = values.map(Number).filter(Number.isFinite);
+  const finite = values
+    .filter((value) => value !== null && value !== undefined && value !== "")
+    .map(Number)
+    .filter(Number.isFinite);
   return finite.length ? round2(Math.max(...finite)) : null;
 }
 

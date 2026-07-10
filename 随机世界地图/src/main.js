@@ -46,6 +46,7 @@ if (gpuComputeValidator.enabled) {
     kernels: gpuComputeValidator.kernels,
     fields: gpuComputeValidator.fields,
     interval: gpuComputeValidator.interval,
+    timingMode: gpuComputeValidator.timingMode,
   });
 }
 const renderer = createMapRenderer(elements.canvas, {
@@ -621,9 +622,10 @@ function readGpuComputeOptions() {
       maxCandidateMs: params.get("gpuValidateMaxCandidateMs") ?? params.get("gpu-validate-max-candidate-ms") ?? 0,
       maxTotalMs: params.get("gpuValidateMaxTotalMs") ?? params.get("gpu-validate-max-total-ms") ?? 0,
       cooldownSteps: params.get("gpuValidateCooldownSteps") ?? params.get("gpu-validate-cooldown-steps") ?? 0,
+      timingMode: params.get("gpuTimingMode") ?? params.get("gpu-timing-mode") ?? "overlapped",
       globalObject: globalThis,
     };
   } catch {
-    return { mode: "off", globalObject: globalThis };
+    return { mode: "off", timingMode: "overlapped", globalObject: globalThis };
   }
 }

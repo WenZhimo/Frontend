@@ -102,6 +102,7 @@ export function createGpuComputeValidator(options = {}) {
   const maxCandidateMs = nonNegativeNumber(options.maxCandidateMs);
   const maxTotalMs = nonNegativeNumber(options.maxTotalMs);
   const cooldownSteps = Math.max(0, Math.trunc(Number(options.cooldownSteps ?? 0)) || 0);
+  const timingMode = normalizeTimingMode(options.timingMode);
   const globalObject = options.globalObject ?? globalThis;
   const logger = options.logger ?? console;
   let running = false;
@@ -121,6 +122,7 @@ export function createGpuComputeValidator(options = {}) {
     maxCandidateMs,
     maxTotalMs,
     cooldownSteps,
+    timingMode,
     resetDiagnostics() {
       if (running) {
         return {
@@ -171,10 +173,10 @@ export function createGpuComputeValidator(options = {}) {
     try {
       const result =
         mode === "experimental"
-          ? await applyExperimentalGpuComputeCheckpoint(world, { kernels, fields, globalObject })
+          ? await applyExperimentalGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject })
           : mode === "candidate"
-            ? await candidateGpuComputeCheckpoint(world, { kernels, fields, globalObject })
-          : await validateGpuComputeCheckpoint(world, { kernels, fields, globalObject });
+            ? await candidateGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject })
+          : await validateGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject });
       reportCount += 1;
       const throttle = updateValidationThrottle(world, result, {
         maxCandidateMs,
@@ -392,7 +394,13 @@ async function compareGpuComputeCheckpoint(world, options = {}) {
 
   const candidateStartedAt = performance.now();
   for (const kernel of kernels) {
-    const result = await runCandidateKernel(kernel, snapshot, options.globalObject, fields);
+    const result = await runCandidateKernel(
+      kernel,
+      snapshot,
+      options.globalObject,
+      fields,
+      normalizeTimingMode(options.timingMode),
+    );
     candidateResults.push(compactCandidateResult(kernel, result));
     if (!result?.skipped && result?.fields) {
       Object.assign(candidateFields, result.fields);
@@ -497,6 +505,10 @@ function normalizeCsvList(value, fallback) {
     .filter(Boolean);
 }
 
+function normalizeTimingMode(value) {
+  return value === "split" ? "split" : "overlapped";
+}
+
 function defaultFieldsForMode(mode, kernels) {
   const normalized = normalizeCsvList(kernels, []);
   if (mode === "experimental" && normalized.some((kernel) => kernel === "isostasy" || kernel === "webgpu-isostasy")) {
@@ -505,7 +517,7 @@ function defaultFieldsForMode(mode, kernels) {
   return DEFAULT_VALIDATE_FIELDS;
 }
 
-async function runCandidateKernel(kernel, world, globalObject, fields) {
+async function runCandidateKernel(kernel, world, globalObject, fields, timingMode) {
   if (kernel === "elevation" || kernel === "webgpu-elevation") {
     return runWebGpuElevationCandidate(world, { globalObject, fields });
   }
@@ -513,7 +525,7 @@ async function runCandidateKernel(kernel, world, globalObject, fields) {
     return runWebGpuIsostasyCandidate(world, { globalObject, fields });
   }
   if (kernel === "local-fields" || kernel === "localTerrain" || kernel === "webgpu-local-fields") {
-    return runWebGpuLocalFieldsCandidate(world, { globalObject, fields });
+    return runWebGpuLocalFieldsCandidate(world, { globalObject, fields, timingMode });
   }
   if (kernel === "margin-smooth" || kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") {
     return runWebGpuMarginSmoothCandidate(world, { globalObject, fields });

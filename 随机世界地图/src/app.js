@@ -12116,6 +12116,7 @@
     const maxCandidateMs = nonNegativeNumber(options.maxCandidateMs);
     const maxTotalMs = nonNegativeNumber(options.maxTotalMs);
     const cooldownSteps = Math.max(0, Math.trunc(Number(options.cooldownSteps ?? 0)) || 0);
+    const timingMode = normalizeTimingMode(options.timingMode);
     const globalObject = options.globalObject ?? globalThis;
     const logger = options.logger ?? console;
     let running = false;
@@ -12135,6 +12136,7 @@
       maxCandidateMs,
       maxTotalMs,
       cooldownSteps,
+      timingMode,
       resetDiagnostics() {
         if (running) {
           return {
@@ -12185,10 +12187,10 @@
       try {
         const result =
           mode === "experimental"
-            ? await applyExperimentalGpuComputeCheckpoint(world, { kernels, fields, globalObject })
+            ? await applyExperimentalGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject })
             : mode === "candidate"
-              ? await candidateGpuComputeCheckpoint(world, { kernels, fields, globalObject })
-            : await validateGpuComputeCheckpoint(world, { kernels, fields, globalObject });
+              ? await candidateGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject })
+            : await validateGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject });
         reportCount += 1;
         const throttle = updateValidationThrottle(world, result, {
           maxCandidateMs,
@@ -12406,7 +12408,13 @@
 
     const candidateStartedAt = performance.now();
     for (const kernel of kernels) {
-      const result = await runCandidateKernel(kernel, snapshot, options.globalObject, fields);
+      const result = await runCandidateKernel(
+        kernel,
+        snapshot,
+        options.globalObject,
+        fields,
+        normalizeTimingMode(options.timingMode),
+      );
       candidateResults.push(compactCandidateResult(kernel, result));
       if (!result?.skipped && result?.fields) {
         Object.assign(candidateFields, result.fields);
@@ -12511,6 +12519,10 @@
       .filter(Boolean);
   }
 
+  function normalizeTimingMode(value) {
+    return value === "split" ? "split" : "overlapped";
+  }
+
   function defaultFieldsForMode(mode, kernels) {
     const normalized = normalizeCsvList(kernels, []);
     if (mode === "experimental" && normalized.some((kernel) => kernel === "isostasy" || kernel === "webgpu-isostasy")) {
@@ -12519,7 +12531,7 @@
     return DEFAULT_VALIDATE_FIELDS;
   }
 
-  async function runCandidateKernel(kernel, world, globalObject, fields) {
+  async function runCandidateKernel(kernel, world, globalObject, fields, timingMode) {
     if (kernel === "elevation" || kernel === "webgpu-elevation") {
       return runWebGpuElevationCandidate(world, { globalObject, fields });
     }
@@ -12527,7 +12539,7 @@
       return runWebGpuIsostasyCandidate(world, { globalObject, fields });
     }
     if (kernel === "local-fields" || kernel === "localTerrain" || kernel === "webgpu-local-fields") {
-      return runWebGpuLocalFieldsCandidate(world, { globalObject, fields });
+      return runWebGpuLocalFieldsCandidate(world, { globalObject, fields, timingMode });
     }
     if (kernel === "margin-smooth" || kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") {
       return runWebGpuMarginSmoothCandidate(world, { globalObject, fields });
@@ -13933,6 +13945,7 @@
       kernels: gpuComputeValidator.kernels,
       fields: gpuComputeValidator.fields,
       interval: gpuComputeValidator.interval,
+      timingMode: gpuComputeValidator.timingMode,
     });
   }
   const renderer = createMapRenderer(elements.canvas, {
@@ -14508,10 +14521,11 @@
         maxCandidateMs: params.get("gpuValidateMaxCandidateMs") ?? params.get("gpu-validate-max-candidate-ms") ?? 0,
         maxTotalMs: params.get("gpuValidateMaxTotalMs") ?? params.get("gpu-validate-max-total-ms") ?? 0,
         cooldownSteps: params.get("gpuValidateCooldownSteps") ?? params.get("gpu-validate-cooldown-steps") ?? 0,
+        timingMode: params.get("gpuTimingMode") ?? params.get("gpu-timing-mode") ?? "overlapped",
         globalObject: globalThis,
       };
     } catch {
-      return { mode: "off", globalObject: globalThis };
+      return { mode: "off", timingMode: "overlapped", globalObject: globalThis };
     }
   }
 
