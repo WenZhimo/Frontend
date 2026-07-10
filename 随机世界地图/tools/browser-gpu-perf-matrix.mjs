@@ -171,9 +171,12 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       validationThrottleReason: latestThrottleReason(parsed?.gpuValidation),
       warmGpuTotalMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalGpuPathMs)),
       warmGpuCandidateMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalCandidateMs ?? candidate.timings?.totalGpuPathMs)),
+      warmGpuBufferSetupMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.bufferSetupMs)),
       warmGpuExecuteDownloadMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.executeAndDownloadMs)),
       warmGpuTimingModes: uniqueStrings(warmCandidates.map((candidate) => candidate.timings?.timingMode)),
       reusedContextObserved: parsed?.gpuValidation?.reusedGpuContextObserved ?? warmCandidates.length > 0,
+      reusedBuffersObserved: parsed?.gpuValidation?.reusedGpuBuffersObserved
+        ?? warmCandidates.some((candidate) => candidate.reusedBuffers === true),
       canvas: parsed?.canvas ?? null,
       pageState: parsed?.pageState ?? null,
       performance,

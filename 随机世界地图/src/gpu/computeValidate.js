@@ -121,6 +121,25 @@ export function createGpuComputeValidator(options = {}) {
     maxCandidateMs,
     maxTotalMs,
     cooldownSteps,
+    resetDiagnostics() {
+      if (running) {
+        return {
+          ok: false,
+          reason: "validation-running",
+        };
+      }
+      reportCount = 0;
+      lastValidatedStep = -1;
+      suppressUntilStep = -1;
+      throttleCount = 0;
+      lastThrottleReason = null;
+      validationHistory.length = 0;
+      globalObject.__lastGpuComputeValidation = null;
+      globalObject.__gpuComputeValidationHistory = validationHistory;
+      return {
+        ok: true,
+      };
+    },
     maybeValidate(world) {
       if ((mode !== "candidate" && mode !== "validate" && mode !== "experimental") || !world?.grid || running || reportCount >= maxReports) {
         return null;
@@ -524,6 +543,7 @@ function compactCandidateResult(kernel, result) {
     adapterInfo: result?.adapterInfo ?? null,
     deviceInfo: result?.deviceInfo ?? null,
     reusedContext: result?.reusedContext ?? false,
+    reusedBuffers: result?.reusedBuffers ?? false,
     timings: result?.timings ?? emptyTimings(),
   };
 }

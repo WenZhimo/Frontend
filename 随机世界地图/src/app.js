@@ -10605,6 +10605,7 @@
         candidateStartedAt,
       );
     } catch (error) {
+      disposeLocalFieldsResources(context);
       return {
         skipped: true,
         valid: true,
@@ -10637,10 +10638,8 @@
   async function getLocalFieldsGpuContext(globalObject, gpu) {
     const cached = localFieldsContextCache.get(globalObject);
     if (cached?.device && cached?.pipeline) {
-      return {
-        ...cached,
-        reused: true,
-      };
+      cached.reused = true;
+      return cached;
     }
 
     const setupStartedAt = performance.now();
@@ -10670,17 +10669,17 @@
       adapterInfo,
       deviceInfo,
       setupMs: performance.now() - setupStartedAt,
+      resources: null,
+      reused: false,
     };
     device.lost?.then?.(() => {
+      disposeLocalFieldsResources(context);
       if (localFieldsContextCache.get(globalObject) === context) {
         localFieldsContextCache.delete(globalObject);
       }
     });
     localFieldsContextCache.set(globalObject, context);
-    return {
-      ...context,
-      reused: false,
-    };
+    return context;
   }
 
   async function computeLocalFieldsOnDevice(world, context, capabilities, options = {}) {
@@ -10694,40 +10693,41 @@
       return skippedLocalFieldsResult(capabilities, "World grid is not a rectangular width x height layout.");
     }
 
-    const uploadStartedAt = performance.now();
-    const relativeElevation = new Float32Array(size * 4);
-    for (let i = 0; i < size; i += 1) {
-      relativeElevation[i * 4] = grid.elev[i] - seaLevel;
-    }
-
     const usage = globalThis.GPUBufferUsage;
     const mapMode = globalThis.GPUMapMode;
     if (!usage || !mapMode) {
       return skippedLocalFieldsResult(capabilities, "WebGPU constants are unavailable in this JavaScript runtime.");
     }
 
-    const paramData = new Uint32Array([size, width, height, 0]);
-    const paramBuffer = createBufferWithData(device, paramData, usage.UNIFORM | usage.COPY_DST);
-    const inputBuffer = createBufferWithData(device, relativeElevation, usage.STORAGE | usage.COPY_DST);
-    const outputBytes = size * 4 * Float32Array.BYTES_PER_ELEMENT;
-    const outputBuffer = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
-    const readBuffer = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
-    const uploadMs = performance.now() - uploadStartedAt;
+    const bufferSetupStartedAt = performance.now();
+    const resourceState = await ensureLocalFieldsResources(context, size, usage);
+    const bufferSetupMs = resourceState.reused ? 0 : performance.now() - bufferSetupStartedAt;
+    const {
+      paramData,
+      relativeElevation,
+      paramBuffer,
+      inputBuffer,
+      outputBuffer,
+      readBuffer,
+      bindGroup,
+      outputBytes,
+    } = resourceState.resources;
 
-    device.pushErrorScope?.("validation");
-    const bindGroup = device.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: paramBuffer } },
-        { binding: 1, resource: { buffer: inputBuffer } },
-        { binding: 2, resource: { buffer: outputBuffer } },
-      ],
-    });
-    const bindGroupError = await device.popErrorScope?.();
-    if (bindGroupError) {
-      destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
-      return skippedLocalFieldsResult(capabilities, `WebGPU local fields bind group validation failed: ${bindGroupError.message ?? bindGroupError}`);
+    const uploadStartedAt = performance.now();
+    paramData[0] = size;
+    paramData[1] = width;
+    paramData[2] = height;
+    paramData[3] = 0;
+    for (let i = 0; i < size; i += 1) {
+      const offset = i * 4;
+      relativeElevation[offset] = grid.elev[i] - seaLevel;
+      relativeElevation[offset + 1] = 0;
+      relativeElevation[offset + 2] = 0;
+      relativeElevation[offset + 3] = 0;
     }
+    device.queue.writeBuffer(paramBuffer, 0, paramData);
+    device.queue.writeBuffer(inputBuffer, 0, relativeElevation);
+    const uploadMs = performance.now() - uploadStartedAt;
 
     const kernelStartedAt = performance.now();
     device.pushErrorScope?.("validation");
@@ -10763,17 +10763,16 @@
     }
 
     if (dispatchError) {
-      destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
+      disposeLocalFieldsResources(context);
       return skippedLocalFieldsResult(capabilities, `WebGPU local fields dispatch validation failed: ${dispatchError.message ?? dispatchError}`);
     }
     const packed = new Float32Array(readBuffer.getMappedRange().slice(0));
     readBuffer.unmap();
 
     const fields = unpackLocalFields(size, packed);
-    destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
     const totalGpuPathMs = timingMode === "split"
-      ? uploadMs + kernelMs + downloadMs
-      : uploadMs + executeAndDownloadMs;
+      ? bufferSetupMs + uploadMs + kernelMs + downloadMs
+      : bufferSetupMs + uploadMs + executeAndDownloadMs;
 
     return {
       skipped: false,
@@ -10786,6 +10785,7 @@
       timings: {
         timingMode,
         setupMs: context.reused ? 0 : context.setupMs,
+        bufferSetupMs,
         uploadMs,
         submitMs,
         kernelMs,
@@ -10795,7 +10795,80 @@
         totalCandidateMs: (context.reused ? 0 : context.setupMs) + totalGpuPathMs,
       },
       reusedContext: context.reused,
+      reusedBuffers: resourceState.reused,
       fields,
+    };
+  }
+
+  async function ensureLocalFieldsResources(context, size, usage) {
+    const outputBytes = size * 4 * Float32Array.BYTES_PER_ELEMENT;
+    const cached = context.resources;
+    if (cached?.size === size && cached?.outputBytes === outputBytes) {
+      return {
+        resources: cached,
+        reused: true,
+      };
+    }
+
+    disposeLocalFieldsResources(context);
+    const { device, pipeline } = context;
+    const resources = {
+      size,
+      outputBytes,
+      paramData: new Uint32Array(4),
+      relativeElevation: new Float32Array(size * 4),
+      paramBuffer: null,
+      inputBuffer: null,
+      outputBuffer: null,
+      readBuffer: null,
+      bindGroup: null,
+    };
+
+    try {
+      resources.paramBuffer = device.createBuffer({
+        size: resources.paramData.byteLength,
+        usage: usage.UNIFORM | usage.COPY_DST,
+      });
+      resources.inputBuffer = device.createBuffer({
+        size: resources.relativeElevation.byteLength,
+        usage: usage.STORAGE | usage.COPY_DST,
+      });
+      resources.outputBuffer = device.createBuffer({
+        size: outputBytes,
+        usage: usage.STORAGE | usage.COPY_SRC,
+      });
+      resources.readBuffer = device.createBuffer({
+        size: outputBytes,
+        usage: usage.COPY_DST | usage.MAP_READ,
+      });
+
+      device.pushErrorScope?.("validation");
+      resources.bindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: resources.paramBuffer } },
+          { binding: 1, resource: { buffer: resources.inputBuffer } },
+          { binding: 2, resource: { buffer: resources.outputBuffer } },
+        ],
+      });
+      const bindGroupError = await device.popErrorScope?.();
+      if (bindGroupError) {
+        throw new Error(`WebGPU local fields bind group validation failed: ${bindGroupError.message ?? bindGroupError}`);
+      }
+    } catch (error) {
+      destroyBuffers([
+        resources.paramBuffer,
+        resources.inputBuffer,
+        resources.outputBuffer,
+        resources.readBuffer,
+      ]);
+      throw error;
+    }
+
+    context.resources = resources;
+    return {
+      resources,
+      reused: false,
     };
   }
 
@@ -10857,17 +10930,6 @@
     return picked;
   }
 
-  function createBufferWithData(device, typedArray, usage) {
-    const buffer = device.createBuffer({
-      size: typedArray.byteLength,
-      usage,
-      mappedAtCreation: true,
-    });
-    new typedArray.constructor(buffer.getMappedRange()).set(typedArray);
-    buffer.unmap();
-    return buffer;
-  }
-
   function unpackLocalFields(size, packed) {
     const fields = {};
     for (const name of GPU_LOCAL_FIELDS_OUTPUT_FIELDS) {
@@ -10889,6 +10951,18 @@
     }
   }
 
+  function disposeLocalFieldsResources(context) {
+    const resources = context?.resources;
+    if (!resources) return;
+    destroyBuffers([
+      resources.paramBuffer,
+      resources.inputBuffer,
+      resources.outputBuffer,
+      resources.readBuffer,
+    ]);
+    context.resources = null;
+  }
+
   function skippedLocalFieldsResult(capabilities, reason) {
     return {
       skipped: true,
@@ -10905,6 +10979,7 @@
     return {
       timingMode: null,
       setupMs: null,
+      bufferSetupMs: null,
       uploadMs: null,
       submitMs: null,
       kernelMs: null,
@@ -12060,6 +12135,25 @@
       maxCandidateMs,
       maxTotalMs,
       cooldownSteps,
+      resetDiagnostics() {
+        if (running) {
+          return {
+            ok: false,
+            reason: "validation-running",
+          };
+        }
+        reportCount = 0;
+        lastValidatedStep = -1;
+        suppressUntilStep = -1;
+        throttleCount = 0;
+        lastThrottleReason = null;
+        validationHistory.length = 0;
+        globalObject.__lastGpuComputeValidation = null;
+        globalObject.__gpuComputeValidationHistory = validationHistory;
+        return {
+          ok: true,
+        };
+      },
       maybeValidate(world) {
         if ((mode !== "candidate" && mode !== "validate" && mode !== "experimental") || !world?.grid || running || reportCount >= maxReports) {
           return null;
@@ -12463,6 +12557,7 @@
       adapterInfo: result?.adapterInfo ?? null,
       deviceInfo: result?.deviceInfo ?? null,
       reusedContext: result?.reusedContext ?? false,
+      reusedBuffers: result?.reusedBuffers ?? false,
       timings: result?.timings ?? emptyTimings(),
     };
   }
@@ -13832,6 +13927,7 @@
   const gpuCapabilities = detectGpuCapabilities(globalThis);
   console.info("[gpu]", gpuCapabilities.recommendedMode, gpuCapabilities.reason);
   const gpuComputeValidator = createGpuComputeValidator(readGpuComputeOptions());
+  globalThis.__resetGpuComputeValidationDiagnostics = () => gpuComputeValidator.resetDiagnostics();
   if (gpuComputeValidator.enabled) {
     console.info("[gpu-compute]", gpuComputeValidator.mode, {
       kernels: gpuComputeValidator.kernels,
@@ -14066,6 +14162,7 @@
       renderMs: [],
       projectionRenderMs: [],
       gpuSetupMs: [],
+      gpuBufferSetupMs: [],
       gpuUploadMs: [],
       gpuSubmitMs: [],
       gpuKernelMs: [],
@@ -14101,6 +14198,7 @@
         adapterInfo: null,
         deviceInfo: null,
         setup: summarizeSamples(samples.gpuSetupMs),
+        bufferSetup: summarizeSamples(samples.gpuBufferSetupMs),
         upload: summarizeSamples(samples.gpuUploadMs),
         submit: summarizeSamples(samples.gpuSubmitMs),
         kernel: summarizeSamples(samples.gpuKernelMs),
@@ -14145,6 +14243,9 @@
       recordGpuCompute(result) {
         const timings = summarizeGpuTimings(result);
         if (Number.isFinite(timings.setupMs)) recordSample(samples.gpuSetupMs, timings.setupMs, sampleLimit);
+        if (Number.isFinite(timings.bufferSetupMs)) {
+          recordSample(samples.gpuBufferSetupMs, timings.bufferSetupMs, sampleLimit);
+        }
         if (Number.isFinite(timings.uploadMs)) recordSample(samples.gpuUploadMs, timings.uploadMs, sampleLimit);
         if (Number.isFinite(timings.submitMs)) recordSample(samples.gpuSubmitMs, timings.submitMs, sampleLimit);
         if (Number.isFinite(timings.kernelMs)) recordSample(samples.gpuKernelMs, timings.kernelMs, sampleLimit);
@@ -14184,6 +14285,7 @@
           adapterInfo: collectFirstGpuCandidateMetadata(result, "adapterInfo"),
           deviceInfo: collectFirstGpuCandidateMetadata(result, "deviceInfo"),
           setup: summarizeSamples(samples.gpuSetupMs),
+          bufferSetup: summarizeSamples(samples.gpuBufferSetupMs),
           upload: summarizeSamples(samples.gpuUploadMs),
           submit: summarizeSamples(samples.gpuSubmitMs),
           kernel: summarizeSamples(samples.gpuKernelMs),
@@ -14240,6 +14342,7 @@
   function summarizeGpuTimings(result) {
     const totals = {
       setupMs: 0,
+      bufferSetupMs: 0,
       uploadMs: 0,
       submitMs: 0,
       kernelMs: 0,
@@ -14265,6 +14368,7 @@
     if (!count) {
       return {
         setupMs: null,
+        bufferSetupMs: null,
         uploadMs: null,
         submitMs: null,
         kernelMs: null,

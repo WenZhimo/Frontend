@@ -40,6 +40,7 @@ bindControlLabels(elements);
 const gpuCapabilities = detectGpuCapabilities(globalThis);
 console.info("[gpu]", gpuCapabilities.recommendedMode, gpuCapabilities.reason);
 const gpuComputeValidator = createGpuComputeValidator(readGpuComputeOptions());
+globalThis.__resetGpuComputeValidationDiagnostics = () => gpuComputeValidator.resetDiagnostics();
 if (gpuComputeValidator.enabled) {
   console.info("[gpu-compute]", gpuComputeValidator.mode, {
     kernels: gpuComputeValidator.kernels,
@@ -274,6 +275,7 @@ function createBrowserPerfTracker(globalObject, options = {}) {
     renderMs: [],
     projectionRenderMs: [],
     gpuSetupMs: [],
+    gpuBufferSetupMs: [],
     gpuUploadMs: [],
     gpuSubmitMs: [],
     gpuKernelMs: [],
@@ -309,6 +311,7 @@ function createBrowserPerfTracker(globalObject, options = {}) {
       adapterInfo: null,
       deviceInfo: null,
       setup: summarizeSamples(samples.gpuSetupMs),
+      bufferSetup: summarizeSamples(samples.gpuBufferSetupMs),
       upload: summarizeSamples(samples.gpuUploadMs),
       submit: summarizeSamples(samples.gpuSubmitMs),
       kernel: summarizeSamples(samples.gpuKernelMs),
@@ -353,6 +356,9 @@ function createBrowserPerfTracker(globalObject, options = {}) {
     recordGpuCompute(result) {
       const timings = summarizeGpuTimings(result);
       if (Number.isFinite(timings.setupMs)) recordSample(samples.gpuSetupMs, timings.setupMs, sampleLimit);
+      if (Number.isFinite(timings.bufferSetupMs)) {
+        recordSample(samples.gpuBufferSetupMs, timings.bufferSetupMs, sampleLimit);
+      }
       if (Number.isFinite(timings.uploadMs)) recordSample(samples.gpuUploadMs, timings.uploadMs, sampleLimit);
       if (Number.isFinite(timings.submitMs)) recordSample(samples.gpuSubmitMs, timings.submitMs, sampleLimit);
       if (Number.isFinite(timings.kernelMs)) recordSample(samples.gpuKernelMs, timings.kernelMs, sampleLimit);
@@ -392,6 +398,7 @@ function createBrowserPerfTracker(globalObject, options = {}) {
         adapterInfo: collectFirstGpuCandidateMetadata(result, "adapterInfo"),
         deviceInfo: collectFirstGpuCandidateMetadata(result, "deviceInfo"),
         setup: summarizeSamples(samples.gpuSetupMs),
+        bufferSetup: summarizeSamples(samples.gpuBufferSetupMs),
         upload: summarizeSamples(samples.gpuUploadMs),
         submit: summarizeSamples(samples.gpuSubmitMs),
         kernel: summarizeSamples(samples.gpuKernelMs),
@@ -448,6 +455,7 @@ function installLongTaskObserver(globalObject, summary, publish) {
 function summarizeGpuTimings(result) {
   const totals = {
     setupMs: 0,
+    bufferSetupMs: 0,
     uploadMs: 0,
     submitMs: 0,
     kernelMs: 0,
@@ -473,6 +481,7 @@ function summarizeGpuTimings(result) {
   if (!count) {
     return {
       setupMs: null,
+      bufferSetupMs: null,
       uploadMs: null,
       submitMs: null,
       kernelMs: null,

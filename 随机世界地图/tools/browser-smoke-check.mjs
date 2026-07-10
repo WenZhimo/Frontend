@@ -17,6 +17,11 @@ const requireWriteback = parseBoolOption(options, "require-writeback");
 const requirePerfSummary = parseBoolOption(options, "require-perf-summary");
 const requireReusedGpuContext = parseBoolOption(options, "require-reused-gpu-context");
 const requireReusedGpuSetupZero = parseBoolOption(options, "require-reused-gpu-setup-zero");
+const requireReusedGpuBuffers = parseBoolOption(options, "require-reused-gpu-buffers");
+const requireGpuBufferRebuild = parseBoolOption(options, "require-gpu-buffer-rebuild");
+const postValidationResolution = String(options["post-validation-resolution"] ?? "").trim();
+const postValidationSeed = String(options["post-validation-seed"] ?? "").trim();
+const postValidationCount = Math.max(1, parseIntOption(options, "post-validation-count", 2));
 const requireValidationThrottle = parseBoolOption(options, "require-validation-throttle");
 const requiredGpuKernels = parseCsvOption(options, "require-gpu-kernels");
 const requiredGpuFields = parseCsvOption(options, "require-gpu-fields", { normalize: false });
@@ -31,9 +36,16 @@ const maxWarmGpuCandidateMs = parseIntOption(options, "max-warm-gpu-candidate-ms
 const chromePath = String(options.chrome ?? findChromePath());
 const userDataDir = resolve(options["user-data-dir"] ?? ".test-cache/browser-smoke-profile");
 const remoteDebuggingPort = parseIntOption(options, "remote-debugging-port", 9222);
+const hasPostValidationChange = Boolean(postValidationResolution || postValidationSeed);
 
 if (!chromePath) {
   throw new Error("Chrome executable was not found. Pass --chrome <path>.");
+}
+if (hasPostValidationChange && !requireValidation) {
+  throw new Error("Post-validation world changes require --require-validation.");
+}
+if (requireGpuBufferRebuild && !hasPostValidationChange) {
+  throw new Error("--require-gpu-buffer-rebuild requires a post-validation resolution or seed change.");
 }
 
 let server = null;
@@ -101,6 +113,7 @@ try {
   await evaluate(cdp, sessionId, clickScript("#playPause"));
 
   let validation = null;
+  let postChange = null;
   if (requireValidation) {
     validation = await waitForValidation(cdp, sessionId, waitMs, requireValidationCount);
     if (!validation?.valid) {
@@ -129,6 +142,9 @@ try {
     if (requireReusedGpuSetupZero && !reusedGpuSetupIsZero(validation)) {
       throw new Error(`Reused GPU contexts did not report zero setup cost: ${JSON.stringify(validation)}`);
     }
+    if (requireReusedGpuBuffers && !reusedGpuBuffersAreWarm(validation)) {
+      throw new Error(`Reused GPU buffers were not observed with zero setup cost: ${JSON.stringify(validation)}`);
+    }
     const missingKernels = missingRequiredGpuKernels(validation, requiredGpuKernels);
     if (missingKernels.length > 0) {
       throw new Error(`Required GPU kernels were not observed (${missingKernels.join(", ")}): ${JSON.stringify(validation)}`);
@@ -138,7 +154,78 @@ try {
       throw new Error(`Required GPU fields were not validated (${missingFields.join(", ")}): ${JSON.stringify(validation)}`);
     }
     assertWarmGpuTiming(validation);
-    if (postValidationWaitMs > 0) await wait(postValidationWaitMs);
+    if (hasPostValidationChange) {
+      const resetDiagnostics = await preparePostValidationWorldChange(cdp, sessionId, waitMs);
+      const changedControls = await evaluate(
+        cdp,
+        sessionId,
+        changeWorldControlsScript({
+          resolution: postValidationResolution,
+          seedText: postValidationSeed,
+        }),
+      );
+      if (!changedControls?.ok) {
+        throw new Error(`Post-validation world change failed: ${JSON.stringify(changedControls)}`);
+      }
+      if (resetDiagnostics.wasPlaying) {
+        await evaluate(cdp, sessionId, clickScript("#playPause"));
+      }
+      const fullPostValidation = await waitForValidation(
+        cdp,
+        sessionId,
+        waitMs,
+        postValidationCount,
+      );
+      const changedValidation = sliceValidationHistory(fullPostValidation, 0);
+      if (!changedValidation?.valid || changedValidation.skipped) {
+        throw new Error(`Post-change GPU validation did not pass: ${JSON.stringify(changedValidation)}`);
+      }
+      if ((changedValidation.historyLength ?? 0) < postValidationCount) {
+        throw new Error(`Post-change GPU validation count did not reach ${postValidationCount}: ${JSON.stringify(changedValidation)}`);
+      }
+      if (requireReusedGpuContext && !hasReusedGpuContext(changedValidation)) {
+        throw new Error(`Post-change GPU context reuse was not observed: ${JSON.stringify(changedValidation)}`);
+      }
+      if (requireReusedGpuSetupZero && !reusedGpuSetupIsZero(changedValidation)) {
+        throw new Error(`Post-change reused GPU context did not report zero setup cost: ${JSON.stringify(changedValidation)}`);
+      }
+      if (requireReusedGpuBuffers && !reusedGpuBuffersAreWarm(changedValidation)) {
+        throw new Error(`Post-change reused GPU buffers were not observed with zero setup cost: ${JSON.stringify(changedValidation)}`);
+      }
+      if (requireGpuBufferRebuild && !gpuBuffersRebuiltThenReused(changedValidation)) {
+        throw new Error(`GPU buffers were not rebuilt and then reused after the world change: ${JSON.stringify(changedValidation)}`);
+      }
+      const missingPostChangeKernels = missingRequiredGpuKernels(changedValidation, requiredGpuKernels);
+      if (missingPostChangeKernels.length > 0) {
+        throw new Error(`Required GPU kernels were missing after the world change (${missingPostChangeKernels.join(", ")}): ${JSON.stringify(changedValidation)}`);
+      }
+      const missingPostChangeFields = missingRequiredGpuFields(changedValidation, requiredGpuFields);
+      if (missingPostChangeFields.length > 0) {
+        throw new Error(`Required GPU fields were missing after the world change (${missingPostChangeFields.join(", ")}): ${JSON.stringify(changedValidation)}`);
+      }
+      if (postValidationWaitMs > 0) await wait(postValidationWaitMs);
+      const changedProbe = await evaluate(cdp, sessionId, pageProbeScript());
+      if (!changedProbe?.ok) {
+        throw new Error(`Page probe failed after the world change: ${JSON.stringify(changedProbe)}`);
+      }
+      if (postValidationResolution && changedProbe.pageState?.resolution !== postValidationResolution) {
+        throw new Error(`Runtime resolution did not change to ${postValidationResolution}: ${JSON.stringify(changedProbe)}`);
+      }
+      if (postValidationSeed && changedProbe.pageState?.seedText !== postValidationSeed) {
+        throw new Error(`Runtime seed did not change to ${postValidationSeed}: ${JSON.stringify(changedProbe)}`);
+      }
+      postChange = {
+        resetDiagnostics,
+        controls: changedControls,
+        canvas: changedProbe.canvas,
+        step: changedProbe.step,
+        pageState: changedProbe.pageState ?? null,
+        validation: summarizeValidation(changedValidation),
+      };
+      validation = fullPostValidation;
+    } else if (postValidationWaitMs > 0) {
+      await wait(postValidationWaitMs);
+    }
   } else {
     if (maxWarmGpuTotalMs > 0 || maxWarmGpuCandidateMs > 0) {
       throw new Error("Warm GPU timing gates require --require-validation so candidate history can be inspected.");
@@ -174,6 +261,7 @@ try {
     controlState: afterPlay.controlState ?? null,
     performance: performanceSummary,
     gpuValidation: validation ? summarizeValidation(validation) : null,
+    postChange,
     consoleSummary: summarizeConsole(consoleMessages),
   }, null, 2));
   await closeBrowserSafely(cdp);
@@ -373,6 +461,68 @@ function clickScript(selector) {
   })()`;
 }
 
+function changeWorldControlsScript({ resolution, seedText }) {
+  return `(() => {
+    const resolutionNode = document.querySelector("#resolution");
+    const seedNode = document.querySelector("#seedText");
+    const url = new URL(globalThis.location.href);
+    if (${JSON.stringify(resolution)}) {
+      if (!resolutionNode) return { ok: false, reason: "missing #resolution" };
+      resolutionNode.value = ${JSON.stringify(resolution)};
+      url.searchParams.set("resolution", ${JSON.stringify(resolution)});
+    }
+    if (${JSON.stringify(seedText)}) {
+      if (!seedNode) return { ok: false, reason: "missing #seedText" };
+      seedNode.value = ${JSON.stringify(seedText)};
+      url.searchParams.set("seed", ${JSON.stringify(seedText)});
+    }
+    history.replaceState(null, "", url);
+    const trigger = ${JSON.stringify(resolution)} ? resolutionNode : seedNode;
+    trigger?.dispatchEvent(new Event("change", { bubbles: true }));
+    return {
+      ok: true,
+      resolution: resolutionNode?.value ?? null,
+      seedText: seedNode?.value ?? null,
+      url: globalThis.location.href,
+    };
+  })()`;
+}
+
+async function preparePostValidationWorldChange(cdp, sessionId, timeoutMs) {
+  const pauseResult = await evaluate(cdp, sessionId, `(() => {
+    const playPause = document.querySelector("#playPause");
+    if (!playPause) return { ok: false, reason: "missing #playPause" };
+    const wasPlaying = playPause.textContent === "暂停";
+    if (wasPlaying) playPause.click();
+    return { ok: true, wasPlaying };
+  })()`);
+  if (!pauseResult?.ok) return pauseResult;
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const result = await evaluate(cdp, sessionId, `(() => {
+      const reset = globalThis.__resetGpuComputeValidationDiagnostics;
+      if (typeof reset !== "function") {
+        return { ok: false, reason: "missing-reset-hook" };
+      }
+      return reset();
+    })()`);
+    if (result?.ok) {
+      return {
+        ok: true,
+        wasPlaying: pauseResult.wasPlaying === true,
+        waitedMs: Date.now() - startedAt,
+      };
+    }
+    if (result?.reason !== "validation-running") return result;
+    await wait(100);
+  }
+  return {
+    ok: false,
+    reason: "validation-reset-timeout",
+  };
+}
+
 function pageProbeScript({ requireStep = 0 } = {}) {
   return `(() => {
     const canvas = document.querySelector("#mapCanvas");
@@ -449,6 +599,45 @@ function reusedGpuSetupIsZero(validation) {
   const candidates = collectCandidateResults(validation)
     .filter((candidate) => !candidate?.skipped && candidate?.reusedContext === true);
   return candidates.length > 0 && candidates.every((candidate) => Math.abs(Number(candidate.timings?.setupMs ?? 0)) <= 0.000001);
+}
+
+function reusedGpuBuffersAreWarm(validation) {
+  const candidates = collectCandidateResults(validation)
+    .filter((candidate) => !candidate?.skipped && candidate?.reusedBuffers === true);
+  return candidates.length > 0
+    && candidates.every((candidate) => Math.abs(Number(candidate.timings?.bufferSetupMs ?? 0)) <= 0.000001);
+}
+
+function gpuBuffersRebuiltThenReused(validation) {
+  const candidates = collectCandidateResults(validation)
+    .filter((candidate) => !candidate?.skipped);
+  let rebuildObserved = false;
+  for (const candidate of candidates) {
+    const bufferSetupMs = Number(candidate.timings?.bufferSetupMs);
+    if (candidate.reusedBuffers !== true && Number.isFinite(bufferSetupMs) && bufferSetupMs > 0) {
+      rebuildObserved = true;
+      continue;
+    }
+    if (
+      rebuildObserved
+      && candidate.reusedBuffers === true
+      && Math.abs(Number(candidate.timings?.bufferSetupMs ?? 0)) <= 0.000001
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function sliceValidationHistory(validation, startIndex) {
+  const history = (validation?.history ?? []).slice(startIndex);
+  const latest = history[history.length - 1] ?? validation;
+  return {
+    ...latest,
+    history,
+    historyLength: history.length,
+    candidateResults: latest?.candidateResults ?? [],
+  };
 }
 
 function missingRequiredGpuKernels(validation, requiredKernels) {
@@ -573,12 +762,14 @@ function summarizeCandidatesForError(candidates) {
     kernel: candidate.kernel,
     backend: candidate.backend,
     reusedContext: candidate.reusedContext ?? false,
+    reusedBuffers: candidate.reusedBuffers ?? false,
     timings: candidate.timings ?? null,
   }));
 }
 
 function summarizeValidation(validation) {
   const reusedGpuContextObserved = hasReusedGpuContext(validation);
+  const reusedGpuBuffersObserved = reusedGpuBuffersAreWarm(validation);
   const observedGpuKernels = Array.from(new Set([
     ...(validation.candidateResults ?? []),
     ...(validation.history ?? []).flatMap((entry) => entry.candidateResults ?? []),
@@ -603,6 +794,7 @@ function summarizeValidation(validation) {
     validationTimings: validation.validationTimings ?? null,
     historyLength: validation.historyLength ?? null,
     reusedGpuContextObserved,
+    reusedGpuBuffersObserved,
     observedGpuKernels,
     observedGpuFields,
     history: validation.history?.map((entry) => ({
@@ -626,6 +818,7 @@ function summarizeValidation(validation) {
         adapterInfo: candidate.adapterInfo ?? null,
         deviceInfo: candidate.deviceInfo ?? null,
         reusedContext: candidate.reusedContext ?? false,
+        reusedBuffers: candidate.reusedBuffers ?? false,
         timings: candidate.timings ?? null,
       })) ?? [],
     })) ?? [],
@@ -639,6 +832,7 @@ function summarizeValidation(validation) {
       adapterInfo: candidate.adapterInfo ?? null,
       deviceInfo: candidate.deviceInfo ?? null,
       reusedContext: candidate.reusedContext ?? false,
+      reusedBuffers: candidate.reusedBuffers ?? false,
       timings: candidate.timings ?? null,
     })) ?? [],
     fields: validation.fields?.map((field) => ({

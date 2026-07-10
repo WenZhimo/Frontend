@@ -124,6 +124,10 @@ function evaluateCase(entry) {
     reasons.push(`GPU validation throttle was observed; keep this path experimental. ${entry.validationThrottleReason ?? ""}`.trim());
   } else {
     if (entry?.reusedContextObserved !== true) reasons.push("Reused GPU context was not observed.");
+    if (entry?.reusedBuffersObserved !== true) reasons.push("Reused GPU buffers were not observed.");
+    if (Number.isFinite(entry?.warmGpuBufferSetupMs) && Math.abs(entry.warmGpuBufferSetupMs) > 0.000001) {
+      reasons.push(`Warm GPU buffer setup ${round2(entry.warmGpuBufferSetupMs)}ms is not zero.`);
+    }
     if (entry?.warmGpuTotalMs === null) reasons.push("Warm GPU total path timing is unavailable.");
   }
 
@@ -158,8 +162,10 @@ function evaluateCase(entry) {
     fields: entry.fields ?? [],
     warmGpuTotalMs: entry.warmGpuTotalMs ?? null,
     warmGpuCandidateMs: entry.warmGpuCandidateMs ?? null,
+    warmGpuBufferSetupMs: entry.warmGpuBufferSetupMs ?? null,
     warmGpuExecuteDownloadMs: entry.warmGpuExecuteDownloadMs ?? null,
     warmGpuTimingModes: entry.warmGpuTimingModes ?? [],
+    reusedBuffersObserved: entry.reusedBuffersObserved ?? false,
     validationTotalMs: entry.validationTotalMs ?? null,
     validationSnapshotMs: entry.validationSnapshotMs ?? null,
     validationBaselineMs: entry.validationBaselineMs ?? null,

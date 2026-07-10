@@ -689,6 +689,10 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - 同一双 seed、`256x128 + local-fields` 浏览器矩阵在改造前的 warm GPU total 约为：`龙骨海-纪元7 = 5967.7ms`、`artifact-seed-3 = 6712.4ms`；改为重叠等待后约为 `1702.6ms` 与 `2751.6ms`。两组字段均通过、GPU context 均成功复用、Console 项目错误为 0。
 - 该优化显著减少了人为串行等待，但 warm GPU total 仍明显高于默认启用门槛，且多次运行仍有抖动。因此 `local-fields` 继续保持 validate/experimental，不提升为默认 GPU compute；下一步优先评估持久 buffer、减少上传分配和跨 kernel 合批。
 - 提交前复验的双 seed 浏览器矩阵再次通过：普通矩阵 warm GPU total 为约 `2669.0ms / 2772.3ms`，`warmGpuTimingModes = ["overlapped"]`，`warmGpuExecuteDownloadMs` 为约 `2666.5ms / 2770.1ms`，两个 case 的 Console 项目错误均为 0。readiness 矩阵的复测值约为 `1541.2ms / 1877.3ms`，但分别被 long-task ratio `1.01` 和 `warmGpuTotal > cpuStepAverage * 0.8` 拦截，最终 `ready: false`；这证明门禁能保留正确结果，同时拒绝不稳定的默认启用。
+- `local-fields` 已进一步把 param/input/output/readback buffer、CPU staging arrays 与 bind group 挂到复用的 WebGPU context 上；相同网格尺寸通过 `queue.writeBuffer` 更新输入，不再每次创建和销毁资源。尺寸变化时显式销毁旧资源并重建，device lost 或 candidate 异常时也会释放缓存资源。
+- candidate 与浏览器诊断新增 `bufferSetupMs`、`reusedBuffers`、`warmGpuBufferSetupMs` 和 `reusedBuffersObserved`。`browser-smoke-check` 新增 `--require-reused-gpu-buffers`，并支持 `--post-validation-resolution / --post-validation-seed / --require-gpu-buffer-rebuild`，可在同一真实浏览器会话中验证 world 重建后的 buffer 生命周期。验证器同时提供只读诊断用途的安全重置入口：页面暂停后只有在没有 validation 运行时才清空报告计数与历史，完成 world 变更后再恢复播放，避免旧尺寸在途任务污染验收样本。
+- 同尺寸连续 validation 已验证第二次 `reusedContext: true`、`reusedBuffers: true`、`setupMs: 0`、`bufferSetupMs: 0`，字段误差约 `1e-9`，Console 项目错误为 0。`256x128 -> 512x256` 同页切换同时更换 seed 后，先观察到新尺寸 `reusedBuffers: false / bufferSetupMs > 0`，下一次变为 `true / 0`；新 canvas 为 `512x256`，运行状态、字段和 Console 均通过。
+- 持久 buffer 后的双 seed `256x128 + local-fields` 普通矩阵 warm GPU total 约为 `1658.8ms / 1645.0ms`，相比上一切片普通矩阵约 `2669.0ms / 2772.3ms` 更稳定且更低，两个 case 的 `warmGpuBufferSetupMs = 0`。readiness 复测仍为 `ready: false`：warm GPU total 约 `1680.5ms / 1725.8ms`，主要被 `0.8x CPU step` 和 Long Task 比率门禁拦截；`512x256` warm execute/readback 在复测中约 `8.0s..13.3s`，因此本优化只完成资源复用基础，不构成默认启用许可。
 
 ### 8.7 `tools/gpu-default-readiness-check.mjs`
 
