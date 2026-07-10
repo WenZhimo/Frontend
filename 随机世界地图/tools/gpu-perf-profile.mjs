@@ -173,10 +173,13 @@ function summarizeCandidateRuns(candidates) {
       index: index + 1,
       skipped: candidate?.skipped ?? false,
       reusedContext: candidate?.reusedContext ?? false,
+      timingMode: timings.timingMode ?? null,
       setupMs: roundNullable(timings.setupMs),
       uploadMs: roundNullable(timings.uploadMs),
+      submitMs: roundNullable(timings.submitMs),
       kernelMs: roundNullable(timings.kernelMs),
       downloadMs: roundNullable(timings.downloadMs),
+      executeAndDownloadMs: roundNullable(timings.executeAndDownloadMs),
       totalGpuPathMs: roundNullable(timings.totalGpuPathMs),
       totalCandidateMs: roundNullable(timings.totalCandidateMs ?? timings.totalGpuPathMs),
     };
@@ -204,7 +207,9 @@ function averageRunField(runs, field) {
 async function runKernelCandidate(kernelName, world, fields) {
   if (kernelName === "isostasy") return runWebGpuIsostasyCandidate(world, { fields });
   if (kernelName === "elevation") return runWebGpuElevationCandidate(world, { fields });
-  if (kernelName === "local-fields") return runWebGpuLocalFieldsCandidate(world, { fields });
+  if (kernelName === "local-fields") {
+    return runWebGpuLocalFieldsCandidate(world, { fields, timingMode: "split" });
+  }
   if (kernelName === "margin-smooth") return runWebGpuMarginSmoothCandidate(world, { fields });
   if (kernelName === "sediment-capacity") return runWebGpuSedimentCapacityCandidate(world, { fields });
   return null;

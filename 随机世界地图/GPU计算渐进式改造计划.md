@@ -684,6 +684,11 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - `local-fields` 的最新浏览器 validate 分段显示：选择性快照后 `snapshotMs` 约 `0.2ms`，CPU baseline / compare 为几十毫秒级，而 `candidateMs` 为数秒级；因此当前默认启用瓶颈已明确集中在 WebGPU candidate 执行与读回，不在 CPU 侧 checkpoint 复制或字段比较。
 - 慢路径保护已用真实浏览器验证：`local-fields` 在 `gpuValidateMaxCandidateMs=1&gpuValidateCooldownSteps=5` 下第一次 validate 真实执行并超预算，第二次 validation 被标记为 `throttled/skipped`，`__worldMapPerfSummary.gpuCompute.throttled=true`，Console 项目错误为 0。该机制只保护 validate/candidate 体验，不构成默认 GPU 写回许可。
 - 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
+- `local-fields` 的普通浏览器 validation 已改为重叠计时模式：提交 compute/copy 后并发等待 `readBuffer.mapAsync()` 与 validation error scope，不再先执行一次 `queue.onSubmittedWorkDone()` 再开始 readback。该模式输出 `timingMode: "overlapped"`、`submitMs` 与 `executeAndDownloadMs`；由于 GPU 执行和 readback 已重叠，不再伪造可独立相加的 `kernelMs / downloadMs`。
+- `tools/gpu-perf-profile.mjs` 对 `local-fields` 继续显式使用 `timingMode: "split"`，保留 `queue.onSubmittedWorkDone()` 分界，以便诊断独立的 kernel 与 download 成本。浏览器性能摘要和矩阵会分别输出 `gpuCompute.submit`、`gpuCompute.executeDownload`、`warmGpuExecuteDownloadMs` 与 `warmGpuTimingModes`。
+- 同一双 seed、`256x128 + local-fields` 浏览器矩阵在改造前的 warm GPU total 约为：`龙骨海-纪元7 = 5967.7ms`、`artifact-seed-3 = 6712.4ms`；改为重叠等待后约为 `1702.6ms` 与 `2751.6ms`。两组字段均通过、GPU context 均成功复用、Console 项目错误为 0。
+- 该优化显著减少了人为串行等待，但 warm GPU total 仍明显高于默认启用门槛，且多次运行仍有抖动。因此 `local-fields` 继续保持 validate/experimental，不提升为默认 GPU compute；下一步优先评估持久 buffer、减少上传分配和跨 kernel 合批。
+- 提交前复验的双 seed 浏览器矩阵再次通过：普通矩阵 warm GPU total 为约 `2669.0ms / 2772.3ms`，`warmGpuTimingModes = ["overlapped"]`，`warmGpuExecuteDownloadMs` 为约 `2666.5ms / 2770.1ms`，两个 case 的 Console 项目错误均为 0。readiness 矩阵的复测值约为 `1541.2ms / 1877.3ms`，但分别被 long-task ratio `1.01` 和 `warmGpuTotal > cpuStepAverage * 0.8` 拦截，最终 `ready: false`；这证明门禁能保留正确结果，同时拒绝不稳定的默认启用。
 
 ### 8.7 `tools/gpu-default-readiness-check.mjs`
 

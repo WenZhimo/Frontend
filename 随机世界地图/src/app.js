@@ -10600,7 +10600,10 @@
     }
 
     try {
-      return withLocalFieldsCandidateTiming(await computeLocalFieldsOnDevice(world, context, capabilities), candidateStartedAt);
+      return withLocalFieldsCandidateTiming(
+        await computeLocalFieldsOnDevice(world, context, capabilities, options),
+        candidateStartedAt,
+      );
     } catch (error) {
       return {
         skipped: true,
@@ -10680,9 +10683,10 @@
     };
   }
 
-  async function computeLocalFieldsOnDevice(world, context, capabilities) {
+  async function computeLocalFieldsOnDevice(world, context, capabilities, options = {}) {
     const { device, pipeline } = context;
     const { grid, seaLevel } = world;
+    const timingMode = options.timingMode === "split" ? "split" : "overlapped";
     const size = grid.size;
     const width = grid.width;
     const height = grid.height;
@@ -10735,22 +10739,41 @@
     pass.end();
     encoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, outputBytes);
     device.queue.submit([encoder.finish()]);
-    await device.queue.onSubmittedWorkDone();
-    const dispatchError = await device.popErrorScope?.();
+    const submitMs = performance.now() - kernelStartedAt;
+    let kernelMs = null;
+    let downloadMs = null;
+    let executeAndDownloadMs = null;
+    let dispatchError;
+
+    if (timingMode === "split") {
+      await device.queue.onSubmittedWorkDone();
+      dispatchError = await device.popErrorScope?.();
+      kernelMs = performance.now() - kernelStartedAt;
+      const downloadStartedAt = performance.now();
+      await readBuffer.mapAsync(mapMode.READ);
+      downloadMs = performance.now() - downloadStartedAt;
+    } else {
+      const dispatchErrorPromise = device.popErrorScope?.() ?? Promise.resolve(null);
+      const executeAndDownloadStartedAt = performance.now();
+      [, dispatchError] = await Promise.all([
+        readBuffer.mapAsync(mapMode.READ),
+        dispatchErrorPromise,
+      ]);
+      executeAndDownloadMs = performance.now() - executeAndDownloadStartedAt;
+    }
+
     if (dispatchError) {
       destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
       return skippedLocalFieldsResult(capabilities, `WebGPU local fields dispatch validation failed: ${dispatchError.message ?? dispatchError}`);
     }
-    const kernelMs = performance.now() - kernelStartedAt;
-
-    const downloadStartedAt = performance.now();
-    await readBuffer.mapAsync(mapMode.READ);
     const packed = new Float32Array(readBuffer.getMappedRange().slice(0));
     readBuffer.unmap();
-    const downloadMs = performance.now() - downloadStartedAt;
 
     const fields = unpackLocalFields(size, packed);
     destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
+    const totalGpuPathMs = timingMode === "split"
+      ? uploadMs + kernelMs + downloadMs
+      : uploadMs + executeAndDownloadMs;
 
     return {
       skipped: false,
@@ -10761,12 +10784,15 @@
       deviceInfo: context.deviceInfo ?? null,
       reason: null,
       timings: {
+        timingMode,
         setupMs: context.reused ? 0 : context.setupMs,
         uploadMs,
+        submitMs,
         kernelMs,
         downloadMs,
-        totalGpuPathMs: uploadMs + kernelMs + downloadMs,
-        totalCandidateMs: (context.reused ? 0 : context.setupMs) + uploadMs + kernelMs + downloadMs,
+        executeAndDownloadMs,
+        totalGpuPathMs,
+        totalCandidateMs: (context.reused ? 0 : context.setupMs) + totalGpuPathMs,
       },
       reusedContext: context.reused,
       fields,
@@ -10877,10 +10903,13 @@
 
   function emptyLocalFieldsTimings() {
     return {
+      timingMode: null,
       setupMs: null,
       uploadMs: null,
+      submitMs: null,
       kernelMs: null,
       downloadMs: null,
+      executeAndDownloadMs: null,
       totalGpuPathMs: null,
       totalCandidateMs: null,
     };
@@ -14038,8 +14067,10 @@
       projectionRenderMs: [],
       gpuSetupMs: [],
       gpuUploadMs: [],
+      gpuSubmitMs: [],
       gpuKernelMs: [],
       gpuDownloadMs: [],
+      gpuExecuteDownloadMs: [],
       gpuTotalMs: [],
       gpuCandidateTotalMs: [],
       gpuValidationSnapshotMs: [],
@@ -14071,8 +14102,10 @@
         deviceInfo: null,
         setup: summarizeSamples(samples.gpuSetupMs),
         upload: summarizeSamples(samples.gpuUploadMs),
+        submit: summarizeSamples(samples.gpuSubmitMs),
         kernel: summarizeSamples(samples.gpuKernelMs),
         download: summarizeSamples(samples.gpuDownloadMs),
+        executeDownload: summarizeSamples(samples.gpuExecuteDownloadMs),
         total: summarizeSamples(samples.gpuTotalMs),
         candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
         validation: {
@@ -14113,8 +14146,12 @@
         const timings = summarizeGpuTimings(result);
         if (Number.isFinite(timings.setupMs)) recordSample(samples.gpuSetupMs, timings.setupMs, sampleLimit);
         if (Number.isFinite(timings.uploadMs)) recordSample(samples.gpuUploadMs, timings.uploadMs, sampleLimit);
+        if (Number.isFinite(timings.submitMs)) recordSample(samples.gpuSubmitMs, timings.submitMs, sampleLimit);
         if (Number.isFinite(timings.kernelMs)) recordSample(samples.gpuKernelMs, timings.kernelMs, sampleLimit);
         if (Number.isFinite(timings.downloadMs)) recordSample(samples.gpuDownloadMs, timings.downloadMs, sampleLimit);
+        if (Number.isFinite(timings.executeAndDownloadMs)) {
+          recordSample(samples.gpuExecuteDownloadMs, timings.executeAndDownloadMs, sampleLimit);
+        }
         if (Number.isFinite(timings.totalGpuPathMs)) recordSample(samples.gpuTotalMs, timings.totalGpuPathMs, sampleLimit);
         if (Number.isFinite(timings.totalCandidateMs)) {
           recordSample(samples.gpuCandidateTotalMs, timings.totalCandidateMs, sampleLimit);
@@ -14148,8 +14185,10 @@
           deviceInfo: collectFirstGpuCandidateMetadata(result, "deviceInfo"),
           setup: summarizeSamples(samples.gpuSetupMs),
           upload: summarizeSamples(samples.gpuUploadMs),
+          submit: summarizeSamples(samples.gpuSubmitMs),
           kernel: summarizeSamples(samples.gpuKernelMs),
           download: summarizeSamples(samples.gpuDownloadMs),
+          executeDownload: summarizeSamples(samples.gpuExecuteDownloadMs),
           total: summarizeSamples(samples.gpuTotalMs),
           candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
           validation: {
@@ -14202,18 +14241,24 @@
     const totals = {
       setupMs: 0,
       uploadMs: 0,
+      submitMs: 0,
       kernelMs: 0,
       downloadMs: 0,
+      executeAndDownloadMs: 0,
       totalGpuPathMs: 0,
       totalCandidateMs: 0,
     };
+    const observed = Object.fromEntries(Object.keys(totals).map((key) => [key, 0]));
     let count = 0;
     for (const candidate of result?.candidateResults ?? []) {
       const timings = candidate?.timings;
       if (!timings) continue;
       for (const key of Object.keys(totals)) {
-        const value = Number(timings[key]);
-        if (Number.isFinite(value)) totals[key] += value;
+        const value = timings[key];
+        if (Number.isFinite(value)) {
+          totals[key] += value;
+          observed[key] += 1;
+        }
       }
       count += 1;
     }
@@ -14221,13 +14266,17 @@
       return {
         setupMs: null,
         uploadMs: null,
+        submitMs: null,
         kernelMs: null,
         downloadMs: null,
+        executeAndDownloadMs: null,
         totalGpuPathMs: null,
         totalCandidateMs: null,
       };
     }
-    return totals;
+    return Object.fromEntries(
+      Object.keys(totals).map((key) => [key, observed[key] > 0 ? totals[key] : null]),
+    );
   }
 
   function collectGpuCandidateMetadata(result, key) {

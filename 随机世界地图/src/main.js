@@ -275,8 +275,10 @@ function createBrowserPerfTracker(globalObject, options = {}) {
     projectionRenderMs: [],
     gpuSetupMs: [],
     gpuUploadMs: [],
+    gpuSubmitMs: [],
     gpuKernelMs: [],
     gpuDownloadMs: [],
+    gpuExecuteDownloadMs: [],
     gpuTotalMs: [],
     gpuCandidateTotalMs: [],
     gpuValidationSnapshotMs: [],
@@ -308,8 +310,10 @@ function createBrowserPerfTracker(globalObject, options = {}) {
       deviceInfo: null,
       setup: summarizeSamples(samples.gpuSetupMs),
       upload: summarizeSamples(samples.gpuUploadMs),
+      submit: summarizeSamples(samples.gpuSubmitMs),
       kernel: summarizeSamples(samples.gpuKernelMs),
       download: summarizeSamples(samples.gpuDownloadMs),
+      executeDownload: summarizeSamples(samples.gpuExecuteDownloadMs),
       total: summarizeSamples(samples.gpuTotalMs),
       candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
       validation: {
@@ -350,8 +354,12 @@ function createBrowserPerfTracker(globalObject, options = {}) {
       const timings = summarizeGpuTimings(result);
       if (Number.isFinite(timings.setupMs)) recordSample(samples.gpuSetupMs, timings.setupMs, sampleLimit);
       if (Number.isFinite(timings.uploadMs)) recordSample(samples.gpuUploadMs, timings.uploadMs, sampleLimit);
+      if (Number.isFinite(timings.submitMs)) recordSample(samples.gpuSubmitMs, timings.submitMs, sampleLimit);
       if (Number.isFinite(timings.kernelMs)) recordSample(samples.gpuKernelMs, timings.kernelMs, sampleLimit);
       if (Number.isFinite(timings.downloadMs)) recordSample(samples.gpuDownloadMs, timings.downloadMs, sampleLimit);
+      if (Number.isFinite(timings.executeAndDownloadMs)) {
+        recordSample(samples.gpuExecuteDownloadMs, timings.executeAndDownloadMs, sampleLimit);
+      }
       if (Number.isFinite(timings.totalGpuPathMs)) recordSample(samples.gpuTotalMs, timings.totalGpuPathMs, sampleLimit);
       if (Number.isFinite(timings.totalCandidateMs)) {
         recordSample(samples.gpuCandidateTotalMs, timings.totalCandidateMs, sampleLimit);
@@ -385,8 +393,10 @@ function createBrowserPerfTracker(globalObject, options = {}) {
         deviceInfo: collectFirstGpuCandidateMetadata(result, "deviceInfo"),
         setup: summarizeSamples(samples.gpuSetupMs),
         upload: summarizeSamples(samples.gpuUploadMs),
+        submit: summarizeSamples(samples.gpuSubmitMs),
         kernel: summarizeSamples(samples.gpuKernelMs),
         download: summarizeSamples(samples.gpuDownloadMs),
+        executeDownload: summarizeSamples(samples.gpuExecuteDownloadMs),
         total: summarizeSamples(samples.gpuTotalMs),
         candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
         validation: {
@@ -439,18 +449,24 @@ function summarizeGpuTimings(result) {
   const totals = {
     setupMs: 0,
     uploadMs: 0,
+    submitMs: 0,
     kernelMs: 0,
     downloadMs: 0,
+    executeAndDownloadMs: 0,
     totalGpuPathMs: 0,
     totalCandidateMs: 0,
   };
+  const observed = Object.fromEntries(Object.keys(totals).map((key) => [key, 0]));
   let count = 0;
   for (const candidate of result?.candidateResults ?? []) {
     const timings = candidate?.timings;
     if (!timings) continue;
     for (const key of Object.keys(totals)) {
-      const value = Number(timings[key]);
-      if (Number.isFinite(value)) totals[key] += value;
+      const value = timings[key];
+      if (Number.isFinite(value)) {
+        totals[key] += value;
+        observed[key] += 1;
+      }
     }
     count += 1;
   }
@@ -458,13 +474,17 @@ function summarizeGpuTimings(result) {
     return {
       setupMs: null,
       uploadMs: null,
+      submitMs: null,
       kernelMs: null,
       downloadMs: null,
+      executeAndDownloadMs: null,
       totalGpuPathMs: null,
       totalCandidateMs: null,
     };
   }
-  return totals;
+  return Object.fromEntries(
+    Object.keys(totals).map((key) => [key, observed[key] > 0 ? totals[key] : null]),
+  );
 }
 
 function collectGpuCandidateMetadata(result, key) {

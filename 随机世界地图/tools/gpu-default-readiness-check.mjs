@@ -158,6 +158,8 @@ function evaluateCase(entry) {
     fields: entry.fields ?? [],
     warmGpuTotalMs: entry.warmGpuTotalMs ?? null,
     warmGpuCandidateMs: entry.warmGpuCandidateMs ?? null,
+    warmGpuExecuteDownloadMs: entry.warmGpuExecuteDownloadMs ?? null,
+    warmGpuTimingModes: entry.warmGpuTimingModes ?? [],
     validationTotalMs: entry.validationTotalMs ?? null,
     validationSnapshotMs: entry.validationSnapshotMs ?? null,
     validationBaselineMs: entry.validationBaselineMs ?? null,

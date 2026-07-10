@@ -171,6 +171,8 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       validationThrottleReason: latestThrottleReason(parsed?.gpuValidation),
       warmGpuTotalMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalGpuPathMs)),
       warmGpuCandidateMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalCandidateMs ?? candidate.timings?.totalGpuPathMs)),
+      warmGpuExecuteDownloadMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.executeAndDownloadMs)),
+      warmGpuTimingModes: uniqueStrings(warmCandidates.map((candidate) => candidate.timings?.timingMode)),
       reusedContextObserved: parsed?.gpuValidation?.reusedGpuContextObserved ?? warmCandidates.length > 0,
       canvas: parsed?.canvas ?? null,
       pageState: parsed?.pageState ?? null,
@@ -377,6 +379,10 @@ function latestThrottleReason(validation) {
 function maxNumber(values) {
   const finite = values.map(Number).filter(Number.isFinite);
   return finite.length ? round2(Math.max(...finite)) : null;
+}
+
+function uniqueStrings(values) {
+  return Array.from(new Set(values.filter((value) => typeof value === "string" && value.length > 0)));
 }
 
 function parseNumberOption(optionBag, name, fallback) {
