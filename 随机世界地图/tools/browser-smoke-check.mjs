@@ -23,6 +23,7 @@ const postValidationResolution = String(options["post-validation-resolution"] ??
 const postValidationSeed = String(options["post-validation-seed"] ?? "").trim();
 const postValidationCount = Math.max(1, parseIntOption(options, "post-validation-count", 2));
 const requireValidationThrottle = parseBoolOption(options, "require-validation-throttle");
+const requireValidationReadbackSkip = parseBoolOption(options, "require-validation-readback-skip");
 const requiredGpuKernels = parseCsvOption(options, "require-gpu-kernels");
 const requiredGpuFields = parseCsvOption(options, "require-gpu-fields", { normalize: false });
 const requireValidationCount = Math.max(1, parseIntOption(options, "require-validation-count", 1));
@@ -124,7 +125,11 @@ try {
         consoleSummary: summarizeConsole(consoleMessages),
       })}`);
     }
-    if (validation.skipped && !(requireValidationThrottle && validationThrottleObserved(validation))) {
+    if (
+      validation.skipped
+      && !(requireValidationThrottle && validationThrottleObserved(validation))
+      && !(requireValidationReadbackSkip && validationReadbackSkipObserved(validation))
+    ) {
       throw new Error(`GPU validation was skipped: ${JSON.stringify(validation)}`);
     }
     if (requireWriteback && !validation.writebackApplied) {
@@ -135,6 +140,9 @@ try {
     }
     if (requireValidationThrottle && !validationThrottleObserved(validation)) {
       throw new Error(`GPU validation throttle was not observed: ${JSON.stringify(validation)}`);
+    }
+    if (requireValidationReadbackSkip && !validationReadbackSkipObserved(validation)) {
+      throw new Error(`GPU validation readback skip was not observed: ${JSON.stringify(validation)}`);
     }
     if (requireReusedGpuContext && !hasReusedGpuContext(validation)) {
       throw new Error(`GPU context reuse was not observed: ${JSON.stringify(validation)}`);
@@ -672,6 +680,11 @@ function validationThrottleObserved(validation) {
   return (validation?.history ?? []).some((entry) => entry?.throttled);
 }
 
+function validationReadbackSkipObserved(validation) {
+  if (validation?.readbackSkipped) return true;
+  return (validation?.history ?? []).some((entry) => entry?.readbackSkipped);
+}
+
 async function closeBrowserSafely(cdp) {
   try {
     await Promise.race([
@@ -787,6 +800,12 @@ function summarizeValidation(validation) {
     writebackFields: validation.writebackFields ?? [],
     fallbackReason: validation.fallbackReason ?? null,
     throttled: validation.throttled ?? false,
+    readbackSkipped: validation.readbackSkipped ?? false,
+    readbackInterval: validation.readbackInterval ?? null,
+    lastReadbackStep: validation.lastReadbackStep ?? null,
+    nextReadbackStep: validation.nextReadbackStep ?? null,
+    readbackSkipCount: validation.readbackSkipCount ?? 0,
+    successfulReadbackCount: validation.successfulReadbackCount ?? null,
     throttleReason: validation.throttleReason ?? null,
     suppressUntilStep: validation.suppressUntilStep ?? null,
     throttleCount: validation.throttleCount ?? 0,
@@ -801,6 +820,12 @@ function summarizeValidation(validation) {
       valid: entry.valid,
       skipped: entry.skipped,
       throttled: entry.throttled ?? false,
+      readbackSkipped: entry.readbackSkipped ?? false,
+      readbackInterval: entry.readbackInterval ?? null,
+      lastReadbackStep: entry.lastReadbackStep ?? null,
+      nextReadbackStep: entry.nextReadbackStep ?? null,
+      readbackSkipCount: entry.readbackSkipCount ?? 0,
+      successfulReadbackCount: entry.successfulReadbackCount ?? null,
       throttleReason: entry.throttleReason ?? null,
       suppressUntilStep: entry.suppressUntilStep ?? null,
       throttleCount: entry.throttleCount ?? 0,

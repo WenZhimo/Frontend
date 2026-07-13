@@ -696,6 +696,9 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --que
 - 浏览器 URL 现支持 `gpuTimingMode=overlapped|split`，`tools/browser-gpu-perf-matrix.mjs` 对应支持 `--gpu-timing-mode`，并会校验 local-fields 实际上报的 timing mode。矩阵新增 `warmGpuUploadMs / warmGpuSubmitMs / warmGpuKernelMs / warmGpuDownloadMs`，用于保留真实浏览器证据。
 - 同一 `龙骨海-纪元7 / 256x128 / local-fields / 2 次 validation` 对照中，`overlapped` warm total 为约 `1643.5ms`，其中 upload `1.7ms`、submit `0.2ms`、execute+download `1641.8ms`；`split` warm total 为约 `5019.3ms`，其中 upload `2.4ms`、submit `0.1ms`、串行 `onSubmittedWorkDone + error scope` 计时约 `3356.7ms`、GPU 已完成后的独立 `mapAsync` 仍约 `1660.2ms`。两次浏览器 case 均字段有效、context/buffer 复用、Console 项目错误为 0。
 - 该对照证明 split 模式会人为串行化队列完成等待与 map，因此 `kernelMs` 不能直接当作普通路径的端到端 shader 成本；但 GPU 队列已经完成后，独立 readback 仍需约 `1.66s`，且与 overlapped 总路径接近，说明固定 map/readback 延迟是当前 local-fields 的第一顺位瓶颈。下一步优先减少 readback 频率、保留 GPU 常驻字段并评估跨 kernel 合批；不优先微调当前 shader，也不将 local-fields 提升为默认 GPU compute。
+- 浏览器 validate 现支持 `gpuValidateReadbackInterval` / `gpu-validate-readback-interval`。默认值为 `1`，保持每次 validate 都真实 readback；当值大于 `1` 时，第一次仍必须真实 GPU readback 并逐字段比较，通过后才会在间隔窗口内发布 `readbackSkipped: true` 的诊断结果。跳过报告不包含 candidate 字段、不写回状态、不伪装成字段验证，只用于降低 `mapAsync` 压力；`experimental` 写回模式强制 readback interval 为 `1`。
+- `browser-smoke-check` 新增 `--require-validation-readback-skip`，`browser-gpu-perf-matrix` 新增 `--gpu-validate-readback-interval` 并会报告 `validationReadbackSkipped`。真实浏览器验收使用 `龙骨海-纪元7 / 256x128 / local-fields / gpuValidateReadbackInterval=3 / 4 次 validation`，观察到序列为真实 readback、readback skipped、readback skipped、真实 readback；第二次真实 readback 复用 context/buffer，字段误差约 `1e-9`，Console 项目错误为 0。
+- 该机制能把高成本 readback 从“每个 validation tick”降为“按间隔复核”，但它只减少开发期 validate 读回频率，不提供默认 GPU 写回许可。默认启用仍必须等待端到端 readiness 通过；下一步应把 local-fields 或相邻 kernel 的中间字段留在 GPU 常驻资源中，并评估跨 kernel 合批，减少必须回到 CPU 的次数。
 
 ### 8.7 `tools/gpu-default-readiness-check.mjs`
 

@@ -12117,11 +12117,17 @@
     const maxTotalMs = nonNegativeNumber(options.maxTotalMs);
     const cooldownSteps = Math.max(0, Math.trunc(Number(options.cooldownSteps ?? 0)) || 0);
     const timingMode = normalizeTimingMode(options.timingMode);
+    const readbackInterval = mode === "experimental"
+      ? 1
+      : Math.max(1, Math.trunc(Number(options.readbackInterval ?? 1)) || 1);
     const globalObject = options.globalObject ?? globalThis;
     const logger = options.logger ?? console;
     let running = false;
     let reportCount = 0;
     let lastValidatedStep = -1;
+    let lastReadbackStep = -1;
+    let successfulReadbackCount = 0;
+    let readbackSkipCount = 0;
     let suppressUntilStep = -1;
     let throttleCount = 0;
     let lastThrottleReason = null;
@@ -12137,6 +12143,7 @@
       maxTotalMs,
       cooldownSteps,
       timingMode,
+      readbackInterval,
       resetDiagnostics() {
         if (running) {
           return {
@@ -12146,6 +12153,9 @@
         }
         reportCount = 0;
         lastValidatedStep = -1;
+        lastReadbackStep = -1;
+        successfulReadbackCount = 0;
+        readbackSkipCount = 0;
         suppressUntilStep = -1;
         throttleCount = 0;
         lastThrottleReason = null;
@@ -12171,6 +12181,24 @@
             suppressUntilStep,
             throttleCount,
             throttleReason: lastThrottleReason,
+          });
+          reportCount += 1;
+          logValidateResult(logger, result);
+          publishValidationResult(world, globalObject, validationHistory, result);
+          return Promise.resolve(result);
+        }
+        if (shouldSkipReadback(world.step)) {
+          lastValidatedStep = world.step;
+          readbackSkipCount += 1;
+          const result = createReadbackDeferredValidationResult(world, {
+            mode,
+            kernels,
+            fields,
+            readbackInterval,
+            lastReadbackStep,
+            nextReadbackStep: lastReadbackStep + readbackInterval,
+            readbackSkipCount,
+            successfulReadbackCount,
           });
           reportCount += 1;
           logValidateResult(logger, result);
@@ -12207,6 +12235,18 @@
           result.suppressUntilStep = throttle.suppressUntilStep;
           result.throttleCount = throttle.throttleCount;
         }
+        if (!result.skipped && result.valid) {
+          lastReadbackStep = world.step;
+          successfulReadbackCount += 1;
+        }
+        result.readbackSkipped = result.readbackSkipped ?? false;
+        result.readbackInterval = readbackInterval;
+        result.lastReadbackStep = lastReadbackStep > 0 ? lastReadbackStep : null;
+        result.nextReadbackStep = readbackInterval > 1 && lastReadbackStep > 0
+          ? lastReadbackStep + readbackInterval
+          : null;
+        result.readbackSkipCount = readbackSkipCount;
+        result.successfulReadbackCount = successfulReadbackCount;
         logValidateResult(logger, result);
         publishValidationResult(world, globalObject, validationHistory, result);
         return result;
@@ -12231,6 +12271,14 @@
       } finally {
         running = false;
       }
+    }
+
+    function shouldSkipReadback(step) {
+      return readbackInterval > 1
+        && mode !== "experimental"
+        && successfulReadbackCount > 0
+        && lastReadbackStep > 0
+        && step - lastReadbackStep < readbackInterval;
     }
   }
 
@@ -12275,6 +12323,34 @@
       suppressUntilStep: options.suppressUntilStep ?? null,
       throttleCount: options.throttleCount ?? 0,
       note: "GPU compute validation was skipped on this step to keep the browser responsive; CPU remains authoritative.",
+    };
+  }
+
+  function createReadbackDeferredValidationResult(world, options = {}) {
+    const nextReadbackStep = options.nextReadbackStep ?? null;
+    return {
+      valid: true,
+      skipped: true,
+      readbackSkipped: true,
+      step: world.step,
+      ageYears: world.ageYears,
+      mode: options.mode ?? "validate",
+      kernels: options.kernels ?? [],
+      fields: [],
+      candidateResults: [],
+      validationTimings: emptyValidationTimings(),
+      writebackApplied: false,
+      writebackFields: [],
+      skippedReason:
+        `GPU readback deferred until step ${nextReadbackStep}; CPU remains authoritative.`,
+      fallbackReason: null,
+      readbackInterval: options.readbackInterval ?? 1,
+      lastReadbackStep: options.lastReadbackStep ?? null,
+      nextReadbackStep,
+      readbackSkipCount: options.readbackSkipCount ?? 0,
+      successfulReadbackCount: options.successfulReadbackCount ?? 0,
+      note:
+        "GPU validation readback was intentionally skipped on this tick to reduce mapAsync pressure after a successful prior readback; no candidate fields were written back.",
     };
   }
 
@@ -12965,6 +13041,12 @@
       skipped: result.skipped,
       skippedReason: result.skippedReason ?? result.reason ?? null,
       fallbackReason: result.fallbackReason ?? null,
+      readbackSkipped: result.readbackSkipped ?? false,
+      readbackInterval: result.readbackInterval ?? null,
+      lastReadbackStep: result.lastReadbackStep ?? null,
+      nextReadbackStep: result.nextReadbackStep ?? null,
+      readbackSkipCount: result.readbackSkipCount ?? 0,
+      successfulReadbackCount: result.successfulReadbackCount ?? null,
       throttled: result.throttled ?? false,
       throttleReason: result.throttleReason ?? null,
       suppressUntilStep: result.suppressUntilStep ?? null,
@@ -13946,6 +14028,7 @@
       fields: gpuComputeValidator.fields,
       interval: gpuComputeValidator.interval,
       timingMode: gpuComputeValidator.timingMode,
+      readbackInterval: gpuComputeValidator.readbackInterval,
     });
   }
   const renderer = createMapRenderer(elements.canvas, {
@@ -14200,6 +14283,11 @@
         mode: options.gpuComputeMode ?? "off",
         valid: null,
         skipped: null,
+        readbackSkipped: false,
+        readbackInterval: null,
+        lastReadbackStep: null,
+        nextReadbackStep: null,
+        readbackSkipCount: 0,
         writebackApplied: false,
         fallbackReason: null,
         throttled: false,
@@ -14287,8 +14375,13 @@
           mode: result.mode ?? summary.gpuCompute.mode,
           valid: result.valid ?? null,
           skipped: result.skipped ?? null,
+          readbackSkipped: result.readbackSkipped ?? false,
+          readbackInterval: result.readbackInterval ?? summary.gpuCompute.readbackInterval ?? null,
+          lastReadbackStep: result.lastReadbackStep ?? summary.gpuCompute.lastReadbackStep ?? null,
+          nextReadbackStep: result.nextReadbackStep ?? null,
+          readbackSkipCount: result.readbackSkipCount ?? summary.gpuCompute.readbackSkipCount ?? 0,
           writebackApplied: result.writebackApplied ?? false,
-          fallbackReason: result.fallbackReason ?? result.skippedReason ?? null,
+          fallbackReason: result.fallbackReason ?? (result.readbackSkipped ? null : result.skippedReason ?? null),
           throttled: result.throttled ?? false,
           throttleReason: result.throttleReason ?? null,
           suppressUntilStep: result.suppressUntilStep ?? null,
@@ -14522,10 +14615,11 @@
         maxTotalMs: params.get("gpuValidateMaxTotalMs") ?? params.get("gpu-validate-max-total-ms") ?? 0,
         cooldownSteps: params.get("gpuValidateCooldownSteps") ?? params.get("gpu-validate-cooldown-steps") ?? 0,
         timingMode: params.get("gpuTimingMode") ?? params.get("gpu-timing-mode") ?? "overlapped",
+        readbackInterval: params.get("gpuValidateReadbackInterval") ?? params.get("gpu-validate-readback-interval") ?? 1,
         globalObject: globalThis,
       };
     } catch {
-      return { mode: "off", timingMode: "overlapped", globalObject: globalThis };
+      return { mode: "off", timingMode: "overlapped", readbackInterval: 1, globalObject: globalThis };
     }
   }
 

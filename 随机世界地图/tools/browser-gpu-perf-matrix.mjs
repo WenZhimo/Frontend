@@ -15,6 +15,7 @@ const validationCount = parseIntOption(options, "validation-count", 2);
 const gpuValidateMaxCandidateMs = parseIntOption(options, "gpu-validate-max-candidate-ms", parseIntOption(options, "gpuValidateMaxCandidateMs", 0));
 const gpuValidateMaxTotalMs = parseIntOption(options, "gpu-validate-max-total-ms", parseIntOption(options, "gpuValidateMaxTotalMs", 0));
 const gpuValidateCooldownSteps = parseIntOption(options, "gpu-validate-cooldown-steps", parseIntOption(options, "gpuValidateCooldownSteps", 0));
+const gpuValidateReadbackInterval = parseIntOption(options, "gpu-validate-readback-interval", parseIntOption(options, "gpuValidateReadbackInterval", 1));
 const requireValidationThrottle = parseBoolOption(options, "require-validation-throttle");
 const startPort = parseIntOption(options, "start-port", 9600);
 const maxAverageStepMs = parseIntOption(options, "max-average-step-ms", 0);
@@ -78,6 +79,7 @@ const summary = {
   gpuValidateMaxCandidateMs: gpuValidateMaxCandidateMs || null,
   gpuValidateMaxTotalMs: gpuValidateMaxTotalMs || null,
   gpuValidateCooldownSteps: gpuValidateCooldownSteps || null,
+  gpuValidateReadbackInterval: gpuValidateReadbackInterval || null,
   requireValidationThrottle,
   gpuTimingMode,
 };
@@ -98,6 +100,7 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       gpuKernel: kernel,
       gpuFields: fields.join(","),
       gpuTimingMode,
+      gpuValidateReadbackInterval: String(Math.max(1, gpuValidateReadbackInterval || 1)),
       renderBackend,
       seedText: seed,
       cacheBust: `gpuPerfMatrix${Date.now()}_${caseIndex}`,
@@ -123,6 +126,8 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
     ];
     if (requireValidationThrottle) {
       args.push("--require-validation-throttle");
+    } else if (gpuValidateReadbackInterval > 1) {
+      args.push("--require-validation-readback-skip");
     } else {
       args.push("--require-reused-gpu-context", "--require-reused-gpu-setup-zero");
     }
@@ -177,6 +182,7 @@ function runCase({ seed, resolution, kernel, port, caseIndex }) {
       validationBaselineMs: maxNumber(collectValidationTimings(parsed?.gpuValidation).map((timing) => timing.baselineMs)),
       validationCompareMs: maxNumber(collectValidationTimings(parsed?.gpuValidation).map((timing) => timing.compareMs)),
       validationThrottled: validationThrottleObserved(parsed?.gpuValidation),
+      validationReadbackSkipped: validationReadbackSkipObserved(parsed?.gpuValidation),
       validationThrottleReason: latestThrottleReason(parsed?.gpuValidation),
       warmGpuTotalMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalGpuPathMs)),
       warmGpuCandidateMs: maxNumber(warmCandidates.map((candidate) => candidate.timings?.totalCandidateMs ?? candidate.timings?.totalGpuPathMs)),
@@ -397,6 +403,11 @@ function collectValidationTimings(validation) {
 function validationThrottleObserved(validation) {
   if (validation?.throttled) return true;
   return (validation?.history ?? []).some((entry) => entry?.throttled);
+}
+
+function validationReadbackSkipObserved(validation) {
+  if (validation?.readbackSkipped) return true;
+  return (validation?.history ?? []).some((entry) => entry?.readbackSkipped);
 }
 
 function latestThrottleReason(validation) {

@@ -47,6 +47,7 @@ if (gpuComputeValidator.enabled) {
     fields: gpuComputeValidator.fields,
     interval: gpuComputeValidator.interval,
     timingMode: gpuComputeValidator.timingMode,
+    readbackInterval: gpuComputeValidator.readbackInterval,
   });
 }
 const renderer = createMapRenderer(elements.canvas, {
@@ -301,6 +302,11 @@ function createBrowserPerfTracker(globalObject, options = {}) {
       mode: options.gpuComputeMode ?? "off",
       valid: null,
       skipped: null,
+      readbackSkipped: false,
+      readbackInterval: null,
+      lastReadbackStep: null,
+      nextReadbackStep: null,
+      readbackSkipCount: 0,
       writebackApplied: false,
       fallbackReason: null,
       throttled: false,
@@ -388,8 +394,13 @@ function createBrowserPerfTracker(globalObject, options = {}) {
         mode: result.mode ?? summary.gpuCompute.mode,
         valid: result.valid ?? null,
         skipped: result.skipped ?? null,
+        readbackSkipped: result.readbackSkipped ?? false,
+        readbackInterval: result.readbackInterval ?? summary.gpuCompute.readbackInterval ?? null,
+        lastReadbackStep: result.lastReadbackStep ?? summary.gpuCompute.lastReadbackStep ?? null,
+        nextReadbackStep: result.nextReadbackStep ?? null,
+        readbackSkipCount: result.readbackSkipCount ?? summary.gpuCompute.readbackSkipCount ?? 0,
         writebackApplied: result.writebackApplied ?? false,
-        fallbackReason: result.fallbackReason ?? result.skippedReason ?? null,
+        fallbackReason: result.fallbackReason ?? (result.readbackSkipped ? null : result.skippedReason ?? null),
         throttled: result.throttled ?? false,
         throttleReason: result.throttleReason ?? null,
         suppressUntilStep: result.suppressUntilStep ?? null,
@@ -623,9 +634,10 @@ function readGpuComputeOptions() {
       maxTotalMs: params.get("gpuValidateMaxTotalMs") ?? params.get("gpu-validate-max-total-ms") ?? 0,
       cooldownSteps: params.get("gpuValidateCooldownSteps") ?? params.get("gpu-validate-cooldown-steps") ?? 0,
       timingMode: params.get("gpuTimingMode") ?? params.get("gpu-timing-mode") ?? "overlapped",
+      readbackInterval: params.get("gpuValidateReadbackInterval") ?? params.get("gpu-validate-readback-interval") ?? 1,
       globalObject: globalThis,
     };
   } catch {
-    return { mode: "off", timingMode: "overlapped", globalObject: globalThis };
+    return { mode: "off", timingMode: "overlapped", readbackInterval: 1, globalObject: globalThis };
   }
 }
