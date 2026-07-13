@@ -9,6 +9,7 @@ export const GPU_ELEVATION_OUTPUT_FIELDS = [
 ];
 
 export async function runWebGpuElevationCandidate(world, options = {}) {
+  const candidateStartedAt = performance.now();
   const globalObject = options.globalObject ?? globalThis;
   const capabilities = detectGpuCapabilities(globalObject);
   const gpu = globalObject?.navigator?.gpu;
@@ -29,7 +30,7 @@ export async function runWebGpuElevationCandidate(world, options = {}) {
   }
 
   try {
-    return await computeElevationOnDevice(world, device, capabilities);
+    return withCandidateTiming(await computeElevationOnDevice(world, device, capabilities), candidateStartedAt);
   } catch (error) {
     return {
       skipped: true,
@@ -43,6 +44,20 @@ export async function runWebGpuElevationCandidate(world, options = {}) {
   } finally {
     device?.destroy?.();
   }
+}
+
+function withCandidateTiming(result, candidateStartedAt) {
+  if (!result || result.skipped) return result;
+  const totalCandidateMs = performance.now() - candidateStartedAt;
+  const totalGpuPathMs = Number(result.timings?.totalGpuPathMs);
+  return {
+    ...result,
+    timings: {
+      ...result.timings,
+      setupMs: Number.isFinite(totalGpuPathMs) ? Math.max(0, totalCandidateMs - totalGpuPathMs) : null,
+      totalCandidateMs,
+    },
+  };
 }
 
 async function computeElevationOnDevice(world, device, capabilities) {
@@ -196,9 +211,11 @@ function skippedElevationResult(capabilities, reason) {
 
 function emptyElevationTimings() {
   return {
+    setupMs: null,
     uploadMs: null,
     kernelMs: null,
     downloadMs: null,
     totalGpuPathMs: null,
+    totalCandidateMs: null,
   };
 }

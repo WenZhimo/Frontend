@@ -402,6 +402,9 @@ Phase 2B 当前落地状态：
 - `src/gpu/computeValidate.js` 已接入 `gpuKernel=local-fields` 浏览器 validate，并为 `slope / aspect / ruggedness / localRelief` 构建 CPU snapshot baseline；浏览器实机验证使用 `topology=cylindrical&projection=equirectangular` 显式走矩形网格路径。
 - `localFields` 浏览器实机曾暴露 Chrome WebGPU 不支持 WGSL `isNan/isInf` 的问题；现已改为 `value != value || abs(value) > 3.3e38` 的兼容检查，并为 pipeline / bind group / dispatch 加入 error scope，避免 shader 失败被误判为全 0 输出。
 - `localFields` 输入已改为 packed `vec4<f32>` storage buffer，和已验证的 dense kernels 保持一致；当前浏览器实机 `local-fields` validate 结果为真执行、非 skip，`slope / aspect / ruggedness / localRelief` 均通过阈值。
+- `localFields` WebGPU candidate 已开始复用 device / pipeline，并输出 `adapterInfo / deviceInfo / setupMs / totalCandidateMs / reusedContext`；浏览器实机两次连续 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`。
+- `localFields` 复用修复曾暴露 classic bundle 作用域中的同名 `withCandidateTiming` 函数覆盖问题；当前已改用 `withLocalFieldsCandidateTiming`，后续新增 GPU candidate 时应避免跨模块顶层 helper 同名，或在 bundler 中隔离模块作用域。
+- `sediment-capacity` 与 `margin-smooth` 已补齐和 `localFields` 一致的 device / pipeline context 复用，并输出 `adapterInfo / deviceInfo / setupMs / totalCandidateMs / reusedContext`；浏览器实机两次连续 validate 均已确认第二次 `reusedContext: true` 且 `setupMs: 0`。
 - 该 candidate 仍是只读实验路径，不写回 `world.grid`，也不接入 `stepWorld` / `runGeologyV2Step`。
 - 当前只覆盖矩形网格；真实球面 / cubed-sphere 图拓扑会安全跳过，后续需按图邻域重新设计权重。
 - 已新增 `src/gpu/kernels/marginSmoothKernel.js` 与 `src/gpu/marginSmoothCompute.js`，实现 `passiveMargin / continentalShelf / continentalSlope / continentalRise / sedimentWedge / abyssalPlain` 的一次四邻域平滑 WebGPU candidate。
@@ -442,14 +445,17 @@ Phase 2B 当前落地状态：
 - 已新增 `tools/gpu-drift-check.mjs`，作为 Phase 4 validate / experimental 前置闸门；它按 checkpoint 采样当前 CPU 权威世界，并在 WebGPU candidate 可用时对比候选字段，不可用时安全输出 skipped reason 与零漂移 CPU 证据。
 - `gpu-drift-check` 支持两种调用形态：计划文档形态 `seed pipeline resolution checkpoints fields`，以及 step-first 形态 `seed step pipeline resolution --gpu-compute validate --gpu-kernel ... --fields ...`。
 - 当前工具输出 `comparedSteps / maxFieldRmse / maxFieldAbs / failedFields / diagnosticDrift / driftOverTime / fieldDrift / skippedReason`；离线 drift gate 仍保持 CPU 权威 checkpoint 对比，不把 GPU candidate 写回生产 pipeline。
-- 已新增 `src/gpu/computeValidate.js` 与浏览器 URL 参数入口：`?gpuCompute=validate` 会每 N 步采样当前 CPU 权威 world，默认运行已通过浏览器实机采样的 `isostasy` WebGPU candidate，对比 `isostaticBase` 并在 Console 输出 `[gpu-compute-validate]` 摘要；该模式不写回 `world.grid`。
+- 已新增 `src/gpu/computeValidate.js` 与浏览器 URL 参数入口：`?gpuCompute=candidate/validate` 会每 N 步采样当前 CPU 权威 world，默认运行已通过浏览器实机采样的 `isostasy` WebGPU candidate，对比 `isostaticBase` 并在 Console 输出 `[gpu-compute-candidate]` 或 `[gpu-compute-validate]` 摘要；这两种模式都不写回 `world.grid`。
 - `gpuCompute=validate` 的默认采样间隔为 20 步，可用 `gpuValidateInterval` 调整；可用 `gpuKernel` / `gpuKernels` 和 `gpuFields` 缩小验证范围。
+- `gpuCompute=validate` 已支持显式慢路径保护参数：`gpuValidateMaxCandidateMs`、`gpuValidateMaxTotalMs`、`gpuValidateCooldownSteps`。默认不启用冷却，避免影响既有验证计数；当传入阈值且真实浏览器 candidate 超预算时，后续若干 step 会发布 `throttled/skipped` 结果，CPU 继续保持权威，页面不会反复执行过慢 WebGPU candidate。
 - 浏览器运行时 `isostaticBase` validate 门槛使用 `rmse <= 0.001 / p95Abs <= 0.002 / maxAbs <= 0.0065`；其中 `maxAbs` 比离线候选门槛略宽，用于吸收浏览器 WebGPU f32 的单点边缘差异，不构成默认 GPU 写回许可。
 - 浏览器实机 WebGPU 验证显示 `elevation` 已可作为显式 `gpuKernel=elevation&gpuFields=baseElev,relief,boundaryRelief,elev` validate 核触发；当前修复使用 validation snapshot 对齐 CPU 权威 checkpoint，并把 elevation 输入打包到单 storage buffer，避免多 storage buffer 绑定限制导致全 0 输出。
 - 浏览器实机 WebGPU 验证显示 `sediment-capacity` 可以作为显式 `gpuKernel=sediment-capacity&gpuFields=sedimentCapacity` validate 核触发；当前已用同 checkpoint CPU 公式 baseline 校准，避免直接和沉积流程后续改写过的 step-end `grid.sedimentCapacity` 错位比较。它仍保留为显式实验项，不进入默认 GPU 写回。
 - 已新增浏览器运行时 `gpuCompute=experimental`：目前只允许 `isostasy` 低风险派生字段写回，且写回前会先对同 checkpoint CPU baseline 与 WebGPU candidate 做误差门禁；若 WebGPU 不可用、candidate skipped、字段超阈值或请求字段不在 allowlist 内，会自动保留 CPU 字段并报告 `fallbackReason`。
 - `gpuCompute=experimental&gpuKernel=isostasy` 当前允许写回 `sedimentFill / ridgeUplift / trenchDepression / crustBuoyancy / densitySubsidence / lithosphereCooling / isostaticBase / ageSubsidence / thicknessBuoyancy / oceanDepthTerms / isostaticResidual / isostaticReliefSupply`，仍不写回 `crustAge / sediment / basin / crustThickness` 等长期记忆字段。
 - 浏览器 smoke gate 已增加 `--require-writeback`，用于确认 WebGPU experimental 不是 safe-skip 误报；实机验证中 `isostasy` 12 个写回字段均通过阈值，最大误差约 `2.98e-8`，Console 输出 `[gpu-compute-experimental]` 摘要且无项目错误。
+- `src/gpu/computeValidate.js` 的 checkpoint 快照已改为按 kernel 裁剪 TypedArray 字段：`local-fields` 只复制 `elev` 与请求字段，`margin-smooth`、`sediment-capacity`、`isostasy`、`elevation` 只复制各自声明的输入/比较字段，避免每次 validate 都复制整个 `world.grid`。
+- 选择性快照已用真实浏览器验证：`local-fields` 与 `sediment-capacity` validate 均通过字段误差阈值且 Console 项目错误为 0；但实机结果仍显示 kernel/readback 远大于 CPU step 成本，说明默认启用前的主要瓶颈仍是 WebGPU 执行/读回，而不是快照复制。
 - 当前 experimental writeback 仍不是默认生产路径；进入默认 GPU compute 前还必须补齐多 seed、多分辨率和更长程 20 / 200 / 739 Myr drift gate，并证明总路径性能收益高于 CPU。
 
 ### Phase 5：高级 GPU 图算法评估
@@ -463,6 +469,12 @@ Phase 2B 当前落地状态：
 - flow accumulation scan / iterative relaxation。
 
 这些算法对正确性和调试成本要求高，不应阻塞下一阶段地质质量改造。
+
+当前落地状态：
+
+- 已完成 `GPU图算法评估报告.md`，结论是外海连通、闭合盆地、陆块编号、水文汇流和流域编号暂不进入默认 GPU 路径。
+- 已新增 `tools/gpu-graph-candidate-check.mjs` 作为前置 safe-skip 框架；当前只输出 CPU 权威 baseline 字段摘要、拓扑诊断、`skipped: true` 和推荐结论，不运行任何 WebGPU 图算法，也不写回生产字段。
+- 已验证 `distance-field / external-sea` 在 cylindrical 下可输出 baseline，`distance-field` 在 cubed-sphere 下可读取 graph-backed 拓扑字段并保持 safe skip。
 
 ## 7. 近期优先级清单
 
@@ -609,6 +621,105 @@ node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 12000 --que
 - 每次修改渲染、浏览器入口、GPU validate、GPU candidate 或默认运行模式后，都必须至少跑一次 `file` 模式。
 - 涉及 WebGPU compute 的阶段必须额外跑一次 `http` 模式并带 `--require-validation`。
 - `browser-smoke-check` 通过不替代 `interface-check / long-run-check / resolution-check`，而是补足真实浏览器运行证据。
+- `browser-smoke-check` 已可读取 `globalThis.__worldMapPerfSummary`；加 `--require-perf-summary` 时会要求浏览器实机产生 step/render 样本，并在输出中记录 step、render、projection render、GPU upload/kernel/download/total 和 Long Task 摘要。
+- 浏览器 smoke 已支持通过 URL `resolution` / `res` 覆盖 UI 分辨率；后续性能对比命令必须显式写入目标分辨率（例如 `resolution=256x128`），避免页面实际使用默认 `512x256` 而污染 CPU/GPU 性能判断。
+- 浏览器 smoke 现在优先读取 `globalThis.__worldMapRuntimeState` 作为 `pageState`，而不是只读取 DOM 控件值；URL 覆盖的 `seedText` / `resolution` 即使没有回写到侧边栏控件，也必须能在 runtime state 中被验证。
+- 浏览器 perf summary 与 `gpu-perf-profile` 现在同时记录 `setupMs` 和 `totalCandidateMs`；默认启用 GPU 时应优先看包含 setup 的 `totalCandidateMs`，连续运行时再看 setup 摊薄后的 `totalGpuPathMs`。
+- `browser-smoke-check` 已禁用页面缓存，避免验证旧 bundle；新增 `--require-reused-gpu-setup-zero`，可要求所有 `reusedContext: true` 的 candidate 报告 `setupMs: 0`，用于防止 pipeline/device 复用退化或 bundle helper 覆盖造成计时误报。
+- 涉及 WebGPU validate 的 smoke 会先等待 validation 结果，再用 `--post-validation-wait-ms` 给页面恢复一小段时间后探测 canvas 和 step；这样能区分“validation 没完成”和“validation 后页面无法继续推进”，避免长任务期间提前误报。
+- `browser-smoke-check` 的 `gpuValidation` 与浏览器 `__worldMapPerfSummary.gpuCompute.validation` 已输出 CPU 侧 validation 分段：`snapshotMs / baselineMs / compareMs / totalValidationMs`。这些指标用于区分验证框架开销和 WebGPU candidate 自身开销。
+- `browser-smoke-check` 已支持 `--require-validation-throttle`，用于验证慢路径保护是否在真实浏览器中触发；普通 `--require-validation` 仍不接受 skipped validation，只有显式要求 throttle 时才把冷却跳过视为合格。
+- 性能门禁可选参数：`--max-average-step-ms` 检查浏览器真实 step 平均耗时，`--max-average-render-ms` 检查渲染平均耗时，`--max-long-task-ms` 检查交互线程最大 long task；这些门禁用于发现“字段正确但页面体验退化”的情况。
+- GPU compute 性能门禁可选参数：`--max-gpu-total-ms` 检查不含 setup 的 upload+kernel+download，`--max-gpu-candidate-ms` 检查包含 setup 的完整 candidate 成本；进入默认启用前应使用这两个阈值证明浏览器真实运行不退化。
+- GPU warm-run 性能门禁可选参数：`--max-warm-gpu-total-ms` / `--max-warm-gpu-candidate-ms` 只检查 `reusedContext: true` 的 validation candidate，用来区分首次 setup 成本与复用后仍然过慢的 kernel/readback 成本；这些门禁必须和 `--require-validation` 一起使用。
+
+### 8.6 `tools/browser-gpu-perf-matrix.mjs`
+
+用途：
+
+- 串行调用 `browser-smoke-check`，对多个 seed、resolution、kernel 组合执行真实浏览器 WebGPU validate。
+- 汇总每个 case 的 warm GPU cost、canvas 尺寸、step 推进、Console 项目错误数和失败原因。
+- 校验每个 case 的浏览器 `pageState.seedText` 与 `pageState.resolution` 必须匹配矩阵参数；不匹配时即使 smoke 本身成功也视为失败。
+- 汇总每个 case 的浏览器性能摘要：step 平均 / p95 / 最大耗时、render 平均 / p95 / 最大耗时、projection render 摘要和 long task 总量 / 最大值。
+- 可用 `--include-cpu-baseline` 为每个 GPU case 追加同 seed / resolution / topology / projection / render backend 的 CPU-only 浏览器 smoke，并输出 `cpuBaseline` 与 `performanceRatio`，用于判断 GPU validate 是否真的改善页面体验。
+- 可用 `--max-step-ratio` / `--max-render-ratio` / `--max-long-task-ratio` 设置 GPU/CPU 体验比例门禁；只要传入任一比例门禁，矩阵会自动启用 CPU baseline，不再需要人工额外加 `--include-cpu-baseline`。
+- 作为默认 GPU compute 前的多 seed / 多分辨率性能门禁，而不是只看单次 smoke。
+
+命令示例：
+
+```powershell
+node .\tools\browser-gpu-perf-matrix.mjs --seeds '龙骨海-纪元7,artifact-seed-3' --resolutions 256x128,512x256 --kernels local-fields --max-warm-gpu-total-ms 2000
+```
+
+当前状态：
+
+- `local-fields` 单 seed / `256x128` 可通过宽 warm-run 门禁，并输出 `warmGpuTotalMs`。
+- `sediment-capacity` 在严格 warm-run 阈值下会失败，失败 JSON 仍会提取 warm candidate timing，便于判断是 setup、kernel 还是 download 慢。
+- 工具当前串行运行浏览器 case，避免多个 Chrome/WebGPU 实例并发争用 GPU。
+
+```powershell
+node .\tools\browser-smoke-check.mjs --mode file --steps 1 --wait-ms 8000 --query "renderBackend=cpu" --require-perf-summary
+node .\tools\browser-smoke-check.mjs --mode http --steps 1 --wait-ms 30000 --query "gpuCompute=experimental&gpuValidateInterval=1&gpuValidateReports=1&gpuKernel=isostasy&renderBackend=cpu" --require-validation --require-writeback --require-perf-summary
+```
+
+当前浏览器实机性能观测：
+
+- `file:// + renderBackend=cpu` 可输出性能摘要，step 平均约 `252ms`，render 平均约 `44ms`，Console 无项目错误。
+- `localhost + topology=cylindrical + projection=equirectangular + resolution=256x128 + renderBackend=cpu` 已确认 canvas 为 `256x128`，URL 分辨率参数会真实影响浏览器运行；此前未显式传入或未生效的性能样本可能实际跑在默认 `512x256`，后续基线需重新注明分辨率。
+- `localhost + gpuCompute=experimental + gpuKernel=isostasy` 可真执行并写回，但 GPU 总路径约 `14s`，其中 download/readback 约 `8.9s`，明显慢于当前 CPU 路径；因此 `isostasy` GPU 写回必须继续保留为显式 experimental，不能默认启用。
+- `localhost + gpuCompute=validate/experimental + gpuKernel=isostasy + gpuFields=isostaticBase` 已支持字段级 readback，只下载 `isostaticBase` 所在的 packed output buffer；浏览器 smoke 输出会记录 `requestedFields` 与 `downloadedPacks`，用于确认验证范围没有误报。
+- 字段级 readback 的实机结果仍显示 GPU 总路径约 `15.7s`，download/readback 约 `9.8s`，说明当前瓶颈不只是输出字段数量，后续优化应优先评估 buffer map/readback 固定成本、Chrome/WebGPU 环境开销、kernel 合批和降低验证频率。
+- 浏览器 smoke 现在会把 WebGPU candidate 的 `adapterInfo` / `deviceInfo` 一并带出，用来区分真实硬件路径、兼容/软件 fallback、设备 limits 或 feature 缺失造成的异常慢路径。
+- `gpuFields=isostaticBase` 的最新浏览器 validate 显示 adapter 为 `nvidia / lovelace`，不是软件 fallback；单字段路径仍出现约 `20.3s` 总 GPU 路径，其中 kernel 约 `7.3s`、download 约 `12.9s`，因此下一轮应优先做“设备 / pipeline 复用 + 异步低频验证”，而不是继续细分单次 readback 字段。
+- `isostasy` WebGPU candidate 已开始复用 device / pipeline；输出增加 `setupMs`、`totalCandidateMs` 与 `reusedContext`，后续应在多次 validation 或更低频 validation 中观察 setup 成本是否被摊薄。
+- 两次连续浏览器 validate 已确认第二次 `reusedContext: true` 且 `setupMs: 0`，首次 setup 约 `19.2s` 已被消除；但复用后的单次 `totalGpuPathMs` 仍约 `13.6s`，kernel 与 readback 仍各约 `6-7s`，因此该路径继续保持 experimental，不进入默认。
+- `resolution=256x128` 生效后重新验证 `local-fields`：两次连续浏览器 validate 中第二次 `reusedContext: true` 且 `setupMs: 0`，`slope / ruggedness / localRelief` 误差仍约 `1e-9` 到 `0`，复用后 `totalGpuPathMs` 约 `8.3ms`；这说明 local-fields 的 device/pipeline 复用路径已经可作为后续 Phase 3 性能基线。
+- `sediment-capacity` 与 `margin-smooth` 在 `resolution=256x128` 下复用后字段误差均在阈值内，且第二次 `setupMs: 0`；但复用后的 `sediment-capacity` 仍约 `4.3s`、`margin-smooth` 仍约 `3.5s`，说明这两条路径正确性和复用门禁已过，性能仍不足以进入默认写回或默认高频 validate。
+- 后续 warm-run 门禁复测显示 `local-fields` 复用后仍可能抖动到约 `1.7s`，而 `sediment-capacity` 在 `--max-warm-gpu-total-ms 1000` 下会被明确拦截；因此进入默认 GPU compute 前，不能只凭单次低延迟样本判断收益，必须使用 warm-run 门禁和多次浏览器样本证明稳定性。
+- `browser-gpu-perf-matrix` 已用真实 runtime state 复核 URL 参数：`龙骨海-纪元7` 与 `artifact-seed-3` 在 `256x128 + local-fields` 下均通过，`pageState.seedText` / `pageState.resolution` 与矩阵参数一致，Console 项目错误为 0；本次 warm GPU total 约 `2.56s` 与 `5.78s`，仍提示默认 GPU compute 前需要继续看多样本稳定性。
+- `browser-gpu-perf-matrix` 现在会把浏览器 step/render/long task 摘要带入每个 case；复测 `256x128 + local-fields` 时 warm GPU total 约 `3.64s..4.77s`，step 平均约 `1.89s..1.94s`，render 平均约 `3ms`，long task 最大约 `3.1s`。这类数据必须和字段误差一起用于默认 GPU compute 判断。
+- `browser-gpu-perf-matrix --include-cpu-baseline` 已可输出同参数 CPU-only 浏览器 baseline 与 `performanceRatio`；单 seed 复测中 `local-fields` warm GPU total 曾降到约 `10ms`，但页面 step 平均仍约 `2s` 量级，因此默认启用判断仍必须看整体浏览器 step/render/long task，而不是单次 warm kernel 成本。
+- `browser-gpu-perf-matrix` 已支持 GPU/CPU 比例门禁；单 seed `256x128 + local-fields` 复测中，`--max-step-ratio 10 --max-render-ratio 10 --max-long-task-ratio 10` 会自动跑 CPU baseline 并通过，输出 `performanceRatio.stepAverage ~= 0.65`、`renderAverage ~= 0.72`、`longTaskMax ~= 0.79`。进入默认启用前应把这些阈值收紧到计划中的收益门槛。
+- `gpuValidateInterval=20` 的低频浏览器 smoke 曾在 90s 内未触发 validation：诊断显示页面仅推进到 step 15，说明该配置下基础浏览器 step 已约 7s/步，不能用低频 validate 单独证明 GPU 体验改善；后续性能门禁应同时报告“触发前 step 推进速度”和“触发后的 GPU path 成本”。
+- `local-fields` 的最新浏览器 validate 分段显示：选择性快照后 `snapshotMs` 约 `0.2ms`，CPU baseline / compare 为几十毫秒级，而 `candidateMs` 为数秒级；因此当前默认启用瓶颈已明确集中在 WebGPU candidate 执行与读回，不在 CPU 侧 checkpoint 复制或字段比较。
+- 慢路径保护已用真实浏览器验证：`local-fields` 在 `gpuValidateMaxCandidateMs=1&gpuValidateCooldownSteps=5` 下第一次 validate 真实执行并超预算，第二次 validation 被标记为 `throttled/skipped`，`__worldMapPerfSummary.gpuCompute.throttled=true`，Console 项目错误为 0。该机制只保护 validate/candidate 体验，不构成默认 GPU 写回许可。
+- 这组结果说明 Phase 6 的门禁已能捕获“正确但体验退化”的情况，下一步优化重点应是减少 readback、批量合并 kernel 或降低验证频率，而不是把该路径提升为默认。
+- `local-fields` 的普通浏览器 validation 已改为重叠计时模式：提交 compute/copy 后并发等待 `readBuffer.mapAsync()` 与 validation error scope，不再先执行一次 `queue.onSubmittedWorkDone()` 再开始 readback。该模式输出 `timingMode: "overlapped"`、`submitMs` 与 `executeAndDownloadMs`；由于 GPU 执行和 readback 已重叠，不再伪造可独立相加的 `kernelMs / downloadMs`。
+- `tools/gpu-perf-profile.mjs` 对 `local-fields` 继续显式使用 `timingMode: "split"`，保留 `queue.onSubmittedWorkDone()` 分界，以便诊断独立的 kernel 与 download 成本。浏览器性能摘要和矩阵会分别输出 `gpuCompute.submit`、`gpuCompute.executeDownload`、`warmGpuExecuteDownloadMs` 与 `warmGpuTimingModes`。
+- 同一双 seed、`256x128 + local-fields` 浏览器矩阵在改造前的 warm GPU total 约为：`龙骨海-纪元7 = 5967.7ms`、`artifact-seed-3 = 6712.4ms`；改为重叠等待后约为 `1702.6ms` 与 `2751.6ms`。两组字段均通过、GPU context 均成功复用、Console 项目错误为 0。
+- 该优化显著减少了人为串行等待，但 warm GPU total 仍明显高于默认启用门槛，且多次运行仍有抖动。因此 `local-fields` 继续保持 validate/experimental，不提升为默认 GPU compute；下一步优先评估持久 buffer、减少上传分配和跨 kernel 合批。
+- 提交前复验的双 seed 浏览器矩阵再次通过：普通矩阵 warm GPU total 为约 `2669.0ms / 2772.3ms`，`warmGpuTimingModes = ["overlapped"]`，`warmGpuExecuteDownloadMs` 为约 `2666.5ms / 2770.1ms`，两个 case 的 Console 项目错误均为 0。readiness 矩阵的复测值约为 `1541.2ms / 1877.3ms`，但分别被 long-task ratio `1.01` 和 `warmGpuTotal > cpuStepAverage * 0.8` 拦截，最终 `ready: false`；这证明门禁能保留正确结果，同时拒绝不稳定的默认启用。
+- `local-fields` 已进一步把 param/input/output/readback buffer、CPU staging arrays 与 bind group 挂到复用的 WebGPU context 上；相同网格尺寸通过 `queue.writeBuffer` 更新输入，不再每次创建和销毁资源。尺寸变化时显式销毁旧资源并重建，device lost 或 candidate 异常时也会释放缓存资源。
+- candidate 与浏览器诊断新增 `bufferSetupMs`、`reusedBuffers`、`warmGpuBufferSetupMs` 和 `reusedBuffersObserved`。`browser-smoke-check` 新增 `--require-reused-gpu-buffers`，并支持 `--post-validation-resolution / --post-validation-seed / --require-gpu-buffer-rebuild`，可在同一真实浏览器会话中验证 world 重建后的 buffer 生命周期。验证器同时提供只读诊断用途的安全重置入口：页面暂停后只有在没有 validation 运行时才清空报告计数与历史，完成 world 变更后再恢复播放，避免旧尺寸在途任务污染验收样本。
+- 同尺寸连续 validation 已验证第二次 `reusedContext: true`、`reusedBuffers: true`、`setupMs: 0`、`bufferSetupMs: 0`，字段误差约 `1e-9`，Console 项目错误为 0。`256x128 -> 512x256` 同页切换同时更换 seed 后，先观察到新尺寸 `reusedBuffers: false / bufferSetupMs > 0`，下一次变为 `true / 0`；新 canvas 为 `512x256`，运行状态、字段和 Console 均通过。
+- 持久 buffer 后的双 seed `256x128 + local-fields` 普通矩阵 warm GPU total 约为 `1658.8ms / 1645.0ms`，相比上一切片普通矩阵约 `2669.0ms / 2772.3ms` 更稳定且更低，两个 case 的 `warmGpuBufferSetupMs = 0`。readiness 复测仍为 `ready: false`：warm GPU total 约 `1680.5ms / 1725.8ms`，主要被 `0.8x CPU step` 和 Long Task 比率门禁拦截；`512x256` warm execute/readback 在复测中约 `8.0s..13.3s`，因此本优化只完成资源复用基础，不构成默认启用许可。
+- 浏览器 URL 现支持 `gpuTimingMode=overlapped|split`，`tools/browser-gpu-perf-matrix.mjs` 对应支持 `--gpu-timing-mode`，并会校验 local-fields 实际上报的 timing mode。矩阵新增 `warmGpuUploadMs / warmGpuSubmitMs / warmGpuKernelMs / warmGpuDownloadMs`，用于保留真实浏览器证据。
+- 同一 `龙骨海-纪元7 / 256x128 / local-fields / 2 次 validation` 对照中，`overlapped` warm total 为约 `1643.5ms`，其中 upload `1.7ms`、submit `0.2ms`、execute+download `1641.8ms`；`split` warm total 为约 `5019.3ms`，其中 upload `2.4ms`、submit `0.1ms`、串行 `onSubmittedWorkDone + error scope` 计时约 `3356.7ms`、GPU 已完成后的独立 `mapAsync` 仍约 `1660.2ms`。两次浏览器 case 均字段有效、context/buffer 复用、Console 项目错误为 0。
+- 该对照证明 split 模式会人为串行化队列完成等待与 map，因此 `kernelMs` 不能直接当作普通路径的端到端 shader 成本；但 GPU 队列已经完成后，独立 readback 仍需约 `1.66s`，且与 overlapped 总路径接近，说明固定 map/readback 延迟是当前 local-fields 的第一顺位瓶颈。下一步优先减少 readback 频率、保留 GPU 常驻字段并评估跨 kernel 合批；不优先微调当前 shader，也不将 local-fields 提升为默认 GPU compute。
+- 浏览器 validate 现支持 `gpuValidateReadbackInterval` / `gpu-validate-readback-interval`。默认值为 `1`，保持每次 validate 都真实 readback；当值大于 `1` 时，第一次仍必须真实 GPU readback 并逐字段比较，通过后才会在间隔窗口内发布 `readbackSkipped: true` 的诊断结果。跳过报告不包含 candidate 字段、不写回状态、不伪装成字段验证，只用于降低 `mapAsync` 压力；`experimental` 写回模式强制 readback interval 为 `1`。
+- `browser-smoke-check` 新增 `--require-validation-readback-skip`，`browser-gpu-perf-matrix` 新增 `--gpu-validate-readback-interval` 并会报告 `validationReadbackSkipped`。真实浏览器验收使用 `龙骨海-纪元7 / 256x128 / local-fields / gpuValidateReadbackInterval=3 / 4 次 validation`，观察到序列为真实 readback、readback skipped、readback skipped、真实 readback；第二次真实 readback 复用 context/buffer，字段误差约 `1e-9`，Console 项目错误为 0。
+- 该机制能把高成本 readback 从“每个 validation tick”降为“按间隔复核”，但它只减少开发期 validate 读回频率，不提供默认 GPU 写回许可。默认启用仍必须等待端到端 readiness 通过；下一步应把 local-fields 或相邻 kernel 的中间字段留在 GPU 常驻资源中，并评估跨 kernel 合批，减少必须回到 CPU 的次数。
+
+### 8.7 `tools/gpu-default-readiness-check.mjs`
+
+用途：
+
+- 调用 `browser-gpu-perf-matrix`，把多 seed / 多分辨率 / 多 kernel 的真实浏览器 validate 结果汇总成默认启用判定。
+- 默认强制包含 CPU-only 浏览器 baseline，不允许只凭 WebGPU kernel 时间判断收益。
+- 同时检查浏览器 case 是否有效、CPU baseline 是否有效、Console 项目错误数、GPU context 复用、warm GPU timing、step/render/long task GPU/CPU 比例。
+- 默认判定为“报告工具”：GPU 不满足默认启用条件时输出 `ready: false` 但不改变生产路径；需要作为 CI/门禁失败时可加 `--fail-on-not-ready`。
+
+命令示例：
+
+```powershell
+node .\tools\gpu-default-readiness-check.mjs --seeds '龙骨海-纪元7,artifact-seed-3' --resolutions 256x128,512x256 --kernels local-fields --max-gpu-to-cpu-step-ratio 0.8
+```
+
+当前状态：
+
+- 已新增 `tools/gpu-default-readiness-check.mjs`，作为 Phase 6 默认 GPU compute 前的保守 readiness gate。
+- 默认门槛为：step GPU/CPU ratio `<= 1.0`、render ratio `<= 1.1`、long task ratio `<= 1.0`，且 `warmGpuTotalMs <= cpuStepAverageMs * 0.8`。
+- 该工具只读取浏览器实测结果并输出 `ready / not-ready`，不会启用默认 GPU compute，也不会写回模拟状态。
 
 ## 9. GPU 化验收标准
 

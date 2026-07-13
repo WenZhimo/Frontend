@@ -116,6 +116,9 @@ const els = {
   audio: $("#audioPlayer"),
   trackList: $("#trackList"),
   queueList: $("#queueList"),
+  miniQueueList: $("#miniQueueList"),
+  queueDrawer: $("#queueDrawer"),
+  queueToggle: $("#queueToggle"),
   lyricsView: $("#lyricsView"),
   search: $("#searchInput"),
   formatFilter: $("#formatFilter"),
@@ -199,9 +202,12 @@ function renderLibrary() {
 function renderTrackButton(track, index) {
   const isActive = index === state.currentIndex;
   const hasLyrics = Boolean(track.lyric);
+  const coverStyle = track.coverUrl
+    ? `background-image:url('${track.coverUrl}')`
+    : `--cover-a:${track.color[0]};--cover-b:${track.color[1]}`;
   return `
     <button class="track-item ${isActive ? "active" : ""}" type="button" data-index="${index}">
-      <span class="track-cover" style="--cover-a:${track.color[0]};--cover-b:${track.color[1]}">${track.title.charAt(0)}</span>
+      <span class="track-cover ${track.coverUrl ? "has-art" : ""}" style="${coverStyle}">${track.title.charAt(0)}</span>
       <span class="track-meta">
         <strong>${track.title}</strong>
         <span>${track.artist} · ${track.album}</span>
@@ -212,7 +218,7 @@ function renderTrackButton(track, index) {
 }
 
 function renderQueue() {
-  els.queueList.innerHTML = state.queue
+  const markup = state.queue
     .map((trackIndex, queueIndex) => {
       const track = tracks[trackIndex];
       const active = trackIndex === state.currentIndex;
@@ -228,6 +234,8 @@ function renderQueue() {
       `;
     })
     .join("");
+  els.queueList.innerHTML = markup;
+  els.miniQueueList.innerHTML = markup;
 }
 
 function updateNowPlaying() {
@@ -243,7 +251,7 @@ function updateNowPlaying() {
   els.miniArtist.textContent = track.artist;
   els.discInitial.textContent = track.title.charAt(0).toUpperCase();
   els.miniCover.textContent = track.title.charAt(0).toUpperCase();
-  els.miniCover.style.background = `linear-gradient(135deg, ${firstColor}, ${secondColor})`;
+  applyCoverArt(track);
   els.lyricBadge.textContent = track.lyric ? "正在读取歌词" : "无歌词文件";
   els.favorite.classList.toggle("favorite-active", state.favorites.has(track.id));
   renderLibrary();
@@ -257,11 +265,124 @@ async function loadTrack(index, autoplay = false) {
   els.audio.src = track.url || encodePath(track.file);
   els.audio.load();
   updateNowPlaying();
-  await loadLyrics(track);
+  loadCoverArt(track);
+  const lyricPromise = loadLyrics(track);
   updateProgress();
   if (autoplay) {
     await playAudio();
   }
+  await lyricPromise;
+}
+
+async function loadCoverArt(track) {
+  if (track.coverLoaded || track.coverLoading) return;
+  track.coverLoading = true;
+  try {
+    const buffer = track.local && track.fileObject
+      ? await track.fileObject.arrayBuffer()
+      : await fetchAudioHeader(track.file);
+    const cover = extractEmbeddedCover(buffer, getExtension(track.file));
+    if (cover) {
+      track.coverUrl = URL.createObjectURL(cover);
+      applyCoverArt(track);
+      renderLibrary();
+      renderQueue();
+    }
+  } catch (error) {
+    console.debug("No embedded cover loaded:", error);
+  } finally {
+    track.coverLoaded = true;
+    track.coverLoading = false;
+  }
+}
+
+async function fetchAudioHeader(file) {
+  const response = await fetch(encodePath(file), {
+    headers: { Range: "bytes=0-1048575" },
+    cache: "no-store",
+  });
+  if (!response.ok && response.status !== 206) throw new Error(`HTTP ${response.status}`);
+  return response.arrayBuffer();
+}
+
+function applyCoverArt(track) {
+  const hasArt = Boolean(track.coverUrl);
+  const fallback = `linear-gradient(135deg, ${track.color[0]}, ${track.color[1]})`;
+  [els.miniCover, $(".disc-core")].forEach((element) => {
+    element.classList.toggle("has-art", hasArt);
+    element.style.background = hasArt ? `center / cover no-repeat url("${track.coverUrl}")` : fallback;
+  });
+}
+
+function extractEmbeddedCover(buffer, extension) {
+  if (extension === "MP3") return extractMp3Cover(buffer);
+  if (extension === "FLAC") return extractFlacCover(buffer);
+  return null;
+}
+
+function extractMp3Cover(buffer) {
+  const bytes = new Uint8Array(buffer);
+  if (readAscii(bytes, 0, 3) !== "ID3") return null;
+  const version = bytes[3];
+  const tagSize = syncSafeInt(bytes, 6);
+  let offset = 10;
+  while (offset + 10 <= Math.min(bytes.length, tagSize + 10)) {
+    const frameId = readAscii(bytes, offset, 4);
+    const frameSize = version >= 4 ? syncSafeInt(bytes, offset + 4) : readUint32(bytes, offset + 4);
+    if (!frameId.trim() || frameSize <= 0) break;
+    const frameStart = offset + 10;
+    const frameEnd = frameStart + frameSize;
+    if (frameId === "APIC" && frameEnd <= bytes.length) {
+      const frame = bytes.slice(frameStart, frameEnd);
+      let pos = 1;
+      const mimeEnd = frame.indexOf(0, pos);
+      if (mimeEnd < 0) return null;
+      const mime = readAscii(frame, pos, mimeEnd - pos) || "image/jpeg";
+      pos = mimeEnd + 2;
+      while (pos < frame.length && frame[pos] !== 0) pos += 1;
+      while (pos < frame.length && frame[pos] === 0) pos += 1;
+      return new Blob([frame.slice(pos)], { type: mime });
+    }
+    offset = frameEnd;
+  }
+  return null;
+}
+
+function extractFlacCover(buffer) {
+  const bytes = new Uint8Array(buffer);
+  if (readAscii(bytes, 0, 4) !== "fLaC") return null;
+  let offset = 4;
+  while (offset + 4 <= bytes.length) {
+    const type = bytes[offset] & 0x7f;
+    const length = (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3];
+    const start = offset + 4;
+    const end = start + length;
+    if (end > bytes.length) return null;
+    if (type === 6) {
+      let pos = start + 4;
+      const mimeLength = readUint32(bytes, pos);
+      pos += 4;
+      const mime = readAscii(bytes, pos, mimeLength) || "image/jpeg";
+      pos += mimeLength + 4 + 16;
+      const dataLength = readUint32(bytes, pos);
+      pos += 4;
+      return new Blob([bytes.slice(pos, pos + dataLength)], { type: mime });
+    }
+    offset = end;
+  }
+  return null;
+}
+
+function readAscii(bytes, start, length) {
+  return String.fromCharCode(...bytes.slice(start, start + length));
+}
+
+function readUint32(bytes, start) {
+  return ((bytes[start] << 24) | (bytes[start + 1] << 16) | (bytes[start + 2] << 8) | bytes[start + 3]) >>> 0;
+}
+
+function syncSafeInt(bytes, start) {
+  return ((bytes[start] & 0x7f) << 21) | ((bytes[start + 1] & 0x7f) << 14) | ((bytes[start + 2] & 0x7f) << 7) | (bytes[start + 3] & 0x7f);
 }
 
 async function loadLyrics(track) {
@@ -336,6 +457,7 @@ function importLocalFiles(fileList) {
         artist: artistPart?.trim() || "本地音乐",
         album: file.webkitRelativePath ? file.webkitRelativePath.split("/").slice(0, -1).join("/") || "本地文件夹" : "本地文件夹",
         file: file.name,
+        fileObject: file,
         url: URL.createObjectURL(file),
         lyric: lyricFiles.has(baseName) ? lyricFiles.get(baseName).name : null,
         lyricFile: lyricFiles.get(baseName) || null,
@@ -425,8 +547,28 @@ async function playAudio() {
     await prepareVisualizer();
     await els.audio.play();
   } catch (error) {
-    showToast("浏览器阻止了自动播放，请手动点击播放。");
+    showToast(getPlaybackErrorMessage(error));
   }
+}
+
+function getPlaybackErrorMessage(error) {
+  const track = getCurrentTrack();
+  if (error?.name === "NotAllowedError") {
+    return "浏览器限制了这次播放，请再点一次播放按钮。";
+  }
+  if (error?.name === "NotSupportedError") {
+    return `${getExtension(track.file)} 可能不被当前浏览器支持，或音频文件没有成功读取。`;
+  }
+  if (els.audio.error) {
+    const messages = {
+      1: "音频加载被中断。",
+      2: "网络或本地文件读取失败。",
+      3: "音频解码失败，文件可能损坏或格式不兼容。",
+      4: "浏览器不支持这个音频格式或路径无效。",
+    };
+    return messages[els.audio.error.code] || "音频播放失败。";
+  }
+  return error?.message ? `播放失败：${error.message}` : "播放失败，请检查音频文件。";
 }
 
 function togglePlay() {
@@ -564,8 +706,16 @@ function roundedRect(ctx, x, y, width, height, radius) {
 
 function switchView(view) {
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
-  const panel = document.querySelector(`[data-panel="${view}"]`);
-  if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  $$("[data-panel]").forEach((panel) => {
+    panel.classList.toggle("active-view", panel.dataset.panel === view);
+  });
+  setQueueDrawer(false);
+}
+
+function setQueueDrawer(open) {
+  els.queueDrawer.classList.toggle("open", open);
+  els.queueDrawer.setAttribute("aria-hidden", String(!open));
+  els.queueToggle.classList.toggle("active", open);
 }
 
 function toggleFavorite() {
@@ -590,12 +740,21 @@ function bindEvents() {
     const item = event.target.closest("[data-index]");
     if (item) loadTrack(Number(item.dataset.index), true);
   });
+  els.miniQueueList.addEventListener("click", (event) => {
+    const item = event.target.closest("[data-index]");
+    if (item) {
+      loadTrack(Number(item.dataset.index), true);
+      setQueueDrawer(false);
+    }
+  });
   els.search.addEventListener("input", renderLibrary);
   els.formatFilter.addEventListener("change", renderLibrary);
   $("#playAllButton").addEventListener("click", () => loadTrack(0, true));
   $("#localImportButton").addEventListener("click", () => $("#localFolderInput").click());
   $("#localFolderInput").addEventListener("change", (event) => importLocalFiles(event.target.files));
   $("#shuffleButton").addEventListener("click", shuffleQueue);
+  els.queueToggle.addEventListener("click", () => setQueueDrawer(!els.queueDrawer.classList.contains("open")));
+  $("#queueClose").addEventListener("click", () => setQueueDrawer(false));
   $("#scrollLyricButton").addEventListener("click", () => updateLyric(els.audio.currentTime, true));
   $("#themeToggle").addEventListener("click", () => {
     document.body.classList.toggle("light");
@@ -661,6 +820,7 @@ function bindEvents() {
     if (event.key === "ArrowRight") els.audio.currentTime = Math.min((els.audio.duration || 0), els.audio.currentTime + 5);
     if (event.key === "ArrowLeft") els.audio.currentTime = Math.max(0, els.audio.currentTime - 5);
     if (event.key.toLowerCase() === "l") switchView("lyrics");
+    if (event.key === "Escape") setQueueDrawer(false);
   });
 }
 
@@ -674,6 +834,7 @@ function initialize() {
   bindEvents();
   renderLibrary();
   renderQueue();
+  switchView("library");
   updateModeButton();
   loadTrack(0, false);
   drawVisualizer();

@@ -3,7 +3,10 @@ import { SEDIMENT_CAPACITY_WGSL } from "./kernels/sedimentCapacityKernel.js";
 
 export const GPU_SEDIMENT_CAPACITY_OUTPUT_FIELDS = ["sedimentCapacity"];
 
+const sedimentCapacityContextCache = new WeakMap();
+
 export async function runWebGpuSedimentCapacityCandidate(world, options = {}) {
+  const candidateStartedAt = performance.now();
   const globalObject = options.globalObject ?? globalThis;
   const capabilities = detectGpuCapabilities(globalObject);
   const gpu = globalObject?.navigator?.gpu;
@@ -14,36 +17,104 @@ export async function runWebGpuSedimentCapacityCandidate(world, options = {}) {
     return skippedSedimentCapacityResult(capabilities, "WebGPU is not available in this environment.");
   }
 
-  let adapter;
-  let device;
+  let context;
   try {
-    adapter = await gpu.requestAdapter();
-    if (!adapter) {
-      return skippedSedimentCapacityResult(capabilities, "WebGPU adapter request returned null.");
-    }
-    device = await adapter.requestDevice();
+    context = await getSedimentCapacityGpuContext(globalObject, gpu);
   } catch (error) {
     return skippedSedimentCapacityResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
   }
 
   try {
-    return await computeSedimentCapacityOnDevice(world, device, capabilities);
+    return withCandidateTiming(await computeSedimentCapacityOnDevice(world, context, capabilities), candidateStartedAt);
   } catch (error) {
     return {
       skipped: true,
       valid: true,
       backend: "webgpu-sediment-capacity",
       gpuCapabilities: capabilities,
+      adapterInfo: context?.adapterInfo ?? null,
+      deviceInfo: context?.deviceInfo ?? null,
       reason: `WebGPU sediment capacity candidate failed safely: ${error?.message ?? "unknown error"}`,
       timings: emptySedimentCapacityTimings(),
       fields: {},
     };
-  } finally {
-    device?.destroy?.();
   }
 }
 
-async function computeSedimentCapacityOnDevice(world, device, capabilities) {
+function withCandidateTiming(result, candidateStartedAt) {
+  if (!result || result.skipped) return result;
+  if (Number.isFinite(result.timings?.totalCandidateMs)) return result;
+  const totalCandidateMs = performance.now() - candidateStartedAt;
+  const totalGpuPathMs = Number(result.timings?.totalGpuPathMs);
+  return {
+    ...result,
+    timings: {
+      ...result.timings,
+      setupMs: Number.isFinite(totalGpuPathMs) ? Math.max(0, totalCandidateMs - totalGpuPathMs) : null,
+      totalCandidateMs,
+    },
+  };
+}
+
+async function getSedimentCapacityGpuContext(globalObject, gpu) {
+  const cached = sedimentCapacityContextCache.get(globalObject);
+  if (cached?.device && cached?.seedPipeline && cached?.smoothPipeline && cached?.bindGroupLayout) {
+    return {
+      ...cached,
+      reused: true,
+    };
+  }
+
+  const setupStartedAt = performance.now();
+  const adapter = await gpu.requestAdapter();
+  if (!adapter) {
+    throw new Error("WebGPU adapter request returned null.");
+  }
+  const adapterInfo = await collectAdapterInfo(adapter);
+  const device = await adapter.requestDevice();
+  const deviceInfo = collectDeviceInfo(device);
+
+  device.pushErrorScope?.("validation");
+  const shaderModule = device.createShaderModule({ code: SEDIMENT_CAPACITY_WGSL });
+  const bindGroupLayout = createSedimentCapacityBindGroupLayout(device);
+  const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
+  const seedPipeline = device.createComputePipeline({
+    layout: pipelineLayout,
+    compute: { module: shaderModule, entryPoint: "seed_capacity" },
+  });
+  const smoothPipeline = device.createComputePipeline({
+    layout: pipelineLayout,
+    compute: { module: shaderModule, entryPoint: "smooth_capacity" },
+  });
+  const pipelineError = await device.popErrorScope?.();
+  if (pipelineError) {
+    device?.destroy?.();
+    throw new Error(`WebGPU sediment capacity pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
+  }
+
+  const context = {
+    device,
+    bindGroupLayout,
+    seedPipeline,
+    smoothPipeline,
+    adapterInfo,
+    deviceInfo,
+    setupMs: performance.now() - setupStartedAt,
+  };
+  device.lost?.then?.(() => {
+    if (sedimentCapacityContextCache.get(globalObject) === context) {
+      sedimentCapacityContextCache.delete(globalObject);
+    }
+  });
+  sedimentCapacityContextCache.set(globalObject, context);
+  return {
+    ...context,
+    reused: false,
+  };
+}
+
+async function computeSedimentCapacityOnDevice(world, context, capabilities) {
+  const { device, bindGroupLayout, seedPipeline, smoothPipeline } = context;
   const { grid, seaLevel } = world;
   const size = grid.size;
   const width = grid.width;
@@ -98,24 +169,6 @@ async function computeSedimentCapacityOnDevice(world, device, capabilities) {
   const readBuffer = device.createBuffer({ size: capacityBytes, usage: usage.COPY_DST | usage.MAP_READ });
   const uploadMs = performance.now() - uploadStartedAt;
 
-  device.pushErrorScope?.("validation");
-  const shaderModule = device.createShaderModule({ code: SEDIMENT_CAPACITY_WGSL });
-  const bindGroupLayout = createSedimentCapacityBindGroupLayout(device, usage);
-  const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
-  const seedPipeline = device.createComputePipeline({
-    layout: pipelineLayout,
-    compute: { module: shaderModule, entryPoint: "seed_capacity" },
-  });
-  const smoothPipeline = device.createComputePipeline({
-    layout: pipelineLayout,
-    compute: { module: shaderModule, entryPoint: "smooth_capacity" },
-  });
-  const pipelineError = await device.popErrorScope?.();
-  if (pipelineError) {
-    destroyBuffers([paramBuffer, ...inputBuffers, zeroSource, capacityA, capacityB, outputBuffer, readBuffer]);
-    return skippedSedimentCapacityResult(capabilities, `WebGPU sediment capacity pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
-  }
-
   const kernelStartedAt = performance.now();
   device.pushErrorScope?.("validation");
   const encoder = device.createCommandEncoder();
@@ -145,13 +198,18 @@ async function computeSedimentCapacityOnDevice(world, device, capabilities) {
     valid: true,
     backend: "webgpu-sediment-capacity",
     gpuCapabilities: capabilities,
+    adapterInfo: context.adapterInfo ?? null,
+    deviceInfo: context.deviceInfo ?? null,
     reason: null,
     timings: {
+      setupMs: context.reused ? 0 : context.setupMs,
       uploadMs,
       kernelMs,
       downloadMs,
       totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+      totalCandidateMs: (context.reused ? 0 : context.setupMs) + uploadMs + kernelMs + downloadMs,
     },
+    reusedContext: context.reused,
     fields: { sedimentCapacity },
   };
 }
@@ -193,6 +251,64 @@ function createSedimentCapacityBindGroupLayout(device) {
     buffer: { type: "storage" },
   });
   return device.createBindGroupLayout({ entries });
+}
+
+async function collectAdapterInfo(adapter) {
+  try {
+    const rawInfo =
+      adapter?.info ??
+      (typeof adapter?.requestAdapterInfo === "function" ? await adapter.requestAdapterInfo() : null);
+    const info = {};
+    for (const key of [
+      "vendor",
+      "architecture",
+      "device",
+      "description",
+      "subgroupMinSize",
+      "subgroupMaxSize",
+    ]) {
+      const value = rawInfo?.[key];
+      if (value !== undefined && value !== "") info[key] = value;
+    }
+    if (typeof adapter?.isFallbackAdapter === "boolean") {
+      info.isFallbackAdapter = adapter.isFallbackAdapter;
+    }
+    return Object.keys(info).length ? info : null;
+  } catch (error) {
+    return {
+      unavailableReason: `GPU adapter info unavailable: ${error?.message ?? "unknown error"}`,
+    };
+  }
+}
+
+function collectDeviceInfo(device) {
+  try {
+    return {
+      features: [...(device?.features ?? [])].sort(),
+      limits: pickDeviceLimits(device?.limits),
+    };
+  } catch (error) {
+    return {
+      unavailableReason: `GPU device info unavailable: ${error?.message ?? "unknown error"}`,
+    };
+  }
+}
+
+function pickDeviceLimits(limits) {
+  if (!limits) return {};
+  const keys = [
+    "maxBindGroups",
+    "maxBufferSize",
+    "maxComputeInvocationsPerWorkgroup",
+    "maxComputeWorkgroupSizeX",
+    "maxStorageBufferBindingSize",
+  ];
+  const picked = {};
+  for (const key of keys) {
+    const value = limits[key];
+    if (Number.isFinite(value)) picked[key] = value;
+  }
+  return picked;
 }
 
 function createParamData(size, width, height, seaLevel) {
@@ -237,9 +353,11 @@ function skippedSedimentCapacityResult(capabilities, reason) {
 
 function emptySedimentCapacityTimings() {
   return {
+    setupMs: null,
     uploadMs: null,
     kernelMs: null,
     downloadMs: null,
     totalGpuPathMs: null,
+    totalCandidateMs: null,
   };
 }

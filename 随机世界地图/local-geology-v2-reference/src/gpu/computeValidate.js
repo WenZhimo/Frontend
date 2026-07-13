@@ -9,6 +9,86 @@ const DEFAULT_VALIDATE_KERNELS = ["isostasy"];
 const DEFAULT_EXPERIMENTAL_KERNELS = ["isostasy"];
 const DEFAULT_EXPERIMENTAL_FIELDS = GPU_ISOSTASY_OUTPUT_FIELDS;
 const EXPERIMENTAL_WRITEBACK_FIELDS = new Set(GPU_ISOSTASY_OUTPUT_FIELDS);
+const REQUIRED_SNAPSHOT_FIELDS_BY_KERNEL = {
+  isostasy: [
+    "crustType",
+    "crustThickness",
+    "crustAge",
+    "crustDensity",
+    "sediment",
+    "sedimentLoadSubsidence",
+    "ridge",
+    "trench",
+    "elev",
+  ],
+  elevation: [
+    "crustType",
+    "orogeny",
+    "activeOrogeny",
+    "oldOrogeny",
+    "orogenyAge",
+    "sediment",
+    "sedimentLoadSubsidence",
+    "sedimentFill",
+    "ridgeUplift",
+    "trenchDepression",
+    "isostaticBase",
+    "passiveMargin",
+    "continentalShelf",
+    "continentalSlope",
+    "continentalRise",
+    "abyssalPlain",
+    "sedimentWedge",
+    "forelandBasin",
+    "activeTransform",
+    "transformMemory",
+    "fractureZoneMemory",
+    "inactiveBoundaryRelief",
+    "geologyBroadNoise",
+    "geologyMicroNoise",
+    "mountainBelt",
+    "trench",
+    "ridge",
+    "rift",
+    "islandArc",
+    "basin",
+  ],
+  "local-fields": [
+    "elev",
+  ],
+  "margin-smooth": [
+    "passiveMargin",
+    "continentalShelf",
+    "continentalSlope",
+    "continentalRise",
+    "sedimentWedge",
+    "abyssalPlain",
+  ],
+  "sediment-capacity": [
+    "elev",
+    "continentalShelf",
+    "continentalRise",
+    "sedimentWedge",
+    "passiveMargin",
+    "forelandBasin",
+    "inlandWaterCandidate",
+    "abyssalPlain",
+    "basin",
+    "riftAxis",
+    "trench",
+    "trenchAxis",
+    "islandArc",
+    "crustType",
+    "crustAge",
+    "ridgeAxis",
+    "ridge",
+    "activeOrogeny",
+    "boundaryInfluence",
+    "fractureZoneMemory",
+    "transformMemory",
+    "inactiveBoundaryRelief",
+  ],
+};
 
 export function createGpuComputeValidator(options = {}) {
   const mode = normalizeMode(options.mode);
@@ -19,58 +99,291 @@ export function createGpuComputeValidator(options = {}) {
   const fields = normalizeCsvList(options.fields, defaultFieldsForMode(mode, kernels));
   const interval = Math.max(1, Math.trunc(Number(options.interval ?? 20)) || 20);
   const maxReports = Math.max(1, Math.trunc(Number(options.maxReports ?? 12)) || 12);
+  const maxCandidateMs = nonNegativeNumber(options.maxCandidateMs);
+  const maxTotalMs = nonNegativeNumber(options.maxTotalMs);
+  const cooldownSteps = Math.max(0, Math.trunc(Number(options.cooldownSteps ?? 0)) || 0);
+  const timingMode = normalizeTimingMode(options.timingMode);
+  const readbackInterval = mode === "experimental"
+    ? 1
+    : Math.max(1, Math.trunc(Number(options.readbackInterval ?? 1)) || 1);
   const globalObject = options.globalObject ?? globalThis;
   const logger = options.logger ?? console;
   let running = false;
   let reportCount = 0;
   let lastValidatedStep = -1;
+  let lastReadbackStep = -1;
+  let successfulReadbackCount = 0;
+  let readbackSkipCount = 0;
+  let suppressUntilStep = -1;
+  let throttleCount = 0;
+  let lastThrottleReason = null;
+  const validationHistory = [];
 
   return {
     mode,
-    enabled: mode === "validate" || mode === "experimental",
+    enabled: mode === "candidate" || mode === "validate" || mode === "experimental",
     kernels,
     fields,
     interval,
-    async maybeValidate(world) {
-      if ((mode !== "validate" && mode !== "experimental") || !world?.grid || running || reportCount >= maxReports) {
+    maxCandidateMs,
+    maxTotalMs,
+    cooldownSteps,
+    timingMode,
+    readbackInterval,
+    resetDiagnostics() {
+      if (running) {
+        return {
+          ok: false,
+          reason: "validation-running",
+        };
+      }
+      reportCount = 0;
+      lastValidatedStep = -1;
+      lastReadbackStep = -1;
+      successfulReadbackCount = 0;
+      readbackSkipCount = 0;
+      suppressUntilStep = -1;
+      throttleCount = 0;
+      lastThrottleReason = null;
+      validationHistory.length = 0;
+      globalObject.__lastGpuComputeValidation = null;
+      globalObject.__gpuComputeValidationHistory = validationHistory;
+      return {
+        ok: true,
+      };
+    },
+    maybeValidate(world) {
+      if ((mode !== "candidate" && mode !== "validate" && mode !== "experimental") || !world?.grid || running || reportCount >= maxReports) {
         return null;
       }
       if (!Number.isFinite(world.step) || world.step <= 0 || world.step === lastValidatedStep) return null;
       if (world.step % interval !== 0) return null;
+      if (cooldownSteps > 0 && world.step < suppressUntilStep) {
+        lastValidatedStep = world.step;
+        const result = createThrottledValidationResult(world, {
+          mode,
+          kernels,
+          fields,
+          suppressUntilStep,
+          throttleCount,
+          throttleReason: lastThrottleReason,
+        });
+        reportCount += 1;
+        logValidateResult(logger, result);
+        publishValidationResult(world, globalObject, validationHistory, result);
+        return Promise.resolve(result);
+      }
+      if (shouldSkipReadback(world.step)) {
+        lastValidatedStep = world.step;
+        readbackSkipCount += 1;
+        const result = createReadbackDeferredValidationResult(world, {
+          mode,
+          kernels,
+          fields,
+          readbackInterval,
+          lastReadbackStep,
+          nextReadbackStep: lastReadbackStep + readbackInterval,
+          readbackSkipCount,
+          successfulReadbackCount,
+        });
+        reportCount += 1;
+        logValidateResult(logger, result);
+        publishValidationResult(world, globalObject, validationHistory, result);
+        return Promise.resolve(result);
+      }
       running = true;
       lastValidatedStep = world.step;
-      try {
-        const result =
-          mode === "experimental"
-            ? await applyExperimentalGpuComputeCheckpoint(world, { kernels, fields, globalObject })
-            : await validateGpuComputeCheckpoint(world, { kernels, fields, globalObject });
-        reportCount += 1;
-        logValidateResult(logger, result);
-        world.gpuComputeValidation = result;
-        globalObject.__lastGpuComputeValidation = result;
-        return result;
-      } catch (error) {
-        const result = {
-          valid: true,
-          skipped: true,
-          step: world.step,
-          mode,
-          reason: `GPU compute validate failed safely: ${error?.message ?? "unknown error"}`,
-          fallbackReason: `GPU compute ${mode} failed safely: ${error?.message ?? "unknown error"}`,
-          writebackApplied: false,
-          writebackFields: [],
-          fields: [],
-          candidateResults: [],
-        };
-        reportCount += 1;
-        logValidateResult(logger, result);
-        world.gpuComputeValidation = result;
-        globalObject.__lastGpuComputeValidation = result;
-        return result;
-      } finally {
-        running = false;
-      }
+      return scheduleValidationTask(globalObject, () => runScheduledValidation(world));
     },
+  };
+
+  async function runScheduledValidation(world) {
+    try {
+      const result =
+        mode === "experimental"
+          ? await applyExperimentalGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject })
+          : mode === "candidate"
+            ? await candidateGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject })
+          : await validateGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject });
+      reportCount += 1;
+      const throttle = updateValidationThrottle(world, result, {
+        maxCandidateMs,
+        maxTotalMs,
+        cooldownSteps,
+        throttleCount,
+      });
+      if (throttle.throttled) {
+        throttleCount = throttle.throttleCount;
+        suppressUntilStep = throttle.suppressUntilStep;
+        lastThrottleReason = throttle.throttleReason;
+        result.throttled = true;
+        result.throttleReason = throttle.throttleReason;
+        result.suppressUntilStep = throttle.suppressUntilStep;
+        result.throttleCount = throttle.throttleCount;
+      }
+      if (!result.skipped && result.valid) {
+        lastReadbackStep = world.step;
+        successfulReadbackCount += 1;
+      }
+      result.readbackSkipped = result.readbackSkipped ?? false;
+      result.readbackInterval = readbackInterval;
+      result.lastReadbackStep = lastReadbackStep > 0 ? lastReadbackStep : null;
+      result.nextReadbackStep = readbackInterval > 1 && lastReadbackStep > 0
+        ? lastReadbackStep + readbackInterval
+        : null;
+      result.readbackSkipCount = readbackSkipCount;
+      result.successfulReadbackCount = successfulReadbackCount;
+      logValidateResult(logger, result);
+      publishValidationResult(world, globalObject, validationHistory, result);
+      return result;
+    } catch (error) {
+      const result = {
+        valid: true,
+        skipped: true,
+        step: world.step,
+        mode,
+        reason: `GPU compute validate failed safely: ${error?.message ?? "unknown error"}`,
+        fallbackReason: `GPU compute ${mode} failed safely: ${error?.message ?? "unknown error"}`,
+        writebackApplied: false,
+        writebackFields: [],
+        fields: [],
+        candidateResults: [],
+        validationTimings: emptyValidationTimings(),
+      };
+      reportCount += 1;
+      logValidateResult(logger, result);
+      publishValidationResult(world, globalObject, validationHistory, result);
+      return result;
+    } finally {
+      running = false;
+    }
+  }
+
+  function shouldSkipReadback(step) {
+    return readbackInterval > 1
+      && mode !== "experimental"
+      && successfulReadbackCount > 0
+      && lastReadbackStep > 0
+      && step - lastReadbackStep < readbackInterval;
+  }
+}
+
+function scheduleValidationTask(globalObject, task) {
+  return new Promise((resolve) => {
+    const run = () => {
+      resolve(Promise.resolve().then(task));
+    };
+    if (typeof globalObject?.requestIdleCallback === "function") {
+      globalObject.requestIdleCallback(run, { timeout: 250 });
+      return;
+    }
+    globalObject?.setTimeout?.(run, 0);
+  });
+}
+
+function publishValidationResult(world, globalObject, history, result) {
+  history.push(result);
+  while (history.length > 24) history.shift();
+  world.gpuComputeValidation = result;
+  globalObject.__lastGpuComputeValidation = result;
+  globalObject.__gpuComputeValidationHistory = history;
+}
+
+function createThrottledValidationResult(world, options = {}) {
+  return {
+    valid: true,
+    skipped: true,
+    throttled: true,
+    step: world.step,
+    ageYears: world.ageYears,
+    mode: options.mode ?? "validate",
+    kernels: options.kernels ?? [],
+    fields: [],
+    candidateResults: [],
+    validationTimings: emptyValidationTimings(),
+    writebackApplied: false,
+    writebackFields: [],
+    skippedReason: options.throttleReason ?? "GPU validation is cooling down after an over-budget candidate.",
+    fallbackReason: options.throttleReason ?? "GPU validation is cooling down after an over-budget candidate.",
+    throttleReason: options.throttleReason ?? "GPU validation is cooling down after an over-budget candidate.",
+    suppressUntilStep: options.suppressUntilStep ?? null,
+    throttleCount: options.throttleCount ?? 0,
+    note: "GPU compute validation was skipped on this step to keep the browser responsive; CPU remains authoritative.",
+  };
+}
+
+function createReadbackDeferredValidationResult(world, options = {}) {
+  const nextReadbackStep = options.nextReadbackStep ?? null;
+  return {
+    valid: true,
+    skipped: true,
+    readbackSkipped: true,
+    step: world.step,
+    ageYears: world.ageYears,
+    mode: options.mode ?? "validate",
+    kernels: options.kernels ?? [],
+    fields: [],
+    candidateResults: [],
+    validationTimings: emptyValidationTimings(),
+    writebackApplied: false,
+    writebackFields: [],
+    skippedReason:
+      `GPU readback deferred until step ${nextReadbackStep}; CPU remains authoritative.`,
+    fallbackReason: null,
+    readbackInterval: options.readbackInterval ?? 1,
+    lastReadbackStep: options.lastReadbackStep ?? null,
+    nextReadbackStep,
+    readbackSkipCount: options.readbackSkipCount ?? 0,
+    successfulReadbackCount: options.successfulReadbackCount ?? 0,
+    note:
+      "GPU validation readback was intentionally skipped on this tick to reduce mapAsync pressure after a successful prior readback; no candidate fields were written back.",
+  };
+}
+
+function updateValidationThrottle(world, result, options = {}) {
+  const cooldownSteps = Math.max(0, Math.trunc(Number(options.cooldownSteps ?? 0)) || 0);
+  if (cooldownSteps <= 0) return { throttled: false };
+
+  const maxCandidateMs = nonNegativeNumber(options.maxCandidateMs);
+  const maxTotalMs = nonNegativeNumber(options.maxTotalMs);
+  if (maxCandidateMs <= 0 && maxTotalMs <= 0) return { throttled: false };
+
+  const candidateMs = Number(result?.validationTimings?.candidateMs);
+  const totalMs = Number(result?.validationTimings?.totalValidationMs);
+  const candidateOver = maxCandidateMs > 0 && Number.isFinite(candidateMs) && candidateMs > maxCandidateMs;
+  const totalOver = maxTotalMs > 0 && Number.isFinite(totalMs) && totalMs > maxTotalMs;
+  if (!candidateOver && !totalOver) return { throttled: false };
+
+  const reasons = [];
+  if (candidateOver) reasons.push(`candidate ${candidateMs.toFixed(1)}ms > ${maxCandidateMs}ms`);
+  if (totalOver) reasons.push(`total ${totalMs.toFixed(1)}ms > ${maxTotalMs}ms`);
+  const throttleCount = (options.throttleCount ?? 0) + 1;
+  return {
+    throttled: true,
+    throttleCount,
+    suppressUntilStep: (world?.step ?? 0) + cooldownSteps,
+    throttleReason: `GPU validation over budget (${reasons.join("; ")}); cooling down for ${cooldownSteps} step(s).`,
+  };
+}
+
+export async function candidateGpuComputeCheckpoint(world, options = {}) {
+  const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
+  const fields = normalizeCsvList(options.fields, defaultFieldsForMode("candidate", kernels));
+  const comparison = await compareGpuComputeCheckpoint(world, { ...options, kernels, fields });
+  return {
+    valid: comparison.fieldResults.every((field) => field.valid),
+    skipped: comparison.skipped,
+    skippedReason: comparison.skipped ? comparison.skippedReason : null,
+    step: comparison.snapshot.step,
+    ageYears: comparison.snapshot.ageYears,
+    mode: "candidate",
+    kernels,
+    fields: comparison.fieldResults,
+    candidateResults: comparison.candidateResults,
+    validationTimings: comparison.validationTimings,
+    writebackApplied: false,
+    writebackFields: [],
+    note: "Browser GPU compute candidate mode samples WebGPU fields for inspection; CPU remains authoritative and no writeback occurs.",
   };
 }
 
@@ -88,6 +401,7 @@ export async function validateGpuComputeCheckpoint(world, options = {}) {
     kernels,
     fields: comparison.fieldResults,
     candidateResults: comparison.candidateResults,
+    validationTimings: comparison.validationTimings,
     writebackApplied: false,
     writebackFields: [],
     note: "Browser GPU compute validate keeps CPU authoritative; candidate fields are compared but never written back.",
@@ -132,6 +446,7 @@ export async function applyExperimentalGpuComputeCheckpoint(world, options = {})
     kernels,
     fields: comparison.fieldResults,
     candidateResults: comparison.candidateResults,
+    validationTimings: comparison.validationTimings,
     writebackApplied: writebackFields.length > 0,
     writebackFields,
     fallbackReason,
@@ -141,21 +456,35 @@ export async function applyExperimentalGpuComputeCheckpoint(world, options = {})
 }
 
 async function compareGpuComputeCheckpoint(world, options = {}) {
+  const totalStartedAt = performance.now();
   const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
   const fields = normalizeCsvList(options.fields, defaultFieldsForMode("validate", kernels));
-  const snapshot = createValidationSnapshot(world);
+  const snapshotStartedAt = performance.now();
+  const snapshot = createValidationSnapshot(world, kernels, fields);
+  const snapshotMs = performance.now() - snapshotStartedAt;
   const candidateResults = [];
   const candidateFields = {};
+  const baselineStartedAt = performance.now();
   const baselineFields = buildBaselineFieldsForKernels(kernels, snapshot);
+  const baselineMs = performance.now() - baselineStartedAt;
 
+  const candidateStartedAt = performance.now();
   for (const kernel of kernels) {
-    const result = await runCandidateKernel(kernel, snapshot, options.globalObject);
+    const result = await runCandidateKernel(
+      kernel,
+      snapshot,
+      options.globalObject,
+      fields,
+      normalizeTimingMode(options.timingMode),
+    );
     candidateResults.push(compactCandidateResult(kernel, result));
     if (!result?.skipped && result?.fields) {
       Object.assign(candidateFields, result.fields);
     }
   }
+  const candidateMs = performance.now() - candidateStartedAt;
 
+  const compareStartedAt = performance.now();
   const fieldResults = fields.map((fieldName) => {
     const baselineField = baselineFields[fieldName] ?? snapshot.grid[fieldName];
     const candidateField = candidateFields[fieldName] ?? baselineField;
@@ -165,6 +494,7 @@ async function compareGpuComputeCheckpoint(world, options = {}) {
       candidateSummary: summarizeField(candidateField),
     };
   });
+  const compareMs = performance.now() - compareStartedAt;
   const skipped = candidateResults.length > 0 && candidateResults.every((result) => result.skipped);
   const skippedReason = candidateResults
     .filter((result) => result.skipped)
@@ -176,17 +506,25 @@ async function compareGpuComputeCheckpoint(world, options = {}) {
     fieldResults,
     candidateFields,
     candidateResults,
+    validationTimings: {
+      snapshotMs,
+      baselineMs,
+      candidateMs,
+      compareMs,
+      totalValidationMs: performance.now() - totalStartedAt,
+    },
     skipped,
     skippedReason: skipped ? skippedReason : null,
   };
 }
 
-function createValidationSnapshot(world) {
+function createValidationSnapshot(world, kernels = [], fields = []) {
   const grid = world?.grid ?? {};
   const snapshotGrid = {};
+  const requiredFields = requiredSnapshotFieldsForKernels(kernels, fields);
   for (const [key, value] of Object.entries(grid)) {
     if (ArrayBuffer.isView(value) && typeof value.constructor === "function") {
-      snapshotGrid[key] = new value.constructor(value);
+      if (requiredFields.has(key)) snapshotGrid[key] = new value.constructor(value);
     } else {
       snapshotGrid[key] = value;
     }
@@ -201,12 +539,37 @@ function createValidationSnapshot(world) {
   };
 }
 
+function requiredSnapshotFieldsForKernels(kernels, fields) {
+  const required = new Set(fields);
+  for (const kernel of normalizeCsvList(kernels, [])) {
+    const normalized = normalizeKernelName(kernel);
+    for (const fieldName of REQUIRED_SNAPSHOT_FIELDS_BY_KERNEL[normalized] ?? []) {
+      required.add(fieldName);
+    }
+  }
+  return required;
+}
+
+function normalizeKernelName(kernel) {
+  if (kernel === "webgpu-isostasy") return "isostasy";
+  if (kernel === "webgpu-elevation") return "elevation";
+  if (kernel === "localTerrain" || kernel === "webgpu-local-fields") return "local-fields";
+  if (kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") return "margin-smooth";
+  if (kernel === "sedimentCapacity" || kernel === "webgpu-sediment-capacity") return "sediment-capacity";
+  return String(kernel ?? "").trim();
+}
+
 function normalizeMode(value) {
   const mode = String(value ?? "off").trim().toLowerCase();
   if (mode === "validate") return "validate";
   if (mode === "candidate") return "candidate";
   if (mode === "experimental") return "experimental";
   return "off";
+}
+
+function nonNegativeNumber(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
 }
 
 function normalizeCsvList(value, fallback) {
@@ -218,6 +581,10 @@ function normalizeCsvList(value, fallback) {
     .filter(Boolean);
 }
 
+function normalizeTimingMode(value) {
+  return value === "split" ? "split" : "overlapped";
+}
+
 function defaultFieldsForMode(mode, kernels) {
   const normalized = normalizeCsvList(kernels, []);
   if (mode === "experimental" && normalized.some((kernel) => kernel === "isostasy" || kernel === "webgpu-isostasy")) {
@@ -226,21 +593,21 @@ function defaultFieldsForMode(mode, kernels) {
   return DEFAULT_VALIDATE_FIELDS;
 }
 
-async function runCandidateKernel(kernel, world, globalObject) {
+async function runCandidateKernel(kernel, world, globalObject, fields, timingMode) {
   if (kernel === "elevation" || kernel === "webgpu-elevation") {
-    return runWebGpuElevationCandidate(world, { globalObject });
+    return runWebGpuElevationCandidate(world, { globalObject, fields });
   }
   if (kernel === "isostasy" || kernel === "webgpu-isostasy") {
-    return runWebGpuIsostasyCandidate(world, { globalObject });
+    return runWebGpuIsostasyCandidate(world, { globalObject, fields });
   }
   if (kernel === "local-fields" || kernel === "localTerrain" || kernel === "webgpu-local-fields") {
-    return runWebGpuLocalFieldsCandidate(world, { globalObject });
+    return runWebGpuLocalFieldsCandidate(world, { globalObject, fields, timingMode });
   }
   if (kernel === "margin-smooth" || kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") {
-    return runWebGpuMarginSmoothCandidate(world, { globalObject });
+    return runWebGpuMarginSmoothCandidate(world, { globalObject, fields });
   }
   if (kernel === "sediment-capacity" || kernel === "sedimentCapacity" || kernel === "webgpu-sediment-capacity") {
-    return runWebGpuSedimentCapacityCandidate(world, { globalObject });
+    return runWebGpuSedimentCapacityCandidate(world, { globalObject, fields });
   }
   return {
     skipped: true,
@@ -259,6 +626,12 @@ function compactCandidateResult(kernel, result) {
     skipped: Boolean(result?.skipped),
     valid: result?.valid !== false,
     reason: result?.reason ?? null,
+    requestedFields: result?.requestedFields ?? [],
+    downloadedPacks: result?.downloadedPacks ?? [],
+    adapterInfo: result?.adapterInfo ?? null,
+    deviceInfo: result?.deviceInfo ?? null,
+    reusedContext: result?.reusedContext ?? false,
+    reusedBuffers: result?.reusedBuffers ?? false,
     timings: result?.timings ?? emptyTimings(),
   };
 }
@@ -654,9 +1027,20 @@ function logValidateResult(logger, result) {
     skipped: result.skipped,
     skippedReason: result.skippedReason ?? result.reason ?? null,
     fallbackReason: result.fallbackReason ?? null,
+    readbackSkipped: result.readbackSkipped ?? false,
+    readbackInterval: result.readbackInterval ?? null,
+    lastReadbackStep: result.lastReadbackStep ?? null,
+    nextReadbackStep: result.nextReadbackStep ?? null,
+    readbackSkipCount: result.readbackSkipCount ?? 0,
+    successfulReadbackCount: result.successfulReadbackCount ?? null,
+    throttled: result.throttled ?? false,
+    throttleReason: result.throttleReason ?? null,
+    suppressUntilStep: result.suppressUntilStep ?? null,
+    throttleCount: result.throttleCount ?? 0,
     writebackApplied: result.writebackApplied ?? false,
     writebackFields: result.writebackFields ?? [],
     kernels: result.kernels,
+    validationTimings: result.validationTimings ?? null,
     fields: result.fields?.map((field) => ({
       field: field.field,
       valid: field.valid,
@@ -668,15 +1052,32 @@ function logValidateResult(logger, result) {
     })) ?? [],
   };
   const method = result.valid ? "info" : "warn";
-  const label = result.mode === "experimental" ? "[gpu-compute-experimental]" : "[gpu-compute-validate]";
+  const label =
+    result.mode === "experimental"
+      ? "[gpu-compute-experimental]"
+      : result.mode === "candidate"
+        ? "[gpu-compute-candidate]"
+        : "[gpu-compute-validate]";
   logger?.[method]?.(label, summary);
 }
 
 function emptyTimings() {
   return {
+    setupMs: null,
     uploadMs: null,
     kernelMs: null,
     downloadMs: null,
     totalGpuPathMs: null,
+    totalCandidateMs: null,
+  };
+}
+
+function emptyValidationTimings() {
+  return {
+    snapshotMs: null,
+    baselineMs: null,
+    candidateMs: null,
+    compareMs: null,
+    totalValidationMs: null,
   };
 }

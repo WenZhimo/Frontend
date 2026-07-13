@@ -9776,46 +9776,104 @@
     "isostaticReliefSupply",
   ];
 
+  const GPU_ISOSTASY_OUTPUT_PACKS = [
+    {
+      index: 0,
+      fields: ["sedimentFill", "ridgeUplift", "trenchDepression", "crustBuoyancy"],
+    },
+    {
+      index: 1,
+      fields: ["densitySubsidence", "lithosphereCooling", "isostaticBase", "ageSubsidence"],
+    },
+    {
+      index: 2,
+      fields: ["thicknessBuoyancy", "oceanDepthTerms", "isostaticResidual", "isostaticReliefSupply"],
+    },
+  ];
+
+  const isostasyContextCache = new WeakMap();
+
   async function runWebGpuIsostasyCandidate(world, options = {}) {
     const globalObject = options.globalObject ?? globalThis;
     const capabilities = detectGpuCapabilities(globalObject);
+    const requestedFields = normalizeRequestedFields(options.fields ?? options.requestedFields, GPU_ISOSTASY_OUTPUT_FIELDS);
+    if (!requestedFields.length) {
+      return skippedResult(capabilities, "No WebGPU isostasy output fields were requested.");
+    }
     const gpu = globalObject?.navigator?.gpu;
     if (!capabilities.secureContext || !capabilities.webgpuAvailable || !gpu?.requestAdapter) {
       return skippedResult(capabilities, "WebGPU is not available in this environment.");
     }
 
-    let adapter;
-    let device;
+    let context;
     try {
-      adapter = await gpu.requestAdapter();
-      if (!adapter) {
-        return skippedResult(capabilities, "WebGPU adapter request returned null.");
-      }
-      device = await adapter.requestDevice();
+      context = await getIsostasyGpuContext(globalObject, gpu);
     } catch (error) {
       return skippedResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
     }
 
     try {
-      return await computeIsostasyOnDevice(world, device, capabilities);
+      return await computeIsostasyOnDevice(world, context, capabilities, requestedFields);
     } catch (error) {
       return {
         skipped: true,
         valid: true,
         backend: "webgpu-isostasy",
         gpuCapabilities: capabilities,
+        adapterInfo: context?.adapterInfo ?? null,
+        deviceInfo: context?.deviceInfo ?? null,
         reason: `WebGPU isostasy candidate failed safely: ${error?.message ?? "unknown error"}`,
         timings: emptyTimings(),
         fields: {},
       };
-    } finally {
-      device?.destroy?.();
     }
   }
 
-  async function computeIsostasyOnDevice(world, device, capabilities) {
+  async function getIsostasyGpuContext(globalObject, gpu) {
+    const cached = isostasyContextCache.get(globalObject);
+    if (cached?.device && cached?.pipeline) {
+      cached.reused = true;
+      return cached;
+    }
+
+    const setupStartedAt = performance.now();
+    const adapter = await gpu.requestAdapter();
+    if (!adapter) {
+      throw new Error("WebGPU adapter request returned null.");
+    }
+    const adapterInfo = await collectAdapterInfo(adapter);
+    const device = await adapter.requestDevice();
+    const deviceInfo = collectDeviceInfo(device);
+    const shaderModule = device.createShaderModule({ code: ISOSTASY_WGSL });
+    const pipeline = device.createComputePipeline({
+      layout: "auto",
+      compute: { module: shaderModule, entryPoint: "main" },
+    });
+    const context = {
+      device,
+      pipeline,
+      adapterInfo,
+      deviceInfo,
+      setupMs: performance.now() - setupStartedAt,
+      reused: false,
+    };
+    device.lost?.then?.(() => {
+      if (isostasyContextCache.get(globalObject) === context) {
+        isostasyContextCache.delete(globalObject);
+      }
+    });
+    isostasyContextCache.set(globalObject, context);
+    return context;
+  }
+
+  async function computeIsostasyOnDevice(world, context, capabilities, requestedFields) {
+    const { device, pipeline } = context;
     const { grid } = world;
     const size = grid.size;
+    const requestedSet = new Set(requestedFields);
+    const requestedPacks = GPU_ISOSTASY_OUTPUT_PACKS.filter((pack) =>
+      pack.fields.some((fieldName) => requestedSet.has(fieldName)),
+    );
     const input0 = new Float32Array(size * 4);
     const input1 = new Float32Array(size * 4);
     const input2 = new Float32Array(size * 4);
@@ -9849,16 +9907,13 @@
     const outputBuffer0 = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
     const outputBuffer1 = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
     const outputBuffer2 = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
-    const readBuffer0 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
-    const readBuffer1 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
-    const readBuffer2 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+    const outputBuffers = [outputBuffer0, outputBuffer1, outputBuffer2];
+    const readBuffers = [null, null, null];
+    for (const pack of requestedPacks) {
+      readBuffers[pack.index] = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+    }
     const uploadMs = performance.now() - uploadStartedAt;
 
-    const shaderModule = device.createShaderModule({ code: ISOSTASY_WGSL });
-    const pipeline = device.createComputePipeline({
-      layout: "auto",
-      compute: { module: shaderModule, entryPoint: "main" },
-    });
     const bindGroup = device.createBindGroup({
       layout: pipeline.getBindGroupLayout(0),
       entries: [
@@ -9879,28 +9934,24 @@
     pass.setBindGroup(0, bindGroup);
     pass.dispatchWorkgroups(Math.ceil(size / 64));
     pass.end();
-    encoder.copyBufferToBuffer(outputBuffer0, 0, readBuffer0, 0, outputBytes);
-    encoder.copyBufferToBuffer(outputBuffer1, 0, readBuffer1, 0, outputBytes);
-    encoder.copyBufferToBuffer(outputBuffer2, 0, readBuffer2, 0, outputBytes);
+    for (const pack of requestedPacks) {
+      encoder.copyBufferToBuffer(outputBuffers[pack.index], 0, readBuffers[pack.index], 0, outputBytes);
+    }
     device.queue.submit([encoder.finish()]);
     await device.queue.onSubmittedWorkDone();
     const kernelMs = performance.now() - kernelStartedAt;
 
     const downloadStartedAt = performance.now();
-    await Promise.all([
-      readBuffer0.mapAsync(mapMode.READ),
-      readBuffer1.mapAsync(mapMode.READ),
-      readBuffer2.mapAsync(mapMode.READ),
-    ]);
-    const packed0 = new Float32Array(readBuffer0.getMappedRange().slice(0));
-    const packed1 = new Float32Array(readBuffer1.getMappedRange().slice(0));
-    const packed2 = new Float32Array(readBuffer2.getMappedRange().slice(0));
-    readBuffer0.unmap();
-    readBuffer1.unmap();
-    readBuffer2.unmap();
+    await Promise.all(readBuffers.filter(Boolean).map((buffer) => buffer.mapAsync(mapMode.READ)));
+    const packed = [null, null, null];
+    for (const pack of requestedPacks) {
+      const readBuffer = readBuffers[pack.index];
+      packed[pack.index] = new Float32Array(readBuffer.getMappedRange().slice(0));
+      readBuffer.unmap();
+    }
     const downloadMs = performance.now() - downloadStartedAt;
 
-    const fields = unpackIsostasyFields(size, packed0, packed1, packed2);
+    const fields = unpackIsostasyFields(size, packed[0], packed[1], packed[2], requestedFields);
     destroyBuffers([
       paramBuffer,
       inputBuffer0,
@@ -9909,9 +9960,7 @@
       outputBuffer0,
       outputBuffer1,
       outputBuffer2,
-      readBuffer0,
-      readBuffer1,
-      readBuffer2,
+      ...readBuffers,
     ]);
 
     return {
@@ -9919,15 +9968,80 @@
       valid: true,
       backend: "webgpu-isostasy",
       gpuCapabilities: capabilities,
+      adapterInfo: context.adapterInfo ?? null,
+      deviceInfo: context.deviceInfo ?? null,
       reason: null,
       timings: {
+        setupMs: context.reused ? 0 : context.setupMs,
         uploadMs,
         kernelMs,
         downloadMs,
         totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+        totalCandidateMs: (context.reused ? 0 : context.setupMs) + uploadMs + kernelMs + downloadMs,
       },
+      requestedFields,
+      downloadedPacks: requestedPacks.map((pack) => pack.index),
+      reusedContext: context.reused,
       fields,
     };
+  }
+
+  async function collectAdapterInfo(adapter) {
+    try {
+      const rawInfo =
+        adapter?.info ??
+        (typeof adapter?.requestAdapterInfo === "function" ? await adapter.requestAdapterInfo() : null);
+      const info = {};
+      for (const key of [
+        "vendor",
+        "architecture",
+        "device",
+        "description",
+        "subgroupMinSize",
+        "subgroupMaxSize",
+      ]) {
+        const value = rawInfo?.[key];
+        if (value !== undefined && value !== "") info[key] = value;
+      }
+      if (typeof adapter?.isFallbackAdapter === "boolean") {
+        info.isFallbackAdapter = adapter.isFallbackAdapter;
+      }
+      return Object.keys(info).length ? info : null;
+    } catch (error) {
+      return {
+        unavailableReason: `GPU adapter info unavailable: ${error?.message ?? "unknown error"}`,
+      };
+    }
+  }
+
+  function collectDeviceInfo(device) {
+    try {
+      return {
+        features: [...(device?.features ?? [])].sort(),
+        limits: pickDeviceLimits(device?.limits),
+      };
+    } catch (error) {
+      return {
+        unavailableReason: `GPU device info unavailable: ${error?.message ?? "unknown error"}`,
+      };
+    }
+  }
+
+  function pickDeviceLimits(limits) {
+    if (!limits) return {};
+    const keys = [
+      "maxBindGroups",
+      "maxBufferSize",
+      "maxComputeInvocationsPerWorkgroup",
+      "maxComputeWorkgroupSizeX",
+      "maxStorageBufferBindingSize",
+    ];
+    const picked = {};
+    for (const key of keys) {
+      const value = limits[key];
+      if (Number.isFinite(value)) picked[key] = value;
+    }
+    return picked;
   }
 
   function createBufferWithData(device, typedArray, usage) {
@@ -9941,25 +10055,31 @@
     return buffer;
   }
 
-  function unpackIsostasyFields(size, packed0, packed1, packed2) {
+  function unpackIsostasyFields(size, packed0, packed1, packed2, requestedFields) {
     const fields = {};
-    for (const name of GPU_ISOSTASY_OUTPUT_FIELDS) {
+    for (const name of requestedFields) {
       fields[name] = new Float32Array(size);
     }
     for (let i = 0; i < size; i += 1) {
       const offset = i * 4;
-      fields.sedimentFill[i] = packed0[offset];
-      fields.ridgeUplift[i] = packed0[offset + 1];
-      fields.trenchDepression[i] = packed0[offset + 2];
-      fields.crustBuoyancy[i] = packed0[offset + 3];
-      fields.densitySubsidence[i] = packed1[offset];
-      fields.lithosphereCooling[i] = packed1[offset + 1];
-      fields.isostaticBase[i] = packed1[offset + 2];
-      fields.ageSubsidence[i] = packed1[offset + 3];
-      fields.thicknessBuoyancy[i] = packed2[offset];
-      fields.oceanDepthTerms[i] = packed2[offset + 1];
-      fields.isostaticResidual[i] = packed2[offset + 2];
-      fields.isostaticReliefSupply[i] = packed2[offset + 3];
+      if (packed0) {
+        if (fields.sedimentFill) fields.sedimentFill[i] = packed0[offset];
+        if (fields.ridgeUplift) fields.ridgeUplift[i] = packed0[offset + 1];
+        if (fields.trenchDepression) fields.trenchDepression[i] = packed0[offset + 2];
+        if (fields.crustBuoyancy) fields.crustBuoyancy[i] = packed0[offset + 3];
+      }
+      if (packed1) {
+        if (fields.densitySubsidence) fields.densitySubsidence[i] = packed1[offset];
+        if (fields.lithosphereCooling) fields.lithosphereCooling[i] = packed1[offset + 1];
+        if (fields.isostaticBase) fields.isostaticBase[i] = packed1[offset + 2];
+        if (fields.ageSubsidence) fields.ageSubsidence[i] = packed1[offset + 3];
+      }
+      if (packed2) {
+        if (fields.thicknessBuoyancy) fields.thicknessBuoyancy[i] = packed2[offset];
+        if (fields.oceanDepthTerms) fields.oceanDepthTerms[i] = packed2[offset + 1];
+        if (fields.isostaticResidual) fields.isostaticResidual[i] = packed2[offset + 2];
+        if (fields.isostaticReliefSupply) fields.isostaticReliefSupply[i] = packed2[offset + 3];
+      }
     }
     return fields;
   }
@@ -9968,6 +10088,25 @@
     for (const buffer of buffers) {
       buffer?.destroy?.();
     }
+  }
+
+  function normalizeRequestedFields(value, fallback) {
+    const available = new Set(GPU_ISOSTASY_OUTPUT_FIELDS);
+    const raw =
+      value === undefined || value === null || value === ""
+        ? fallback
+        : Array.isArray(value)
+          ? value
+          : String(value).split(",");
+    const fields = [];
+    const seen = new Set();
+    for (const part of raw) {
+      const fieldName = String(part).trim();
+      if (!available.has(fieldName) || seen.has(fieldName)) continue;
+      seen.add(fieldName);
+      fields.push(fieldName);
+    }
+    return fields;
   }
 
   function skippedResult(capabilities, reason) {
@@ -9984,10 +10123,12 @@
 
   function emptyTimings() {
     return {
+      setupMs: null,
       uploadMs: null,
       kernelMs: null,
       downloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
     };
   }
 
@@ -10123,6 +10264,7 @@
   ];
 
   async function runWebGpuElevationCandidate(world, options = {}) {
+    const candidateStartedAt = performance.now();
     const globalObject = options.globalObject ?? globalThis;
     const capabilities = detectGpuCapabilities(globalObject);
     const gpu = globalObject?.navigator?.gpu;
@@ -10143,7 +10285,7 @@
     }
 
     try {
-      return await computeElevationOnDevice(world, device, capabilities);
+      return withCandidateTiming(await computeElevationOnDevice(world, device, capabilities), candidateStartedAt);
     } catch (error) {
       return {
         skipped: true,
@@ -10157,6 +10299,20 @@
     } finally {
       device?.destroy?.();
     }
+  }
+
+  function withCandidateTiming(result, candidateStartedAt) {
+    if (!result || result.skipped) return result;
+    const totalCandidateMs = performance.now() - candidateStartedAt;
+    const totalGpuPathMs = Number(result.timings?.totalGpuPathMs);
+    return {
+      ...result,
+      timings: {
+        ...result.timings,
+        setupMs: Number.isFinite(totalGpuPathMs) ? Math.max(0, totalCandidateMs - totalGpuPathMs) : null,
+        totalCandidateMs,
+      },
+    };
   }
 
   async function computeElevationOnDevice(world, device, capabilities) {
@@ -10310,10 +10466,12 @@
 
   function emptyElevationTimings() {
     return {
+      setupMs: null,
       uploadMs: null,
       kernelMs: null,
       downloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
     };
   }
 
@@ -10420,7 +10578,10 @@
     "localRelief",
   ];
 
+  const localFieldsContextCache = new WeakMap();
+
   async function runWebGpuLocalFieldsCandidate(world, options = {}) {
+    const candidateStartedAt = performance.now();
     const globalObject = options.globalObject ?? globalThis;
     const capabilities = detectGpuCapabilities(globalObject);
     const gpu = globalObject?.navigator?.gpu;
@@ -10431,63 +10592,64 @@
       return skippedLocalFieldsResult(capabilities, "WebGPU is not available in this environment.");
     }
 
-    let adapter;
-    let device;
+    let context;
     try {
-      adapter = await gpu.requestAdapter();
-      if (!adapter) {
-        return skippedLocalFieldsResult(capabilities, "WebGPU adapter request returned null.");
-      }
-      device = await adapter.requestDevice();
+      context = await getLocalFieldsGpuContext(globalObject, gpu);
     } catch (error) {
       return skippedLocalFieldsResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
     }
 
     try {
-      return await computeLocalFieldsOnDevice(world, device, capabilities);
+      return withLocalFieldsCandidateTiming(
+        await computeLocalFieldsOnDevice(world, context, capabilities, options),
+        candidateStartedAt,
+      );
     } catch (error) {
+      disposeLocalFieldsResources(context);
       return {
         skipped: true,
         valid: true,
         backend: "webgpu-local-fields",
         gpuCapabilities: capabilities,
+        adapterInfo: context?.adapterInfo ?? null,
+        deviceInfo: context?.deviceInfo ?? null,
         reason: `WebGPU local fields candidate failed safely: ${error?.message ?? "unknown error"}`,
         timings: emptyLocalFieldsTimings(),
         fields: {},
       };
-    } finally {
-      device?.destroy?.();
     }
   }
 
-  async function computeLocalFieldsOnDevice(world, device, capabilities) {
-    const { grid, seaLevel } = world;
-    const size = grid.size;
-    const width = grid.width;
-    const height = grid.height;
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width * height !== size) {
-      return skippedLocalFieldsResult(capabilities, "World grid is not a rectangular width x height layout.");
+  function withLocalFieldsCandidateTiming(result, candidateStartedAt) {
+    if (!result || result.skipped) return result;
+    if (Number.isFinite(result.timings?.totalCandidateMs)) return result;
+    const totalCandidateMs = performance.now() - candidateStartedAt;
+    const totalGpuPathMs = Number(result.timings?.totalGpuPathMs);
+    return {
+      ...result,
+      timings: {
+        ...result.timings,
+        setupMs: Number.isFinite(totalGpuPathMs) ? Math.max(0, totalCandidateMs - totalGpuPathMs) : null,
+        totalCandidateMs,
+      },
+    };
+  }
+
+  async function getLocalFieldsGpuContext(globalObject, gpu) {
+    const cached = localFieldsContextCache.get(globalObject);
+    if (cached?.device && cached?.pipeline) {
+      cached.reused = true;
+      return cached;
     }
 
-    const uploadStartedAt = performance.now();
-    const relativeElevation = new Float32Array(size * 4);
-    for (let i = 0; i < size; i += 1) {
-      relativeElevation[i * 4] = grid.elev[i] - seaLevel;
+    const setupStartedAt = performance.now();
+    const adapter = await gpu.requestAdapter();
+    if (!adapter) {
+      throw new Error("WebGPU adapter request returned null.");
     }
-
-    const usage = globalThis.GPUBufferUsage;
-    const mapMode = globalThis.GPUMapMode;
-    if (!usage || !mapMode) {
-      return skippedLocalFieldsResult(capabilities, "WebGPU constants are unavailable in this JavaScript runtime.");
-    }
-
-    const paramData = new Uint32Array([size, width, height, 0]);
-    const paramBuffer = createBufferWithData(device, paramData, usage.UNIFORM | usage.COPY_DST);
-    const inputBuffer = createBufferWithData(device, relativeElevation, usage.STORAGE | usage.COPY_DST);
-    const outputBytes = size * 4 * Float32Array.BYTES_PER_ELEMENT;
-    const outputBuffer = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
-    const readBuffer = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
-    const uploadMs = performance.now() - uploadStartedAt;
+    const adapterInfo = await collectAdapterInfo(adapter);
+    const device = await adapter.requestDevice();
+    const deviceInfo = collectDeviceInfo(device);
 
     device.pushErrorScope?.("validation");
     const shaderModule = device.createShaderModule({ code: LOCAL_FIELDS_WGSL });
@@ -10497,24 +10659,75 @@
     });
     const pipelineError = await device.popErrorScope?.();
     if (pipelineError) {
-      destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
-      return skippedLocalFieldsResult(capabilities, `WebGPU local fields pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
+      device?.destroy?.();
+      throw new Error(`WebGPU local fields pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
     }
 
-    device.pushErrorScope?.("validation");
-    const bindGroup = device.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: paramBuffer } },
-        { binding: 1, resource: { buffer: inputBuffer } },
-        { binding: 2, resource: { buffer: outputBuffer } },
-      ],
+    const context = {
+      device,
+      pipeline,
+      adapterInfo,
+      deviceInfo,
+      setupMs: performance.now() - setupStartedAt,
+      resources: null,
+      reused: false,
+    };
+    device.lost?.then?.(() => {
+      disposeLocalFieldsResources(context);
+      if (localFieldsContextCache.get(globalObject) === context) {
+        localFieldsContextCache.delete(globalObject);
+      }
     });
-    const bindGroupError = await device.popErrorScope?.();
-    if (bindGroupError) {
-      destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
-      return skippedLocalFieldsResult(capabilities, `WebGPU local fields bind group validation failed: ${bindGroupError.message ?? bindGroupError}`);
+    localFieldsContextCache.set(globalObject, context);
+    return context;
+  }
+
+  async function computeLocalFieldsOnDevice(world, context, capabilities, options = {}) {
+    const { device, pipeline } = context;
+    const { grid, seaLevel } = world;
+    const timingMode = options.timingMode === "split" ? "split" : "overlapped";
+    const size = grid.size;
+    const width = grid.width;
+    const height = grid.height;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || width * height !== size) {
+      return skippedLocalFieldsResult(capabilities, "World grid is not a rectangular width x height layout.");
     }
+
+    const usage = globalThis.GPUBufferUsage;
+    const mapMode = globalThis.GPUMapMode;
+    if (!usage || !mapMode) {
+      return skippedLocalFieldsResult(capabilities, "WebGPU constants are unavailable in this JavaScript runtime.");
+    }
+
+    const bufferSetupStartedAt = performance.now();
+    const resourceState = await ensureLocalFieldsResources(context, size, usage);
+    const bufferSetupMs = resourceState.reused ? 0 : performance.now() - bufferSetupStartedAt;
+    const {
+      paramData,
+      relativeElevation,
+      paramBuffer,
+      inputBuffer,
+      outputBuffer,
+      readBuffer,
+      bindGroup,
+      outputBytes,
+    } = resourceState.resources;
+
+    const uploadStartedAt = performance.now();
+    paramData[0] = size;
+    paramData[1] = width;
+    paramData[2] = height;
+    paramData[3] = 0;
+    for (let i = 0; i < size; i += 1) {
+      const offset = i * 4;
+      relativeElevation[offset] = grid.elev[i] - seaLevel;
+      relativeElevation[offset + 1] = 0;
+      relativeElevation[offset + 2] = 0;
+      relativeElevation[offset + 3] = 0;
+    }
+    device.queue.writeBuffer(paramBuffer, 0, paramData);
+    device.queue.writeBuffer(inputBuffer, 0, relativeElevation);
+    const uploadMs = performance.now() - uploadStartedAt;
 
     const kernelStartedAt = performance.now();
     device.pushErrorScope?.("validation");
@@ -10526,48 +10739,195 @@
     pass.end();
     encoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, outputBytes);
     device.queue.submit([encoder.finish()]);
-    await device.queue.onSubmittedWorkDone();
-    const dispatchError = await device.popErrorScope?.();
+    const submitMs = performance.now() - kernelStartedAt;
+    let kernelMs = null;
+    let downloadMs = null;
+    let executeAndDownloadMs = null;
+    let dispatchError;
+
+    if (timingMode === "split") {
+      await device.queue.onSubmittedWorkDone();
+      dispatchError = await device.popErrorScope?.();
+      kernelMs = performance.now() - kernelStartedAt;
+      const downloadStartedAt = performance.now();
+      await readBuffer.mapAsync(mapMode.READ);
+      downloadMs = performance.now() - downloadStartedAt;
+    } else {
+      const dispatchErrorPromise = device.popErrorScope?.() ?? Promise.resolve(null);
+      const executeAndDownloadStartedAt = performance.now();
+      [, dispatchError] = await Promise.all([
+        readBuffer.mapAsync(mapMode.READ),
+        dispatchErrorPromise,
+      ]);
+      executeAndDownloadMs = performance.now() - executeAndDownloadStartedAt;
+    }
+
     if (dispatchError) {
-      destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
+      disposeLocalFieldsResources(context);
       return skippedLocalFieldsResult(capabilities, `WebGPU local fields dispatch validation failed: ${dispatchError.message ?? dispatchError}`);
     }
-    const kernelMs = performance.now() - kernelStartedAt;
-
-    const downloadStartedAt = performance.now();
-    await readBuffer.mapAsync(mapMode.READ);
     const packed = new Float32Array(readBuffer.getMappedRange().slice(0));
     readBuffer.unmap();
-    const downloadMs = performance.now() - downloadStartedAt;
 
     const fields = unpackLocalFields(size, packed);
-    destroyBuffers([paramBuffer, inputBuffer, outputBuffer, readBuffer]);
+    const totalGpuPathMs = timingMode === "split"
+      ? bufferSetupMs + uploadMs + kernelMs + downloadMs
+      : bufferSetupMs + uploadMs + executeAndDownloadMs;
 
     return {
       skipped: false,
       valid: true,
       backend: "webgpu-local-fields",
       gpuCapabilities: capabilities,
+      adapterInfo: context.adapterInfo ?? null,
+      deviceInfo: context.deviceInfo ?? null,
       reason: null,
       timings: {
+        timingMode,
+        setupMs: context.reused ? 0 : context.setupMs,
+        bufferSetupMs,
         uploadMs,
+        submitMs,
         kernelMs,
         downloadMs,
-        totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+        executeAndDownloadMs,
+        totalGpuPathMs,
+        totalCandidateMs: (context.reused ? 0 : context.setupMs) + totalGpuPathMs,
       },
+      reusedContext: context.reused,
+      reusedBuffers: resourceState.reused,
       fields,
     };
   }
 
-  function createBufferWithData(device, typedArray, usage) {
-    const buffer = device.createBuffer({
-      size: typedArray.byteLength,
-      usage,
-      mappedAtCreation: true,
-    });
-    new typedArray.constructor(buffer.getMappedRange()).set(typedArray);
-    buffer.unmap();
-    return buffer;
+  async function ensureLocalFieldsResources(context, size, usage) {
+    const outputBytes = size * 4 * Float32Array.BYTES_PER_ELEMENT;
+    const cached = context.resources;
+    if (cached?.size === size && cached?.outputBytes === outputBytes) {
+      return {
+        resources: cached,
+        reused: true,
+      };
+    }
+
+    disposeLocalFieldsResources(context);
+    const { device, pipeline } = context;
+    const resources = {
+      size,
+      outputBytes,
+      paramData: new Uint32Array(4),
+      relativeElevation: new Float32Array(size * 4),
+      paramBuffer: null,
+      inputBuffer: null,
+      outputBuffer: null,
+      readBuffer: null,
+      bindGroup: null,
+    };
+
+    try {
+      resources.paramBuffer = device.createBuffer({
+        size: resources.paramData.byteLength,
+        usage: usage.UNIFORM | usage.COPY_DST,
+      });
+      resources.inputBuffer = device.createBuffer({
+        size: resources.relativeElevation.byteLength,
+        usage: usage.STORAGE | usage.COPY_DST,
+      });
+      resources.outputBuffer = device.createBuffer({
+        size: outputBytes,
+        usage: usage.STORAGE | usage.COPY_SRC,
+      });
+      resources.readBuffer = device.createBuffer({
+        size: outputBytes,
+        usage: usage.COPY_DST | usage.MAP_READ,
+      });
+
+      device.pushErrorScope?.("validation");
+      resources.bindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: resources.paramBuffer } },
+          { binding: 1, resource: { buffer: resources.inputBuffer } },
+          { binding: 2, resource: { buffer: resources.outputBuffer } },
+        ],
+      });
+      const bindGroupError = await device.popErrorScope?.();
+      if (bindGroupError) {
+        throw new Error(`WebGPU local fields bind group validation failed: ${bindGroupError.message ?? bindGroupError}`);
+      }
+    } catch (error) {
+      destroyBuffers([
+        resources.paramBuffer,
+        resources.inputBuffer,
+        resources.outputBuffer,
+        resources.readBuffer,
+      ]);
+      throw error;
+    }
+
+    context.resources = resources;
+    return {
+      resources,
+      reused: false,
+    };
+  }
+
+  async function collectAdapterInfo(adapter) {
+    try {
+      const rawInfo =
+        adapter?.info ??
+        (typeof adapter?.requestAdapterInfo === "function" ? await adapter.requestAdapterInfo() : null);
+      const info = {};
+      for (const key of [
+        "vendor",
+        "architecture",
+        "device",
+        "description",
+        "subgroupMinSize",
+        "subgroupMaxSize",
+      ]) {
+        const value = rawInfo?.[key];
+        if (value !== undefined && value !== "") info[key] = value;
+      }
+      if (typeof adapter?.isFallbackAdapter === "boolean") {
+        info.isFallbackAdapter = adapter.isFallbackAdapter;
+      }
+      return Object.keys(info).length ? info : null;
+    } catch (error) {
+      return {
+        unavailableReason: `GPU adapter info unavailable: ${error?.message ?? "unknown error"}`,
+      };
+    }
+  }
+
+  function collectDeviceInfo(device) {
+    try {
+      return {
+        features: [...(device?.features ?? [])].sort(),
+        limits: pickDeviceLimits(device?.limits),
+      };
+    } catch (error) {
+      return {
+        unavailableReason: `GPU device info unavailable: ${error?.message ?? "unknown error"}`,
+      };
+    }
+  }
+
+  function pickDeviceLimits(limits) {
+    if (!limits) return {};
+    const keys = [
+      "maxBindGroups",
+      "maxBufferSize",
+      "maxComputeInvocationsPerWorkgroup",
+      "maxComputeWorkgroupSizeX",
+      "maxStorageBufferBindingSize",
+    ];
+    const picked = {};
+    for (const key of keys) {
+      const value = limits[key];
+      if (Number.isFinite(value)) picked[key] = value;
+    }
+    return picked;
   }
 
   function unpackLocalFields(size, packed) {
@@ -10591,6 +10951,18 @@
     }
   }
 
+  function disposeLocalFieldsResources(context) {
+    const resources = context?.resources;
+    if (!resources) return;
+    destroyBuffers([
+      resources.paramBuffer,
+      resources.inputBuffer,
+      resources.outputBuffer,
+      resources.readBuffer,
+    ]);
+    context.resources = null;
+  }
+
   function skippedLocalFieldsResult(capabilities, reason) {
     return {
       skipped: true,
@@ -10605,10 +10977,16 @@
 
   function emptyLocalFieldsTimings() {
     return {
+      timingMode: null,
+      setupMs: null,
+      bufferSetupMs: null,
       uploadMs: null,
+      submitMs: null,
       kernelMs: null,
       downloadMs: null,
+      executeAndDownloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
     };
   }
 
@@ -10697,7 +11075,10 @@
     "abyssalPlain",
   ];
 
+  const marginSmoothContextCache = new WeakMap();
+
   async function runWebGpuMarginSmoothCandidate(world, options = {}) {
+    const candidateStartedAt = performance.now();
     const globalObject = options.globalObject ?? globalThis;
     const capabilities = detectGpuCapabilities(globalObject);
     const gpu = globalObject?.navigator?.gpu;
@@ -10708,36 +11089,96 @@
       return skippedMarginSmoothResult(capabilities, "WebGPU is not available in this environment.");
     }
 
-    let adapter;
-    let device;
+    let context;
     try {
-      adapter = await gpu.requestAdapter();
-      if (!adapter) {
-        return skippedMarginSmoothResult(capabilities, "WebGPU adapter request returned null.");
-      }
-      device = await adapter.requestDevice();
+      context = await getMarginSmoothGpuContext(globalObject, gpu);
     } catch (error) {
       return skippedMarginSmoothResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
     }
 
     try {
-      return await computeMarginSmoothOnDevice(world, device, capabilities);
+      return withCandidateTiming(await computeMarginSmoothOnDevice(world, context, capabilities), candidateStartedAt);
     } catch (error) {
       return {
         skipped: true,
         valid: true,
         backend: "webgpu-margin-smooth",
         gpuCapabilities: capabilities,
+        adapterInfo: context?.adapterInfo ?? null,
+        deviceInfo: context?.deviceInfo ?? null,
         reason: `WebGPU margin smoothing candidate failed safely: ${error?.message ?? "unknown error"}`,
         timings: emptyMarginSmoothTimings(),
         fields: {},
       };
-    } finally {
-      device?.destroy?.();
     }
   }
 
-  async function computeMarginSmoothOnDevice(world, device, capabilities) {
+  function withCandidateTiming(result, candidateStartedAt) {
+    if (!result || result.skipped) return result;
+    if (Number.isFinite(result.timings?.totalCandidateMs)) return result;
+    const totalCandidateMs = performance.now() - candidateStartedAt;
+    const totalGpuPathMs = Number(result.timings?.totalGpuPathMs);
+    return {
+      ...result,
+      timings: {
+        ...result.timings,
+        setupMs: Number.isFinite(totalGpuPathMs) ? Math.max(0, totalCandidateMs - totalGpuPathMs) : null,
+        totalCandidateMs,
+      },
+    };
+  }
+
+  async function getMarginSmoothGpuContext(globalObject, gpu) {
+    const cached = marginSmoothContextCache.get(globalObject);
+    if (cached?.device && cached?.pipeline) {
+      return {
+        ...cached,
+        reused: true,
+      };
+    }
+
+    const setupStartedAt = performance.now();
+    const adapter = await gpu.requestAdapter();
+    if (!adapter) {
+      throw new Error("WebGPU adapter request returned null.");
+    }
+    const adapterInfo = await collectAdapterInfo(adapter);
+    const device = await adapter.requestDevice();
+    const deviceInfo = collectDeviceInfo(device);
+
+    device.pushErrorScope?.("validation");
+    const shaderModule = device.createShaderModule({ code: MARGIN_SMOOTH_WGSL });
+    const pipeline = device.createComputePipeline({
+      layout: "auto",
+      compute: { module: shaderModule, entryPoint: "main" },
+    });
+    const pipelineError = await device.popErrorScope?.();
+    if (pipelineError) {
+      device?.destroy?.();
+      throw new Error(`WebGPU margin smoothing pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
+    }
+
+    const context = {
+      device,
+      pipeline,
+      adapterInfo,
+      deviceInfo,
+      setupMs: performance.now() - setupStartedAt,
+    };
+    device.lost?.then?.(() => {
+      if (marginSmoothContextCache.get(globalObject) === context) {
+        marginSmoothContextCache.delete(globalObject);
+      }
+    });
+    marginSmoothContextCache.set(globalObject, context);
+    return {
+      ...context,
+      reused: false,
+    };
+  }
+
+  async function computeMarginSmoothOnDevice(world, context, capabilities) {
+    const { device, pipeline } = context;
     const { grid } = world;
     const size = grid.size;
     const width = grid.width;
@@ -10776,11 +11217,8 @@
     const readBuffer1 = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
     const uploadMs = performance.now() - uploadStartedAt;
 
-    const shaderModule = device.createShaderModule({ code: MARGIN_SMOOTH_WGSL });
-    const pipeline = device.createComputePipeline({
-      layout: "auto",
-      compute: { module: shaderModule, entryPoint: "main" },
-    });
+    const kernelStartedAt = performance.now();
+    device.pushErrorScope?.("validation");
     const bindGroup = device.createBindGroup({
       layout: pipeline.getBindGroupLayout(0),
       entries: [
@@ -10791,8 +11229,13 @@
         { binding: 4, resource: { buffer: outputBuffer1 } },
       ],
     });
+    const bindGroupError = await device.popErrorScope?.();
+    if (bindGroupError) {
+      destroyBuffers([paramBuffer, inputBuffer0, inputBuffer1, outputBuffer0, outputBuffer1, readBuffer0, readBuffer1]);
+      return skippedMarginSmoothResult(capabilities, `WebGPU margin smoothing bind group validation failed: ${bindGroupError.message ?? bindGroupError}`);
+    }
 
-    const kernelStartedAt = performance.now();
+    device.pushErrorScope?.("validation");
     const encoder = device.createCommandEncoder();
     const pass = encoder.beginComputePass();
     pass.setPipeline(pipeline);
@@ -10803,6 +11246,11 @@
     encoder.copyBufferToBuffer(outputBuffer1, 0, readBuffer1, 0, outputBytes);
     device.queue.submit([encoder.finish()]);
     await device.queue.onSubmittedWorkDone();
+    const dispatchError = await device.popErrorScope?.();
+    if (dispatchError) {
+      destroyBuffers([paramBuffer, inputBuffer0, inputBuffer1, outputBuffer0, outputBuffer1, readBuffer0, readBuffer1]);
+      return skippedMarginSmoothResult(capabilities, `WebGPU margin smoothing dispatch validation failed: ${dispatchError.message ?? dispatchError}`);
+    }
     const kernelMs = performance.now() - kernelStartedAt;
 
     const downloadStartedAt = performance.now();
@@ -10824,15 +11272,78 @@
       valid: true,
       backend: "webgpu-margin-smooth",
       gpuCapabilities: capabilities,
+      adapterInfo: context.adapterInfo ?? null,
+      deviceInfo: context.deviceInfo ?? null,
       reason: null,
       timings: {
+        setupMs: context.reused ? 0 : context.setupMs,
         uploadMs,
         kernelMs,
         downloadMs,
         totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+        totalCandidateMs: (context.reused ? 0 : context.setupMs) + uploadMs + kernelMs + downloadMs,
       },
+      reusedContext: context.reused,
       fields,
     };
+  }
+
+  async function collectAdapterInfo(adapter) {
+    try {
+      const rawInfo =
+        adapter?.info ??
+        (typeof adapter?.requestAdapterInfo === "function" ? await adapter.requestAdapterInfo() : null);
+      const info = {};
+      for (const key of [
+        "vendor",
+        "architecture",
+        "device",
+        "description",
+        "subgroupMinSize",
+        "subgroupMaxSize",
+      ]) {
+        const value = rawInfo?.[key];
+        if (value !== undefined && value !== "") info[key] = value;
+      }
+      if (typeof adapter?.isFallbackAdapter === "boolean") {
+        info.isFallbackAdapter = adapter.isFallbackAdapter;
+      }
+      return Object.keys(info).length ? info : null;
+    } catch (error) {
+      return {
+        unavailableReason: `GPU adapter info unavailable: ${error?.message ?? "unknown error"}`,
+      };
+    }
+  }
+
+  function collectDeviceInfo(device) {
+    try {
+      return {
+        features: [...(device?.features ?? [])].sort(),
+        limits: pickDeviceLimits(device?.limits),
+      };
+    } catch (error) {
+      return {
+        unavailableReason: `GPU device info unavailable: ${error?.message ?? "unknown error"}`,
+      };
+    }
+  }
+
+  function pickDeviceLimits(limits) {
+    if (!limits) return {};
+    const keys = [
+      "maxBindGroups",
+      "maxBufferSize",
+      "maxComputeInvocationsPerWorkgroup",
+      "maxComputeWorkgroupSizeX",
+      "maxStorageBufferBindingSize",
+    ];
+    const picked = {};
+    for (const key of keys) {
+      const value = limits[key];
+      if (Number.isFinite(value)) picked[key] = value;
+    }
+    return picked;
   }
 
   function createBufferWithData(device, typedArray, usage) {
@@ -10883,10 +11394,12 @@
 
   function emptyMarginSmoothTimings() {
     return {
+      setupMs: null,
       uploadMs: null,
       kernelMs: null,
       downloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
     };
   }
 
@@ -11143,7 +11656,10 @@
 
   const GPU_SEDIMENT_CAPACITY_OUTPUT_FIELDS = ["sedimentCapacity"];
 
+  const sedimentCapacityContextCache = new WeakMap();
+
   async function runWebGpuSedimentCapacityCandidate(world, options = {}) {
+    const candidateStartedAt = performance.now();
     const globalObject = options.globalObject ?? globalThis;
     const capabilities = detectGpuCapabilities(globalObject);
     const gpu = globalObject?.navigator?.gpu;
@@ -11154,36 +11670,104 @@
       return skippedSedimentCapacityResult(capabilities, "WebGPU is not available in this environment.");
     }
 
-    let adapter;
-    let device;
+    let context;
     try {
-      adapter = await gpu.requestAdapter();
-      if (!adapter) {
-        return skippedSedimentCapacityResult(capabilities, "WebGPU adapter request returned null.");
-      }
-      device = await adapter.requestDevice();
+      context = await getSedimentCapacityGpuContext(globalObject, gpu);
     } catch (error) {
       return skippedSedimentCapacityResult(capabilities, `WebGPU device request failed: ${error?.message ?? "unknown error"}`);
     }
 
     try {
-      return await computeSedimentCapacityOnDevice(world, device, capabilities);
+      return withCandidateTiming(await computeSedimentCapacityOnDevice(world, context, capabilities), candidateStartedAt);
     } catch (error) {
       return {
         skipped: true,
         valid: true,
         backend: "webgpu-sediment-capacity",
         gpuCapabilities: capabilities,
+        adapterInfo: context?.adapterInfo ?? null,
+        deviceInfo: context?.deviceInfo ?? null,
         reason: `WebGPU sediment capacity candidate failed safely: ${error?.message ?? "unknown error"}`,
         timings: emptySedimentCapacityTimings(),
         fields: {},
       };
-    } finally {
-      device?.destroy?.();
     }
   }
 
-  async function computeSedimentCapacityOnDevice(world, device, capabilities) {
+  function withCandidateTiming(result, candidateStartedAt) {
+    if (!result || result.skipped) return result;
+    if (Number.isFinite(result.timings?.totalCandidateMs)) return result;
+    const totalCandidateMs = performance.now() - candidateStartedAt;
+    const totalGpuPathMs = Number(result.timings?.totalGpuPathMs);
+    return {
+      ...result,
+      timings: {
+        ...result.timings,
+        setupMs: Number.isFinite(totalGpuPathMs) ? Math.max(0, totalCandidateMs - totalGpuPathMs) : null,
+        totalCandidateMs,
+      },
+    };
+  }
+
+  async function getSedimentCapacityGpuContext(globalObject, gpu) {
+    const cached = sedimentCapacityContextCache.get(globalObject);
+    if (cached?.device && cached?.seedPipeline && cached?.smoothPipeline && cached?.bindGroupLayout) {
+      return {
+        ...cached,
+        reused: true,
+      };
+    }
+
+    const setupStartedAt = performance.now();
+    const adapter = await gpu.requestAdapter();
+    if (!adapter) {
+      throw new Error("WebGPU adapter request returned null.");
+    }
+    const adapterInfo = await collectAdapterInfo(adapter);
+    const device = await adapter.requestDevice();
+    const deviceInfo = collectDeviceInfo(device);
+
+    device.pushErrorScope?.("validation");
+    const shaderModule = device.createShaderModule({ code: SEDIMENT_CAPACITY_WGSL });
+    const bindGroupLayout = createSedimentCapacityBindGroupLayout(device);
+    const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
+    const seedPipeline = device.createComputePipeline({
+      layout: pipelineLayout,
+      compute: { module: shaderModule, entryPoint: "seed_capacity" },
+    });
+    const smoothPipeline = device.createComputePipeline({
+      layout: pipelineLayout,
+      compute: { module: shaderModule, entryPoint: "smooth_capacity" },
+    });
+    const pipelineError = await device.popErrorScope?.();
+    if (pipelineError) {
+      device?.destroy?.();
+      throw new Error(`WebGPU sediment capacity pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
+    }
+
+    const context = {
+      device,
+      bindGroupLayout,
+      seedPipeline,
+      smoothPipeline,
+      adapterInfo,
+      deviceInfo,
+      setupMs: performance.now() - setupStartedAt,
+    };
+    device.lost?.then?.(() => {
+      if (sedimentCapacityContextCache.get(globalObject) === context) {
+        sedimentCapacityContextCache.delete(globalObject);
+      }
+    });
+    sedimentCapacityContextCache.set(globalObject, context);
+    return {
+      ...context,
+      reused: false,
+    };
+  }
+
+  async function computeSedimentCapacityOnDevice(world, context, capabilities) {
+    const { device, bindGroupLayout, seedPipeline, smoothPipeline } = context;
     const { grid, seaLevel } = world;
     const size = grid.size;
     const width = grid.width;
@@ -11238,24 +11822,6 @@
     const readBuffer = device.createBuffer({ size: capacityBytes, usage: usage.COPY_DST | usage.MAP_READ });
     const uploadMs = performance.now() - uploadStartedAt;
 
-    device.pushErrorScope?.("validation");
-    const shaderModule = device.createShaderModule({ code: SEDIMENT_CAPACITY_WGSL });
-    const bindGroupLayout = createSedimentCapacityBindGroupLayout(device, usage);
-    const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] });
-    const seedPipeline = device.createComputePipeline({
-      layout: pipelineLayout,
-      compute: { module: shaderModule, entryPoint: "seed_capacity" },
-    });
-    const smoothPipeline = device.createComputePipeline({
-      layout: pipelineLayout,
-      compute: { module: shaderModule, entryPoint: "smooth_capacity" },
-    });
-    const pipelineError = await device.popErrorScope?.();
-    if (pipelineError) {
-      destroyBuffers([paramBuffer, ...inputBuffers, zeroSource, capacityA, capacityB, outputBuffer, readBuffer]);
-      return skippedSedimentCapacityResult(capabilities, `WebGPU sediment capacity pipeline validation failed: ${pipelineError.message ?? pipelineError}`);
-    }
-
     const kernelStartedAt = performance.now();
     device.pushErrorScope?.("validation");
     const encoder = device.createCommandEncoder();
@@ -11285,13 +11851,18 @@
       valid: true,
       backend: "webgpu-sediment-capacity",
       gpuCapabilities: capabilities,
+      adapterInfo: context.adapterInfo ?? null,
+      deviceInfo: context.deviceInfo ?? null,
       reason: null,
       timings: {
+        setupMs: context.reused ? 0 : context.setupMs,
         uploadMs,
         kernelMs,
         downloadMs,
         totalGpuPathMs: uploadMs + kernelMs + downloadMs,
+        totalCandidateMs: (context.reused ? 0 : context.setupMs) + uploadMs + kernelMs + downloadMs,
       },
+      reusedContext: context.reused,
       fields: { sedimentCapacity },
     };
   }
@@ -11333,6 +11904,64 @@
       buffer: { type: "storage" },
     });
     return device.createBindGroupLayout({ entries });
+  }
+
+  async function collectAdapterInfo(adapter) {
+    try {
+      const rawInfo =
+        adapter?.info ??
+        (typeof adapter?.requestAdapterInfo === "function" ? await adapter.requestAdapterInfo() : null);
+      const info = {};
+      for (const key of [
+        "vendor",
+        "architecture",
+        "device",
+        "description",
+        "subgroupMinSize",
+        "subgroupMaxSize",
+      ]) {
+        const value = rawInfo?.[key];
+        if (value !== undefined && value !== "") info[key] = value;
+      }
+      if (typeof adapter?.isFallbackAdapter === "boolean") {
+        info.isFallbackAdapter = adapter.isFallbackAdapter;
+      }
+      return Object.keys(info).length ? info : null;
+    } catch (error) {
+      return {
+        unavailableReason: `GPU adapter info unavailable: ${error?.message ?? "unknown error"}`,
+      };
+    }
+  }
+
+  function collectDeviceInfo(device) {
+    try {
+      return {
+        features: [...(device?.features ?? [])].sort(),
+        limits: pickDeviceLimits(device?.limits),
+      };
+    } catch (error) {
+      return {
+        unavailableReason: `GPU device info unavailable: ${error?.message ?? "unknown error"}`,
+      };
+    }
+  }
+
+  function pickDeviceLimits(limits) {
+    if (!limits) return {};
+    const keys = [
+      "maxBindGroups",
+      "maxBufferSize",
+      "maxComputeInvocationsPerWorkgroup",
+      "maxComputeWorkgroupSizeX",
+      "maxStorageBufferBindingSize",
+    ];
+    const picked = {};
+    for (const key of keys) {
+      const value = limits[key];
+      if (Number.isFinite(value)) picked[key] = value;
+    }
+    return picked;
   }
 
   function createParamData(size, width, height, seaLevel) {
@@ -11377,10 +12006,12 @@
 
   function emptySedimentCapacityTimings() {
     return {
+      setupMs: null,
       uploadMs: null,
       kernelMs: null,
       downloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
     };
   }
 
@@ -11392,6 +12023,86 @@
   const DEFAULT_EXPERIMENTAL_KERNELS = ["isostasy"];
   const DEFAULT_EXPERIMENTAL_FIELDS = GPU_ISOSTASY_OUTPUT_FIELDS;
   const EXPERIMENTAL_WRITEBACK_FIELDS = new Set(GPU_ISOSTASY_OUTPUT_FIELDS);
+  const REQUIRED_SNAPSHOT_FIELDS_BY_KERNEL = {
+    isostasy: [
+      "crustType",
+      "crustThickness",
+      "crustAge",
+      "crustDensity",
+      "sediment",
+      "sedimentLoadSubsidence",
+      "ridge",
+      "trench",
+      "elev",
+    ],
+    elevation: [
+      "crustType",
+      "orogeny",
+      "activeOrogeny",
+      "oldOrogeny",
+      "orogenyAge",
+      "sediment",
+      "sedimentLoadSubsidence",
+      "sedimentFill",
+      "ridgeUplift",
+      "trenchDepression",
+      "isostaticBase",
+      "passiveMargin",
+      "continentalShelf",
+      "continentalSlope",
+      "continentalRise",
+      "abyssalPlain",
+      "sedimentWedge",
+      "forelandBasin",
+      "activeTransform",
+      "transformMemory",
+      "fractureZoneMemory",
+      "inactiveBoundaryRelief",
+      "geologyBroadNoise",
+      "geologyMicroNoise",
+      "mountainBelt",
+      "trench",
+      "ridge",
+      "rift",
+      "islandArc",
+      "basin",
+    ],
+    "local-fields": [
+      "elev",
+    ],
+    "margin-smooth": [
+      "passiveMargin",
+      "continentalShelf",
+      "continentalSlope",
+      "continentalRise",
+      "sedimentWedge",
+      "abyssalPlain",
+    ],
+    "sediment-capacity": [
+      "elev",
+      "continentalShelf",
+      "continentalRise",
+      "sedimentWedge",
+      "passiveMargin",
+      "forelandBasin",
+      "inlandWaterCandidate",
+      "abyssalPlain",
+      "basin",
+      "riftAxis",
+      "trench",
+      "trenchAxis",
+      "islandArc",
+      "crustType",
+      "crustAge",
+      "ridgeAxis",
+      "ridge",
+      "activeOrogeny",
+      "boundaryInfluence",
+      "fractureZoneMemory",
+      "transformMemory",
+      "inactiveBoundaryRelief",
+    ],
+  };
 
   function createGpuComputeValidator(options = {}) {
     const mode = normalizeMode(options.mode);
@@ -11402,58 +12113,291 @@
     const fields = normalizeCsvList(options.fields, defaultFieldsForMode(mode, kernels));
     const interval = Math.max(1, Math.trunc(Number(options.interval ?? 20)) || 20);
     const maxReports = Math.max(1, Math.trunc(Number(options.maxReports ?? 12)) || 12);
+    const maxCandidateMs = nonNegativeNumber(options.maxCandidateMs);
+    const maxTotalMs = nonNegativeNumber(options.maxTotalMs);
+    const cooldownSteps = Math.max(0, Math.trunc(Number(options.cooldownSteps ?? 0)) || 0);
+    const timingMode = normalizeTimingMode(options.timingMode);
+    const readbackInterval = mode === "experimental"
+      ? 1
+      : Math.max(1, Math.trunc(Number(options.readbackInterval ?? 1)) || 1);
     const globalObject = options.globalObject ?? globalThis;
     const logger = options.logger ?? console;
     let running = false;
     let reportCount = 0;
     let lastValidatedStep = -1;
+    let lastReadbackStep = -1;
+    let successfulReadbackCount = 0;
+    let readbackSkipCount = 0;
+    let suppressUntilStep = -1;
+    let throttleCount = 0;
+    let lastThrottleReason = null;
+    const validationHistory = [];
 
     return {
       mode,
-      enabled: mode === "validate" || mode === "experimental",
+      enabled: mode === "candidate" || mode === "validate" || mode === "experimental",
       kernels,
       fields,
       interval,
-      async maybeValidate(world) {
-        if ((mode !== "validate" && mode !== "experimental") || !world?.grid || running || reportCount >= maxReports) {
+      maxCandidateMs,
+      maxTotalMs,
+      cooldownSteps,
+      timingMode,
+      readbackInterval,
+      resetDiagnostics() {
+        if (running) {
+          return {
+            ok: false,
+            reason: "validation-running",
+          };
+        }
+        reportCount = 0;
+        lastValidatedStep = -1;
+        lastReadbackStep = -1;
+        successfulReadbackCount = 0;
+        readbackSkipCount = 0;
+        suppressUntilStep = -1;
+        throttleCount = 0;
+        lastThrottleReason = null;
+        validationHistory.length = 0;
+        globalObject.__lastGpuComputeValidation = null;
+        globalObject.__gpuComputeValidationHistory = validationHistory;
+        return {
+          ok: true,
+        };
+      },
+      maybeValidate(world) {
+        if ((mode !== "candidate" && mode !== "validate" && mode !== "experimental") || !world?.grid || running || reportCount >= maxReports) {
           return null;
         }
         if (!Number.isFinite(world.step) || world.step <= 0 || world.step === lastValidatedStep) return null;
         if (world.step % interval !== 0) return null;
+        if (cooldownSteps > 0 && world.step < suppressUntilStep) {
+          lastValidatedStep = world.step;
+          const result = createThrottledValidationResult(world, {
+            mode,
+            kernels,
+            fields,
+            suppressUntilStep,
+            throttleCount,
+            throttleReason: lastThrottleReason,
+          });
+          reportCount += 1;
+          logValidateResult(logger, result);
+          publishValidationResult(world, globalObject, validationHistory, result);
+          return Promise.resolve(result);
+        }
+        if (shouldSkipReadback(world.step)) {
+          lastValidatedStep = world.step;
+          readbackSkipCount += 1;
+          const result = createReadbackDeferredValidationResult(world, {
+            mode,
+            kernels,
+            fields,
+            readbackInterval,
+            lastReadbackStep,
+            nextReadbackStep: lastReadbackStep + readbackInterval,
+            readbackSkipCount,
+            successfulReadbackCount,
+          });
+          reportCount += 1;
+          logValidateResult(logger, result);
+          publishValidationResult(world, globalObject, validationHistory, result);
+          return Promise.resolve(result);
+        }
         running = true;
         lastValidatedStep = world.step;
-        try {
-          const result =
-            mode === "experimental"
-              ? await applyExperimentalGpuComputeCheckpoint(world, { kernels, fields, globalObject })
-              : await validateGpuComputeCheckpoint(world, { kernels, fields, globalObject });
-          reportCount += 1;
-          logValidateResult(logger, result);
-          world.gpuComputeValidation = result;
-          globalObject.__lastGpuComputeValidation = result;
-          return result;
-        } catch (error) {
-          const result = {
-            valid: true,
-            skipped: true,
-            step: world.step,
-            mode,
-            reason: `GPU compute validate failed safely: ${error?.message ?? "unknown error"}`,
-            fallbackReason: `GPU compute ${mode} failed safely: ${error?.message ?? "unknown error"}`,
-            writebackApplied: false,
-            writebackFields: [],
-            fields: [],
-            candidateResults: [],
-          };
-          reportCount += 1;
-          logValidateResult(logger, result);
-          world.gpuComputeValidation = result;
-          globalObject.__lastGpuComputeValidation = result;
-          return result;
-        } finally {
-          running = false;
-        }
+        return scheduleValidationTask(globalObject, () => runScheduledValidation(world));
       },
+    };
+
+    async function runScheduledValidation(world) {
+      try {
+        const result =
+          mode === "experimental"
+            ? await applyExperimentalGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject })
+            : mode === "candidate"
+              ? await candidateGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject })
+            : await validateGpuComputeCheckpoint(world, { kernels, fields, timingMode, globalObject });
+        reportCount += 1;
+        const throttle = updateValidationThrottle(world, result, {
+          maxCandidateMs,
+          maxTotalMs,
+          cooldownSteps,
+          throttleCount,
+        });
+        if (throttle.throttled) {
+          throttleCount = throttle.throttleCount;
+          suppressUntilStep = throttle.suppressUntilStep;
+          lastThrottleReason = throttle.throttleReason;
+          result.throttled = true;
+          result.throttleReason = throttle.throttleReason;
+          result.suppressUntilStep = throttle.suppressUntilStep;
+          result.throttleCount = throttle.throttleCount;
+        }
+        if (!result.skipped && result.valid) {
+          lastReadbackStep = world.step;
+          successfulReadbackCount += 1;
+        }
+        result.readbackSkipped = result.readbackSkipped ?? false;
+        result.readbackInterval = readbackInterval;
+        result.lastReadbackStep = lastReadbackStep > 0 ? lastReadbackStep : null;
+        result.nextReadbackStep = readbackInterval > 1 && lastReadbackStep > 0
+          ? lastReadbackStep + readbackInterval
+          : null;
+        result.readbackSkipCount = readbackSkipCount;
+        result.successfulReadbackCount = successfulReadbackCount;
+        logValidateResult(logger, result);
+        publishValidationResult(world, globalObject, validationHistory, result);
+        return result;
+      } catch (error) {
+        const result = {
+          valid: true,
+          skipped: true,
+          step: world.step,
+          mode,
+          reason: `GPU compute validate failed safely: ${error?.message ?? "unknown error"}`,
+          fallbackReason: `GPU compute ${mode} failed safely: ${error?.message ?? "unknown error"}`,
+          writebackApplied: false,
+          writebackFields: [],
+          fields: [],
+          candidateResults: [],
+          validationTimings: emptyValidationTimings(),
+        };
+        reportCount += 1;
+        logValidateResult(logger, result);
+        publishValidationResult(world, globalObject, validationHistory, result);
+        return result;
+      } finally {
+        running = false;
+      }
+    }
+
+    function shouldSkipReadback(step) {
+      return readbackInterval > 1
+        && mode !== "experimental"
+        && successfulReadbackCount > 0
+        && lastReadbackStep > 0
+        && step - lastReadbackStep < readbackInterval;
+    }
+  }
+
+  function scheduleValidationTask(globalObject, task) {
+    return new Promise((resolve) => {
+      const run = () => {
+        resolve(Promise.resolve().then(task));
+      };
+      if (typeof globalObject?.requestIdleCallback === "function") {
+        globalObject.requestIdleCallback(run, { timeout: 250 });
+        return;
+      }
+      globalObject?.setTimeout?.(run, 0);
+    });
+  }
+
+  function publishValidationResult(world, globalObject, history, result) {
+    history.push(result);
+    while (history.length > 24) history.shift();
+    world.gpuComputeValidation = result;
+    globalObject.__lastGpuComputeValidation = result;
+    globalObject.__gpuComputeValidationHistory = history;
+  }
+
+  function createThrottledValidationResult(world, options = {}) {
+    return {
+      valid: true,
+      skipped: true,
+      throttled: true,
+      step: world.step,
+      ageYears: world.ageYears,
+      mode: options.mode ?? "validate",
+      kernels: options.kernels ?? [],
+      fields: [],
+      candidateResults: [],
+      validationTimings: emptyValidationTimings(),
+      writebackApplied: false,
+      writebackFields: [],
+      skippedReason: options.throttleReason ?? "GPU validation is cooling down after an over-budget candidate.",
+      fallbackReason: options.throttleReason ?? "GPU validation is cooling down after an over-budget candidate.",
+      throttleReason: options.throttleReason ?? "GPU validation is cooling down after an over-budget candidate.",
+      suppressUntilStep: options.suppressUntilStep ?? null,
+      throttleCount: options.throttleCount ?? 0,
+      note: "GPU compute validation was skipped on this step to keep the browser responsive; CPU remains authoritative.",
+    };
+  }
+
+  function createReadbackDeferredValidationResult(world, options = {}) {
+    const nextReadbackStep = options.nextReadbackStep ?? null;
+    return {
+      valid: true,
+      skipped: true,
+      readbackSkipped: true,
+      step: world.step,
+      ageYears: world.ageYears,
+      mode: options.mode ?? "validate",
+      kernels: options.kernels ?? [],
+      fields: [],
+      candidateResults: [],
+      validationTimings: emptyValidationTimings(),
+      writebackApplied: false,
+      writebackFields: [],
+      skippedReason:
+        `GPU readback deferred until step ${nextReadbackStep}; CPU remains authoritative.`,
+      fallbackReason: null,
+      readbackInterval: options.readbackInterval ?? 1,
+      lastReadbackStep: options.lastReadbackStep ?? null,
+      nextReadbackStep,
+      readbackSkipCount: options.readbackSkipCount ?? 0,
+      successfulReadbackCount: options.successfulReadbackCount ?? 0,
+      note:
+        "GPU validation readback was intentionally skipped on this tick to reduce mapAsync pressure after a successful prior readback; no candidate fields were written back.",
+    };
+  }
+
+  function updateValidationThrottle(world, result, options = {}) {
+    const cooldownSteps = Math.max(0, Math.trunc(Number(options.cooldownSteps ?? 0)) || 0);
+    if (cooldownSteps <= 0) return { throttled: false };
+
+    const maxCandidateMs = nonNegativeNumber(options.maxCandidateMs);
+    const maxTotalMs = nonNegativeNumber(options.maxTotalMs);
+    if (maxCandidateMs <= 0 && maxTotalMs <= 0) return { throttled: false };
+
+    const candidateMs = Number(result?.validationTimings?.candidateMs);
+    const totalMs = Number(result?.validationTimings?.totalValidationMs);
+    const candidateOver = maxCandidateMs > 0 && Number.isFinite(candidateMs) && candidateMs > maxCandidateMs;
+    const totalOver = maxTotalMs > 0 && Number.isFinite(totalMs) && totalMs > maxTotalMs;
+    if (!candidateOver && !totalOver) return { throttled: false };
+
+    const reasons = [];
+    if (candidateOver) reasons.push(`candidate ${candidateMs.toFixed(1)}ms > ${maxCandidateMs}ms`);
+    if (totalOver) reasons.push(`total ${totalMs.toFixed(1)}ms > ${maxTotalMs}ms`);
+    const throttleCount = (options.throttleCount ?? 0) + 1;
+    return {
+      throttled: true,
+      throttleCount,
+      suppressUntilStep: (world?.step ?? 0) + cooldownSteps,
+      throttleReason: `GPU validation over budget (${reasons.join("; ")}); cooling down for ${cooldownSteps} step(s).`,
+    };
+  }
+
+  async function candidateGpuComputeCheckpoint(world, options = {}) {
+    const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
+    const fields = normalizeCsvList(options.fields, defaultFieldsForMode("candidate", kernels));
+    const comparison = await compareGpuComputeCheckpoint(world, { ...options, kernels, fields });
+    return {
+      valid: comparison.fieldResults.every((field) => field.valid),
+      skipped: comparison.skipped,
+      skippedReason: comparison.skipped ? comparison.skippedReason : null,
+      step: comparison.snapshot.step,
+      ageYears: comparison.snapshot.ageYears,
+      mode: "candidate",
+      kernels,
+      fields: comparison.fieldResults,
+      candidateResults: comparison.candidateResults,
+      validationTimings: comparison.validationTimings,
+      writebackApplied: false,
+      writebackFields: [],
+      note: "Browser GPU compute candidate mode samples WebGPU fields for inspection; CPU remains authoritative and no writeback occurs.",
     };
   }
 
@@ -11471,6 +12415,7 @@
       kernels,
       fields: comparison.fieldResults,
       candidateResults: comparison.candidateResults,
+      validationTimings: comparison.validationTimings,
       writebackApplied: false,
       writebackFields: [],
       note: "Browser GPU compute validate keeps CPU authoritative; candidate fields are compared but never written back.",
@@ -11515,6 +12460,7 @@
       kernels,
       fields: comparison.fieldResults,
       candidateResults: comparison.candidateResults,
+      validationTimings: comparison.validationTimings,
       writebackApplied: writebackFields.length > 0,
       writebackFields,
       fallbackReason,
@@ -11524,21 +12470,35 @@
   }
 
   async function compareGpuComputeCheckpoint(world, options = {}) {
+    const totalStartedAt = performance.now();
     const kernels = normalizeCsvList(options.kernels, DEFAULT_VALIDATE_KERNELS);
     const fields = normalizeCsvList(options.fields, defaultFieldsForMode("validate", kernels));
-    const snapshot = createValidationSnapshot(world);
+    const snapshotStartedAt = performance.now();
+    const snapshot = createValidationSnapshot(world, kernels, fields);
+    const snapshotMs = performance.now() - snapshotStartedAt;
     const candidateResults = [];
     const candidateFields = {};
+    const baselineStartedAt = performance.now();
     const baselineFields = buildBaselineFieldsForKernels(kernels, snapshot);
+    const baselineMs = performance.now() - baselineStartedAt;
 
+    const candidateStartedAt = performance.now();
     for (const kernel of kernels) {
-      const result = await runCandidateKernel(kernel, snapshot, options.globalObject);
+      const result = await runCandidateKernel(
+        kernel,
+        snapshot,
+        options.globalObject,
+        fields,
+        normalizeTimingMode(options.timingMode),
+      );
       candidateResults.push(compactCandidateResult(kernel, result));
       if (!result?.skipped && result?.fields) {
         Object.assign(candidateFields, result.fields);
       }
     }
+    const candidateMs = performance.now() - candidateStartedAt;
 
+    const compareStartedAt = performance.now();
     const fieldResults = fields.map((fieldName) => {
       const baselineField = baselineFields[fieldName] ?? snapshot.grid[fieldName];
       const candidateField = candidateFields[fieldName] ?? baselineField;
@@ -11548,6 +12508,7 @@
         candidateSummary: summarizeField(candidateField),
       };
     });
+    const compareMs = performance.now() - compareStartedAt;
     const skipped = candidateResults.length > 0 && candidateResults.every((result) => result.skipped);
     const skippedReason = candidateResults
       .filter((result) => result.skipped)
@@ -11559,17 +12520,25 @@
       fieldResults,
       candidateFields,
       candidateResults,
+      validationTimings: {
+        snapshotMs,
+        baselineMs,
+        candidateMs,
+        compareMs,
+        totalValidationMs: performance.now() - totalStartedAt,
+      },
       skipped,
       skippedReason: skipped ? skippedReason : null,
     };
   }
 
-  function createValidationSnapshot(world) {
+  function createValidationSnapshot(world, kernels = [], fields = []) {
     const grid = world?.grid ?? {};
     const snapshotGrid = {};
+    const requiredFields = requiredSnapshotFieldsForKernels(kernels, fields);
     for (const [key, value] of Object.entries(grid)) {
       if (ArrayBuffer.isView(value) && typeof value.constructor === "function") {
-        snapshotGrid[key] = new value.constructor(value);
+        if (requiredFields.has(key)) snapshotGrid[key] = new value.constructor(value);
       } else {
         snapshotGrid[key] = value;
       }
@@ -11584,12 +12553,37 @@
     };
   }
 
+  function requiredSnapshotFieldsForKernels(kernels, fields) {
+    const required = new Set(fields);
+    for (const kernel of normalizeCsvList(kernels, [])) {
+      const normalized = normalizeKernelName(kernel);
+      for (const fieldName of REQUIRED_SNAPSHOT_FIELDS_BY_KERNEL[normalized] ?? []) {
+        required.add(fieldName);
+      }
+    }
+    return required;
+  }
+
+  function normalizeKernelName(kernel) {
+    if (kernel === "webgpu-isostasy") return "isostasy";
+    if (kernel === "webgpu-elevation") return "elevation";
+    if (kernel === "localTerrain" || kernel === "webgpu-local-fields") return "local-fields";
+    if (kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") return "margin-smooth";
+    if (kernel === "sedimentCapacity" || kernel === "webgpu-sediment-capacity") return "sediment-capacity";
+    return String(kernel ?? "").trim();
+  }
+
   function normalizeMode(value) {
     const mode = String(value ?? "off").trim().toLowerCase();
     if (mode === "validate") return "validate";
     if (mode === "candidate") return "candidate";
     if (mode === "experimental") return "experimental";
     return "off";
+  }
+
+  function nonNegativeNumber(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
   }
 
   function normalizeCsvList(value, fallback) {
@@ -11601,6 +12595,10 @@
       .filter(Boolean);
   }
 
+  function normalizeTimingMode(value) {
+    return value === "split" ? "split" : "overlapped";
+  }
+
   function defaultFieldsForMode(mode, kernels) {
     const normalized = normalizeCsvList(kernels, []);
     if (mode === "experimental" && normalized.some((kernel) => kernel === "isostasy" || kernel === "webgpu-isostasy")) {
@@ -11609,21 +12607,21 @@
     return DEFAULT_VALIDATE_FIELDS;
   }
 
-  async function runCandidateKernel(kernel, world, globalObject) {
+  async function runCandidateKernel(kernel, world, globalObject, fields, timingMode) {
     if (kernel === "elevation" || kernel === "webgpu-elevation") {
-      return runWebGpuElevationCandidate(world, { globalObject });
+      return runWebGpuElevationCandidate(world, { globalObject, fields });
     }
     if (kernel === "isostasy" || kernel === "webgpu-isostasy") {
-      return runWebGpuIsostasyCandidate(world, { globalObject });
+      return runWebGpuIsostasyCandidate(world, { globalObject, fields });
     }
     if (kernel === "local-fields" || kernel === "localTerrain" || kernel === "webgpu-local-fields") {
-      return runWebGpuLocalFieldsCandidate(world, { globalObject });
+      return runWebGpuLocalFieldsCandidate(world, { globalObject, fields, timingMode });
     }
     if (kernel === "margin-smooth" || kernel === "marginSmooth" || kernel === "webgpu-margin-smooth") {
-      return runWebGpuMarginSmoothCandidate(world, { globalObject });
+      return runWebGpuMarginSmoothCandidate(world, { globalObject, fields });
     }
     if (kernel === "sediment-capacity" || kernel === "sedimentCapacity" || kernel === "webgpu-sediment-capacity") {
-      return runWebGpuSedimentCapacityCandidate(world, { globalObject });
+      return runWebGpuSedimentCapacityCandidate(world, { globalObject, fields });
     }
     return {
       skipped: true,
@@ -11642,6 +12640,12 @@
       skipped: Boolean(result?.skipped),
       valid: result?.valid !== false,
       reason: result?.reason ?? null,
+      requestedFields: result?.requestedFields ?? [],
+      downloadedPacks: result?.downloadedPacks ?? [],
+      adapterInfo: result?.adapterInfo ?? null,
+      deviceInfo: result?.deviceInfo ?? null,
+      reusedContext: result?.reusedContext ?? false,
+      reusedBuffers: result?.reusedBuffers ?? false,
       timings: result?.timings ?? emptyTimings(),
     };
   }
@@ -12037,9 +13041,20 @@
       skipped: result.skipped,
       skippedReason: result.skippedReason ?? result.reason ?? null,
       fallbackReason: result.fallbackReason ?? null,
+      readbackSkipped: result.readbackSkipped ?? false,
+      readbackInterval: result.readbackInterval ?? null,
+      lastReadbackStep: result.lastReadbackStep ?? null,
+      nextReadbackStep: result.nextReadbackStep ?? null,
+      readbackSkipCount: result.readbackSkipCount ?? 0,
+      successfulReadbackCount: result.successfulReadbackCount ?? null,
+      throttled: result.throttled ?? false,
+      throttleReason: result.throttleReason ?? null,
+      suppressUntilStep: result.suppressUntilStep ?? null,
+      throttleCount: result.throttleCount ?? 0,
       writebackApplied: result.writebackApplied ?? false,
       writebackFields: result.writebackFields ?? [],
       kernels: result.kernels,
+      validationTimings: result.validationTimings ?? null,
       fields: result.fields?.map((field) => ({
         field: field.field,
         valid: field.valid,
@@ -12051,16 +13066,33 @@
       })) ?? [],
     };
     const method = result.valid ? "info" : "warn";
-    const label = result.mode === "experimental" ? "[gpu-compute-experimental]" : "[gpu-compute-validate]";
+    const label =
+      result.mode === "experimental"
+        ? "[gpu-compute-experimental]"
+        : result.mode === "candidate"
+          ? "[gpu-compute-candidate]"
+          : "[gpu-compute-validate]";
     logger?.[method]?.(label, summary);
   }
 
   function emptyTimings() {
     return {
+      setupMs: null,
       uploadMs: null,
       kernelMs: null,
       downloadMs: null,
       totalGpuPathMs: null,
+      totalCandidateMs: null,
+    };
+  }
+
+  function emptyValidationTimings() {
+    return {
+      snapshotMs: null,
+      baselineMs: null,
+      candidateMs: null,
+      compareMs: null,
+      totalValidationMs: null,
     };
   }
 
@@ -12842,12 +13874,12 @@
     const urlParams = readUrlOnlyParams();
     const topologyMode = urlParams.topologyMode ?? elements.topologyMode?.value;
     const projectionMode = urlParams.projectionMode ?? elements.projectionMode?.value;
-    const resolution = elements.resolution.value;
+    const resolution = urlParams.resolution ?? elements.resolution.value;
     const faceSize = urlParams.faceSize
       ?? optionalNumber(elements.faceSize?.value)
       ?? interactiveAutoFaceSize(topologyMode, urlParams.productionTopologyMode, resolution);
     return {
-      seedText: elements.seedText.value,
+      seedText: urlParams.seedText ?? elements.seedText.value,
       waterLevel: Number(elements.waterLevel.value),
       intensity: Number(elements.intensity.value),
       plateCount: Number(elements.plateCount.value),
@@ -12903,8 +13935,10 @@
     }
 
     const result = {};
+    assignStringParam(result, "seedText", firstParam(params, ["seed", "seedText", "seed-text"]));
     assignStringParam(result, "topologyMode", firstParam(params, ["topology", "topologyMode", "topology-mode"]));
     assignStringParam(result, "projectionMode", firstParam(params, ["projection", "projectionMode", "projection-mode"]));
+    assignStringParam(result, "resolution", firstParam(params, ["resolution", "res"]));
     assignStringParam(
       result,
       "productionTopologyMode",
@@ -12987,11 +14021,14 @@
   const gpuCapabilities = detectGpuCapabilities(globalThis);
   console.info("[gpu]", gpuCapabilities.recommendedMode, gpuCapabilities.reason);
   const gpuComputeValidator = createGpuComputeValidator(readGpuComputeOptions());
+  globalThis.__resetGpuComputeValidationDiagnostics = () => gpuComputeValidator.resetDiagnostics();
   if (gpuComputeValidator.enabled) {
     console.info("[gpu-compute]", gpuComputeValidator.mode, {
       kernels: gpuComputeValidator.kernels,
       fields: gpuComputeValidator.fields,
       interval: gpuComputeValidator.interval,
+      timingMode: gpuComputeValidator.timingMode,
+      readbackInterval: gpuComputeValidator.readbackInterval,
     });
   }
   const renderer = createMapRenderer(elements.canvas, {
@@ -13010,6 +14047,9 @@
     zoom: 0.92,
   };
   let projectionDrag = null;
+  const perfTracker = createBrowserPerfTracker(globalThis, {
+    gpuComputeMode: gpuComputeValidator.mode,
+  });
 
   bindProjectionCameraControls();
   renderAll();
@@ -13022,8 +14062,7 @@
 
   elements.stepOnce.addEventListener("click", () => {
     updateWorldParams(world, readParams(elements));
-    stepWorld(world);
-    gpuComputeValidator.maybeValidate(world);
+    runSimulationStep();
     renderAll();
   });
 
@@ -13057,12 +14096,31 @@
     if (!playing) return;
     if (now - lastFrame > 32) {
       updateWorldParams(world, readParams(elements));
-      stepWorld(world);
-      gpuComputeValidator.maybeValidate(world);
+      runSimulationStep();
       renderAll();
       lastFrame = now;
     }
     requestAnimationFrame(loop);
+  }
+
+  function runSimulationStep() {
+    const startedAt = performance.now();
+    stepWorld(world);
+    const measuredStepMs = Number.isFinite(world.lastStepMs)
+      ? world.lastStepMs
+      : performance.now() - startedAt;
+    perfTracker.recordStep(measuredStepMs, world);
+    trackGpuCompute(gpuComputeValidator.maybeValidate(world));
+  }
+
+  function trackGpuCompute(maybeResult) {
+    Promise.resolve(maybeResult)
+      .then((result) => {
+        if (result) perfTracker.recordGpuCompute(result);
+      })
+      .catch((error) => {
+        perfTracker.recordGpuError(error);
+      });
   }
 
   function rebuildWorld() {
@@ -13080,10 +14138,15 @@
   }
 
   function renderAll() {
+    const startedAt = performance.now();
     applyProjectionCamera(world);
     updateProjectionCursor();
     renderer.render(world);
+    perfTracker.recordRender(performance.now() - startedAt, world, {
+      projection: usesInteractiveOrthographicProjection(),
+    });
     updateStats(world);
+    publishRuntimeState(world);
   }
 
   function bindProjectionCameraControls() {
@@ -13188,6 +14251,296 @@
     return ((value + Math.PI) % tau + tau) % tau - Math.PI;
   }
 
+  function createBrowserPerfTracker(globalObject, options = {}) {
+    const sampleLimit = 180;
+    const samples = {
+      stepMs: [],
+      renderMs: [],
+      projectionRenderMs: [],
+      gpuSetupMs: [],
+      gpuBufferSetupMs: [],
+      gpuUploadMs: [],
+      gpuSubmitMs: [],
+      gpuKernelMs: [],
+      gpuDownloadMs: [],
+      gpuExecuteDownloadMs: [],
+      gpuTotalMs: [],
+      gpuCandidateTotalMs: [],
+      gpuValidationSnapshotMs: [],
+      gpuValidationBaselineMs: [],
+      gpuValidationCompareMs: [],
+      gpuValidationTotalMs: [],
+    };
+    const summary = {
+      valid: true,
+      gpuComputeMode: options.gpuComputeMode ?? "off",
+      lastStep: 0,
+      renderBackend: null,
+      step: summarizeSamples(samples.stepMs),
+      render: summarizeSamples(samples.renderMs),
+      projectionRender: summarizeSamples(samples.projectionRenderMs),
+      gpuCompute: {
+        mode: options.gpuComputeMode ?? "off",
+        valid: null,
+        skipped: null,
+        readbackSkipped: false,
+        readbackInterval: null,
+        lastReadbackStep: null,
+        nextReadbackStep: null,
+        readbackSkipCount: 0,
+        writebackApplied: false,
+        fallbackReason: null,
+        throttled: false,
+        throttleReason: null,
+        suppressUntilStep: null,
+        throttleCount: 0,
+        requestedFields: [],
+        downloadedPacks: [],
+        adapterInfo: null,
+        deviceInfo: null,
+        setup: summarizeSamples(samples.gpuSetupMs),
+        bufferSetup: summarizeSamples(samples.gpuBufferSetupMs),
+        upload: summarizeSamples(samples.gpuUploadMs),
+        submit: summarizeSamples(samples.gpuSubmitMs),
+        kernel: summarizeSamples(samples.gpuKernelMs),
+        download: summarizeSamples(samples.gpuDownloadMs),
+        executeDownload: summarizeSamples(samples.gpuExecuteDownloadMs),
+        total: summarizeSamples(samples.gpuTotalMs),
+        candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
+        validation: {
+          snapshot: summarizeSamples(samples.gpuValidationSnapshotMs),
+          baseline: summarizeSamples(samples.gpuValidationBaselineMs),
+          compare: summarizeSamples(samples.gpuValidationCompareMs),
+          total: summarizeSamples(samples.gpuValidationTotalMs),
+        },
+      },
+      longTask: {
+        count: 0,
+        totalMs: 0,
+        maxMs: 0,
+        lastMs: null,
+      },
+      updatedAt: 0,
+    };
+
+    installLongTaskObserver(globalObject, summary, publish);
+    publish();
+
+    return {
+      recordStep(ms, currentWorld) {
+        recordSample(samples.stepMs, ms, sampleLimit);
+        summary.lastStep = currentWorld?.step ?? summary.lastStep;
+        summary.step = summarizeSamples(samples.stepMs);
+        publish();
+      },
+      recordRender(ms, currentWorld, renderOptions = {}) {
+        recordSample(samples.renderMs, ms, sampleLimit);
+        if (renderOptions.projection) recordSample(samples.projectionRenderMs, ms, sampleLimit);
+        summary.renderBackend = currentWorld?.renderBackend ?? null;
+        summary.render = summarizeSamples(samples.renderMs);
+        summary.projectionRender = summarizeSamples(samples.projectionRenderMs);
+        publish();
+      },
+      recordGpuCompute(result) {
+        const timings = summarizeGpuTimings(result);
+        if (Number.isFinite(timings.setupMs)) recordSample(samples.gpuSetupMs, timings.setupMs, sampleLimit);
+        if (Number.isFinite(timings.bufferSetupMs)) {
+          recordSample(samples.gpuBufferSetupMs, timings.bufferSetupMs, sampleLimit);
+        }
+        if (Number.isFinite(timings.uploadMs)) recordSample(samples.gpuUploadMs, timings.uploadMs, sampleLimit);
+        if (Number.isFinite(timings.submitMs)) recordSample(samples.gpuSubmitMs, timings.submitMs, sampleLimit);
+        if (Number.isFinite(timings.kernelMs)) recordSample(samples.gpuKernelMs, timings.kernelMs, sampleLimit);
+        if (Number.isFinite(timings.downloadMs)) recordSample(samples.gpuDownloadMs, timings.downloadMs, sampleLimit);
+        if (Number.isFinite(timings.executeAndDownloadMs)) {
+          recordSample(samples.gpuExecuteDownloadMs, timings.executeAndDownloadMs, sampleLimit);
+        }
+        if (Number.isFinite(timings.totalGpuPathMs)) recordSample(samples.gpuTotalMs, timings.totalGpuPathMs, sampleLimit);
+        if (Number.isFinite(timings.totalCandidateMs)) {
+          recordSample(samples.gpuCandidateTotalMs, timings.totalCandidateMs, sampleLimit);
+        }
+        const validationTimings = result?.validationTimings ?? {};
+        if (Number.isFinite(validationTimings.snapshotMs)) {
+          recordSample(samples.gpuValidationSnapshotMs, validationTimings.snapshotMs, sampleLimit);
+        }
+        if (Number.isFinite(validationTimings.baselineMs)) {
+          recordSample(samples.gpuValidationBaselineMs, validationTimings.baselineMs, sampleLimit);
+        }
+        if (Number.isFinite(validationTimings.compareMs)) {
+          recordSample(samples.gpuValidationCompareMs, validationTimings.compareMs, sampleLimit);
+        }
+        if (Number.isFinite(validationTimings.totalValidationMs)) {
+          recordSample(samples.gpuValidationTotalMs, validationTimings.totalValidationMs, sampleLimit);
+        }
+        summary.gpuCompute = {
+          mode: result.mode ?? summary.gpuCompute.mode,
+          valid: result.valid ?? null,
+          skipped: result.skipped ?? null,
+          readbackSkipped: result.readbackSkipped ?? false,
+          readbackInterval: result.readbackInterval ?? summary.gpuCompute.readbackInterval ?? null,
+          lastReadbackStep: result.lastReadbackStep ?? summary.gpuCompute.lastReadbackStep ?? null,
+          nextReadbackStep: result.nextReadbackStep ?? null,
+          readbackSkipCount: result.readbackSkipCount ?? summary.gpuCompute.readbackSkipCount ?? 0,
+          writebackApplied: result.writebackApplied ?? false,
+          fallbackReason: result.fallbackReason ?? (result.readbackSkipped ? null : result.skippedReason ?? null),
+          throttled: result.throttled ?? false,
+          throttleReason: result.throttleReason ?? null,
+          suppressUntilStep: result.suppressUntilStep ?? null,
+          throttleCount: result.throttleCount ?? 0,
+          requestedFields: collectGpuCandidateMetadata(result, "requestedFields"),
+          downloadedPacks: collectGpuCandidateMetadata(result, "downloadedPacks"),
+          adapterInfo: collectFirstGpuCandidateMetadata(result, "adapterInfo"),
+          deviceInfo: collectFirstGpuCandidateMetadata(result, "deviceInfo"),
+          setup: summarizeSamples(samples.gpuSetupMs),
+          bufferSetup: summarizeSamples(samples.gpuBufferSetupMs),
+          upload: summarizeSamples(samples.gpuUploadMs),
+          submit: summarizeSamples(samples.gpuSubmitMs),
+          kernel: summarizeSamples(samples.gpuKernelMs),
+          download: summarizeSamples(samples.gpuDownloadMs),
+          executeDownload: summarizeSamples(samples.gpuExecuteDownloadMs),
+          total: summarizeSamples(samples.gpuTotalMs),
+          candidateTotal: summarizeSamples(samples.gpuCandidateTotalMs),
+          validation: {
+            snapshot: summarizeSamples(samples.gpuValidationSnapshotMs),
+            baseline: summarizeSamples(samples.gpuValidationBaselineMs),
+            compare: summarizeSamples(samples.gpuValidationCompareMs),
+            total: summarizeSamples(samples.gpuValidationTotalMs),
+          },
+        };
+        publish();
+      },
+      recordGpuError(error) {
+        summary.gpuCompute = {
+          ...summary.gpuCompute,
+          valid: false,
+          fallbackReason: `GPU compute timing sample failed safely: ${error?.message ?? "unknown error"}`,
+        };
+        publish();
+      },
+    };
+
+    function publish() {
+      summary.updatedAt = performance.now();
+      globalObject.__worldMapPerfSummary = summary;
+    }
+  }
+
+  function installLongTaskObserver(globalObject, summary, publish) {
+    try {
+      const Observer = globalObject.PerformanceObserver;
+      if (!Observer?.supportedEntryTypes?.includes("longtask")) return;
+      const observer = new Observer((list) => {
+        for (const entry of list.getEntries()) {
+          const duration = Number(entry.duration);
+          if (!Number.isFinite(duration)) continue;
+          summary.longTask.count += 1;
+          summary.longTask.totalMs += duration;
+          summary.longTask.maxMs = Math.max(summary.longTask.maxMs, duration);
+          summary.longTask.lastMs = duration;
+        }
+        publish();
+      });
+      observer.observe({ entryTypes: ["longtask"] });
+    } catch {
+      // Long Task API is optional; smoke tests still use step/render samples.
+    }
+  }
+
+  function summarizeGpuTimings(result) {
+    const totals = {
+      setupMs: 0,
+      bufferSetupMs: 0,
+      uploadMs: 0,
+      submitMs: 0,
+      kernelMs: 0,
+      downloadMs: 0,
+      executeAndDownloadMs: 0,
+      totalGpuPathMs: 0,
+      totalCandidateMs: 0,
+    };
+    const observed = Object.fromEntries(Object.keys(totals).map((key) => [key, 0]));
+    let count = 0;
+    for (const candidate of result?.candidateResults ?? []) {
+      const timings = candidate?.timings;
+      if (!timings) continue;
+      for (const key of Object.keys(totals)) {
+        const value = timings[key];
+        if (Number.isFinite(value)) {
+          totals[key] += value;
+          observed[key] += 1;
+        }
+      }
+      count += 1;
+    }
+    if (!count) {
+      return {
+        setupMs: null,
+        bufferSetupMs: null,
+        uploadMs: null,
+        submitMs: null,
+        kernelMs: null,
+        downloadMs: null,
+        executeAndDownloadMs: null,
+        totalGpuPathMs: null,
+        totalCandidateMs: null,
+      };
+    }
+    return Object.fromEntries(
+      Object.keys(totals).map((key) => [key, observed[key] > 0 ? totals[key] : null]),
+    );
+  }
+
+  function collectGpuCandidateMetadata(result, key) {
+    const values = [];
+    const seen = new Set();
+    for (const candidate of result?.candidateResults ?? []) {
+      for (const value of candidate?.[key] ?? []) {
+        const id = String(value);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        values.push(value);
+      }
+    }
+    return values;
+  }
+
+  function collectFirstGpuCandidateMetadata(result, key) {
+    for (const candidate of result?.candidateResults ?? []) {
+      if (candidate?.[key]) return candidate[key];
+    }
+    return null;
+  }
+
+  function recordSample(samplesList, value, limit) {
+    if (!Number.isFinite(value)) return;
+    samplesList.push(value);
+    while (samplesList.length > limit) samplesList.shift();
+  }
+
+  function summarizeSamples(values) {
+    if (!values.length) {
+      return {
+        count: 0,
+        lastMs: null,
+        averageMs: null,
+        p95Ms: null,
+        maxMs: null,
+      };
+    }
+    const sorted = [...values].sort((a, b) => a - b);
+    const sum = values.reduce((total, value) => total + value, 0);
+    return {
+      count: values.length,
+      lastMs: roundPerf(values[values.length - 1]),
+      averageMs: roundPerf(sum / values.length),
+      p95Ms: roundPerf(sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)]),
+      maxMs: roundPerf(sorted[sorted.length - 1]),
+    };
+  }
+
+  function roundPerf(value) {
+    return Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
+  }
+
   function updateStats(currentWorld) {
     const stats = currentWorld.stats;
     elements.seedUint.textContent = currentWorld.seedUint32.toString();
@@ -13204,6 +14557,33 @@
       `${sign}：陆块汇聚造山带均高 ${stats.avgMountainConvergent.toFixed(3)}，陆块内部均高 ${stats.avgContinentalInterior.toFixed(3)}，差值 ${mountainDelta.toFixed(3)}。` +
       ` 全部汇聚边界均值 ${stats.avgConvergent.toFixed(3)}，其中包含会降低均值的海沟。` +
       " 红色边界附近应逐步形成当前山带或海沟；蓝色离散边界在海洋抬升、陆内弱下陷；边界会随板块中心漂移。";
+  }
+
+  function publishRuntimeState(currentWorld) {
+    const params = currentWorld?.params ?? {};
+    const grid = currentWorld?.grid ?? {};
+    globalThis.__worldMapRuntimeState = {
+      seedText: params.seedText ?? null,
+      seedUint32: currentWorld?.seedUint32 ?? null,
+      resolution: params.resolution ?? null,
+      topologyMode: params.topologyMode ?? null,
+      productionTopologyMode: params.productionTopologyMode ?? null,
+      projectionMode: params.projectionMode ?? null,
+      pipelineMode: params.pipelineMode ?? null,
+      faceSize: params.faceSize ?? null,
+      renderWidth: params.renderWidth ?? null,
+      renderHeight: params.renderHeight ?? null,
+      step: currentWorld?.step ?? null,
+      ageYears: currentWorld?.ageYears ?? null,
+      renderBackend: currentWorld?.renderBackend ?? null,
+      grid: {
+        width: grid.width ?? null,
+        height: grid.height ?? null,
+        size: grid.size ?? null,
+        topologyKind: grid.topologyKind ?? null,
+        graphBacked: Boolean(grid.topologyOptions?.graphBacked),
+      },
+    };
   }
 
   function formatYears(years) {
@@ -13231,10 +14611,15 @@
         fields: params.get("gpuFields") ?? "",
         interval: params.get("gpuValidateInterval") ?? 20,
         maxReports: params.get("gpuValidateReports") ?? 12,
+        maxCandidateMs: params.get("gpuValidateMaxCandidateMs") ?? params.get("gpu-validate-max-candidate-ms") ?? 0,
+        maxTotalMs: params.get("gpuValidateMaxTotalMs") ?? params.get("gpu-validate-max-total-ms") ?? 0,
+        cooldownSteps: params.get("gpuValidateCooldownSteps") ?? params.get("gpu-validate-cooldown-steps") ?? 0,
+        timingMode: params.get("gpuTimingMode") ?? params.get("gpu-timing-mode") ?? "overlapped",
+        readbackInterval: params.get("gpuValidateReadbackInterval") ?? params.get("gpu-validate-readback-interval") ?? 1,
         globalObject: globalThis,
       };
     } catch {
-      return { mode: "off", globalObject: globalThis };
+      return { mode: "off", timingMode: "overlapped", readbackInterval: 1, globalObject: globalThis };
     }
   }
 
