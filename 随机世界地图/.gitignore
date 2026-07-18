@@ -1,9 +1,4 @@
-# Local browser/test artifacts
 .test-cache/
-_debug_*/
-external-references/
-
-# Long-running agent harness state
 .harness-active
 harness-progress.txt
 harness-tasks.json

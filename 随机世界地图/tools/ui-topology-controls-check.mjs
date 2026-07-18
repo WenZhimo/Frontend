@@ -1,0 +1,178 @@
+import { readFileSync } from "node:fs";
+import { createWorld } from "../src/sim/world.js";
+import { bindControlLabels, readParams } from "../src/ui/controls.js";
+
+const failures = [];
+const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+
+for (const id of ["topologyMode", "projectionMode", "faceSize", "faceSizeLabel"]) {
+  expect(html.includes(`id="${id}"`), `index.html exposes #${id}`);
+}
+expect(html.includes("cubed-sphere"), "index.html exposes cubed-sphere option");
+expect(html.includes("orthographic"), "index.html exposes orthographic projection option");
+for (const mode of [
+  "debug-face",
+  "debug-cell-id",
+  "debug-neighbor-count",
+  "debug-area",
+  "debug-face-seam-risk",
+  "debug-projection-sampling",
+]) {
+  expect(html.includes(`value="${mode}"`), `index.html exposes ${mode} projection option`);
+}
+
+const elements = createMockElements({
+  topologyMode: "cubed-sphere",
+  projectionMode: "orthographic",
+  faceSize: "24",
+});
+
+bindControlLabels(elements);
+const params = readParams(elements);
+const world = createWorld(params);
+
+expect(params.topologyMode === "cubed-sphere", "readParams preserves topology selector value");
+expect(params.projectionMode === "orthographic", "readParams preserves projection selector value");
+expect(params.faceSize === 24, "readParams parses face-size selector value");
+expect(elements.faceSizeLabel.textContent === "24", "bindControlLabels updates face-size label");
+expect(world.params.topologyMode === "cubed-sphere", "createWorld normalizes cubed-sphere topology");
+expect(world.params.projectionMode === "orthographic", "createWorld normalizes orthographic projection");
+expect(world.params.faceSize === 24, "createWorld preserves explicit face size");
+expect(world.grid.topologyKind === "cubed-sphere", "createWorld uses cubed-sphere production grid");
+expect(world.grid.topologyOptions?.graphBacked === true, "cubed-sphere production grid is graph-backed");
+expect(world.grid.size === 6 * 24 * 24, "cubed-sphere grid size matches face size");
+
+const autoElements = createMockElements({
+  topologyMode: "cubed-sphere",
+  projectionMode: "orthographic",
+  faceSize: "",
+});
+bindControlLabels(autoElements);
+const autoParams = readParams(autoElements);
+const autoWorld = createWorld(autoParams);
+expect(autoParams.faceSize === 24, "blank default spherical face-size selector uses fast automatic mode");
+expect(autoElements.faceSizeLabel.textContent === "自动", "blank face-size selector labels automatic mode");
+expect(autoWorld.params.topologyMode === "cubed-sphere", "default UI topology uses true spherical core");
+expect(autoWorld.params.projectionMode === "orthographic", "default UI projection uses draggable orthographic globe");
+expect(autoWorld.grid.topologyKind === "cubed-sphere", "default UI path uses cubed-sphere production grid");
+expect(autoWorld.grid.topologyOptions?.graphBacked === true, "default UI spherical grid is graph-backed");
+
+const sphericalAutoElements = createMockElements({
+  topologyMode: "cubed-sphere",
+  projectionMode: "equirectangular",
+  faceSize: "",
+  resolution: "512x256",
+});
+bindControlLabels(sphericalAutoElements);
+const sphericalAutoParams = readParams(sphericalAutoElements);
+const sphericalAutoWorld = createWorld(sphericalAutoParams);
+expect(sphericalAutoParams.faceSize === 24, "interactive cubed-sphere auto face size uses fast preview size");
+expect(sphericalAutoWorld.params.faceSize === 24, "interactive cubed-sphere auto world keeps fast preview size");
+expect(sphericalAutoWorld.grid.size === 6 * 24 * 24, "interactive cubed-sphere auto avoids high-cost default grid");
+
+const debugElements = createMockElements({
+  topologyMode: "cubed-sphere",
+  projectionMode: "debug-area",
+  faceSize: "24",
+});
+const debugParams = readParams(debugElements);
+const debugWorld = createWorld(debugParams);
+expect(debugParams.projectionMode === "debug-area", "readParams preserves debug projection selector value");
+expect(debugWorld.params.projectionMode === "debug-area", "createWorld normalizes debug projection mode");
+expect(debugWorld.grid.topologyOptions?.graphBacked === true, "debug projection keeps cubed-sphere graph-backed grid");
+
+const result = {
+  valid: failures.length === 0,
+  failures,
+  controlsPresent: {
+    topologyMode: html.includes('id="topologyMode"'),
+    projectionMode: html.includes('id="projectionMode"'),
+    faceSize: html.includes('id="faceSize"'),
+    faceSizeLabel: html.includes('id="faceSizeLabel"'),
+  },
+  selectedParams: {
+    topologyMode: params.topologyMode,
+    projectionMode: params.projectionMode,
+    faceSize: params.faceSize,
+  },
+  selectedWorld: {
+    topologyMode: world.params.topologyMode,
+    projectionMode: world.params.projectionMode,
+    faceSize: world.params.faceSize,
+    gridKind: world.grid.kind ?? world.grid.topologyKind ?? null,
+    topologyKind: world.grid.topologyKind ?? null,
+    graphBacked: world.grid.topologyOptions?.graphBacked === true,
+    gridSize: world.grid.size,
+  },
+  defaultWorld: {
+    topologyMode: autoWorld.params.topologyMode,
+    projectionMode: autoWorld.params.projectionMode,
+    faceSize: autoWorld.params.faceSize,
+    gridKind: autoWorld.grid.kind ?? autoWorld.grid.topologyKind ?? null,
+    topologyKind: autoWorld.grid.topologyKind ?? autoWorld.grid.topologyOptions?.kind ?? null,
+    graphBacked: autoWorld.grid.topologyOptions?.graphBacked === true,
+    gridSize: autoWorld.grid.size,
+  },
+  sphericalAutoWorld: {
+    topologyMode: sphericalAutoWorld.params.topologyMode,
+    projectionMode: sphericalAutoWorld.params.projectionMode,
+    faceSize: sphericalAutoWorld.params.faceSize,
+    gridKind: sphericalAutoWorld.grid.kind ?? sphericalAutoWorld.grid.topologyKind ?? null,
+    topologyKind: sphericalAutoWorld.grid.topologyKind ?? null,
+    graphBacked: sphericalAutoWorld.grid.topologyOptions?.graphBacked === true,
+    gridSize: sphericalAutoWorld.grid.size,
+  },
+  debugWorld: {
+    topologyMode: debugWorld.params.topologyMode,
+    projectionMode: debugWorld.params.projectionMode,
+    faceSize: debugWorld.params.faceSize,
+    gridKind: debugWorld.grid.kind ?? debugWorld.grid.topologyKind ?? null,
+    topologyKind: debugWorld.grid.topologyKind ?? null,
+    graphBacked: debugWorld.grid.topologyOptions?.graphBacked === true,
+    gridSize: debugWorld.grid.size,
+  },
+};
+
+console.log(JSON.stringify(result, null, 2));
+process.exit(result.valid ? 0 : 1);
+
+function createMockElements(overrides = {}) {
+  return {
+    seedText: mockControl("龙骨海-纪元7"),
+    waterLevel: mockControl("50"),
+    waterLabel: mockOutput(),
+    intensity: mockControl("1"),
+    intensityLabel: mockOutput(),
+    plateCount: mockControl("14"),
+    platesLabel: mockOutput(),
+    timeScale: mockControl("1000000"),
+    resolution: mockControl(overrides.resolution ?? "256x128"),
+    topologyMode: mockControl(overrides.topologyMode ?? "cylindrical"),
+    projectionMode: mockControl(overrides.projectionMode ?? "equirectangular"),
+    faceSize: mockControl(overrides.faceSize ?? ""),
+    faceSizeLabel: mockOutput(),
+    showBoundaries: mockControl("on", { checked: true }),
+    pipelineMode: mockControl("geology-v2"),
+  };
+}
+
+function mockControl(value, options = {}) {
+  return {
+    value,
+    checked: options.checked === true,
+    listeners: [],
+    addEventListener(_eventName, listener) {
+      this.listeners.push(listener);
+    },
+  };
+}
+
+function mockOutput() {
+  return {
+    textContent: "",
+  };
+}
+
+function expect(condition, message) {
+  if (!condition) failures.push(message);
+}
