@@ -1,0 +1,253 @@
+import { createGrid } from "./grid.js";
+import { hashSeed } from "./prng.js";
+import { createCubedSphereGrid } from "./sphere/cubedSphere.js";
+import { createCubedSphereProductionGridAdapter } from "./sphere/productionGridAdapter.js";
+import { measureSphericalPlateDrift } from "./sphere/plates.js";
+import { createSphericalExperimentalWorld } from "./sphere/sphericalWorld.js";
+import { initializeBaseTerrain, initializeSeaLevel, updateSeaLevel } from "./terrain.js";
+import { assignPlates, computeBoundaryStress } from "./tectonics.js";
+import { updatePlateBoundaries } from "./geology/boundaries.js";
+import { rasterizePlatesV2 } from "./geology/plates.js";
+
+export const PipelineMode = {
+  LEGACY: "legacy",
+  GEOLOGY_V2: "geology-v2",
+};
+
+export const TopologyMode = {
+  CYLINDRICAL: "cylindrical",
+  CUBED_SPHERE: "cubed-sphere",
+};
+
+export const ProjectionMode = {
+  EQUIRECTANGULAR: "equirectangular",
+  ORTHOGRAPHIC: "orthographic",
+  DEBUG_FACE: "debug-face",
+  DEBUG_CELL_ID: "debug-cell-id",
+  DEBUG_NEIGHBOR_COUNT: "debug-neighbor-count",
+  DEBUG_AREA: "debug-area",
+  DEBUG_FACE_SEAM_RISK: "debug-face-seam-risk",
+  DEBUG_PROJECTION_SAMPLING: "debug-projection-sampling",
+};
+
+export const ProductionTopologyMode = {
+  CYLINDRICAL: "cylindrical",
+  CUBED_SPHERE_ADAPTER: "cubed-sphere-adapter",
+};
+
+export function createWorld(params) {
+  const normalizedParams = normalizeParams(params);
+  const [width, height] = normalizedParams.resolution.split("x").map(Number);
+  const seedUint32 = hashSeed(normalizedParams.seedText);
+  const grid = createProductionGrid(normalizedParams, width, height, seedUint32);
+  const world = {
+    grid,
+    sphericalGrid: createExperimentalSphericalGrid(normalizedParams),
+    sphericalWorld: createExperimentalSphericalWorld(normalizedParams, seedUint32),
+    params: normalizedParams,
+    seedUint32,
+    step: 0,
+    ageYears: 0,
+    timeScaleFactor: timeScaleFactor(normalizedParams.timeScale),
+    seaLevel: 0,
+    waterVolume: 0,
+    plates: null,
+    continentNoise: null,
+    textureNoise: null,
+    initialPlateCentersX: null,
+    initialPlateCentersY: null,
+    initialPlateCentersU: null,
+    initialPlateCentersV: null,
+    initialSphericalPlates: null,
+    stats: {},
+  };
+  initializeBaseTerrain(world);
+  assignPlates(world);
+  initializeSeaLevel(world);
+  if (world.params.pipelineMode === PipelineMode.GEOLOGY_V2) {
+    rasterizePlatesV2(world);
+    updatePlateBoundaries(world);
+  } else {
+    computeBoundaryStress(world);
+  }
+  updateSeaLevel(world);
+  world.stats = analyzeWorld(world);
+  return world;
+}
+
+export function updateWorldParams(world, params) {
+  world.params = normalizeParams({ ...world.params, ...params });
+  world.timeScaleFactor = timeScaleFactor(world.params.timeScale);
+}
+
+function normalizeParams(params) {
+  const topologyMode = params.topologyMode === TopologyMode.CUBED_SPHERE
+    ? TopologyMode.CUBED_SPHERE
+    : TopologyMode.CYLINDRICAL;
+  const productionTopologyMode = normalizeProductionTopologyMode({ ...params, topologyMode });
+  const pipelineMode = productionTopologyMode === ProductionTopologyMode.CUBED_SPHERE_ADAPTER || params.pipelineMode === PipelineMode.GEOLOGY_V2
+    ? PipelineMode.GEOLOGY_V2
+    : PipelineMode.LEGACY;
+  const projectionMode = Object.values(ProjectionMode).includes(params.projectionMode)
+    ? params.projectionMode
+    : ProjectionMode.EQUIRECTANGULAR;
+  return {
+    ...params,
+    pipelineMode,
+    topologyMode,
+    projectionMode,
+    productionTopologyMode,
+    faceSize: normalizeFaceSize(params.faceSize, params.resolution),
+  };
+}
+
+function normalizeProductionTopologyMode(params) {
+  if (
+    params.topologyMode === TopologyMode.CUBED_SPHERE ||
+    params.productionTopologyMode === ProductionTopologyMode.CUBED_SPHERE_ADAPTER ||
+    params.useSphericalProductionGrid === true
+  ) {
+    return ProductionTopologyMode.CUBED_SPHERE_ADAPTER;
+  }
+  return ProductionTopologyMode.CYLINDRICAL;
+}
+
+function createProductionGrid(params, width, height, seedUint32) {
+  if (params.productionTopologyMode === ProductionTopologyMode.CUBED_SPHERE_ADAPTER) {
+    return createCubedSphereProductionGridAdapter({
+      faceSize: params.faceSize,
+      seedUint32,
+    });
+  }
+  return createGrid(width, height);
+}
+
+function createExperimentalSphericalGrid(params) {
+  if (params.topologyMode !== TopologyMode.CUBED_SPHERE) return null;
+  return createCubedSphereGrid(params.faceSize);
+}
+
+function createExperimentalSphericalWorld(params, seedUint32) {
+  if (params.topologyMode !== TopologyMode.CUBED_SPHERE) return null;
+  return createSphericalExperimentalWorld({
+    seedText: params.seedText,
+    seedUint32,
+    faceSize: params.faceSize,
+    plateCount: params.plateCount,
+    intensity: params.intensity,
+    steps: 0,
+  });
+}
+
+function normalizeFaceSize(faceSize, resolution) {
+  const explicit = Number(faceSize);
+  if (Number.isFinite(explicit) && explicit >= 2) return Math.trunc(explicit);
+  const [width, height] = String(resolution ?? "512x256").split("x").map(Number);
+  const base = Math.max(2, Math.min(width || 512, height || 256));
+  return Math.max(2, Math.round(base / 2));
+}
+
+export function analyzeWorld(world) {
+  const { grid } = world;
+  const { size, elev, btype, isContinental } = grid;
+  const areaWeighted = isGraphBackedGrid(grid);
+  let landArea = 0;
+  let totalArea = 0;
+  let convergentSum = 0;
+  let convergentWeight = 0;
+  let mountainConvergentSum = 0;
+  let mountainConvergentWeight = 0;
+  let divergentSum = 0;
+  let divergentWeight = 0;
+  let interiorSum = 0;
+  let interiorWeight = 0;
+  let continentalInteriorSum = 0;
+  let continentalInteriorWeight = 0;
+  let convergentCount = 0;
+  let mountainConvergentCount = 0;
+  let divergentCount = 0;
+  let maxElev = -Infinity;
+
+  for (let i = 0; i < size; i += 1) {
+    const h = elev[i];
+    const weight = areaWeighted ? grid.area?.[i] ?? 1 : 1;
+    totalArea += weight;
+    if (h >= world.seaLevel) landArea += weight;
+    if (h > maxElev) maxElev = h;
+    if (btype[i] === 1) {
+      convergentSum += h * weight;
+      convergentWeight += weight;
+      convergentCount += 1;
+      if (isContinental[i]) {
+        mountainConvergentSum += h * weight;
+        mountainConvergentWeight += weight;
+        mountainConvergentCount += 1;
+      }
+    } else if (btype[i] === 2) {
+      divergentSum += h * weight;
+      divergentWeight += weight;
+      divergentCount += 1;
+    } else if (btype[i] === 0) {
+      interiorSum += h * weight;
+      interiorWeight += weight;
+      if (isContinental[i]) {
+        continentalInteriorSum += h * weight;
+        continentalInteriorWeight += weight;
+      }
+    }
+  }
+
+  const avgConvergent = convergentWeight ? convergentSum / convergentWeight : 0;
+  const avgMountainConvergent = mountainConvergentWeight ? mountainConvergentSum / mountainConvergentWeight : avgConvergent;
+  const avgDivergent = divergentWeight ? divergentSum / divergentWeight : 0;
+  const avgInterior = interiorWeight ? interiorSum / interiorWeight : 0;
+  const avgContinentalInterior = continentalInteriorWeight ? continentalInteriorSum / continentalInteriorWeight : avgInterior;
+  const avgPlateDrift = measurePlateDrift(world);
+  const mountainDelta = avgMountainConvergent - avgContinentalInterior;
+  const broadDelta = avgMountainConvergent - avgInterior;
+  const landRatio = landArea / Math.max(totalArea, Number.EPSILON);
+  return {
+    landRatio,
+    seaRatio: 1 - landRatio,
+    avgConvergent,
+    avgMountainConvergent,
+    avgDivergent,
+    avgInterior,
+    avgContinentalInterior,
+    maxElev,
+    convergentCount,
+    mountainConvergentCount,
+    divergentCount,
+    seaLevel: world.seaLevel,
+    avgPlateDrift,
+    causalityPass: mountainConvergentCount > 0 && (mountainDelta > 0.015 || broadDelta > 0.05),
+  };
+}
+
+function isGraphBackedGrid(grid) {
+  return Boolean(grid?.topologyOptions?.graphBacked || grid?.topologyKind === "cubed-sphere");
+}
+
+function measurePlateDrift(world) {
+  if (world.plates?.kind === "spherical-plates" && world.initialSphericalPlates) {
+    return measureSphericalPlateDrift(world.initialSphericalPlates, world.plates);
+  }
+  if (!world.plates || !world.initialPlateCentersU || !world.initialPlateCentersV) return 0;
+  let total = 0;
+  for (let p = 0; p < world.plates.centersX.length; p += 1) {
+    const duRaw = Math.abs(world.plates.centersU[p] - world.initialPlateCentersU[p]);
+    const du = Math.min(duRaw, 1 - duRaw);
+    const dv = world.plates.centersV[p] - world.initialPlateCentersV[p];
+    total += Math.hypot(du * 512, dv * 256);
+  }
+  return total / world.plates.centersX.length;
+}
+
+function timeScaleFactor(years) {
+  const value = Number(years);
+  if (value <= 1) return 0.04;
+  if (value <= 100) return 0.12;
+  if (value <= 1000) return 0.35;
+  if (value <= 10000) return 0.75;
+  return 1.4;
+}
