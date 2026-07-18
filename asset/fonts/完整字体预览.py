@@ -1,21 +1,18 @@
 from pathlib import Path
+from urllib.parse import quote
+from dataclasses import dataclass
+import html
+import json
 import re
-from PIL import Image, ImageDraw, ImageFont
 
 
-INPUT_DIR = Path(r"D:\盒子\HTML\asset\fonts")
-OUTPUT_IMAGE = Path(__file__).with_name("完整字体预览.png")
+INPUT_DIR = Path(__file__).resolve().parent
+OUTPUT_HTML = Path(__file__).with_name("完整字体预览.html")
 PREVIEW_TEXT = "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789 汉字预览测试 文于止墨丰川祥子实验"
-FONT_SIZE = 200
-TITLE_SIZE = 140
-PADDING = 40
-LINE_SPACING = 20
-TITLE_LINE_SPACING = 20
-PREVIEW_LINE_SPACING = 20
 
-FONT_EXTS = {".ttf", ".otf", ".ttc"}
-PREFERRED_SUFFIX_ORDER = {".ttf": 0, ".otf": 1, ".ttc": 2}
-ALLOWED_PARENT_DIRS = {"static", "ttf", "otf"}
+FONT_EXTS = {".ttf", ".otf", ".ttc", ".woff", ".woff2"}
+PREFERRED_SUFFIX_ORDER = {".woff2": 0, ".woff": 1, ".ttf": 2, ".otf": 3, ".ttc": 4}
+ALLOWED_PARENT_DIRS = {"static", "font", "fonts", "ttf", "otf", "woff", "woff2", "truetype", "opentype", "variable"}
 SUBSET_MARKERS = {
     "latin", "latinext", "cyrillic", "cyrillicext", "greek", "greekext",
     "vietnamese", "hebrew", "arabic", "thai", "khmer", "lao", "devanagari",
@@ -23,16 +20,22 @@ SUBSET_MARKERS = {
     "sinhala", "tamil", "telugu"
 }
 WEIGHT_MARKERS = {"100", "200", "300", "400", "500", "600", "700", "800", "900", "normal", "italic"}
+FRAGMENT_SIDECARS = {"index.html", "index.proto", "reporter.bin", "result.css"}
+HEX_HASH_RE = re.compile(r"^[0-9a-f]{16,}$", re.IGNORECASE)
+CSS_FONT_FAMILY_RE = re.compile(
+    r"font-family\s*:\s*(?:\"((?:\\.|[^\"])*)\"|'((?:\\.|[^'])*)'|([^;,{]+))",
+    re.IGNORECASE,
+)
+META_FONT_FAMILY_RE = re.compile(r"FontFamilyName\s+([^\r\n]+)")
 
 
-def load_title_font(size: int):
-    for name in ("msyh.ttc", "msyhbd.ttc", "simhei.ttf", "simsun.ttc"):
-        try:
-            return ImageFont.truetype(name, size)
-        except OSError:
-            continue
-    print("警告: 未找到常见中文系统字体，标题将退回 PIL 默认字体。")
-    return ImageFont.load_default()
+@dataclass
+class FontEntry:
+    display_name: str
+    source_path: Path
+    css_family: str
+    source_kind: str
+    uses_split: bool
 
 
 def normalize_subset_text(text: str) -> str:
@@ -49,8 +52,18 @@ def looks_like_subset_bucket(text: str) -> bool:
     return bool(tokens & SUBSET_MARKERS) and bool(tokens & WEIGHT_MARKERS)
 
 
+def is_split_woff_fragment(font_path: Path) -> bool:
+    if font_path.suffix.lower() not in {".woff", ".woff2"}:
+        return False
+    if HEX_HASH_RE.fullmatch(font_path.stem):
+        return True
+    return any((font_path.parent / sidecar).exists() for sidecar in FRAGMENT_SIDECARS)
+
+
 def is_fragment_font(font_path: Path, root: Path) -> bool:
     rel = font_path.relative_to(root)
+    if is_split_woff_fragment(font_path):
+        return True
     if looks_like_subset_bucket(font_path.stem):
         return True
 
@@ -65,15 +78,49 @@ def is_fragment_font(font_path: Path, root: Path) -> bool:
 
 
 def normalize_font_key(font_path: Path) -> str:
-    stem = font_path.stem.lower()
-    stem = re.sub(r"-exfont[0-9a-f]+$", "", stem)
-    return re.sub(r"[^0-9a-z一-鿿]+", "", stem)
+    return normalize_font_text(font_path.stem)
 
 
-def collect_complete_fonts(root: Path):
+def normalize_font_text(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"-exfont[0-9a-f]+$", "", text)
+    return re.sub(r"[^0-9a-z一-鿿]+", "", text)
+
+
+def keys_are_related(left: str, right: str) -> bool:
+    if not left or not right:
+        return False
+    if left == right:
+        return True
+    return min(len(left), len(right)) >= 4 and (left.startswith(right) or right.startswith(left))
+
+
+def clean_css_family(value: str) -> str:
+    value = value.replace(r"\"", '"').replace(r"\'", "'")
+    return re.sub(r"\s+", " ", value).strip().strip("\"'")
+
+
+def parse_result_css_family(css_path: Path) -> str:
+    text = css_path.read_text(encoding="utf-8", errors="ignore")
+
+    match = CSS_FONT_FAMILY_RE.search(text)
+    if match:
+        return clean_css_family(next(part for part in match.groups() if part))
+
+    match = META_FONT_FAMILY_RE.search(text)
+    if match:
+        return clean_css_family(match.group(1))
+
+    return clean_css_family(css_path.parent.name)
+
+
+def collect_complete_fonts(root: Path, covered_paths=None):
+    covered_paths = covered_paths or set()
     candidates = []
     for path in root.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in FONT_EXTS:
+            continue
+        if path.resolve() in covered_paths:
             continue
         if is_fragment_font(path, root):
             continue
@@ -96,34 +143,387 @@ def collect_complete_fonts(root: Path):
     return sorted((item[1] for item in selected.values()), key=lambda p: str(p.relative_to(root)).lower())
 
 
-def measure_lines(lines, font, spacing: int):
-    widths = []
-    total_height = 0
-    for index, line in enumerate(lines):
-        sample = line or "Ag"
-        bbox = font.getbbox(sample)
-        line_width = font.getlength(line) if line else 0
-        line_height = bbox[3] - bbox[1]
-        widths.append(line_width)
-        total_height += line_height
-        if index < len(lines) - 1:
-            total_height += spacing
-    return max(widths, default=0), total_height
+def font_files_for_split_matching(top_dir: Path):
+    for path in top_dir.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in FONT_EXTS:
+            continue
+        if is_split_woff_fragment(path):
+            continue
+        yield path
 
 
-def measure_lines(lines, font, spacing: int):
-    widths = []
-    total_height = 0
-    for index, line in enumerate(lines):
-        sample = line or "Ag"
-        bbox = font.getbbox(sample)
-        line_width = font.getlength(line) if line else 0
-        line_height = bbox[3] - bbox[1]
-        widths.append(line_width)
-        total_height += line_height
-        if index < len(lines) - 1:
-            total_height += spacing
-    return max(widths, default=0), total_height
+def collect_split_entries(root: Path):
+    entries = []
+    covered_paths = set()
+
+    for css_path in sorted(root.rglob("result.css"), key=lambda p: str(p.relative_to(root)).lower()):
+        rel = css_path.relative_to(root)
+        css_family = parse_result_css_family(css_path)
+        display_name = css_path.parent.name
+        entries.append(FontEntry(display_name, css_path, css_family, "切片 CSS", True))
+
+        top_dir = root / rel.parts[0]
+        split_keys = {
+            normalize_font_text(css_path.parent.name),
+            normalize_font_text(css_family),
+            normalize_font_text(css_path.parent.parent.name),
+        }
+
+        for font_path in font_files_for_split_matching(top_dir):
+            full_key = normalize_font_key(font_path)
+            if any(keys_are_related(full_key, split_key) for split_key in split_keys):
+                covered_paths.add(font_path.resolve())
+
+    return entries, covered_paths
+
+
+def collect_font_entries(root: Path):
+    split_entries, covered_paths = collect_split_entries(root)
+    complete_fonts = collect_complete_fonts(root, covered_paths)
+    full_entries = [
+        FontEntry(display_name_for(path, root), path, "", "完整文件", False)
+        for path in complete_fonts
+    ]
+
+    entries = split_entries + full_entries
+    entries.sort(key=lambda entry: str(entry.source_path.relative_to(root)).lower())
+
+    for index, entry in enumerate(entries, start=1):
+        if not entry.css_family:
+            entry.css_family = f"FontPreview{index:04d}"
+
+    return entries
+
+
+def css_url_for(source_path: Path, html_path: Path) -> str:
+    rel_path = source_path.relative_to(html_path.parent).as_posix()
+    return quote(rel_path, safe="/")
+
+
+def display_name_for(font_path: Path, root: Path) -> str:
+    rel = font_path.relative_to(root)
+    if len(rel.parts) > 1:
+        return rel.parts[0]
+    return font_path.stem
+
+
+def css_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', r"\"").replace("\n", " ")
+
+
+def build_font_styles(font_entries, html_path: Path) -> str:
+    imports = []
+    font_faces = []
+
+    for entry in font_entries:
+        family = css_string(entry.css_family)
+        url = css_url_for(entry.source_path, html_path)
+        if entry.uses_split:
+            imports.append(f'@import url("{url}");')
+        else:
+            font_faces.append(
+                f'@font-face {{ font-family: "{family}"; src: url("{url}"); font-display: swap; }}'
+            )
+
+    return "\n".join(imports + font_faces)
+
+
+def build_font_cards(font_entries, root: Path) -> str:
+    cards = []
+    for entry in font_entries:
+        family = css_string(entry.css_family)
+        rel_path = entry.source_path.relative_to(root).as_posix()
+        source_detail = f"{entry.source_kind}: {rel_path}"
+        if entry.uses_split:
+            source_detail = f"{source_detail} · font-family: {entry.css_family}"
+        search_text = f"{entry.display_name} {entry.css_family} {rel_path} {entry.source_kind}".lower()
+        style = f'font-family: "{family}", var(--fallback-font);'
+        cards.append(f"""
+      <article class="font-card" data-search="{html.escape(search_text, quote=True)}">
+        <div class="font-meta">
+          <h2>{html.escape(entry.display_name)}</h2>
+          <p>{html.escape(source_detail)}</p>
+        </div>
+        <p class="font-sample" style="{html.escape(style, quote=True)}">{html.escape(PREVIEW_TEXT)}</p>
+      </article>""")
+    return "\n".join(cards)
+
+
+def build_html(font_entries, root: Path, html_path: Path) -> str:
+    font_styles = build_font_styles(font_entries, html_path)
+    font_cards = build_font_cards(font_entries, root)
+    font_count = len(font_entries)
+    escaped_preview = html.escape(PREVIEW_TEXT, quote=True)
+    preview_json = json.dumps(PREVIEW_TEXT, ensure_ascii=False)
+
+    return f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>完整字体预览</title>
+  <style>
+{font_styles}
+
+:root {{
+  --bg: #f7f4ef;
+  --surface: #fffefa;
+  --text: #1e2528;
+  --muted: #697073;
+  --line: #d8d1c7;
+  --accent: #186a5a;
+  --accent-weak: #d8ebe4;
+  --fallback-font: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif;
+}}
+
+* {{
+  box-sizing: border-box;
+}}
+
+body {{
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--fallback-font);
+}}
+
+.shell {{
+  width: min(1560px, calc(100% - 32px));
+  margin: 0 auto;
+}}
+
+.topbar {{
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--line);
+  background: rgba(247, 244, 239, 0.96);
+  backdrop-filter: blur(10px);
+}}
+
+.topbar-inner {{
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, 2fr) auto;
+  gap: 16px;
+  align-items: end;
+  padding: 18px 0;
+}}
+
+h1 {{
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 700;
+}}
+
+.count {{
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}}
+
+.controls {{
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 2fr) 132px;
+  gap: 10px;
+  align-items: end;
+}}
+
+.field {{
+  display: grid;
+  gap: 6px;
+}}
+
+label {{
+  color: var(--muted);
+  font-size: 12px;
+}}
+
+input {{
+  min-width: 0;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  padding: 0 11px;
+}}
+
+input:focus {{
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-weak);
+  outline-offset: 1px;
+}}
+
+.size-value {{
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}}
+
+.grid {{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 14px;
+  padding: 18px 0 40px;
+}}
+
+.font-card {{
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}}
+
+.font-meta {{
+  border-bottom: 1px solid var(--line);
+  padding: 12px 14px 10px;
+}}
+
+.font-meta h2 {{
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 700;
+}}
+
+.font-meta p {{
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}}
+
+.font-sample {{
+  min-height: 132px;
+  margin: 0;
+  padding: 18px 14px 20px;
+  font-size: var(--sample-size, 42px);
+  line-height: 1.24;
+  overflow-wrap: anywhere;
+}}
+
+.empty {{
+  display: none;
+  margin: 60px 0;
+  color: var(--muted);
+  text-align: center;
+}}
+
+.is-filter-empty .empty {{
+  display: block;
+}}
+
+.is-filter-empty .grid {{
+  display: none;
+}}
+
+@media (max-width: 900px) {{
+  .topbar-inner {{
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }}
+
+  .controls {{
+    grid-template-columns: 1fr;
+  }}
+
+  .size-value {{
+    text-align: left;
+  }}
+}}
+
+@media (max-width: 520px) {{
+  .shell {{
+    width: min(100% - 20px, 1560px);
+  }}
+
+  .grid {{
+    grid-template-columns: 1fr;
+  }}
+
+  h1 {{
+    font-size: 23px;
+  }}
+}}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <div>
+        <h1>完整字体预览</h1>
+        <p class="count"><span id="visibleCount">{font_count}</span> / {font_count} 个字体</p>
+      </div>
+      <div class="controls" role="search">
+        <div class="field">
+          <label for="searchInput">搜索</label>
+          <input id="searchInput" type="search" autocomplete="off" placeholder="字体名或路径">
+        </div>
+        <div class="field">
+          <label for="previewInput">预览文本</label>
+          <input id="previewInput" type="text" value="{escaped_preview}">
+        </div>
+        <div class="field">
+          <label for="sizeInput">字号</label>
+          <input id="sizeInput" type="range" min="24" max="96" value="42">
+          <span class="size-value"><span id="sizeValue">42</span>px</span>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main class="shell" id="pageRoot">
+    <section class="grid" id="fontGrid" aria-live="polite">
+{font_cards}
+    </section>
+    <p class="empty" id="emptyState">没有匹配的字体。</p>
+  </main>
+  <script>
+const searchInput = document.querySelector("#searchInput");
+const previewInput = document.querySelector("#previewInput");
+const sizeInput = document.querySelector("#sizeInput");
+const sizeValue = document.querySelector("#sizeValue");
+const visibleCount = document.querySelector("#visibleCount");
+const pageRoot = document.querySelector("#pageRoot");
+const cards = Array.from(document.querySelectorAll(".font-card"));
+const samples = Array.from(document.querySelectorAll(".font-sample"));
+
+function updateSearch() {{
+  const query = searchInput.value.trim().toLowerCase();
+  let count = 0;
+  for (const card of cards) {{
+    const matched = !query || card.dataset.search.includes(query);
+    card.hidden = !matched;
+    if (matched) count += 1;
+  }}
+  visibleCount.textContent = String(count);
+  pageRoot.classList.toggle("is-filter-empty", count === 0);
+}}
+
+function updatePreviewText() {{
+  const text = previewInput.value || {preview_json};
+  for (const sample of samples) {{
+    sample.textContent = text;
+  }}
+}}
+
+function updateSampleSize() {{
+  document.documentElement.style.setProperty("--sample-size", `${{sizeInput.value}}px`);
+  sizeValue.textContent = sizeInput.value;
+}}
+
+searchInput.addEventListener("input", updateSearch);
+previewInput.addEventListener("input", updatePreviewText);
+sizeInput.addEventListener("input", updateSampleSize);
+updateSampleSize();
+  </script>
+</body>
+</html>
+"""
 
 
 def main():
@@ -131,83 +531,17 @@ def main():
         print(f"错误: 未找到字体目录: {INPUT_DIR}")
         return
 
-    font_files = collect_complete_fonts(INPUT_DIR)
-    if not font_files:
+    font_entries = collect_font_entries(INPUT_DIR)
+    if not font_entries:
         print("错误: 未找到可预览的完整字体。")
         return
 
-    print(f"找到 {len(font_files)} 个完整字体，开始计算预览布局...")
-
-    title_font = load_title_font(TITLE_SIZE)
-    processed_fonts = []
-    max_content_width = 0
-    total_height = PADDING
-
-    for font_path in font_files:
-        rel_path = font_path.relative_to(INPUT_DIR).as_posix()
-        title_text = f"字体文件: {rel_path}"
-
-        try:
-            preview_font = ImageFont.truetype(str(font_path), FONT_SIZE)
-            title_lines = [title_text]
-            preview_lines = [PREVIEW_TEXT]
-
-            title_width, title_height = measure_lines(title_lines, title_font, TITLE_LINE_SPACING)
-            preview_width, preview_height = measure_lines(preview_lines, preview_font, PREVIEW_LINE_SPACING)
-
-            max_content_width = max(max_content_width, title_width, preview_width)
-            section_height = title_height + LINE_SPACING + preview_height + PADDING * 2 + 1
-            total_height += section_height
-
-            processed_fonts.append({
-                "font_path": font_path,
-                "title_lines": title_lines,
-                "preview_lines": preview_lines,
-                "title_height": title_height,
-                "preview_height": preview_height,
-            })
-        except Exception as e:
-            print(f"跳过: {rel_path} - {e}")
-
-    if not processed_fonts:
-        print("错误: 没有成功加载的完整字体。")
-        return
-
-    img_width = max(int(max_content_width + PADDING * 2), 1200)
-    img_height = max(int(total_height), 200)
-
-    print(f"成功处理 {len(processed_fonts)} 个字体，输出尺寸: {img_width} x {img_height}")
-
-    img = Image.new("RGB", (img_width, img_height), color="white")
-    draw = ImageDraw.Draw(img)
-    y_offset = PADDING
-
-    for font_info in processed_fonts:
-        preview_font = ImageFont.truetype(str(font_info["font_path"]), FONT_SIZE)
-
-        draw.multiline_text(
-            (PADDING, y_offset),
-            "\n".join(font_info["title_lines"]),
-            fill=(120, 120, 120),
-            font=title_font,
-            spacing=TITLE_LINE_SPACING,
-        )
-        y_offset += font_info["title_height"] + LINE_SPACING
-
-        draw.multiline_text(
-            (PADDING, y_offset),
-            "\n".join(font_info["preview_lines"]),
-            fill=(0, 0, 0),
-            font=preview_font,
-            spacing=PREVIEW_LINE_SPACING,
-        )
-        y_offset += font_info["preview_height"] + PADDING
-
-        draw.line((0, y_offset, img_width, y_offset), fill=(230, 230, 230), width=1)
-        y_offset += PADDING
-
-    img.save(OUTPUT_IMAGE)
-    print(f"预览图已保存: {OUTPUT_IMAGE}")
+    OUTPUT_HTML.write_text(build_html(font_entries, INPUT_DIR, OUTPUT_HTML), encoding="utf-8")
+    split_count = sum(1 for entry in font_entries if entry.uses_split)
+    full_count = len(font_entries) - split_count
+    print(f"找到 {len(font_entries)} 个可预览字体。")
+    print(f"其中 {split_count} 个使用切片 CSS，{full_count} 个使用完整文件。")
+    print(f"静态预览页已保存: {OUTPUT_HTML}")
 
 
 if __name__ == "__main__":
