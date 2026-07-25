@@ -4,7 +4,6 @@ _debug_*/
 external-references/
 
 # Long-running agent harness state
-.test-cache/
 .harness-active
 harness-progress.txt
 harness-tasks.json
