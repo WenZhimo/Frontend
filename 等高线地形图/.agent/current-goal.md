@@ -6,7 +6,7 @@
 autoContinueEnabled: true
 maxAutoRounds: 20
 completedAutoRounds: 0
-pauseAfterEachSlice: false
+pauseAfterEachSlice: true
 commitAgentFiles: false
 pushAgentFiles: false
 ```
@@ -40,9 +40,10 @@ pushAgentFiles: false
 - Phase E internal rock exposure sampling is complete in `TerrainDataGenerator.js`.
 - Phase E internal derived-terrain rock exposure bundling is complete in `TerrainDataGenerator.js`.
 - Phase E internal surface class sampling is complete in `TerrainDataGenerator.js`.
+- Phase E internal derived-terrain surface class bundling is complete in `TerrainDataGenerator.js`.
 - Terrain generation keeps the existing public API while using layered helper methods, local domain warping, cached heightmap sampling, conservative thermal erosion, and internal slope derived data on the live heightmap cache.
 - `getHeight(u, v)` reads the eroded internal heightmap cache with bilinear interpolation.
-- The internal heightmap cache now carries `min`, `max`, `slopeMap`, `slopeMin`, and `slopeMax`; private helpers can sample raw height, normalized height, elevation bands, raw slope, normalized slope, slope bands, terrain zones, rock exposure, surface classes, and a bundled derived terrain sample with normalized height, elevation band, terrain zone, and rock exposure, but rendering and UI do not use derived maps yet.
+- The internal heightmap cache now carries `min`, `max`, `slopeMap`, `slopeMin`, and `slopeMax`; private helpers can sample raw height, normalized height, elevation bands, raw slope, normalized slope, slope bands, terrain zones, rock exposure, surface classes, and a bundled derived terrain sample with normalized height, elevation band, terrain zone, rock exposure, and surface class, but rendering and UI do not use derived maps yet.
 - Existing project rules are in `AGENTS.md`.
 - The project currently uses `index.html`, `TerrainDataGenerator.js`, and `ContourVisualizer.js` at the workspace root.
 - There is no package manager, build step, or automated test framework yet.
@@ -50,12 +51,12 @@ pushAgentFiles: false
 
 ## Last Completed Slice
 
-- Added private `_sampleSurfaceClassCache(u, v, segments = 200)`.
-- Reused elevation band, slope band, and rock exposure samplers rather than duplicating formulas.
-- Returned a finite integer surface class in the documented `0..7` range.
-- Kept surface class internal and unused by shader/material/color output.
-- Verified surface class sampling does not mutate cached height or slope arrays.
-- Verified syntax, browser load, nonblank render, resize, OrbitControls rotate/pan, and seed/roughness/amplitude/density/thickness/color behavior.
+- Added `surfaceClass` to private `_sampleDerivedTerrainCache(u, v, segments = 200)`.
+- Reused `_sampleSurfaceClassCache` rather than duplicating classification logic.
+- Returned a finite integer `surfaceClass` in the documented `0..7` range.
+- Kept the expanded derived sample internal and unused by shader/material/color output.
+- Verified derived sampling does not mutate cached height or slope arrays.
+- Verified syntax, browser load, nonblank render, and existing runtime behavior.
 
 ## Must Remain Unchanged
 
@@ -90,11 +91,11 @@ Based on `真实地形生成技术调�?md`, gradually make terrain generation m
 
 ## Next Round Goal
 
-Paused: `completedAutoRounds` has been reset to `0`. Wait for explicit user confirmation before starting another implementation slice.
+Paused: completed the user-confirmed derived surface class bundling slice. `completedAutoRounds` has been reset to `0`; keep the goal paused rather than ended, and wait for explicit user confirmation before starting another implementation slice.
 
 ## Goal Explanation
 
-The rolling execution counter has been reset after completing the internal surface class sampler. The next action remains an intentional stop point so the user can review the accumulated terrain-generation changes before authorizing additional rounds.
+The latest user-confirmed slice is complete. The rolling counter has been reset, and the next action remains an intentional pause point so the user can review the accumulated terrain-generation changes before authorizing additional rounds.
 
 ## Deliverables
 

@@ -351,6 +351,7 @@ class TerrainDataGenerator {
         const normalizedSlope = this._sampleNormalizedSlopeMapCache(u, v, segments);
         const slopeBand = this._sampleSlopeBandCache(u, v, segments);
         const rockExposure = this._sampleRockExposureCache(u, v, segments);
+        const surfaceClass = this._sampleSurfaceClassCache(u, v, segments);
 
         return {
             height: Number.isFinite(height) ? height : 0,
@@ -360,7 +361,8 @@ class TerrainDataGenerator {
             slope: Number.isFinite(slope) ? Math.max(0, slope) : 0,
             normalizedSlope: Number.isFinite(normalizedSlope) ? this._clamp(normalizedSlope, 0, 1) : 0,
             slopeBand: [0, 1, 2].includes(slopeBand) ? slopeBand : 0,
-            rockExposure: Number.isFinite(rockExposure) ? this._clamp(rockExposure, 0, 1) : 0
+            rockExposure: Number.isFinite(rockExposure) ? this._clamp(rockExposure, 0, 1) : 0,
+            surfaceClass: Number.isInteger(surfaceClass) && surfaceClass >= 0 && surfaceClass <= 7 ? surfaceClass : 0
         };
     }
 
