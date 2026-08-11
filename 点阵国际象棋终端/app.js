@@ -506,7 +506,6 @@
   }
 
   function drawBoard(now) {
-    const phase = Math.floor(now / 170);
     for (let rank = 0; rank < 8; rank += 1) {
       for (let file = 0; file < 8; file += 1) {
         const x0 = board.x + file * board.sw;
@@ -518,8 +517,8 @@
 
         for (let yy = 0; yy < board.sh; yy += 1) {
           for (let xx = 0; xx < board.sw; xx += 1) {
-            const seed = file * 127 + rank * 71 + xx * 19 + yy * 37 + phase;
-            const glyph = textureBraille(seed, density, phase * 13);
+            const seed = file * 127 + rank * 71 + xx * 19 + yy * 37;
+            const glyph = textureBraille(seed, density);
             put(x0 + xx, y0 + yy, glyph, tint, bg);
           }
         }
@@ -566,7 +565,6 @@
     const mask = pieceMasks[p.type] || pieceMasks.pawn;
     const fg = p.side === "codex" ? color.white : color.kimi;
     const alt = p.side === "codex" ? color.codexAlt : color.kimiAlt;
-    const shimmer = Math.floor(now / 120);
     const x0 = Math.round(pos.x * DOT_W - mask.width / 2);
     const y0 = Math.round(pos.y * DOT_H - mask.height / 2);
 
@@ -574,7 +572,7 @@
       const row = mask.rows[y];
       for (let x = 0; x < mask.width; x += 1) {
         if (row[x] === " ") continue;
-        const noise = hash(x * 13 + y * 29 + p.seed + shimmer);
+        const noise = hash(x * 13 + y * 29 + p.seed);
         const keep = alpha * (0.88 + hash(p.seed + x * 5 + y * 7) * 0.1);
         if (noise > keep) continue;
         const edge = isMaskEdge(mask, x, y);
