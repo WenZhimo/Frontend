@@ -1,6 +1,11 @@
-﻿(() => {
+(() => {
   const canvas = document.getElementById("terminal");
   const ctx = canvas.getContext("2d", { alpha: false });
+  const seedForm = document.querySelector(".seed-bar");
+  const seedInput = document.getElementById("seed-input");
+  const seedRandomButton = document.getElementById("seed-random");
+  const seedCopyButton = document.getElementById("seed-copy");
+  const seedStatus = document.getElementById("seed-status");
 
   const COLS = 126;
   const ROWS = 60;
@@ -57,6 +62,10 @@
   const BRAILLE_FULL = String.fromCharCode(BRAILLE_BASE + 0xff);
   const BRAILLE_DUST = String.fromCharCode(BRAILLE_BASE + 0x09);
   const MAX_PLIES = 160;
+  const SEED_LENGTH = 100;
+  const ASCII_FIRST = 32;
+  const ASCII_LAST = 126;
+  const RANDOM_SEED_CHARS = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
   const SYMBOL_TO_TYPE = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
   const AI_ROSTER = [
     { name: "JCE-SEARCH", source: "js-chess-engine", kind: "engine", level: 2, randomness: 60 },
@@ -173,10 +182,13 @@
   let selectionToken = 0;
   let matchResult = "";
   let winnerSide = null;
-  let matchSeed = 1;
+  let matchSeedText = "".padEnd(SEED_LENGTH, " ");
+  let matchSeedCode = 1;
+  let matchRng = () => 0.5;
   let paused = false;
   let lastFrame = 0;
   let replayButton = null;
+  let seedStatusTimer = null;
 
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -185,6 +197,30 @@
     const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
     return s - Math.floor(s);
   };
+  const hashUint32 = (value, salt = 0) => {
+    const textValue = String(value);
+    let h = (0x811c9dc5 ^ salt) >>> 0;
+    for (let i = 0; i < textValue.length; i += 1) {
+      h ^= textValue.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x85ebca6b) >>> 0;
+    h ^= h >>> 13;
+    h = Math.imul(h, 0xc2b2ae35) >>> 0;
+    return (h ^ (h >>> 16)) >>> 0;
+  };
+  const createRng = (seed, stream) => {
+    let state = hashUint32(`${seed}|${stream}`, 0x9e3779b9) || 0x6d2b79f5;
+    return () => {
+      state = (state + 0x6d2b79f5) >>> 0;
+      let t = state;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  const seededUnit = (...parts) => hashUint32(`${matchSeedText}|${parts.join("|")}`, 0x7f4a7c15) / 4294967296;
 
   function buildPieceMasks(source) {
     const masks = {};
@@ -329,6 +365,102 @@
     }
   }
 
+  function sanitizeSeedValue(value) {
+    const source = String(value);
+    let clean = "";
+    for (let i = 0; i < source.length && clean.length < SEED_LENGTH; i += 1) {
+      const char = source[i];
+      const code = char.charCodeAt(0);
+      if (code >= ASCII_FIRST && code <= ASCII_LAST) clean += char;
+    }
+    return clean;
+  }
+
+  function normalizeSeed(value) {
+    return sanitizeSeedValue(value).slice(0, SEED_LENGTH).padEnd(SEED_LENGTH, " ");
+  }
+
+  function generateAsciiSeed() {
+    const bytes = new Uint8Array(SEED_LENGTH);
+    if (window.crypto?.getRandomValues) window.crypto.getRandomValues(bytes);
+    else for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+    return Array.from(bytes, (byte) => RANDOM_SEED_CHARS[byte % RANDOM_SEED_CHARS.length]).join("");
+  }
+
+  function seedDigest(seed = matchSeedText) {
+    return hashUint32(`${seed}|digest`, 0xb5297a4d).toString(16).padStart(8, "0").toUpperCase();
+  }
+
+  function setSeedStatus(message, temporary = false) {
+    if (!seedStatus) return;
+    window.clearTimeout(seedStatusTimer);
+    seedStatus.textContent = message;
+    if (temporary) {
+      seedStatusTimer = window.setTimeout(() => {
+        seedStatus.textContent = `SEED ${seedDigest()}`;
+      }, 900);
+    }
+  }
+
+  function updateSeedInputStatus() {
+    if (!seedInput) return;
+    const clean = sanitizeSeedValue(seedInput.value);
+    if (clean !== seedInput.value) seedInput.value = clean;
+    setSeedStatus(`LEN ${String(clean.length).padStart(3, "0")}/100`);
+  }
+
+  function prepareMatchSeed(forceRandom = false) {
+    const typed = sanitizeSeedValue(seedInput?.value || "");
+    const autoSeed = forceRandom || typed.trim().length === 0;
+    const base = autoSeed ? generateAsciiSeed() : typed;
+    matchSeedText = normalizeSeed(base);
+    matchSeedCode = hashUint32(`${matchSeedText}|pieces`, 0x68e31da4) || 1;
+    matchRng = createRng(matchSeedText, "match");
+    if (seedInput) seedInput.value = matchSeedText;
+    setSeedStatus(`${autoSeed ? "AUTO" : "SEED"} ${seedDigest()}`);
+  }
+
+  function fallbackCopySeed(seed) {
+    const proxy = document.createElement("textarea");
+    proxy.value = seed;
+    proxy.setAttribute("readonly", "");
+    proxy.style.position = "fixed";
+    proxy.style.left = "-9999px";
+    proxy.style.opacity = "0";
+    document.body.appendChild(proxy);
+    proxy.focus();
+    proxy.select();
+    const copied = document.execCommand("copy");
+    proxy.remove();
+    return copied;
+  }
+
+  function copyCurrentSeed() {
+    const draft = sanitizeSeedValue(seedInput?.value || "");
+    const seed = draft.trim().length ? normalizeSeed(draft) : matchSeedText;
+    const markCopied = () => setSeedStatus("COPIED 100 CHARS", true);
+    const markFailed = () => setSeedStatus("COPY FAILED", true);
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(seed).then(markCopied).catch(() => {
+        try {
+          if (fallbackCopySeed(seed)) markCopied();
+          else markFailed();
+        } catch (error) {
+          markFailed();
+        }
+      });
+      return;
+    }
+
+    try {
+      if (fallbackCopySeed(seed)) markCopied();
+      else markFailed();
+    } catch (error) {
+      markFailed();
+    }
+  }
+
   function box({ x, y, w, h }, bg) {
     fillArea(x, y, w, h, bg);
     for (let col = x; col < x + w; col += 1) {
@@ -408,7 +540,7 @@
   }
 
   function pickAI() {
-    return AI_ROSTER[Math.floor(Math.random() * AI_ROSTER.length)];
+    return AI_ROSTER[Math.floor(matchRng() * AI_ROSTER.length)];
   }
 
   function pieceTypeFromSymbol(symbol) {
@@ -446,7 +578,7 @@
   }
 
   function seededJitter(move, salt = 0) {
-    return hash(matchSeed + ply * 131 + move.from.charCodeAt(0) * 17 + move.to.charCodeAt(1) * 31 + salt);
+    return seededUnit("jitter", ply, move.from, move.to, salt);
   }
 
   function scoreMove(move, side, style) {
@@ -481,7 +613,7 @@
       .sort((a, b) => b.score - a.score);
     const width = player.kind === "gambit" ? 5 : 3;
     const pool = scored.slice(0, Math.min(width, scored.length));
-    return pool[Math.floor(hash(matchSeed + ply * 47 + pool.length * 11) * pool.length)];
+    return pool[Math.floor(seededUnit("pool", ply, player.name, side, pool.length) * pool.length)];
   }
 
   function chooseEngineMove(player) {
@@ -489,7 +621,7 @@
       level: player.level,
       play: false,
       analysis: true,
-      randomness: player.randomness,
+      randomness: 0,
       ttSizeMB: 0.5,
     });
     const move = result?.move ? Object.entries(result.move)[0] : null;
@@ -533,7 +665,7 @@
         visual = pieces.find((p) => !used.has(p) && p.side === side && p.type === type && p.file === sq.file && p.rank === sq.rank);
       }
 
-      if (!visual) visual = piece(`${side}-${type}-${squareId}-${matchSeed}`, side, type, sq.file, sq.rank);
+      if (!visual) visual = piece(`${side}-${type}-${squareId}-${matchSeedCode}`, side, type, sq.file, sq.rank);
       visual.side = side;
       visual.type = type;
       visual.file = sq.file;
@@ -544,7 +676,7 @@
     pieces = next;
   }
 
-  function reset(now = performance.now()) {
+  function reset(now = performance.now(), options = {}) {
     pieces = [];
     fragments = [];
     ripples = [];
@@ -556,7 +688,7 @@
     moveLog = [];
     moveCursor = 0;
     ply = 0;
-    matchSeed = Math.floor(Math.random() * 1000000) + 1;
+    prepareMatchSeed(Boolean(options.forceRandom));
     matchPlayers = { white: null, black: null };
     engineGame = chessEngine ? new chessEngine.Game() : null;
     boardState = engineGame?.exportJson() || null;
@@ -939,6 +1071,7 @@
     if (selectingPlayers) {
       text(x, 6, "CHOOSING PLAYERS", color.header);
       text(x, 9, "sampling local AI roster", color.dim);
+      text(x, 12, `seed ${seedDigest()}`, color.dim);
       for (let y = 2; y < 42; y += 1) put(right.x + right.w - 2, y, BRAILLE_FULL, color.blue, "#003852");
       for (let y = 42; y < right.y + right.h - 2; y += 1) put(right.x + right.w - 2, y, BRAILLE_DUST, "#13222a", color.black);
       text(x, 57, "1 2 3 fold   jk scroll   r reload", color.dim);
@@ -957,6 +1090,7 @@
     text(x + 22, 13, String(ply ? Math.ceil(ply / 2) : 0), color.white);
     const statusText = !chessEngine ? "engine missing" : gameDone ? matchResult : aiThinking ? activePlayerPhrase(side, "thinking") : activePlayerPhrase(side, "to move");
     text(x, 15, statusText.slice(0, 34), gameDone || !chessEngine ? color.red : sideTone(side));
+    if (!gameDone) text(x, 17, `seed ${seedDigest()}`, color.dim);
     if (gameDone) {
       replayButton = { x, y: 17, w: 16, h: 1 };
       text(x, 17, "[ PLAY AGAIN ]", color.white);
@@ -1053,8 +1187,19 @@
     );
   }
 
+  if (seedInput) seedInput.addEventListener("input", updateSeedInputStatus);
+  if (seedForm) seedForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    reset(performance.now());
+  });
+  if (seedRandomButton) seedRandomButton.addEventListener("click", () => reset(performance.now(), { forceRandom: true }));
+  if (seedCopyButton) seedCopyButton.addEventListener("click", copyCurrentSeed);
+
+  const isControlTarget = (target) => target instanceof HTMLInputElement || target instanceof HTMLButtonElement || target instanceof HTMLTextAreaElement;
+
   window.addEventListener("resize", resize);
   window.addEventListener("keydown", (event) => {
+    if (isControlTarget(event.target)) return;
     if (event.key === " ") paused = !paused;
     if (event.key.toLowerCase() === "r") reset(performance.now());
   });
@@ -1069,6 +1214,19 @@
   });
 
   reset(performance.now());
+  window.__dotChessState = () => ({
+    seed: matchSeedText,
+    seedLength: matchSeedText.length,
+    seedDigest: seedDigest(),
+    selectingPlayers,
+    players: {
+      white: matchPlayers.white?.name || null,
+      black: matchPlayers.black?.name || null,
+    },
+    ply,
+    moves: moveLog.map((move) => `${move.ai}:${move.from}${move.flag.includes("x") ? "x" : "-"}${move.to}${move.flag}`),
+    result: matchResult,
+  });
   requestAnimationFrame(frame);
 })();
 

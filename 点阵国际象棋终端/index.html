@@ -7,12 +7,31 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="terminal-shell" aria-label="Character-cell terminal chess visualization">
-    <canvas id="terminal" aria-hidden="true"></canvas>
+  <main class="app-shell" aria-label="Character-cell terminal chess visualization">
+    <form class="seed-bar" aria-label="Match seed controls">
+      <label for="seed-input">SEED</label>
+      <input
+        id="seed-input"
+        type="text"
+        maxlength="100"
+        inputmode="text"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="blank = random 100-char ASCII seed"
+      />
+      <button id="seed-start" type="submit">START</button>
+      <button id="seed-random" type="button">RANDOM</button>
+      <button id="seed-copy" type="button">COPY</button>
+      <span id="seed-status" aria-live="polite">LEN 000/100</span>
+    </form>
+    <section class="terminal-shell" aria-label="Terminal display">
+      <canvas id="terminal" aria-hidden="true"></canvas>
+    </section>
     <p class="sr-only">
       A simulated terminal screen. The chessboard, pieces, move list, material bar, ripples, captures,
       and trails are rendered by changing Braille dot-matrix glyphs inside a fixed terminal buffer.
-      Press R or click Play Again after the match ends to restart with a new random AI pairing.
+      Enter an ASCII seed and press Start to replay the same match. Leave the seed empty to generate a
+      random 100-character seed. Press R or click Play Again after the match ends to restart.
     </p>
   </main>
   <script src="vendor/js-chess-engine.browser.js"></script>
