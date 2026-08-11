@@ -17,6 +17,7 @@
     ink2: "#0b0f17",
     cellA: "#202735",
     cellB: "#151b25",
+    boardParticle: "#7f858d",
     grid: "#111722",
     line: "#747b8c",
     dim: "#626b7e",
@@ -46,8 +47,8 @@
     fg: Array(COLS * ROWS),
   };
 
-  const left = { x: 1, y: 1, w: 77, h: 58 };
-  const right = { x: 80, y: 1, w: 45, h: 58 };
+  const left = { x: 1, y: 1, w: 81, h: 58 };
+  const right = { x: 84, y: 1, w: 41, h: 58 };
   const board = { x: 9, y: 5, sw: 9, sh: 6, w: 72, h: 48 };
   const DOT_W = 2;
   const DOT_H = 4;
@@ -226,6 +227,7 @@
   let nextMoveAt = 0;
   let paused = false;
   let lastFrame = 0;
+  let replayButton = null;
 
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -264,16 +266,81 @@
     return [0x08, 0x10, 0x20, 0x80][row];
   }
 
-  function textureBraille(seed, density, bias = 0) {
-    let mask = 0;
-    for (let row = 0; row < DOT_H; row += 1) {
-      for (let col = 0; col < DOT_W; col += 1) {
-        const h = hash(seed + row * 23 + col * 97 + bias);
-        if (h < density) mask |= brailleBit(col, row);
+  const boardDensity = [0.04, 0.065, 0.095, 0.13, 0.17];
+  const boardDither = [
+    [0, 48, 12, 60, 3, 51, 15, 63],
+    [32, 16, 44, 28, 35, 19, 47, 31],
+    [8, 56, 4, 52, 11, 59, 7, 55],
+    [40, 24, 36, 20, 43, 27, 39, 23],
+    [2, 50, 14, 62, 1, 49, 13, 61],
+    [34, 18, 46, 30, 33, 17, 45, 29],
+    [10, 58, 6, 54, 9, 57, 5, 53],
+    [42, 26, 38, 22, 41, 25, 37, 21],
+  ];
+
+  const boardDensityLevels = buildBoardDensityLevels();
+
+  function densityIndex(file, rank) {
+    return rank * 8 + file;
+  }
+
+  function buildBoardDensityLevels() {
+    const levels = Array(64).fill(2);
+    for (let rank = 0; rank < 8; rank += 1) {
+      for (let file = 0; file < 8; file += 1) {
+        const light = (file + rank) % 2 === 0;
+        const random = hash(file * 73 + rank * 137);
+        const drift = Math.floor((file + rank) / 5);
+        levels[densityIndex(file, rank)] = clamp(1 + drift + (random > 0.62 ? 1 : 0) + (light ? 1 : 0), 1, 5);
       }
     }
-    if (!mask) mask = hash(seed + 701) > 0.5 ? 0x01 : 0x08;
-    return braille(mask);
+
+    for (let pass = 0; pass < 12; pass += 1) {
+      for (let rank = 0; rank < 8; rank += 1) {
+        for (let file = 0; file < 8; file += 1) {
+          if ((file + rank) % 2 !== 0) continue;
+          [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => {
+            const nf = file + dx;
+            const nr = rank + dy;
+            if (nf < 0 || nf >= 8 || nr < 0 || nr >= 8) return;
+            const lightIndex = densityIndex(file, rank);
+            const darkIndex = densityIndex(nf, nr);
+            if (levels[lightIndex] > levels[darkIndex]) return;
+            if (levels[darkIndex] < 5) {
+              levels[lightIndex] = levels[darkIndex] + 1;
+            } else {
+              levels[darkIndex] = 4;
+              levels[lightIndex] = 5;
+            }
+          });
+        }
+      }
+    }
+
+    return levels;
+  }
+
+  function boardDotMask(file, rank, xx, yy) {
+    const density = boardDensity[boardDensityLevels[densityIndex(file, rank)] - 1];
+    const limit = Math.round(density * 64);
+    let mask = 0;
+
+    for (let row = 0; row < DOT_H; row += 1) {
+      for (let col = 0; col < DOT_W; col += 1) {
+        const sx = file * board.sw * DOT_W + xx * DOT_W + col;
+        const sy = rank * board.sh * DOT_H + yy * DOT_H + row;
+        if (boardDither[sy & 7][sx & 7] < limit) mask |= brailleBit(col, row);
+      }
+    }
+
+    return mask;
+  }
+
+  function boardCellStyle(file, rank) {
+    return {
+      bg: (file + rank) % 2 === 0 ? color.cellA : color.cellB,
+      fg: color.boardParticle,
+    };
   }
 
   function idx(x, y) {
@@ -510,26 +577,13 @@
       for (let file = 0; file < 8; file += 1) {
         const x0 = board.x + file * board.sw;
         const y0 = board.y + rank * board.sh;
-        const bg = (file + rank) % 2 === 0 ? color.cellA : color.cellB;
-        const tint = rank <= 2 ? color.warmDim : rank >= 5 ? color.coolDim : color.dim;
-        const density = rank <= 1 || rank >= 6 ? 0.34 : 0.22;
-        fillArea(x0, y0, board.sw, board.sh, bg, tint, " ");
-
         for (let yy = 0; yy < board.sh; yy += 1) {
           for (let xx = 0; xx < board.sw; xx += 1) {
-            const seed = file * 127 + rank * 71 + xx * 19 + yy * 37;
-            const glyph = textureBraille(seed, density);
-            put(x0 + xx, y0 + yy, glyph, tint, bg);
+            const style = boardCellStyle(file, rank);
+            put(x0 + xx, y0 + yy, braille(boardDotMask(file, rank, xx, yy)), style.fg, style.bg);
           }
         }
       }
-    }
-
-    for (let i = 0; i <= 8; i += 1) {
-      const gx = board.x + i * board.sw;
-      const gy = board.y + i * board.sh;
-      for (let y = board.y; y < board.y + board.h; y += 1) put(gx, y, textureBraille(gx * 31 + y * 11, 0.12), "#101722");
-      for (let x = board.x; x < board.x + board.w; x += 1) put(x, gy, textureBraille(x * 17 + gy * 23, 0.12), "#101722");
     }
 
     const side = active?.move.side || script[moveCursor]?.side || "codex";
@@ -565,7 +619,7 @@
     const mask = pieceMasks[p.type] || pieceMasks.pawn;
     const fg = p.side === "codex" ? color.white : color.kimi;
     const alt = p.side === "codex" ? color.codexAlt : color.kimiAlt;
-    const x0 = Math.round(pos.x * DOT_W - mask.width / 2);
+    const x0 = Math.round(pos.x * DOT_W - mask.width / 2 + 1);
     const y0 = Math.round(pos.y * DOT_H - mask.height / 2);
 
     for (let y = 0; y < mask.height; y += 1) {
@@ -669,21 +723,27 @@
     const gameDone = moveCursor >= script.length;
     const side = active?.move.side || script[moveCursor]?.side || "codex";
     const diff = gameDone ? 13 : captured.codex.reduce((sum, p) => sum + VALUE[p], 0) - captured.kimi.reduce((sum, p) => sum + VALUE[p], 0);
+    replayButton = null;
 
     text(x, 3, "v MATCH", color.header);
     text(x, 6, `${side === "codex" && !gameDone ? "> " : "  "}CODEX`, color.codex);
     text(x + 20, 6, "white", color.dim);
-    text(x + 33, 6, "3", color.white);
-    text(x + 36, 6, "won", color.dim);
+    text(x + 29, 6, "3", color.white);
+    text(x + 32, 6, "won", color.dim);
     text(x, 8, `${side === "kimi" && !gameDone ? "> " : "  "}KIMI`, color.kimi);
     text(x + 20, 8, "black", color.dim);
-    text(x + 33, 8, "0", color.white);
-    text(x + 36, 8, "won", color.dim);
+    text(x + 29, 8, "0", color.white);
+    text(x + 32, 8, "won", color.dim);
     text(x, 13, "ply", color.dim);
     text(x + 6, 13, String(ply), color.white);
     text(x + 15, 13, "move", color.dim);
     text(x + 22, 13, String(ply ? Math.ceil(ply / 2) : 0), color.white);
     text(x, 15, gameDone ? "checkmate - CODEX wins" : `${side.toUpperCase()} to move`, gameDone ? color.red : side === "codex" ? color.codex : color.kimi);
+    if (gameDone) {
+      replayButton = { x, y: 17, w: 16, h: 1 };
+      text(x, 17, "[ PLAY AGAIN ]", color.white);
+      text(x, 19, "click or press r", color.dim);
+    }
 
     text(x, 21, "v MATERIAL", color.header);
     if (diff === 0) {
@@ -759,10 +819,37 @@
     requestAnimationFrame(frame);
   }
 
+  function cellFromPointer(event) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: Math.floor(((event.clientX - rect.left) / rect.width) * COLS),
+      y: Math.floor(((event.clientY - rect.top) / rect.height) * ROWS),
+    };
+  }
+
+  function hitsReplayButton(cell) {
+    return Boolean(
+      replayButton &&
+      cell.x >= replayButton.x &&
+      cell.x < replayButton.x + replayButton.w &&
+      cell.y >= replayButton.y &&
+      cell.y < replayButton.y + replayButton.h
+    );
+  }
+
   window.addEventListener("resize", resize);
   window.addEventListener("keydown", (event) => {
     if (event.key === " ") paused = !paused;
     if (event.key.toLowerCase() === "r") reset(performance.now());
+  });
+  canvas.addEventListener("click", (event) => {
+    if (hitsReplayButton(cellFromPointer(event))) reset(performance.now());
+  });
+  canvas.addEventListener("mousemove", (event) => {
+    canvas.style.cursor = hitsReplayButton(cellFromPointer(event)) ? "pointer" : "default";
+  });
+  canvas.addEventListener("mouseleave", () => {
+    canvas.style.cursor = "default";
   });
 
   reset(performance.now());

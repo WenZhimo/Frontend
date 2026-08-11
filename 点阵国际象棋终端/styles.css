@@ -2,6 +2,7 @@
   --page: #020306;
   --ink: #080b11;
   --font: "Cascadia Mono", "Courier New", Consolas, monospace;
+  --terminal-ratio: 1.533;
 }
 
 * {
@@ -25,7 +26,7 @@ body {
 }
 
 .terminal-shell {
-  width: min(1720px, calc(100vw - 16px));
+  width: min(1720px, calc(100vw - 16px), calc((100dvh - 16px) * var(--terminal-ratio)));
   aspect-ratio: 1720 / 1122;
   border: 1px solid #30384a;
   background: var(--ink);
@@ -59,7 +60,7 @@ body {
   }
 
   .terminal-shell {
-    width: calc(100vw - 10px);
+    width: min(calc(100vw - 10px), calc((100dvh - 10px) * var(--terminal-ratio)));
     margin: 5px auto;
   }
 }
