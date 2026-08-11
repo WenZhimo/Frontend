@@ -61,7 +61,7 @@
   const BRAILLE_BASE = 0x2800;
   const BRAILLE_FULL = String.fromCharCode(BRAILLE_BASE + 0xff);
   const BRAILLE_DUST = String.fromCharCode(BRAILLE_BASE + 0x09);
-  const MAX_PLIES = 160;
+  const FIFTY_MOVE_HALF_MOVES = 100;
   const AI_MOVE_TIMEOUT_MS = 10000;
   const PLAYBACK_SPEEDS = [0.5, 1, 2, 4];
   const SEED_LENGTH = 100;
@@ -190,6 +190,7 @@
   let matchSeedText = "".padEnd(SEED_LENGTH, " ");
   let matchSeedCode = 1;
   let matchRng = () => 0.5;
+  let positionCounts = new Map();
   let aiMoveTimer = null;
   let aiMoveToken = 0;
   let paused = false;
@@ -538,6 +539,46 @@
     return side === "white" ? "black" : "white";
   }
 
+  function halfMoveClock(config = boardState) {
+    const value = config?.halfMove ?? config?.halfMoveClock ?? 0;
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
+  }
+
+  function sortedObjectSignature(value) {
+    if (!value || typeof value !== "object") return "";
+    return Object.entries(value)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${key}:${item}`)
+      .join(",");
+  }
+
+  function positionKey(config = boardState) {
+    if (!config) return "";
+    return [
+      config.turn || "white",
+      sortedObjectSignature(config.pieces),
+      sortedObjectSignature(config.castling),
+      config.enPassant || "-",
+    ].join("|");
+  }
+
+  function recordPosition(config = boardState) {
+    const key = positionKey(config);
+    if (!key) return 0;
+    const count = (positionCounts.get(key) || 0) + 1;
+    positionCounts.set(key, count);
+    return count;
+  }
+
+  function currentPositionCount(config = boardState) {
+    const key = positionKey(config);
+    return key ? positionCounts.get(key) || 0 : 0;
+  }
+
+  function hasRuleDraw(config = boardState) {
+    return halfMoveClock(config) >= FIFTY_MOVE_HALF_MOVES || currentPositionCount(config) >= 3;
+  }
+
   function clearAiMoveTimer() {
     if (aiMoveTimer) window.clearTimeout(aiMoveTimer);
     aiMoveTimer = null;
@@ -577,16 +618,20 @@
     nextMoveAt = Number.POSITIVE_INFINITY;
   }
 
-  function markStalemateDraw() {
+  function markDraw(reason, message) {
     if (matchResult) return;
     clearAiMoveTimer();
     aiThinking = false;
     active = null;
     timeoutSide = null;
     winnerSide = null;
-    matchEndReason = "stalemate";
-    matchResult = "stalemate - draw";
+    matchEndReason = reason;
+    matchResult = message;
     nextMoveAt = Number.POSITIVE_INFINITY;
+  }
+
+  function markStalemateDraw() {
+    markDraw("stalemate", "stalemate - draw");
   }
 
   function settleNoLegalMoves() {
@@ -614,6 +659,10 @@
 
   function sideTone(side) {
     return side === "white" ? color.whiteSide : color.blackSide;
+  }
+
+  function effectTone(side) {
+    return side === "white" ? color.whiteSide : color.red;
   }
 
   function activePlayerPhrase(side, suffix) {
@@ -778,6 +827,8 @@
     matchPlayers = { white: null, black: null };
     engineGame = chessEngine ? new chessEngine.Game() : null;
     boardState = engineGame?.exportJson() || null;
+    positionCounts = new Map();
+    if (boardState) recordPosition(boardState);
     if (boardState) syncPiecesFromBoard(boardState);
     nextMoveAt = Number.POSITIVE_INFINITY;
 
@@ -859,7 +910,7 @@
 
   function startMove(now) {
     if (paused || active || aiThinking || selectingPlayers || !engineGame || !boardState || matchResult) return;
-    if (boardState.isFinished || boardState.checkMate || boardState.staleMate || ply >= MAX_PLIES || boardState.halfMove >= 100) {
+    if (boardState.isFinished || boardState.checkMate || boardState.staleMate || hasRuleDraw()) {
       settleResult();
       return;
     }
@@ -971,6 +1022,7 @@
     moveScroll = clamp(moveScroll, 0, maxMoveScroll());
     moveCursor += 1;
     ply += 1;
+    recordPosition(boardState);
     if (move.flag.includes("#")) shatter(boardPos(to.file, to.rank), moving.side, 62, 1.35);
     settleResult();
     active = null;
@@ -985,17 +1037,11 @@
       matchEndReason = "checkmate";
       matchResult = `checkmate - ${playerName(winner)} wins`;
     } else if (boardState.staleMate) {
-      winnerSide = null;
-      matchEndReason = "stalemate";
-      matchResult = "stalemate - draw";
-    } else if (boardState.halfMove >= 100) {
-      winnerSide = null;
-      matchEndReason = "50-move-rule";
-      matchResult = "draw - 50 move rule";
-    } else if (ply >= MAX_PLIES) {
-      winnerSide = null;
-      matchEndReason = "move-cap";
-      matchResult = "draw - move cap";
+      markStalemateDraw();
+    } else if (halfMoveClock() >= FIFTY_MOVE_HALF_MOVES) {
+      markDraw("50-move-rule", "draw - 50 move rule");
+    } else if (currentPositionCount() >= 3) {
+      markDraw("threefold-repetition", "draw - threefold repetition");
     }
   }
 
@@ -1021,6 +1067,7 @@
     moveScroll = clamp(moveScroll, 0, maxMoveScroll());
     moveCursor += 1;
     ply += 1;
+    recordPosition(boardState);
     syncPiecesFromBoard(boardState);
     settleResult();
     return true;
@@ -1054,6 +1101,8 @@
       moveRecords: moveLog.map(moveSignature),
       moveScroll,
       maxMoveScroll: maxMoveScroll(),
+      halfMoveClock: halfMoveClock(),
+      positionRepeats: currentPositionCount(),
       playbackSpeed: playbackSpeed(),
       playbackSpeedIndex,
       result: matchResult,
@@ -1084,7 +1133,7 @@
     paused = true;
 
     while (!matchResult && engineGame && boardState) {
-      if (boardState.isFinished || boardState.checkMate || boardState.staleMate || ply >= MAX_PLIES || boardState.halfMove >= 100) {
+      if (boardState.isFinished || boardState.checkMate || boardState.staleMate || hasRuleDraw()) {
         settleResult();
         break;
       }
@@ -1280,7 +1329,7 @@
       const thickness = lerp(0.7, 0.22, age);
       const cx = r.x * DOT_W;
       const cy = r.y * DOT_H;
-      const fg = r.side === "white" ? color.whiteSide : color.blackSideAlt;
+      const fg = effectTone(r.side);
       const minX = Math.floor((r.x - radius - 2) * DOT_W);
       const maxX = Math.ceil((r.x + radius + 2) * DOT_W);
       const minY = Math.floor((r.y - radius * 0.62 - 2) * DOT_H);
@@ -1300,7 +1349,7 @@
 
     fragments.forEach((g, i) => {
       const age = (now - g.born) / g.life;
-      const fg = g.side === "white" ? color.whiteSide : color.blackSideAlt;
+      const fg = effectTone(g.side);
       const radius = g.kind === "trail" ? 3 : 1;
       const cx = Math.round(g.x * DOT_W);
       const cy = Math.round(g.y * DOT_H);
