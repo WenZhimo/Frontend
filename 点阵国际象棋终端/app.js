@@ -62,6 +62,8 @@
   const BRAILLE_FULL = String.fromCharCode(BRAILLE_BASE + 0xff);
   const BRAILLE_DUST = String.fromCharCode(BRAILLE_BASE + 0x09);
   const MAX_PLIES = 160;
+  const AI_MOVE_TIMEOUT_MS = 10000;
+  const PLAYBACK_SPEEDS = [0.5, 1, 2, 4];
   const SEED_LENGTH = 100;
   const ASCII_FIRST = 32;
   const ASCII_LAST = 126;
@@ -177,15 +179,21 @@
   let boardState = null;
   let matchPlayers = { white: null, black: null };
   let moveLog = [];
+  let moveScroll = 0;
   let aiThinking = false;
   let selectingPlayers = true;
   let selectionToken = 0;
   let matchResult = "";
+  let matchEndReason = "";
   let winnerSide = null;
+  let timeoutSide = null;
   let matchSeedText = "".padEnd(SEED_LENGTH, " ");
   let matchSeedCode = 1;
   let matchRng = () => 0.5;
+  let aiMoveTimer = null;
+  let aiMoveToken = 0;
   let paused = false;
+  let playbackSpeedIndex = 1;
   let lastFrame = 0;
   let replayButton = null;
   let seedStatusTimer = null;
@@ -193,6 +201,8 @@
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
   const lerp = (a, b, t) => a + (b - a) * t;
   const smooth = (t) => t * t * (3 - 2 * t);
+  const playbackSpeed = () => PLAYBACK_SPEEDS[playbackSpeedIndex] || 1;
+  const playbackDelay = (ms, min = 16) => Math.max(min, ms / playbackSpeed());
   const hash = (n) => {
     const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
     return s - Math.floor(s);
@@ -409,9 +419,10 @@
     setSeedStatus(`LEN ${String(clean.length).padStart(3, "0")}/100`);
   }
 
-  function prepareMatchSeed(forceRandom = false) {
-    const typed = sanitizeSeedValue(seedInput?.value || "");
-    const autoSeed = forceRandom || typed.trim().length === 0;
+  function prepareMatchSeed(forceRandom = false, seedOverride = null) {
+    const hasOverride = typeof seedOverride === "string";
+    const typed = sanitizeSeedValue(hasOverride ? seedOverride : seedInput?.value || "");
+    const autoSeed = !hasOverride && (forceRandom || typed.trim().length === 0);
     const base = autoSeed ? generateAsciiSeed() : typed;
     matchSeedText = normalizeSeed(base);
     matchSeedCode = hashUint32(`${matchSeedText}|pieces`, 0x68e31da4) || 1;
@@ -521,6 +532,76 @@
 
   function currentSide() {
     return boardState?.turn === "black" ? "black" : "white";
+  }
+
+  function otherSide(side) {
+    return side === "white" ? "black" : "white";
+  }
+
+  function clearAiMoveTimer() {
+    if (aiMoveTimer) window.clearTimeout(aiMoveTimer);
+    aiMoveTimer = null;
+  }
+
+  function markTimeoutLoss(side, elapsedMs = AI_MOVE_TIMEOUT_MS) {
+    if (matchResult) return;
+    clearAiMoveTimer();
+    aiThinking = false;
+    active = null;
+    nextMoveAt = Number.POSITIVE_INFINITY;
+    timeoutSide = side;
+    winnerSide = otherSide(side);
+    matchEndReason = "timeout";
+    matchResult = `timeout - ${playerName(side)} forfeits after ${Math.ceil(elapsedMs / 1000)}s`;
+  }
+
+  function markEngineError(message) {
+    matchEndReason = "engine-error";
+    matchResult = message;
+    winnerSide = null;
+    timeoutSide = null;
+    aiThinking = false;
+    active = null;
+    nextMoveAt = Number.POSITIVE_INFINITY;
+  }
+
+  function markCheckmateWin(side) {
+    if (matchResult) return;
+    clearAiMoveTimer();
+    aiThinking = false;
+    active = null;
+    timeoutSide = null;
+    winnerSide = side;
+    matchEndReason = "checkmate";
+    matchResult = `checkmate - ${playerName(side)} wins`;
+    nextMoveAt = Number.POSITIVE_INFINITY;
+  }
+
+  function markStalemateDraw() {
+    if (matchResult) return;
+    clearAiMoveTimer();
+    aiThinking = false;
+    active = null;
+    timeoutSide = null;
+    winnerSide = null;
+    matchEndReason = "stalemate";
+    matchResult = "stalemate - draw";
+    nextMoveAt = Number.POSITIVE_INFINITY;
+  }
+
+  function settleNoLegalMoves() {
+    if (!engineGame || !boardState || matchResult) return false;
+    let moves = [];
+    try {
+      moves = flattenMoves(engineGame.moves());
+    } catch (error) {
+      markEngineError(`engine error: ${playerName(currentSide())} legal move scan failed`);
+      return true;
+    }
+    if (moves.length > 0) return false;
+    if (boardState.check) markCheckmateWin(otherSide(currentSide()));
+    else markStalemateDraw();
+    return true;
   }
 
   function playerName(side) {
@@ -677,6 +758,8 @@
   }
 
   function reset(now = performance.now(), options = {}) {
+    clearAiMoveTimer();
+    aiMoveToken += 1;
     pieces = [];
     fragments = [];
     ripples = [];
@@ -684,11 +767,14 @@
     aiThinking = false;
     selectingPlayers = true;
     matchResult = "";
+    matchEndReason = "";
     winnerSide = null;
+    timeoutSide = null;
     moveLog = [];
+    moveScroll = 0;
     moveCursor = 0;
     ply = 0;
-    prepareMatchSeed(Boolean(options.forceRandom));
+    prepareMatchSeed(Boolean(options.forceRandom), options.seedOverride ?? null);
     matchPlayers = { white: null, black: null };
     engineGame = chessEngine ? new chessEngine.Game() : null;
     boardState = engineGame?.exportJson() || null;
@@ -696,22 +782,79 @@
     nextMoveAt = Number.POSITIVE_INFINITY;
 
     const token = ++selectionToken;
-    window.setTimeout(() => {
-      if (token !== selectionToken) return;
+    if (options.immediatePlayers) {
       if (!chessEngine) {
         selectingPlayers = false;
+        matchEndReason = "engine-missing";
         matchResult = "engine missing";
         winnerSide = null;
         return;
       }
       matchPlayers = { white: pickAI(), black: pickAI() };
       selectingPlayers = false;
-      nextMoveAt = performance.now() + 520;
-    }, 760);
+      nextMoveAt = Number.POSITIVE_INFINITY;
+      return;
+    }
+
+    window.setTimeout(() => {
+      if (token !== selectionToken) return;
+      if (!chessEngine) {
+        selectingPlayers = false;
+        matchEndReason = "engine-missing";
+        matchResult = "engine missing";
+        winnerSide = null;
+        return;
+      }
+      matchPlayers = { white: pickAI(), black: pickAI() };
+      selectingPlayers = false;
+      nextMoveAt = performance.now() + playbackDelay(520);
+    }, playbackDelay(760));
   }
 
   function findPiece(file, rank, skip = null) {
     return pieces.find((p) => p !== skip && p.file === file && p.rank === rank);
+  }
+
+  function buildMoveRecord(choice, side, player) {
+    const targetSymbol = pieceAt(boardState, choice.to);
+    return {
+      side,
+      from: choice.from.toLowerCase(),
+      to: choice.to.toLowerCase(),
+      flag: targetSymbol ? "x" : "",
+      type: pieceTypeFromSymbol(pieceAt(boardState, choice.from)),
+      capturedType: targetSymbol ? pieceTypeFromSymbol(targetSymbol) : null,
+      ai: player.name,
+      source: player.source,
+      score: choice.score,
+      nodes: choice.nodes,
+    };
+  }
+
+  function isKingCapture(move) {
+    return move.capturedType === "king";
+  }
+
+  function recordTerminalKingCapture(move) {
+    move.flag = "#";
+    moveLog.push(move);
+    moveScroll = clamp(moveScroll, 0, maxMoveScroll());
+    moveCursor += 1;
+    ply += 1;
+    markCheckmateWin(move.side);
+  }
+
+  function chooseAIMoveTimed(player, side, timeoutMs = AI_MOVE_TIMEOUT_MS) {
+    const startedAt = performance.now();
+    let choice = null;
+    let error = null;
+    try {
+      choice = chooseAIMove(player, side);
+    } catch (caught) {
+      error = caught;
+    }
+    const elapsedMs = performance.now() - startedAt;
+    return { choice, error, elapsedMs, timedOut: elapsedMs >= timeoutMs };
   }
 
   function startMove(now) {
@@ -720,40 +863,60 @@
       settleResult();
       return;
     }
+    if (settleNoLegalMoves()) return;
 
     aiThinking = true;
+    const token = ++aiMoveToken;
+    clearAiMoveTimer();
     window.setTimeout(() => {
-      if (paused || active || matchResult) {
+      if (token !== aiMoveToken || paused || active || matchResult) {
         aiThinking = false;
         return;
       }
 
       const side = currentSide();
       const player = matchPlayers[side];
-      const choice = chooseAIMove(player, side);
+      aiMoveTimer = window.setTimeout(() => {
+        if (token !== aiMoveToken || !aiThinking || active || matchResult) return;
+        markTimeoutLoss(side, AI_MOVE_TIMEOUT_MS);
+      }, AI_MOVE_TIMEOUT_MS);
+
+      const { choice, error, elapsedMs, timedOut } = chooseAIMoveTimed(player, side, AI_MOVE_TIMEOUT_MS);
+      clearAiMoveTimer();
+      if (token !== aiMoveToken || matchResult) return;
+      if (timedOut) {
+        markTimeoutLoss(side, elapsedMs);
+        return;
+      }
       aiThinking = false;
+      if (error) {
+        markEngineError(`engine error: ${playerName(side)} move failed`);
+        return;
+      }
       if (!choice) {
         settleResult();
+        if (!matchResult) settleNoLegalMoves();
+        if (!matchResult) {
+          aiThinking = true;
+          aiMoveTimer = window.setTimeout(() => {
+            if (token !== aiMoveToken || matchResult) return;
+            markTimeoutLoss(side, AI_MOVE_TIMEOUT_MS);
+          }, Math.max(0, AI_MOVE_TIMEOUT_MS - elapsedMs));
+        }
         return;
       }
 
       const from = squareFromEngine(choice.from);
       const to = squareFromEngine(choice.to);
-      const targetSymbol = pieceAt(boardState, choice.to);
-      const move = {
-        side,
-        from: choice.from.toLowerCase(),
-        to: choice.to.toLowerCase(),
-        flag: targetSymbol ? "x" : "",
-        type: pieceTypeFromSymbol(pieceAt(boardState, choice.from)),
-        ai: player.name,
-        source: player.source,
-        score: choice.score,
-        nodes: choice.nodes,
-      };
+      const move = buildMoveRecord(choice, side, player);
+      if (isKingCapture(move)) {
+        recordTerminalKingCapture(move);
+        ripple(boardPos(to.file, to.rank), side, 1.2);
+        return;
+      }
 
       primeActiveMove(now, move, from, to);
-    }, 30);
+    }, playbackDelay(30, 0));
   }
 
   function primeActiveMove(now, move, from, to) {
@@ -770,7 +933,7 @@
       from,
       to,
       start: now,
-      duration: reducedMotion ? 120 : 240,
+      duration: playbackDelay(reducedMotion ? 120 : 240),
       lastTrail: now,
     };
     ripple(boardPos(from.file, from.rank), move.side, 0.75);
@@ -780,6 +943,12 @@
   function finishMove(now) {
     const { move, moving, target, to } = active;
     let nextBoard = null;
+    if (isKingCapture(move)) {
+      recordTerminalKingCapture(move);
+      shatter(boardPos(to.file, to.rank), move.side, 62, 1.35);
+      active = null;
+      return;
+    }
     if (target) {
       pieces = pieces.filter((p) => p !== target);
       shatter(boardPos(to.file, to.rank), target.side, 36, 1.2);
@@ -787,8 +956,7 @@
     try {
       nextBoard = engineGame.move(move.from, move.to);
     } catch (error) {
-      matchResult = `engine error: ${move.from}-${move.to}`;
-      winnerSide = null;
+      markEngineError(`engine error: ${move.from}-${move.to}`);
       active = null;
       return;
     }
@@ -800,12 +968,13 @@
     else if (boardState.check) move.flag += "+";
     move.type = moving.type;
     moveLog.push(move);
+    moveScroll = clamp(moveScroll, 0, maxMoveScroll());
     moveCursor += 1;
     ply += 1;
     if (move.flag.includes("#")) shatter(boardPos(to.file, to.rank), moving.side, 62, 1.35);
     settleResult();
     active = null;
-    nextMoveAt = now + 165;
+    nextMoveAt = now + playbackDelay(165);
   }
 
   function settleResult() {
@@ -813,19 +982,142 @@
     if (boardState.checkMate) {
       const winner = boardState.turn === "white" ? "black" : "white";
       winnerSide = winner;
+      matchEndReason = "checkmate";
       matchResult = `checkmate - ${playerName(winner)} wins`;
     } else if (boardState.staleMate) {
       winnerSide = null;
+      matchEndReason = "stalemate";
       matchResult = "stalemate - draw";
     } else if (boardState.halfMove >= 100) {
       winnerSide = null;
+      matchEndReason = "50-move-rule";
       matchResult = "draw - 50 move rule";
     } else if (ply >= MAX_PLIES) {
       winnerSide = null;
+      matchEndReason = "move-cap";
       matchResult = "draw - move cap";
     }
   }
 
+
+  function applyInstantMove(choice, side) {
+    const player = matchPlayers[side];
+    const move = buildMoveRecord(choice, side, player);
+    let nextBoard = null;
+    if (isKingCapture(move)) {
+      recordTerminalKingCapture(move);
+      return true;
+    }
+    try {
+      nextBoard = engineGame.move(move.from, move.to);
+    } catch (error) {
+      markEngineError(`engine error: ${move.from}-${move.to}`);
+      return false;
+    }
+    boardState = nextBoard || engineGame.exportJson();
+    if (boardState.checkMate) move.flag += "#";
+    else if (boardState.check) move.flag += "+";
+    moveLog.push(move);
+    moveScroll = clamp(moveScroll, 0, maxMoveScroll());
+    moveCursor += 1;
+    ply += 1;
+    syncPiecesFromBoard(boardState);
+    settleResult();
+    return true;
+  }
+
+  function moveSignature(move) {
+    return {
+      side: move.side,
+      ai: move.ai,
+      source: move.source,
+      type: move.type,
+      from: move.from,
+      to: move.to,
+      flag: move.flag,
+      capturedType: move.capturedType,
+    };
+  }
+
+  function publicState() {
+    return {
+      seed: matchSeedText,
+      seedLength: matchSeedText.length,
+      seedDigest: seedDigest(),
+      selectingPlayers,
+      players: {
+        white: matchPlayers.white?.name || null,
+        black: matchPlayers.black?.name || null,
+      },
+      ply,
+      moves: moveLog.map((move) => `${move.ai}:${move.from}${move.flag.includes("x") ? "x" : "-"}${move.to}${move.flag}`),
+      moveRecords: moveLog.map(moveSignature),
+      moveScroll,
+      maxMoveScroll: maxMoveScroll(),
+      playbackSpeed: playbackSpeed(),
+      playbackSpeedIndex,
+      result: matchResult,
+      resultReason: matchEndReason,
+      winnerSide,
+      timeoutSide,
+    };
+  }
+
+  function matchSignature() {
+    const snapshot = publicState();
+    return JSON.stringify({
+      seed: snapshot.seed,
+      players: snapshot.players,
+      result: snapshot.result,
+      resultReason: snapshot.resultReason,
+      winnerSide: snapshot.winnerSide,
+      timeoutSide: snapshot.timeoutSide,
+      moves: snapshot.moveRecords,
+    });
+  }
+
+  function runHeadlessMatch(seed, options = {}) {
+    const moveTimeoutMs = Math.max(1, Number(options.moveTimeoutMs) || AI_MOVE_TIMEOUT_MS);
+    const startedAt = performance.now();
+    paused = true;
+    reset(performance.now(), { seedOverride: seed, immediatePlayers: true });
+    paused = true;
+
+    while (!matchResult && engineGame && boardState) {
+      if (boardState.isFinished || boardState.checkMate || boardState.staleMate || ply >= MAX_PLIES || boardState.halfMove >= 100) {
+        settleResult();
+        break;
+      }
+      if (settleNoLegalMoves()) break;
+
+      const side = currentSide();
+      const player = matchPlayers[side];
+      const { choice, error, elapsedMs, timedOut } = chooseAIMoveTimed(player, side, moveTimeoutMs);
+      if (timedOut) {
+        markTimeoutLoss(side, elapsedMs);
+        break;
+      }
+      if (error) {
+        markEngineError(`engine error: ${playerName(side)} move failed`);
+        break;
+      }
+      if (!choice) {
+        settleResult();
+        if (!matchResult) settleNoLegalMoves();
+        if (!matchResult) markTimeoutLoss(side, moveTimeoutMs);
+        break;
+      }
+      if (!applyInstantMove(choice, side)) break;
+    }
+
+    const snapshot = publicState();
+    return {
+      ...snapshot,
+      signature: matchSignature(),
+      durationMs: Math.round(performance.now() - startedAt),
+      moveTimeoutMs,
+    };
+  }
   function update(now, dt) {
     if (!paused) {
       if (now >= nextMoveAt) startMove(now);
@@ -1074,7 +1366,8 @@
       text(x, 12, `seed ${seedDigest()}`, color.dim);
       for (let y = 2; y < 42; y += 1) put(right.x + right.w - 2, y, BRAILLE_FULL, color.blue, "#003852");
       for (let y = 42; y < right.y + right.h - 2; y += 1) put(right.x + right.w - 2, y, BRAILLE_DUST, "#13222a", color.black);
-      text(x, 57, "1 2 3 fold   jk scroll   r reload", color.dim);
+      text(x, 56, speedLegend(), color.dim);
+      text(x, 57, "jk scroll   r reroll", color.dim);
       return;
     }
 
@@ -1094,7 +1387,7 @@
     if (gameDone) {
       replayButton = { x, y: 17, w: 16, h: 1 };
       text(x, 17, "[ PLAY AGAIN ]", color.white);
-      text(x, 19, "click or press r", color.dim);
+      text(x, 19, "click replay   r reroll", color.dim);
     }
 
     text(x, 21, "v MATERIAL", color.header);
@@ -1112,7 +1405,10 @@
     if (!moveLog.length) {
       text(x, 37, "no moves yet", color.dim);
     } else {
-      const visible = moveLog.map((m, i) => ({ ...m, ply: i + 1 })).reverse().slice(0, 10);
+      const maxScroll = maxMoveScroll();
+      moveScroll = clamp(moveScroll, 0, maxScroll);
+      if (maxScroll > 0) text(x + 22, 34, `scroll ${moveScroll}/${maxScroll}`.slice(0, 16), color.dim);
+      const visible = moveLog.map((m, i) => ({ ...m, ply: i + 1 })).reverse().slice(moveScroll, moveScroll + 10);
       visible.forEach((m, i) => {
         const row = 37 + i * 2;
         const moveNo = Math.ceil(m.ply / 2);
@@ -1128,11 +1424,35 @@
 
     for (let y = 2; y < 42; y += 1) put(right.x + right.w - 2, y, BRAILLE_FULL, color.blue, "#003852");
     for (let y = 42; y < right.y + right.h - 2; y += 1) put(right.x + right.w - 2, y, BRAILLE_DUST, "#13222a", color.black);
-    text(x, 57, "1 2 3 fold   jk scroll   r reload", color.dim);
+    text(x, 56, speedLegend(), color.dim);
+    text(x, 57, "jk scroll   r reroll", color.dim);
   }
 
   function movedTypeFor(move) {
     return move.type || "pawn";
+  }
+
+  function maxMoveScroll() {
+    return Math.max(0, moveLog.length - 10);
+  }
+
+  function scrollMoves(delta) {
+    const nextScroll = clamp(moveScroll + delta, 0, maxMoveScroll());
+    const changed = nextScroll !== moveScroll;
+    moveScroll = nextScroll;
+    return changed;
+  }
+
+  function speedLegend() {
+    return PLAYBACK_SPEEDS.map((speed, i) => `${i + 1}=${speed}x`).join(" ");
+  }
+
+  function setPlaybackSpeedFromKey(key) {
+    if (!/^\d$/.test(key)) return false;
+    const index = Number(key) - 1;
+    if (!Number.isInteger(index) || index < 0 || index >= PLAYBACK_SPEEDS.length) return false;
+    playbackSpeedIndex = index;
+    return true;
   }
 
   function render() {
@@ -1187,23 +1507,52 @@
     );
   }
 
+  function releaseControlFocus() {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && seedForm?.contains(activeElement)) activeElement.blur();
+  }
+
   if (seedInput) seedInput.addEventListener("input", updateSeedInputStatus);
   if (seedForm) seedForm.addEventListener("submit", (event) => {
     event.preventDefault();
     reset(performance.now());
+    releaseControlFocus();
   });
-  if (seedRandomButton) seedRandomButton.addEventListener("click", () => reset(performance.now(), { forceRandom: true }));
-  if (seedCopyButton) seedCopyButton.addEventListener("click", copyCurrentSeed);
+  if (seedRandomButton) seedRandomButton.addEventListener("click", () => {
+    reset(performance.now(), { forceRandom: true });
+    releaseControlFocus();
+  });
+  if (seedCopyButton) seedCopyButton.addEventListener("click", () => {
+    copyCurrentSeed();
+    releaseControlFocus();
+  });
 
-  const isControlTarget = (target) => target instanceof HTMLInputElement || target instanceof HTMLButtonElement || target instanceof HTMLTextAreaElement;
+  function shouldLetControlHandleKey(event) {
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true;
+    return target instanceof HTMLButtonElement && (event.key === " " || event.key === "Enter");
+  }
 
   window.addEventListener("resize", resize);
   window.addEventListener("keydown", (event) => {
-    if (isControlTarget(event.target)) return;
+    if (shouldLetControlHandleKey(event)) return;
+    if (setPlaybackSpeedFromKey(event.key)) {
+      event.preventDefault();
+      return;
+    }
     if (event.key === " ") paused = !paused;
-    if (event.key.toLowerCase() === "r") reset(performance.now());
+    if (event.key.toLowerCase() === "r") reset(performance.now(), { forceRandom: true });
+    if (event.key.toLowerCase() === "j") {
+      event.preventDefault();
+      scrollMoves(1);
+    }
+    if (event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      scrollMoves(-1);
+    }
   });
   canvas.addEventListener("click", (event) => {
+    releaseControlFocus();
     if (hitsReplayButton(cellFromPointer(event))) reset(performance.now());
   });
   canvas.addEventListener("mousemove", (event) => {
@@ -1214,19 +1563,14 @@
   });
 
   reset(performance.now());
-  window.__dotChessState = () => ({
-    seed: matchSeedText,
-    seedLength: matchSeedText.length,
-    seedDigest: seedDigest(),
-    selectingPlayers,
-    players: {
-      white: matchPlayers.white?.name || null,
-      black: matchPlayers.black?.name || null,
-    },
-    ply,
-    moves: moveLog.map((move) => `${move.ai}:${move.from}${move.flag.includes("x") ? "x" : "-"}${move.to}${move.flag}`),
-    result: matchResult,
-  });
+  window.__dotChessState = publicState;
+  window.__dotChessTest = {
+    seedLength: SEED_LENGTH,
+    defaultMoveTimeoutMs: AI_MOVE_TIMEOUT_MS,
+    normalizeSeed,
+    generateAsciiSeed,
+    runMatch: runHeadlessMatch,
+  };
   requestAnimationFrame(frame);
 })();
 
