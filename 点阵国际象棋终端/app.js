@@ -25,10 +25,10 @@
     muted: "#7a8397",
     header: "#b3b8c8",
     white: "#eef7ff",
-    codex: "#9bf6ff",
-    codexAlt: "#dffcff",
-    kimi: "#f6a33b",
-    kimiAlt: "#ffd269",
+    whiteSide: "#9bf6ff",
+    whiteSideAlt: "#dffcff",
+    blackSide: "#f6a33b",
+    blackSideAlt: "#ffd269",
     warmDim: "#956d44",
     coolDim: "#5aafc7",
     blue: "#6ed5ec",
@@ -166,7 +166,7 @@
   let nextMoveAt = 0;
   let engineGame = null;
   let boardState = null;
-  let matchPlayers = { codex: null, kimi: null };
+  let matchPlayers = { white: null, black: null };
   let moveLog = [];
   let aiThinking = false;
   let selectingPlayers = true;
@@ -388,7 +388,7 @@
   }
 
   function currentSide() {
-    return boardState?.turn === "black" ? "kimi" : "codex";
+    return boardState?.turn === "black" ? "black" : "white";
   }
 
   function playerName(side) {
@@ -400,7 +400,7 @@
   }
 
   function sideTone(side) {
-    return side === "codex" ? color.codex : color.kimi;
+    return side === "white" ? color.whiteSide : color.blackSide;
   }
 
   function activePlayerPhrase(side, suffix) {
@@ -416,7 +416,7 @@
   }
 
   function sideFromSymbol(symbol) {
-    return symbol === symbol.toUpperCase() ? "codex" : "kimi";
+    return symbol === symbol.toUpperCase() ? "white" : "black";
   }
 
   function pieceAt(config, squareId) {
@@ -431,14 +431,14 @@
     if (!config?.pieces) return 0;
     return Object.values(config.pieces).reduce((sum, symbol) => {
       const type = pieceTypeFromSymbol(symbol);
-      const sign = sideFromSymbol(symbol) === "codex" ? 1 : -1;
+      const sign = sideFromSymbol(symbol) === "white" ? 1 : -1;
       return sum + sign * VALUE[type];
     }, 0);
   }
 
   function materialScoreFor(config, side) {
     const diff = materialDiff(config);
-    return side === "codex" ? diff : -diff;
+    return side === "white" ? diff : -diff;
   }
 
   function cloneConfig(config) {
@@ -557,9 +557,10 @@
     moveCursor = 0;
     ply = 0;
     matchSeed = Math.floor(Math.random() * 1000000) + 1;
-    matchPlayers = { codex: null, kimi: null };
-    engineGame = null;
-    boardState = null;
+    matchPlayers = { white: null, black: null };
+    engineGame = chessEngine ? new chessEngine.Game() : null;
+    boardState = engineGame?.exportJson() || null;
+    if (boardState) syncPiecesFromBoard(boardState);
     nextMoveAt = Number.POSITIVE_INFINITY;
 
     const token = ++selectionToken;
@@ -571,10 +572,7 @@
         winnerSide = null;
         return;
       }
-      matchPlayers = { codex: pickAI(), kimi: pickAI() };
-      engineGame = new chessEngine.Game();
-      boardState = engineGame.exportJson();
-      syncPiecesFromBoard(boardState);
+      matchPlayers = { white: pickAI(), black: pickAI() };
       selectingPlayers = false;
       nextMoveAt = performance.now() + 520;
     }, 760);
@@ -585,7 +583,7 @@
   }
 
   function startMove(now) {
-    if (paused || active || aiThinking || !engineGame || !boardState || matchResult) return;
+    if (paused || active || aiThinking || selectingPlayers || !engineGame || !boardState || matchResult) return;
     if (boardState.isFinished || boardState.checkMate || boardState.staleMate || ply >= MAX_PLIES || boardState.halfMove >= 100) {
       settleResult();
       return;
@@ -681,7 +679,7 @@
   function settleResult() {
     if (!boardState || matchResult) return;
     if (boardState.checkMate) {
-      const winner = boardState.turn === "white" ? "kimi" : "codex";
+      const winner = boardState.turn === "white" ? "black" : "white";
       winnerSide = winner;
       matchResult = `checkmate - ${playerName(winner)} wins`;
     } else if (boardState.staleMate) {
@@ -791,8 +789,8 @@
     if (selectingPlayers) {
       text(board.x + 2, board.y - 2, "SELECTING PLAYERS", color.header);
     } else {
-      text(board.x + 2, board.y - 2, `${side === "codex" ? ">  " : "   "}${playerLabel("codex", 14)}`, side === "codex" ? color.codexAlt : color.dim);
-      text(board.x + 24, board.y - 2, `${side === "kimi" ? ">  " : "   "}${playerLabel("kimi", 14)}`, side === "kimi" ? color.kimiAlt : color.dim);
+      text(board.x + 2, board.y - 2, `${side === "white" ? ">  " : "   "}${playerLabel("white", 14)}`, side === "white" ? color.whiteSideAlt : color.dim);
+      text(board.x + 24, board.y - 2, `${side === "black" ? ">  " : "   "}${playerLabel("black", 14)}`, side === "black" ? color.blackSideAlt : color.dim);
     }
 
     for (let rank = 0; rank < 8; rank += 1) text(board.x - 3, board.y + rank * board.sh + 1, String(8 - rank), color.dim);
@@ -827,8 +825,8 @@
 
   function drawPieceAt(p, pos, now, alpha = 1) {
     const mask = pieceMasks[p.type] || pieceMasks.pawn;
-    const fg = p.side === "codex" ? color.white : color.kimi;
-    const alt = p.side === "codex" ? color.codexAlt : color.kimiAlt;
+    const fg = p.side === "white" ? color.white : color.blackSide;
+    const alt = p.side === "white" ? color.whiteSideAlt : color.blackSideAlt;
     const x0 = Math.round(pos.x * DOT_W - mask.width / 2 + 1);
     const y0 = Math.round(pos.y * DOT_H - mask.height / 2);
 
@@ -858,7 +856,7 @@
       const thickness = lerp(0.7, 0.22, age);
       const cx = r.x * DOT_W;
       const cy = r.y * DOT_H;
-      const fg = r.side === "codex" ? color.codex : color.kimiAlt;
+      const fg = r.side === "white" ? color.whiteSide : color.blackSideAlt;
       const minX = Math.floor((r.x - radius - 2) * DOT_W);
       const maxX = Math.ceil((r.x + radius + 2) * DOT_W);
       const minY = Math.floor((r.y - radius * 0.62 - 2) * DOT_H);
@@ -878,7 +876,7 @@
 
     fragments.forEach((g, i) => {
       const age = (now - g.born) / g.life;
-      const fg = g.side === "codex" ? color.codex : color.kimiAlt;
+      const fg = g.side === "white" ? color.whiteSide : color.blackSideAlt;
       const radius = g.kind === "trail" ? 3 : 1;
       const cx = Math.round(g.x * DOT_W);
       const cy = Math.round(g.y * DOT_H);
@@ -934,12 +932,12 @@
     const side = active?.move.side || currentSide();
     const diff = materialDiff();
     replayButton = null;
-    const codexWon = winnerSide === "codex" ? 1 : 0;
-    const kimiWon = winnerSide === "kimi" ? 1 : 0;
+    const whiteWon = winnerSide === "white" ? 1 : 0;
+    const blackWon = winnerSide === "black" ? 1 : 0;
 
     text(x, 3, "v MATCH", color.header);
     if (selectingPlayers) {
-      text(x, 6, "正在选择对棋双方", color.header);
+      text(x, 6, "CHOOSING PLAYERS", color.header);
       text(x, 9, "sampling local AI roster", color.dim);
       for (let y = 2; y < 42; y += 1) put(right.x + right.w - 2, y, BRAILLE_FULL, color.blue, "#003852");
       for (let y = 42; y < right.y + right.h - 2; y += 1) put(right.x + right.w - 2, y, BRAILLE_DUST, "#13222a", color.black);
@@ -947,11 +945,11 @@
       return;
     }
 
-    text(x, 6, `${side === "codex" && !gameDone ? "> " : "  "}${playerLabel("codex", 18)}`, color.codex);
-    text(x + 25, 6, String(codexWon), color.white);
+    text(x, 6, `${side === "white" && !gameDone ? "> " : "  "}${playerLabel("white", 18)}`, color.whiteSide);
+    text(x + 25, 6, String(whiteWon), color.white);
     text(x + 28, 6, "won", color.dim);
-    text(x, 8, `${side === "kimi" && !gameDone ? "> " : "  "}${playerLabel("kimi", 18)}`, color.kimi);
-    text(x + 25, 8, String(kimiWon), color.white);
+    text(x, 8, `${side === "black" && !gameDone ? "> " : "  "}${playerLabel("black", 18)}`, color.blackSide);
+    text(x + 25, 8, String(blackWon), color.white);
     text(x + 28, 8, "won", color.dim);
     text(x, 13, "ply", color.dim);
     text(x + 6, 13, String(ply), color.white);
@@ -969,9 +967,9 @@
     if (diff === 0) {
       text(x, 24, `level   ${BRAILLE_DUST.repeat(16)}`, color.dim);
     } else {
-      const leading = diff > 0 ? playerLabel("codex", 12) : playerLabel("kimi", 12);
+      const leading = diff > 0 ? playerLabel("white", 12) : playerLabel("black", 12);
       const bar = clamp(Math.round(Math.abs(diff)), 2, 16);
-      text(x, 24, `${leading.trim()} +${Math.abs(diff)}`, diff > 0 ? color.codex : color.kimi);
+      text(x, 24, `${leading.trim()} +${Math.abs(diff)}`, diff > 0 ? color.whiteSide : color.blackSide);
       text(x, 26, BRAILLE_FULL.repeat(bar) + BRAILLE_DUST.repeat(16 - bar), color.blue);
       text(x, 28, `ahead by ${Math.abs(diff)} points`, color.dim);
     }
