@@ -166,10 +166,13 @@
   let nextMoveAt = 0;
   let engineGame = null;
   let boardState = null;
-  let matchPlayers = { codex: AI_ROSTER[0], kimi: AI_ROSTER[1] };
+  let matchPlayers = { codex: null, kimi: null };
   let moveLog = [];
   let aiThinking = false;
+  let selectingPlayers = true;
+  let selectionToken = 0;
   let matchResult = "";
+  let winnerSide = null;
   let matchSeed = 1;
   let paused = false;
   let lastFrame = 0;
@@ -303,8 +306,16 @@
     if (bg) screen.bg[i] = bg;
   }
 
+  function cellSpan(char) {
+    return 1;
+  }
+
   function text(x, y, value, fg = color.muted, bg = null) {
-    Array.from(String(value)).forEach((char, i) => put(x + i, y, char, fg, bg));
+    let col = x;
+    Array.from(String(value)).forEach((char) => {
+      put(col, y, char, fg, bg);
+      col += cellSpan(char);
+    });
   }
 
   function fillArea(x, y, w, h, bg, fg = color.muted, c = " ") {
@@ -378,6 +389,22 @@
 
   function currentSide() {
     return boardState?.turn === "black" ? "kimi" : "codex";
+  }
+
+  function playerName(side) {
+    return matchPlayers?.[side]?.name || "SELECTING";
+  }
+
+  function playerLabel(side, width = 12) {
+    return playerName(side).padEnd(width).slice(0, width);
+  }
+
+  function sideTone(side) {
+    return side === "codex" ? color.codex : color.kimi;
+  }
+
+  function activePlayerPhrase(side, suffix) {
+    return `${playerName(side)} ${suffix}`.slice(0, 34);
   }
 
   function pickAI() {
@@ -523,16 +550,34 @@
     ripples = [];
     active = null;
     aiThinking = false;
+    selectingPlayers = true;
     matchResult = "";
+    winnerSide = null;
     moveLog = [];
     moveCursor = 0;
     ply = 0;
     matchSeed = Math.floor(Math.random() * 1000000) + 1;
-    matchPlayers = { codex: pickAI(), kimi: pickAI() };
-    engineGame = chessEngine ? new chessEngine.Game() : null;
-    boardState = engineGame?.exportJson() || null;
-    if (boardState) syncPiecesFromBoard(boardState);
-    nextMoveAt = now + 900;
+    matchPlayers = { codex: null, kimi: null };
+    engineGame = null;
+    boardState = null;
+    nextMoveAt = Number.POSITIVE_INFINITY;
+
+    const token = ++selectionToken;
+    window.setTimeout(() => {
+      if (token !== selectionToken) return;
+      if (!chessEngine) {
+        selectingPlayers = false;
+        matchResult = "engine missing";
+        winnerSide = null;
+        return;
+      }
+      matchPlayers = { codex: pickAI(), kimi: pickAI() };
+      engineGame = new chessEngine.Game();
+      boardState = engineGame.exportJson();
+      syncPiecesFromBoard(boardState);
+      selectingPlayers = false;
+      nextMoveAt = performance.now() + 520;
+    }, 760);
   }
 
   function findPiece(file, rank, skip = null) {
@@ -613,6 +658,7 @@
       nextBoard = engineGame.move(move.from, move.to);
     } catch (error) {
       matchResult = `engine error: ${move.from}-${move.to}`;
+      winnerSide = null;
       active = null;
       return;
     }
@@ -635,13 +681,17 @@
   function settleResult() {
     if (!boardState || matchResult) return;
     if (boardState.checkMate) {
-      const winner = boardState.turn === "white" ? "KIMI" : "CODEX";
-      matchResult = `checkmate - ${winner} wins`;
+      const winner = boardState.turn === "white" ? "kimi" : "codex";
+      winnerSide = winner;
+      matchResult = `checkmate - ${playerName(winner)} wins`;
     } else if (boardState.staleMate) {
+      winnerSide = null;
       matchResult = "stalemate - draw";
     } else if (boardState.halfMove >= 100) {
+      winnerSide = null;
       matchResult = "draw - 50 move rule";
     } else if (ply >= MAX_PLIES) {
+      winnerSide = null;
       matchResult = "draw - move cap";
     }
   }
@@ -738,20 +788,26 @@
     }
 
     const side = active?.move.side || currentSide();
-    text(board.x + 2, board.y - 2, `${side === "codex" ? ">  " : "   "}CODEX`, side === "codex" ? color.codexAlt : color.dim);
-    text(board.x + 18, board.y - 2, `${side === "kimi" ? ">  " : "   "}KIMI`, side === "kimi" ? color.kimiAlt : color.dim);
+    if (selectingPlayers) {
+      text(board.x + 2, board.y - 2, "SELECTING PLAYERS", color.header);
+    } else {
+      text(board.x + 2, board.y - 2, `${side === "codex" ? ">  " : "   "}${playerLabel("codex", 14)}`, side === "codex" ? color.codexAlt : color.dim);
+      text(board.x + 24, board.y - 2, `${side === "kimi" ? ">  " : "   "}${playerLabel("kimi", 14)}`, side === "kimi" ? color.kimiAlt : color.dim);
+    }
 
     for (let rank = 0; rank < 8; rank += 1) text(board.x - 3, board.y + rank * board.sh + 1, String(8 - rank), color.dim);
     for (let file = 0; file < 8; file += 1) text(board.x + file * board.sw + 4, board.y + board.h + 1, FILES[file], color.dim);
 
     if (!chessEngine) {
       text(board.x, board.y + board.h + 3, "ENGINE MISSING", color.red);
+    } else if (selectingPlayers) {
+      text(board.x, board.y + board.h + 3, "selecting AI players", color.header);
     } else if (matchResult) {
       text(board.x, board.y + board.h + 3, matchResult.toUpperCase(), matchResult.includes("wins") ? color.red : color.dim);
     } else if (aiThinking) {
-      text(board.x, board.y + board.h + 3, `${side.toUpperCase()} thinking`, side === "codex" ? color.codex : color.kimi);
+      text(board.x, board.y + board.h + 3, activePlayerPhrase(side, "thinking"), sideTone(side));
     } else {
-      text(board.x, board.y + board.h + 3, `${side.toUpperCase()} to move`, side === "codex" ? color.codex : color.kimi);
+      text(board.x, board.y + board.h + 3, activePlayerPhrase(side, "to move"), sideTone(side));
     }
   }
 
@@ -878,24 +934,31 @@
     const side = active?.move.side || currentSide();
     const diff = materialDiff();
     replayButton = null;
-    const codexWon = matchResult.includes("CODEX wins") ? 1 : 0;
-    const kimiWon = matchResult.includes("KIMI wins") ? 1 : 0;
+    const codexWon = winnerSide === "codex" ? 1 : 0;
+    const kimiWon = winnerSide === "kimi" ? 1 : 0;
 
     text(x, 3, "v MATCH", color.header);
-    text(x, 6, `${side === "codex" && !gameDone ? "> " : "  "}CODEX`, color.codex);
-    text(x + 12, 6, matchPlayers.codex.name.padEnd(11).slice(0, 11), color.dim);
-    text(x + 29, 6, String(codexWon), color.white);
-    text(x + 32, 6, "won", color.dim);
-    text(x, 8, `${side === "kimi" && !gameDone ? "> " : "  "}KIMI`, color.kimi);
-    text(x + 12, 8, matchPlayers.kimi.name.padEnd(11).slice(0, 11), color.dim);
-    text(x + 29, 8, String(kimiWon), color.white);
-    text(x + 32, 8, "won", color.dim);
+    if (selectingPlayers) {
+      text(x, 6, "正在选择对棋双方", color.header);
+      text(x, 9, "sampling local AI roster", color.dim);
+      for (let y = 2; y < 42; y += 1) put(right.x + right.w - 2, y, BRAILLE_FULL, color.blue, "#003852");
+      for (let y = 42; y < right.y + right.h - 2; y += 1) put(right.x + right.w - 2, y, BRAILLE_DUST, "#13222a", color.black);
+      text(x, 57, "1 2 3 fold   jk scroll   r reload", color.dim);
+      return;
+    }
+
+    text(x, 6, `${side === "codex" && !gameDone ? "> " : "  "}${playerLabel("codex", 18)}`, color.codex);
+    text(x + 25, 6, String(codexWon), color.white);
+    text(x + 28, 6, "won", color.dim);
+    text(x, 8, `${side === "kimi" && !gameDone ? "> " : "  "}${playerLabel("kimi", 18)}`, color.kimi);
+    text(x + 25, 8, String(kimiWon), color.white);
+    text(x + 28, 8, "won", color.dim);
     text(x, 13, "ply", color.dim);
     text(x + 6, 13, String(ply), color.white);
     text(x + 15, 13, "move", color.dim);
     text(x + 22, 13, String(ply ? Math.ceil(ply / 2) : 0), color.white);
-    const statusText = !chessEngine ? "engine missing" : gameDone ? matchResult : aiThinking ? `${side.toUpperCase()} thinking` : `${side.toUpperCase()} to move`;
-    text(x, 15, statusText.slice(0, 34), gameDone || !chessEngine ? color.red : side === "codex" ? color.codex : color.kimi);
+    const statusText = !chessEngine ? "engine missing" : gameDone ? matchResult : aiThinking ? activePlayerPhrase(side, "thinking") : activePlayerPhrase(side, "to move");
+    text(x, 15, statusText.slice(0, 34), gameDone || !chessEngine ? color.red : sideTone(side));
     if (gameDone) {
       replayButton = { x, y: 17, w: 16, h: 1 };
       text(x, 17, "[ PLAY AGAIN ]", color.white);
@@ -906,9 +969,9 @@
     if (diff === 0) {
       text(x, 24, `level   ${BRAILLE_DUST.repeat(16)}`, color.dim);
     } else {
-      const leading = diff > 0 ? "CODEX" : "KIMI";
+      const leading = diff > 0 ? playerLabel("codex", 12) : playerLabel("kimi", 12);
       const bar = clamp(Math.round(Math.abs(diff)), 2, 16);
-      text(x, 24, `${leading} +${Math.abs(diff)}`, diff > 0 ? color.codex : color.kimi);
+      text(x, 24, `${leading.trim()} +${Math.abs(diff)}`, diff > 0 ? color.codex : color.kimi);
       text(x, 26, BRAILLE_FULL.repeat(bar) + BRAILLE_DUST.repeat(16 - bar), color.blue);
       text(x, 28, `ahead by ${Math.abs(diff)} points`, color.dim);
     }
@@ -924,7 +987,7 @@
         const type = movedTypeFor(m);
         const action = m.flag.includes("x") ? "x" : "->";
         text(x + 1, row, `${moveNo}.`, color.dim);
-        text(x + 6, row, m.side.toUpperCase(), m.side === "codex" ? color.codex : color.kimi);
+        text(x + 6, row, String(m.ai || playerName(m.side)).padEnd(10).slice(0, 10), sideTone(m.side));
         text(x + 18, row, TAG[type] || "P", color.white);
         text(x + 22, row, `${m.from}${action}${m.to}`, color.dim);
         text(x + 36, row, m.flag, m.flag.includes("#") ? color.red : color.white);
