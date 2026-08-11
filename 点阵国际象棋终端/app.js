@@ -10,6 +10,7 @@
   const TAG = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
   const FONT = '"Cascadia Mono", "Courier New", Consolas, monospace';
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const chessEngine = window.JSChessEngine;
 
   const color = {
     page: "#020306",
@@ -55,76 +56,15 @@
   const BRAILLE_BASE = 0x2800;
   const BRAILLE_FULL = String.fromCharCode(BRAILLE_BASE + 0xff);
   const BRAILLE_DUST = String.fromCharCode(BRAILLE_BASE + 0x09);
-
-  const script = [
-    ["codex", "e2", "e4"],
-    ["kimi", "e7", "e5"],
-    ["codex", "g1", "f3"],
-    ["kimi", "b8", "c6"],
-    ["codex", "f1", "b5"],
-    ["kimi", "a7", "a6"],
-    ["codex", "b5", "c6", "x"],
-    ["kimi", "d7", "c6", "x"],
-    ["codex", "d2", "d4"],
-    ["kimi", "e5", "d4", "x"],
-    ["codex", "f3", "d4", "x"],
-    ["kimi", "g8", "f6"],
-    ["codex", "b1", "c3"],
-    ["kimi", "f8", "b4"],
-    ["codex", "c1", "g5"],
-    ["kimi", "d8", "b6"],
-    ["codex", "d1", "d2"],
-    ["kimi", "b6", "b2", "x"],
-    ["codex", "d4", "b5"],
-    ["kimi", "a6", "b5", "x"],
-    ["codex", "c3", "b5", "x"],
-    ["kimi", "b4", "d2", "x"],
-    ["codex", "e1", "d2", "x"],
-    ["kimi", "c6", "b5", "x"],
-    ["codex", "g5", "h4"],
-    ["kimi", "f6", "e4", "x"],
-    ["codex", "d2", "c1"],
-    ["kimi", "e8", "g8"],
-    ["codex", "h4", "g5"],
-    ["kimi", "h7", "h6"],
-    ["codex", "g5", "d8"],
-    ["kimi", "b7", "c6", "x"],
-    ["codex", "d8", "f6"],
-    ["kimi", "g7", "f6", "x"],
-    ["codex", "b5", "d6", "+"],
-    ["kimi", "g8", "h8"],
-    ["codex", "a1", "d1"],
-    ["kimi", "c8", "g4"],
-    ["codex", "d1", "d7", "x+"],
-    ["kimi", "h8", "g8"],
-    ["codex", "d7", "f7", "+"],
-    ["kimi", "g8", "h8"],
-    ["codex", "f7", "f5", "+"],
-    ["kimi", "h8", "g8", "", "king"],
-    ["codex", "a2", "a4", "", "pawn"],
-    ["kimi", "a6", "a5", "", "pawn"],
-    ["codex", "a1", "a3", "", "rook"],
-    ["kimi", "b6", "b2", "x", "queen"],
-    ["codex", "d6", "f7", "+", "knight"],
-    ["kimi", "g8", "f7", "x", "king"],
-    ["codex", "d1", "d7", "+", "rook"],
-    ["kimi", "f7", "g6", "", "king"],
-    ["codex", "c6", "e5", "+", "knight"],
-    ["kimi", "g6", "f5", "", "king"],
-    ["codex", "g2", "g4", "+", "pawn"],
-    ["kimi", "f5", "f4", "x", "king"],
-    ["codex", "e5", "d3", "+", "knight"],
-    ["kimi", "f4", "g4", "x", "king"],
-    ["codex", "d7", "g7", "x+", "rook"],
-    ["kimi", "g4", "f5", "", "king"],
-    ["codex", "g7", "f7", "+", "rook"],
-    ["kimi", "f5", "g6", "", "king"],
-    ["codex", "d3", "e5", "+", "knight"],
-    ["kimi", "g6", "g5", "", "king"],
-    ["codex", "h2", "h4", "+", "pawn"],
-    ["kimi", "g5", "h5", "", "king"],
-    ["codex", "f7", "f5", "#", "rook"],
-  ].map(([side, from, to, flag, type]) => ({ side, from, to, flag: flag || "", type: type || "" }));
+  const MAX_PLIES = 160;
+  const SYMBOL_TO_TYPE = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+  const AI_ROSTER = [
+    { name: "JCE-SEARCH", source: "js-chess-engine", kind: "engine", level: 2, randomness: 60 },
+    { name: "JCE-DEEP", source: "js-chess-engine", kind: "engine", level: 3, randomness: 25 },
+    { name: "TACTIC", source: "local heuristic", kind: "tactic" },
+    { name: "MOBILITY", source: "local heuristic", kind: "mobility" },
+    { name: "GAMBIT", source: "local heuristic", kind: "gambit" },
+  ];
 
   const pieceMasks = buildPieceMasks({
     pawn: [
@@ -218,13 +158,19 @@
   let ch = 1;
   let fontSize = 16;
   let pieces = [];
-  let captured = { codex: [], kimi: [] };
   let fragments = [];
   let ripples = [];
   let active = null;
   let moveCursor = 0;
   let ply = 0;
   let nextMoveAt = 0;
+  let engineGame = null;
+  let boardState = null;
+  let matchPlayers = { codex: AI_ROSTER[0], kimi: AI_ROSTER[1] };
+  let moveLog = [];
+  let aiThinking = false;
+  let matchResult = "";
+  let matchSeed = 1;
   let paused = false;
   let lastFrame = 0;
   let replayButton = null;
@@ -422,6 +368,118 @@
     return { file: FILES.indexOf(name[0]), rank: 8 - Number(name[1]) };
   }
 
+  function squareName(file, rank) {
+    return `${FILES[file]}${8 - rank}`;
+  }
+
+  function squareFromEngine(name) {
+    return square(name.toLowerCase());
+  }
+
+  function currentSide() {
+    return boardState?.turn === "black" ? "kimi" : "codex";
+  }
+
+  function pickAI() {
+    return AI_ROSTER[Math.floor(Math.random() * AI_ROSTER.length)];
+  }
+
+  function pieceTypeFromSymbol(symbol) {
+    return SYMBOL_TO_TYPE[String(symbol).toLowerCase()] || "pawn";
+  }
+
+  function sideFromSymbol(symbol) {
+    return symbol === symbol.toUpperCase() ? "codex" : "kimi";
+  }
+
+  function pieceAt(config, squareId) {
+    return config?.pieces?.[squareId.toUpperCase()] || null;
+  }
+
+  function flattenMoves(movesMap) {
+    return Object.entries(movesMap || {}).flatMap(([from, tos]) => tos.map((to) => ({ from, to })));
+  }
+
+  function materialDiff(config = boardState) {
+    if (!config?.pieces) return 0;
+    return Object.values(config.pieces).reduce((sum, symbol) => {
+      const type = pieceTypeFromSymbol(symbol);
+      const sign = sideFromSymbol(symbol) === "codex" ? 1 : -1;
+      return sum + sign * VALUE[type];
+    }, 0);
+  }
+
+  function materialScoreFor(config, side) {
+    const diff = materialDiff(config);
+    return side === "codex" ? diff : -diff;
+  }
+
+  function cloneConfig(config) {
+    return JSON.parse(JSON.stringify(config));
+  }
+
+  function seededJitter(move, salt = 0) {
+    return hash(matchSeed + ply * 131 + move.from.charCodeAt(0) * 17 + move.to.charCodeAt(1) * 31 + salt);
+  }
+
+  function scoreMove(move, side, style) {
+    const target = pieceAt(boardState, move.to);
+    let score = target ? VALUE[pieceTypeFromSymbol(target)] * 120 : 0;
+    const from = squareFromEngine(move.from);
+    const to = squareFromEngine(move.to);
+    const center = 7 - Math.abs(to.file - 3.5) - Math.abs(to.rank - 3.5);
+    score += center * (style === "gambit" ? 8 : 5);
+    score += (style === "mobility" ? 2 : 0) * (Math.abs(to.file - from.file) + Math.abs(to.rank - from.rank));
+
+    let next = null;
+    try {
+      next = chessEngine.move(cloneConfig(boardState), move.from, move.to);
+      score += materialScoreFor(next, side) * (style === "tactic" ? 24 : 12);
+      if (next.checkMate) score += 10000;
+      if (next.check) score += 90;
+      if (style === "mobility") score += flattenMoves(chessEngine.moves(next)).length * 2;
+    } catch (error) {
+      return -999999;
+    }
+
+    if (style === "gambit" && !target) score += seededJitter(move, 301) * 180;
+    return score + seededJitter(move, 701) * 18;
+  }
+
+  function chooseHeuristicMove(player, side) {
+    const moves = flattenMoves(engineGame.moves());
+    if (!moves.length) return null;
+    const scored = moves
+      .map((move) => ({ ...move, score: scoreMove(move, side, player.kind) }))
+      .sort((a, b) => b.score - a.score);
+    const width = player.kind === "gambit" ? 5 : 3;
+    const pool = scored.slice(0, Math.min(width, scored.length));
+    return pool[Math.floor(hash(matchSeed + ply * 47 + pool.length * 11) * pool.length)];
+  }
+
+  function chooseEngineMove(player) {
+    const result = engineGame.ai({
+      level: player.level,
+      play: false,
+      analysis: true,
+      randomness: player.randomness,
+      ttSizeMB: 0.5,
+    });
+    const move = result?.move ? Object.entries(result.move)[0] : null;
+    if (!move) return null;
+    return {
+      from: move[0],
+      to: move[1],
+      score: result.bestScore ?? null,
+      nodes: result.nodesSearched ?? null,
+    };
+  }
+
+  function chooseAIMove(player, side) {
+    if (!chessEngine || !engineGame) return null;
+    return player.kind === "engine" ? chooseEngineMove(player) : chooseHeuristicMove(player, side);
+  }
+
   function boardPos(file, rank) {
     return {
       x: board.x + file * board.sw + Math.floor(board.sw / 2),
@@ -433,21 +491,48 @@
     return { id, side, type, file, rank, seed: id.length * 67 + file * 11 + rank * 29 };
   }
 
+  function syncPiecesFromBoard(config, movingPiece = null, movingTo = null) {
+    const next = [];
+    const used = new Set();
+    Object.entries(config?.pieces || {}).forEach(([squareId, symbol]) => {
+      const side = sideFromSymbol(symbol);
+      const type = pieceTypeFromSymbol(symbol);
+      const sq = squareFromEngine(squareId);
+      let visual = null;
+
+      if (movingPiece && movingTo && squareId.toLowerCase() === movingTo.toLowerCase()) {
+        visual = movingPiece;
+      } else {
+        visual = pieces.find((p) => !used.has(p) && p.side === side && p.type === type && p.file === sq.file && p.rank === sq.rank);
+      }
+
+      if (!visual) visual = piece(`${side}-${type}-${squareId}-${matchSeed}`, side, type, sq.file, sq.rank);
+      visual.side = side;
+      visual.type = type;
+      visual.file = sq.file;
+      visual.rank = sq.rank;
+      used.add(visual);
+      next.push(visual);
+    });
+    pieces = next;
+  }
+
   function reset(now = performance.now()) {
     pieces = [];
     fragments = [];
     ripples = [];
-    captured = { codex: [], kimi: [] };
     active = null;
+    aiThinking = false;
+    matchResult = "";
+    moveLog = [];
     moveCursor = 0;
     ply = 0;
+    matchSeed = Math.floor(Math.random() * 1000000) + 1;
+    matchPlayers = { codex: pickAI(), kimi: pickAI() };
+    engineGame = chessEngine ? new chessEngine.Game() : null;
+    boardState = engineGame?.exportJson() || null;
+    if (boardState) syncPiecesFromBoard(boardState);
     nextMoveAt = now + 900;
-    for (let file = 0; file < 8; file += 1) {
-      pieces.push(piece(`kimi-${TYPES[file]}-${file}`, "kimi", TYPES[file], file, 0));
-      pieces.push(piece(`kimi-pawn-${file}`, "kimi", "pawn", file, 1));
-      pieces.push(piece(`codex-pawn-${file}`, "codex", "pawn", file, 6));
-      pieces.push(piece(`codex-${TYPES[file]}-${file}`, "codex", TYPES[file], file, 7));
-    }
   }
 
   function findPiece(file, rank, skip = null) {
@@ -455,10 +540,48 @@
   }
 
   function startMove(now) {
-    if (paused || active || moveCursor >= script.length) return;
-    const move = script[moveCursor];
-    const from = square(move.from);
-    const to = square(move.to);
+    if (paused || active || aiThinking || !engineGame || !boardState || matchResult) return;
+    if (boardState.isFinished || boardState.checkMate || boardState.staleMate || ply >= MAX_PLIES || boardState.halfMove >= 100) {
+      settleResult();
+      return;
+    }
+
+    aiThinking = true;
+    window.setTimeout(() => {
+      if (paused || active || matchResult) {
+        aiThinking = false;
+        return;
+      }
+
+      const side = currentSide();
+      const player = matchPlayers[side];
+      const choice = chooseAIMove(player, side);
+      aiThinking = false;
+      if (!choice) {
+        settleResult();
+        return;
+      }
+
+      const from = squareFromEngine(choice.from);
+      const to = squareFromEngine(choice.to);
+      const targetSymbol = pieceAt(boardState, choice.to);
+      const move = {
+        side,
+        from: choice.from.toLowerCase(),
+        to: choice.to.toLowerCase(),
+        flag: targetSymbol ? "x" : "",
+        type: pieceTypeFromSymbol(pieceAt(boardState, choice.from)),
+        ai: player.name,
+        source: player.source,
+        score: choice.score,
+        nodes: choice.nodes,
+      };
+
+      primeActiveMove(now, move, from, to);
+    }, 30);
+  }
+
+  function primeActiveMove(now, move, from, to) {
     let moving = findPiece(from.file, from.rank);
     if (!moving) {
       moving = piece(`ghost-${moveCursor}`, move.side, move.type || "pawn", from.file, from.rank);
@@ -481,18 +604,46 @@
 
   function finishMove(now) {
     const { move, moving, target, to } = active;
+    let nextBoard = null;
     if (target) {
       pieces = pieces.filter((p) => p !== target);
-      captured[moving.side].push(target.type);
       shatter(boardPos(to.file, to.rank), target.side, 36, 1.2);
     }
+    try {
+      nextBoard = engineGame.move(move.from, move.to);
+    } catch (error) {
+      matchResult = `engine error: ${move.from}-${move.to}`;
+      active = null;
+      return;
+    }
+    boardState = nextBoard || engineGame.exportJson();
     moving.file = to.file;
     moving.rank = to.rank;
+    syncPiecesFromBoard(boardState, moving, move.to);
+    if (boardState.checkMate) move.flag += "#";
+    else if (boardState.check) move.flag += "+";
+    move.type = moving.type;
+    moveLog.push(move);
     moveCursor += 1;
     ply += 1;
     if (move.flag.includes("#")) shatter(boardPos(to.file, to.rank), moving.side, 62, 1.35);
+    settleResult();
     active = null;
     nextMoveAt = now + 165;
+  }
+
+  function settleResult() {
+    if (!boardState || matchResult) return;
+    if (boardState.checkMate) {
+      const winner = boardState.turn === "white" ? "KIMI" : "CODEX";
+      matchResult = `checkmate - ${winner} wins`;
+    } else if (boardState.staleMate) {
+      matchResult = "stalemate - draw";
+    } else if (boardState.halfMove >= 100) {
+      matchResult = "draw - 50 move rule";
+    } else if (ply >= MAX_PLIES) {
+      matchResult = "draw - move cap";
+    }
   }
 
   function update(now, dt) {
@@ -586,18 +737,21 @@
       }
     }
 
-    const side = active?.move.side || script[moveCursor]?.side || "codex";
+    const side = active?.move.side || currentSide();
     text(board.x + 2, board.y - 2, `${side === "codex" ? ">  " : "   "}CODEX`, side === "codex" ? color.codexAlt : color.dim);
     text(board.x + 18, board.y - 2, `${side === "kimi" ? ">  " : "   "}KIMI`, side === "kimi" ? color.kimiAlt : color.dim);
 
     for (let rank = 0; rank < 8; rank += 1) text(board.x - 3, board.y + rank * board.sh + 1, String(8 - rank), color.dim);
     for (let file = 0; file < 8; file += 1) text(board.x + file * board.sw + 4, board.y + board.h + 1, FILES[file], color.dim);
 
-    if (moveCursor >= script.length) {
-      text(board.x, board.y + board.h + 3, "CHECKMATE  CODEX WINS", color.red);
+    if (!chessEngine) {
+      text(board.x, board.y + board.h + 3, "ENGINE MISSING", color.red);
+    } else if (matchResult) {
+      text(board.x, board.y + board.h + 3, matchResult.toUpperCase(), matchResult.includes("wins") ? color.red : color.dim);
+    } else if (aiThinking) {
+      text(board.x, board.y + board.h + 3, `${side.toUpperCase()} thinking`, side === "codex" ? color.codex : color.kimi);
     } else {
-      const next = script[moveCursor]?.side || "codex";
-      text(board.x, board.y + board.h + 3, `${next.toUpperCase()} to move`, next === "codex" ? color.codex : color.kimi);
+      text(board.x, board.y + board.h + 3, `${side.toUpperCase()} to move`, side === "codex" ? color.codex : color.kimi);
     }
   }
 
@@ -720,25 +874,28 @@
 
   function drawPanel() {
     const x = right.x + 3;
-    const gameDone = moveCursor >= script.length;
-    const side = active?.move.side || script[moveCursor]?.side || "codex";
-    const diff = gameDone ? 13 : captured.codex.reduce((sum, p) => sum + VALUE[p], 0) - captured.kimi.reduce((sum, p) => sum + VALUE[p], 0);
+    const gameDone = Boolean(matchResult);
+    const side = active?.move.side || currentSide();
+    const diff = materialDiff();
     replayButton = null;
+    const codexWon = matchResult.includes("CODEX wins") ? 1 : 0;
+    const kimiWon = matchResult.includes("KIMI wins") ? 1 : 0;
 
     text(x, 3, "v MATCH", color.header);
     text(x, 6, `${side === "codex" && !gameDone ? "> " : "  "}CODEX`, color.codex);
-    text(x + 20, 6, "white", color.dim);
-    text(x + 29, 6, "3", color.white);
+    text(x + 12, 6, matchPlayers.codex.name.padEnd(11).slice(0, 11), color.dim);
+    text(x + 29, 6, String(codexWon), color.white);
     text(x + 32, 6, "won", color.dim);
     text(x, 8, `${side === "kimi" && !gameDone ? "> " : "  "}KIMI`, color.kimi);
-    text(x + 20, 8, "black", color.dim);
-    text(x + 29, 8, "0", color.white);
+    text(x + 12, 8, matchPlayers.kimi.name.padEnd(11).slice(0, 11), color.dim);
+    text(x + 29, 8, String(kimiWon), color.white);
     text(x + 32, 8, "won", color.dim);
     text(x, 13, "ply", color.dim);
     text(x + 6, 13, String(ply), color.white);
     text(x + 15, 13, "move", color.dim);
     text(x + 22, 13, String(ply ? Math.ceil(ply / 2) : 0), color.white);
-    text(x, 15, gameDone ? "checkmate - CODEX wins" : `${side.toUpperCase()} to move`, gameDone ? color.red : side === "codex" ? color.codex : color.kimi);
+    const statusText = !chessEngine ? "engine missing" : gameDone ? matchResult : aiThinking ? `${side.toUpperCase()} thinking` : `${side.toUpperCase()} to move`;
+    text(x, 15, statusText.slice(0, 34), gameDone || !chessEngine ? color.red : side === "codex" ? color.codex : color.kimi);
     if (gameDone) {
       replayButton = { x, y: 17, w: 16, h: 1 };
       text(x, 17, "[ PLAY AGAIN ]", color.white);
@@ -751,16 +908,16 @@
     } else {
       const leading = diff > 0 ? "CODEX" : "KIMI";
       const bar = clamp(Math.round(Math.abs(diff)), 2, 16);
-      text(x, 24, `${leading} ${diff > 0 ? "+" : "-"}${Math.abs(diff)}`, diff > 0 ? color.codex : color.kimi);
+      text(x, 24, `${leading} +${Math.abs(diff)}`, diff > 0 ? color.codex : color.kimi);
       text(x, 26, BRAILLE_FULL.repeat(bar) + BRAILLE_DUST.repeat(16 - bar), color.blue);
       text(x, 28, `ahead by ${Math.abs(diff)} points`, color.dim);
     }
 
     text(x, 34, "v MOVES", color.header);
-    if (ply === 0) {
+    if (!moveLog.length) {
       text(x, 37, "no moves yet", color.dim);
     } else {
-      const visible = script.slice(0, moveCursor).map((m, i) => ({ ...m, ply: i + 1 })).reverse().slice(0, 10);
+      const visible = moveLog.map((m, i) => ({ ...m, ply: i + 1 })).reverse().slice(0, 10);
       visible.forEach((m, i) => {
         const row = 37 + i * 2;
         const moveNo = Math.ceil(m.ply / 2);
@@ -780,9 +937,7 @@
   }
 
   function movedTypeFor(move) {
-    const to = square(move.to);
-    const exact = pieces.find((p) => p.file === to.file && p.rank === to.rank && p.side === move.side);
-    return exact?.type || move.type || "pawn";
+    return move.type || "pawn";
   }
 
   function render() {
