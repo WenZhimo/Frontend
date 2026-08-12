@@ -19,6 +19,10 @@
         spellcheck="false"
         placeholder="blank = random 100-char ASCII seed"
       />
+      <div class="mode-toggle" role="group" aria-label="AI mode">
+        <button id="mode-replay" class="mode-button is-active" type="button" data-mode="deterministic" aria-pressed="true">REPLAY</button>
+        <button id="mode-live" class="mode-button" type="button" data-mode="live" aria-pressed="false">LIVE</button>
+      </div>
       <button id="seed-start" type="submit">START</button>
       <button id="seed-random" type="button">RANDOM</button>
       <button id="seed-copy" type="button">COPY</button>
@@ -31,11 +35,13 @@
       A simulated terminal screen. The chessboard, pieces, move list, material bar, ripples, captures,
       and trails are rendered by changing Braille dot-matrix glyphs inside a fixed terminal buffer.
       Enter an ASCII seed and press Start to replay the same match. Leave the seed empty to generate a
-      random 100-character seed. Press 1, 2, 3, and 4 for 0.5x, 1x, 2x, and 4x playback. Press R to
-      reroll with a new random seed. Press J and K to scroll the move list. Click Play Again after the
-      match ends to replay the current seed.
+      random 100-character seed. Replay mode makes the same seed reproduce the same match; Live mode
+      allows engines to use their native randomness and time-based search. Press 1, 2, 3, and 4 for
+      0.5x, 1x, 2x, and 4x playback. Press R to reroll with a new random seed. Press J and K to
+      scroll the move list. Click Play Again after the match ends to replay the current seed.
     </p>
   </main>
+  <script src="vendor/chess.browser.js"></script>
   <script src="vendor/js-chess-engine.browser.js"></script>
   <script src="app.js"></script>
 </body>

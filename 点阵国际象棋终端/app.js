@@ -6,6 +6,7 @@
   const seedRandomButton = document.getElementById("seed-random");
   const seedCopyButton = document.getElementById("seed-copy");
   const seedStatus = document.getElementById("seed-status");
+  const modeButtons = Array.from(document.querySelectorAll("[data-mode]"));
 
   const COLS = 126;
   const ROWS = 60;
@@ -15,7 +16,8 @@
   const TAG = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
   const FONT = '"Cascadia Mono", "Courier New", Consolas, monospace';
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const chessEngine = window.JSChessEngine;
+  const Chess = window.ChessJS?.Chess;
+  const jceEngine = window.JSChessEngine;
 
   const color = {
     page: "#020306",
@@ -69,12 +71,31 @@
   const ASCII_LAST = 126;
   const RANDOM_SEED_CHARS = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
   const SYMBOL_TO_TYPE = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+  const TYPE_TO_SYMBOL = { pawn: "p", knight: "n", bishop: "b", rook: "r", queen: "q", king: "k" };
+  const STOCKFISH_JS = "vendor/stockfish-18-lite-single.js";
+  const STOCKFISH_WASM = "stockfish-18-lite-single.wasm";
+  const MATCH_MODES = {
+    deterministic: { label: "REPLAY", detail: "deterministic replay" },
+    live: { label: "LIVE", detail: "full engine live" },
+  };
+  const DEFAULT_MATCH_MODE = "deterministic";
   const AI_ROSTER = [
-    { name: "JCE-SEARCH", source: "js-chess-engine", kind: "engine", level: 2, randomness: 60 },
-    { name: "JCE-DEEP", source: "js-chess-engine", kind: "engine", level: 3, randomness: 25 },
+    { name: "JCE-SPARK", source: "js-chess-engine", kind: "engine", level: 1, liveRandomness: 90 },
+    { name: "JCE-SEARCH", source: "js-chess-engine", kind: "engine", level: 2, liveRandomness: 60 },
+    { name: "JCE-DEEP", source: "js-chess-engine", kind: "engine", level: 3, liveRandomness: 25 },
+    { name: "JCE-ELITE", source: "js-chess-engine", kind: "engine", level: 4, liveRandomness: 8 },
     { name: "TACTIC", source: "local heuristic", kind: "tactic" },
     { name: "MOBILITY", source: "local heuristic", kind: "mobility" },
     { name: "GAMBIT", source: "local heuristic", kind: "gambit" },
+    { name: "CENTER", source: "local heuristic", kind: "center" },
+    { name: "TRADER", source: "local heuristic", kind: "trader" },
+    { name: "HUNTER", source: "local heuristic", kind: "hunter" },
+    { name: "SENTINEL", source: "local heuristic", kind: "sentinel" },
+    { name: "CHAOS", source: "local heuristic", kind: "chaos" },
+    { name: "STOCKFISH-DEPTH3", source: "stockfish.js", kind: "stockfish", depth: 3, liveMovetime: 120, liveSkill: 2 },
+    { name: "STOCKFISH-DEPTH5", source: "stockfish.js", kind: "stockfish", depth: 5, liveMovetime: 240, liveSkill: 6 },
+    { name: "STOCKFISH-DEPTH7", source: "stockfish.js", kind: "stockfish", depth: 7, liveMovetime: 420, liveSkill: 10 },
+    { name: "STOCKFISH-DEPTH9", source: "stockfish.js", kind: "stockfish", depth: 9, liveMovetime: 700, liveSkill: 14 },
   ];
 
   const pieceMasks = buildPieceMasks({
@@ -190,6 +211,7 @@
   let matchSeedText = "".padEnd(SEED_LENGTH, " ");
   let matchSeedCode = 1;
   let matchRng = () => 0.5;
+  let matchMode = DEFAULT_MATCH_MODE;
   let positionCounts = new Map();
   let aiMoveTimer = null;
   let aiMoveToken = 0;
@@ -232,6 +254,57 @@
     };
   };
   const seededUnit = (...parts) => hashUint32(`${matchSeedText}|${parts.join("|")}`, 0x7f4a7c15) / 4294967296;
+
+  function normalizeMatchMode(mode) {
+    return MATCH_MODES[mode] ? mode : DEFAULT_MATCH_MODE;
+  }
+
+  function isReplayMode() {
+    return matchMode === "deterministic";
+  }
+
+  function modeLabel(mode = matchMode) {
+    return MATCH_MODES[normalizeMatchMode(mode)].label;
+  }
+
+  function modeDetail(mode = matchMode) {
+    return MATCH_MODES[normalizeMatchMode(mode)].detail;
+  }
+
+  function modeTone() {
+    return isReplayMode() ? color.blue : color.red;
+  }
+
+  function modeRandom(...parts) {
+    return isReplayMode() ? seededUnit("mode-rng", ...parts) : Math.random();
+  }
+
+  function withSeededMathRandom(stream, fn) {
+    if (!isReplayMode()) return fn();
+    const originalRandom = Math.random;
+    Math.random = createRng(matchSeedText, stream);
+    try {
+      return fn();
+    } finally {
+      Math.random = originalRandom;
+    }
+  }
+
+  function syncModeButtons() {
+    modeButtons.forEach((button) => {
+      const active = button.dataset.mode === matchMode;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+  }
+
+  function setMatchMode(mode, restart = false) {
+    const nextMode = normalizeMatchMode(mode);
+    if (nextMode === matchMode && !restart) return;
+    matchMode = nextMode;
+    syncModeButtons();
+    if (restart) reset(performance.now());
+  }
 
   function buildPieceMasks(source) {
     const masks = {};
@@ -531,6 +604,39 @@
     return square(name.toLowerCase());
   }
 
+  function symbolFromChessPiece(piece) {
+    if (!piece) return null;
+    return piece.color === "w" ? piece.type.toUpperCase() : piece.type.toLowerCase();
+  }
+
+  function boardConfigFromGame(game = engineGame) {
+    if (!game) return null;
+    const fenParts = game.fen().split(" ");
+    const castling = fenParts[2] || "-";
+    const pieces = {};
+    game.board().flat().forEach((piece) => {
+      if (piece) pieces[piece.square.toUpperCase()] = symbolFromChessPiece(piece);
+    });
+    return {
+      pieces,
+      turn: game.turn() === "b" ? "black" : "white",
+      isFinished: game.isCheckmate() || game.isStalemate() || game.isDrawByFiftyMoves() || game.isThreefoldRepetition(),
+      check: game.isCheck(),
+      checkMate: game.isCheckmate(),
+      staleMate: game.isStalemate(),
+      castling: {
+        whiteShort: castling.includes("K"),
+        whiteLong: castling.includes("Q"),
+        blackShort: castling.includes("k"),
+        blackLong: castling.includes("q"),
+      },
+      enPassant: fenParts[3] && fenParts[3] !== "-" ? fenParts[3].toUpperCase() : null,
+      halfMove: Number(fenParts[4]) || 0,
+      fullMove: Number(fenParts[5]) || 1,
+      fen: game.fen(),
+    };
+  }
+
   function currentSide() {
     return boardState?.turn === "black" ? "black" : "white";
   }
@@ -576,6 +682,7 @@
   }
 
   function hasRuleDraw(config = boardState) {
+    if (engineGame) return engineGame.isDrawByFiftyMoves() || engineGame.isThreefoldRepetition();
     return halfMoveClock(config) >= FIFTY_MOVE_HALF_MOVES || currentPositionCount(config) >= 3;
   }
 
@@ -638,7 +745,7 @@
     if (!engineGame || !boardState || matchResult) return false;
     let moves = [];
     try {
-      moves = flattenMoves(engineGame.moves());
+      moves = legalMoves();
     } catch (error) {
       markEngineError(`engine error: ${playerName(currentSide())} legal move scan failed`);
       return true;
@@ -669,8 +776,39 @@
     return `${playerName(side)} ${suffix}`.slice(0, 34);
   }
 
+  function canUseStockfish() {
+    return typeof Worker === "function" && location.protocol !== "file:";
+  }
+
+  function availableAI() {
+    return AI_ROSTER.filter((ai) => {
+      if (ai.kind === "engine") return Boolean(jceEngine);
+      if (ai.kind === "stockfish") return canUseStockfish();
+      return true;
+    });
+  }
+
+  function findAI(name) {
+    return AI_ROSTER.find((ai) => ai.name === name) || null;
+  }
+
+  function resolveForcedPlayer(player) {
+    if (!player) return null;
+    if (typeof player === "string") return findAI(player);
+    if (player.name) return findAI(player.name) || player;
+    return null;
+  }
+
+  function pickPlayers(forcedPlayers = null) {
+    return {
+      white: resolveForcedPlayer(forcedPlayers?.white) || pickAI(),
+      black: resolveForcedPlayer(forcedPlayers?.black) || pickAI(),
+    };
+  }
+
   function pickAI() {
-    return AI_ROSTER[Math.floor(matchRng() * AI_ROSTER.length)];
+    const roster = availableAI();
+    return roster[Math.floor(matchRng() * roster.length)];
   }
 
   function pieceTypeFromSymbol(symbol) {
@@ -682,11 +820,32 @@
   }
 
   function pieceAt(config, squareId) {
-    return config?.pieces?.[squareId.toUpperCase()] || null;
+    return config?.pieces?.[squareId.toUpperCase()] || config?.pieces?.[squareId.toLowerCase()] || null;
   }
 
-  function flattenMoves(movesMap) {
-    return Object.entries(movesMap || {}).flatMap(([from, tos]) => tos.map((to) => ({ from, to })));
+  function normalizeMove(move) {
+    if (!move) return null;
+    return {
+      from: String(move.from).toLowerCase(),
+      to: String(move.to).toLowerCase(),
+      piece: move.piece || null,
+      captured: move.captured || null,
+      promotion: move.promotion || null,
+      flags: move.flags || "",
+      san: move.san || "",
+      after: move.after || null,
+      score: move.score ?? null,
+      nodes: move.nodes ?? null,
+    };
+  }
+
+  function flattenMoves(movesSource) {
+    if (Array.isArray(movesSource)) return movesSource.map(normalizeMove).filter(Boolean);
+    return Object.entries(movesSource || {}).flatMap(([from, tos]) => tos.map((to) => normalizeMove({ from, to })));
+  }
+
+  function legalMoves() {
+    return flattenMoves(engineGame?.moves({ verbose: true }) || []);
   }
 
   function materialDiff(config = boardState) {
@@ -707,53 +866,70 @@
     return JSON.parse(JSON.stringify(config));
   }
 
-  function seededJitter(move, salt = 0) {
-    return seededUnit("jitter", ply, move.from, move.to, salt);
+  function moveJitter(move, salt = 0) {
+    return modeRandom("jitter", ply, move.from, move.to, salt);
+  }
+
+  function configAfterMove(move) {
+    if (move.after) return boardConfigFromGame(new Chess(move.after));
+    const trial = new Chess(engineGame.fen());
+    trial.move({ from: move.from, to: move.to, promotion: move.promotion || "q" });
+    return boardConfigFromGame(trial);
   }
 
   function scoreMove(move, side, style) {
     const target = pieceAt(boardState, move.to);
-    let score = target ? VALUE[pieceTypeFromSymbol(target)] * 120 : 0;
+    const captured = move.captured || target;
+    let score = captured ? VALUE[pieceTypeFromSymbol(captured)] * 120 : 0;
     const from = squareFromEngine(move.from);
     const to = squareFromEngine(move.to);
     const center = 7 - Math.abs(to.file - 3.5) - Math.abs(to.rank - 3.5);
-    score += center * (style === "gambit" ? 8 : 5);
-    score += (style === "mobility" ? 2 : 0) * (Math.abs(to.file - from.file) + Math.abs(to.rank - from.rank));
+    const distance = Math.abs(to.file - from.file) + Math.abs(to.rank - from.rank);
+    score += center * (style === "center" ? 16 : style === "gambit" ? 8 : 5);
+    score += (style === "mobility" || style === "hunter" ? 3 : 0) * distance;
 
     let next = null;
     try {
-      next = chessEngine.move(cloneConfig(boardState), move.from, move.to);
-      score += materialScoreFor(next, side) * (style === "tactic" ? 24 : 12);
+      next = configAfterMove(move);
+      const nextGame = new Chess(next.fen);
+      const nextMobility = nextGame.moves().length;
+      score += materialScoreFor(next, side) * (style === "tactic" || style === "trader" ? 24 : 12);
       if (next.checkMate) score += 10000;
       if (next.check) score += 90;
-      if (style === "mobility") score += flattenMoves(chessEngine.moves(next)).length * 2;
+      if (style === "mobility") score += nextMobility * 2;
+      if (style === "sentinel") score -= nextMobility * 1.5;
     } catch (error) {
       return -999999;
     }
 
-    if (style === "gambit" && !target) score += seededJitter(move, 301) * 180;
-    return score + seededJitter(move, 701) * 18;
+    if (style === "gambit" && !captured) score += moveJitter(move, 301) * 180;
+    if (style === "hunter" && captured) score += 160;
+    if (style === "chaos") score += moveJitter(move, 901) * 320;
+    return score + moveJitter(move, 701) * 18;
   }
 
   function chooseHeuristicMove(player, side) {
-    const moves = flattenMoves(engineGame.moves());
+    const moves = legalMoves();
     if (!moves.length) return null;
     const scored = moves
       .map((move) => ({ ...move, score: scoreMove(move, side, player.kind) }))
       .sort((a, b) => b.score - a.score);
-    const width = player.kind === "gambit" ? 5 : 3;
+    const width = player.kind === "gambit" || player.kind === "chaos" ? 5 : 3;
     const pool = scored.slice(0, Math.min(width, scored.length));
-    return pool[Math.floor(seededUnit("pool", ply, player.name, side, pool.length) * pool.length)];
+    return pool[Math.floor(modeRandom("pool", ply, player.name, side, pool.length) * pool.length)];
   }
 
   function chooseEngineMove(player) {
-    const result = engineGame.ai({
+    if (!jceEngine) return null;
+    const jceGame = new jceEngine.Game(cloneConfig(boardState));
+    const options = {
       level: player.level,
       play: false,
       analysis: true,
-      randomness: 0,
+      randomness: isReplayMode() ? 0 : player.liveRandomness || 0,
       ttSizeMB: 0.5,
-    });
+    };
+    const result = withSeededMathRandom(`jce|${ply}|${player.name}|${engineGame.fen()}`, () => jceGame.ai(options));
     const move = result?.move ? Object.entries(result.move)[0] : null;
     if (!move) return null;
     return {
@@ -764,9 +940,92 @@
     };
   }
 
-  function chooseAIMove(player, side) {
-    if (!chessEngine || !engineGame) return null;
-    return player.kind === "engine" ? chooseEngineMove(player) : chooseHeuristicMove(player, side);
+  function stockfishWorkerPath() {
+    return `${STOCKFISH_JS}#${STOCKFISH_WASM}`;
+  }
+
+  function moveFromUci(uci) {
+    if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci)) return null;
+    return normalizeMove({
+      from: uci.slice(0, 2),
+      to: uci.slice(2, 4),
+      promotion: uci[4] || null,
+    });
+  }
+
+  function selectStockfishMove(bestUci, multiPvMoves, player) {
+    if (isReplayMode()) {
+      const width = Math.min(player.replayMultiPV || 1, multiPvMoves.size);
+      if (width > 1) {
+        const choices = Array.from(multiPvMoves.entries())
+          .sort(([a], [b]) => a - b)
+          .slice(0, width)
+          .map(([, uci]) => uci);
+        const index = Math.floor(seededUnit("stockfish-multipv", ply, player.name, engineGame.fen(), choices.length) * choices.length);
+        return moveFromUci(choices[index]) || moveFromUci(bestUci);
+      }
+    }
+    return moveFromUci(bestUci);
+  }
+
+  function chooseStockfishMove(player, timeoutMs = AI_MOVE_TIMEOUT_MS) {
+    if (!canUseStockfish()) return Promise.resolve(null);
+    return new Promise((resolve, reject) => {
+      let worker = null;
+      let finished = false;
+      const multiPvMoves = new Map();
+      const finish = (move, error = null) => {
+        if (finished) return;
+        finished = true;
+        window.clearTimeout(timer);
+        try {
+          worker?.terminate();
+        } catch {}
+        if (error) reject(error);
+        else resolve(move);
+      };
+      const timer = window.setTimeout(() => finish(null), timeoutMs);
+      try {
+        worker = new Worker(stockfishWorkerPath());
+      } catch (error) {
+        finish(null, error);
+        return;
+      }
+      worker.onerror = (event) => finish(null, new Error(event.message || "stockfish worker failed"));
+      worker.onmessage = (event) => {
+        const line = String(event.data || "");
+        if (line === "uciok") {
+          if (isReplayMode()) {
+            worker.postMessage("setoption name Threads value 1");
+            worker.postMessage("setoption name Hash value 16");
+            worker.postMessage(`setoption name MultiPV value ${player.replayMultiPV || 1}`);
+          } else {
+            worker.postMessage(`setoption name Skill Level value ${player.liveSkill ?? 8}`);
+            worker.postMessage("setoption name MultiPV value 1");
+          }
+          worker.postMessage("ucinewgame");
+          worker.postMessage("isready");
+        } else if (line === "readyok") {
+          worker.postMessage(`position fen ${engineGame.fen()}`);
+          if (isReplayMode()) worker.postMessage(`go depth ${player.depth || 5}`);
+          else worker.postMessage(`go movetime ${player.liveMovetime || player.movetime || 250}`);
+        } else if (line.startsWith("info ")) {
+          const match = line.match(/\bmultipv\s+(\d+)\b.*\bpv\s+([a-h][1-8][a-h][1-8][qrbn]?)/);
+          if (match) multiPvMoves.set(Number(match[1]), match[2]);
+        } else if (line.startsWith("bestmove")) {
+          const uci = line.split(/\s+/)[1];
+          finish(selectStockfishMove(uci, multiPvMoves, player));
+        }
+      };
+      worker.postMessage("uci");
+    });
+  }
+
+  function chooseAIMove(player, side, timeoutMs = AI_MOVE_TIMEOUT_MS) {
+    if (!engineGame) return null;
+    if (player.kind === "engine") return chooseEngineMove(player);
+    if (player.kind === "stockfish") return chooseStockfishMove(player, timeoutMs);
+    return chooseHeuristicMove(player, side);
   }
 
   function boardPos(file, rank) {
@@ -807,6 +1066,8 @@
   }
 
   function reset(now = performance.now(), options = {}) {
+    if (options.mode) matchMode = normalizeMatchMode(options.mode);
+    syncModeButtons();
     clearAiMoveTimer();
     aiMoveToken += 1;
     pieces = [];
@@ -825,8 +1086,8 @@
     ply = 0;
     prepareMatchSeed(Boolean(options.forceRandom), options.seedOverride ?? null);
     matchPlayers = { white: null, black: null };
-    engineGame = chessEngine ? new chessEngine.Game() : null;
-    boardState = engineGame?.exportJson() || null;
+    engineGame = new Chess();
+    boardState = boardConfigFromGame(engineGame);
     positionCounts = new Map();
     if (boardState) recordPosition(boardState);
     if (boardState) syncPiecesFromBoard(boardState);
@@ -834,14 +1095,7 @@
 
     const token = ++selectionToken;
     if (options.immediatePlayers) {
-      if (!chessEngine) {
-        selectingPlayers = false;
-        matchEndReason = "engine-missing";
-        matchResult = "engine missing";
-        winnerSide = null;
-        return;
-      }
-      matchPlayers = { white: pickAI(), black: pickAI() };
+      matchPlayers = pickPlayers(options.players);
       selectingPlayers = false;
       nextMoveAt = Number.POSITIVE_INFINITY;
       return;
@@ -849,14 +1103,7 @@
 
     window.setTimeout(() => {
       if (token !== selectionToken) return;
-      if (!chessEngine) {
-        selectingPlayers = false;
-        matchEndReason = "engine-missing";
-        matchResult = "engine missing";
-        winnerSide = null;
-        return;
-      }
-      matchPlayers = { white: pickAI(), black: pickAI() };
+      matchPlayers = pickPlayers(options.players);
       selectingPlayers = false;
       nextMoveAt = performance.now() + playbackDelay(520);
     }, playbackDelay(760));
@@ -867,14 +1114,18 @@
   }
 
   function buildMoveRecord(choice, side, player) {
-    const targetSymbol = pieceAt(boardState, choice.to);
+    const capturedSymbol = choice.captured || pieceAt(boardState, choice.to);
+    const movedSymbol = choice.piece || pieceAt(boardState, choice.from);
+    const promotion = choice.promotion || null;
+    const promotionFlag = promotion ? `=${TAG[pieceTypeFromSymbol(promotion)] || promotion.toUpperCase()}` : "";
     return {
       side,
       from: choice.from.toLowerCase(),
       to: choice.to.toLowerCase(),
-      flag: targetSymbol ? "x" : "",
-      type: pieceTypeFromSymbol(pieceAt(boardState, choice.from)),
-      capturedType: targetSymbol ? pieceTypeFromSymbol(targetSymbol) : null,
+      flag: `${capturedSymbol || choice.flags?.includes("c") || choice.flags?.includes("e") ? "x" : ""}${promotionFlag}`,
+      type: pieceTypeFromSymbol(movedSymbol),
+      capturedType: capturedSymbol ? pieceTypeFromSymbol(capturedSymbol) : null,
+      promotion: promotion ? pieceTypeFromSymbol(promotion) : null,
       ai: player.name,
       source: player.source,
       score: choice.score,
@@ -895,12 +1146,12 @@
     markCheckmateWin(move.side);
   }
 
-  function chooseAIMoveTimed(player, side, timeoutMs = AI_MOVE_TIMEOUT_MS) {
+  async function chooseAIMoveTimed(player, side, timeoutMs = AI_MOVE_TIMEOUT_MS) {
     const startedAt = performance.now();
     let choice = null;
     let error = null;
     try {
-      choice = chooseAIMove(player, side);
+      choice = await chooseAIMove(player, side, timeoutMs);
     } catch (caught) {
       error = caught;
     }
@@ -910,7 +1161,7 @@
 
   function startMove(now) {
     if (paused || active || aiThinking || selectingPlayers || !engineGame || !boardState || matchResult) return;
-    if (boardState.isFinished || boardState.checkMate || boardState.staleMate || hasRuleDraw()) {
+    if (boardState.checkMate || boardState.staleMate || hasRuleDraw()) {
       settleResult();
       return;
     }
@@ -919,7 +1170,7 @@
     aiThinking = true;
     const token = ++aiMoveToken;
     clearAiMoveTimer();
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       if (token !== aiMoveToken || paused || active || matchResult) {
         aiThinking = false;
         return;
@@ -932,7 +1183,7 @@
         markTimeoutLoss(side, AI_MOVE_TIMEOUT_MS);
       }, AI_MOVE_TIMEOUT_MS);
 
-      const { choice, error, elapsedMs, timedOut } = chooseAIMoveTimed(player, side, AI_MOVE_TIMEOUT_MS);
+      const { choice, error, elapsedMs, timedOut } = await chooseAIMoveTimed(player, side, AI_MOVE_TIMEOUT_MS);
       clearAiMoveTimer();
       if (token !== aiMoveToken || matchResult) return;
       if (timedOut) {
@@ -993,7 +1244,6 @@
 
   function finishMove(now) {
     const { move, moving, target, to } = active;
-    let nextBoard = null;
     if (isKingCapture(move)) {
       recordTerminalKingCapture(move);
       shatter(boardPos(to.file, to.rank), move.side, 62, 1.35);
@@ -1005,13 +1255,13 @@
       shatter(boardPos(to.file, to.rank), target.side, 36, 1.2);
     }
     try {
-      nextBoard = engineGame.move(move.from, move.to);
+      engineGame.move({ from: move.from, to: move.to, promotion: TYPE_TO_SYMBOL[move.promotion] || "q" });
     } catch (error) {
       markEngineError(`engine error: ${move.from}-${move.to}`);
       active = null;
       return;
     }
-    boardState = nextBoard || engineGame.exportJson();
+    boardState = boardConfigFromGame(engineGame);
     moving.file = to.file;
     moving.rank = to.rank;
     syncPiecesFromBoard(boardState, moving, move.to);
@@ -1049,18 +1299,17 @@
   function applyInstantMove(choice, side) {
     const player = matchPlayers[side];
     const move = buildMoveRecord(choice, side, player);
-    let nextBoard = null;
     if (isKingCapture(move)) {
       recordTerminalKingCapture(move);
       return true;
     }
     try {
-      nextBoard = engineGame.move(move.from, move.to);
+      engineGame.move({ from: move.from, to: move.to, promotion: TYPE_TO_SYMBOL[move.promotion] || "q" });
     } catch (error) {
       markEngineError(`engine error: ${move.from}-${move.to}`);
       return false;
     }
-    boardState = nextBoard || engineGame.exportJson();
+    boardState = boardConfigFromGame(engineGame);
     if (boardState.checkMate) move.flag += "#";
     else if (boardState.check) move.flag += "+";
     moveLog.push(move);
@@ -1083,6 +1332,7 @@
       to: move.to,
       flag: move.flag,
       capturedType: move.capturedType,
+      promotion: move.promotion,
     };
   }
 
@@ -1091,6 +1341,8 @@
       seed: matchSeedText,
       seedLength: matchSeedText.length,
       seedDigest: seedDigest(),
+      mode: matchMode,
+      modeLabel: modeLabel(),
       selectingPlayers,
       players: {
         white: matchPlayers.white?.name || null,
@@ -1116,6 +1368,7 @@
     const snapshot = publicState();
     return JSON.stringify({
       seed: snapshot.seed,
+      mode: snapshot.mode,
       players: snapshot.players,
       result: snapshot.result,
       resultReason: snapshot.resultReason,
@@ -1125,15 +1378,15 @@
     });
   }
 
-  function runHeadlessMatch(seed, options = {}) {
+  async function runHeadlessMatch(seed, options = {}) {
     const moveTimeoutMs = Math.max(1, Number(options.moveTimeoutMs) || AI_MOVE_TIMEOUT_MS);
     const startedAt = performance.now();
     paused = true;
-    reset(performance.now(), { seedOverride: seed, immediatePlayers: true });
+    reset(performance.now(), { seedOverride: seed, immediatePlayers: true, players: options.players, mode: options.mode });
     paused = true;
 
     while (!matchResult && engineGame && boardState) {
-      if (boardState.isFinished || boardState.checkMate || boardState.staleMate || hasRuleDraw()) {
+      if (boardState.checkMate || boardState.staleMate || hasRuleDraw()) {
         settleResult();
         break;
       }
@@ -1141,7 +1394,7 @@
 
       const side = currentSide();
       const player = matchPlayers[side];
-      const { choice, error, elapsedMs, timedOut } = chooseAIMoveTimed(player, side, moveTimeoutMs);
+      const { choice, error, elapsedMs, timedOut } = await chooseAIMoveTimed(player, side, moveTimeoutMs);
       if (timedOut) {
         markTimeoutLoss(side, elapsedMs);
         break;
@@ -1269,9 +1522,7 @@
     for (let rank = 0; rank < 8; rank += 1) text(board.x - 3, board.y + rank * board.sh + 1, String(8 - rank), color.dim);
     for (let file = 0; file < 8; file += 1) text(board.x + file * board.sw + 4, board.y + board.h + 1, FILES[file], color.dim);
 
-    if (!chessEngine) {
-      text(board.x, board.y + board.h + 3, "ENGINE MISSING", color.red);
-    } else if (selectingPlayers) {
+    if (selectingPlayers) {
       text(board.x, board.y + board.h + 3, "selecting AI players", color.header);
     } else if (matchResult) {
       text(board.x, board.y + board.h + 3, matchResult.toUpperCase(), matchResult.includes("wins") ? color.red : color.dim);
@@ -1411,7 +1662,7 @@
     text(x, 3, "v MATCH", color.header);
     if (selectingPlayers) {
       text(x, 6, "CHOOSING PLAYERS", color.header);
-      text(x, 9, "sampling local AI roster", color.dim);
+      text(x, 9, modeDetail(), modeTone());
       text(x, 12, `seed ${seedDigest()}`, color.dim);
       for (let y = 2; y < 42; y += 1) put(right.x + right.w - 2, y, BRAILLE_FULL, color.blue, "#003852");
       for (let y = 42; y < right.y + right.h - 2; y += 1) put(right.x + right.w - 2, y, BRAILLE_DUST, "#13222a", color.black);
@@ -1426,12 +1677,13 @@
     text(x, 8, `${side === "black" && !gameDone ? "> " : "  "}${playerLabel("black", 18)}`, color.blackSide);
     text(x + 25, 8, String(blackWon), color.white);
     text(x + 28, 8, "won", color.dim);
+    text(x, 11, `mode ${modeLabel()}`, modeTone());
     text(x, 13, "ply", color.dim);
     text(x + 6, 13, String(ply), color.white);
     text(x + 15, 13, "move", color.dim);
     text(x + 22, 13, String(ply ? Math.ceil(ply / 2) : 0), color.white);
-    const statusText = !chessEngine ? "engine missing" : gameDone ? matchResult : aiThinking ? activePlayerPhrase(side, "thinking") : activePlayerPhrase(side, "to move");
-    text(x, 15, statusText.slice(0, 34), gameDone || !chessEngine ? color.red : sideTone(side));
+    const statusText = gameDone ? matchResult : aiThinking ? activePlayerPhrase(side, "thinking") : activePlayerPhrase(side, "to move");
+    text(x, 15, statusText.slice(0, 34), gameDone ? color.red : sideTone(side));
     if (!gameDone) text(x, 17, `seed ${seedDigest()}`, color.dim);
     if (gameDone) {
       replayButton = { x, y: 17, w: 16, h: 1 };
@@ -1575,6 +1827,12 @@
     copyCurrentSeed();
     releaseControlFocus();
   });
+  modeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setMatchMode(button.dataset.mode, true);
+      releaseControlFocus();
+    });
+  });
 
   function shouldLetControlHandleKey(event) {
     const target = event.target;
@@ -1611,6 +1869,7 @@
     canvas.style.cursor = "default";
   });
 
+  syncModeButtons();
   reset(performance.now());
   window.__dotChessState = publicState;
   window.__dotChessTest = {
@@ -1618,6 +1877,20 @@
     defaultMoveTimeoutMs: AI_MOVE_TIMEOUT_MS,
     normalizeSeed,
     generateAsciiSeed,
+    mode: () => matchMode,
+    setMode: (mode) => setMatchMode(mode),
+    matchModes: () => Object.keys(MATCH_MODES),
+    availableAI: () => availableAI().map(({ name, source, kind, level, liveRandomness, depth, replayMultiPV, liveMovetime, liveSkill }) => ({
+      name,
+      source,
+      kind,
+      level,
+      liveRandomness,
+      depth,
+      replayMultiPV,
+      liveMovetime,
+      liveSkill,
+    })),
     runMatch: runHeadlessMatch,
   };
   requestAnimationFrame(frame);

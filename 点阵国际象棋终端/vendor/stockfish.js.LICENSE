@@ -1,0 +1,10 @@
+Stockfish.js 18
+Copyright (c) 2026 Chess.com, LLC
+
+Source package: stockfish@18.0.8
+Repository: https://github.com/nmrugg/stockfish.js
+License: GPL-3.0
+
+The bundled files stockfish-18-lite-single.js and
+stockfish-18-lite-single.wasm are included from the stockfish npm package.
+The JavaScript bundle also carries the upstream license header.

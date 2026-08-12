@@ -13,6 +13,7 @@
     MOVE_TIMEOUT_MS=10000
     MATCH_TIMEOUT_MS=120000
     OUTPUT=path/to/report.json
+    MATCH_MODE=deterministic
     CHROME_PATH=C:/Program Files/Google/Chrome/Application/chrome.exe
 */
 
@@ -42,6 +43,7 @@ const config = {
   moveTimeoutMs: readPositiveInt("MOVE_TIMEOUT_MS", 10000),
   matchTimeoutMs: readPositiveInt("MATCH_TIMEOUT_MS", 120000),
   output: process.env.OUTPUT || path.join(PROJECT_ROOT, "test-results", `determinism-${timestamp()}.json`),
+  mode: process.env.MATCH_MODE || "deterministic",
   chromePath: process.env.CHROME_PATH || DEFAULT_CHROME,
 };
 
@@ -84,8 +86,8 @@ async function runOneMatch(browser, seed, runIndex) {
   try {
     const match = await withTimeout(
       page.evaluate(
-        ({ seed: pageSeed, moveTimeoutMs }) => window.__dotChessTest.runMatch(pageSeed, { moveTimeoutMs }),
-        { seed, moveTimeoutMs: config.moveTimeoutMs },
+        ({ seed: pageSeed, moveTimeoutMs, mode }) => window.__dotChessTest.runMatch(pageSeed, { moveTimeoutMs, mode }),
+        { seed, moveTimeoutMs: config.moveTimeoutMs, mode: config.mode },
       ),
       config.matchTimeoutMs,
       `seed run ${runIndex}`,
@@ -106,6 +108,7 @@ async function runOneMatch(browser, seed, runIndex) {
       signature: JSON.stringify({ seed, resultReason: "harness-timeout", error: error.message }),
       durationMs: config.matchTimeoutMs,
       moveTimeoutMs: config.moveTimeoutMs,
+      mode: config.mode,
     };
   } finally {
     await page.close().catch(() => {});

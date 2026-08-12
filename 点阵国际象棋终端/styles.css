@@ -35,7 +35,7 @@ body {
 
 .seed-bar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto auto;
   align-items: center;
   gap: 8px;
   min-height: 34px;
@@ -77,6 +77,30 @@ body {
 .seed-bar button {
   padding: 0 10px;
   cursor: pointer;
+}
+
+.mode-toggle {
+  display: inline-grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 0;
+  border: 1px solid #2b3446;
+  background: #020306;
+}
+
+.seed-bar .mode-button {
+  min-width: 58px;
+  border: 0;
+  border-left: 1px solid #2b3446;
+  color: #7a8397;
+}
+
+.seed-bar .mode-button:first-child {
+  border-left: 0;
+}
+
+.seed-bar .mode-button.is-active {
+  background: #0b1e27;
+  color: #6ed5ec;
 }
 
 .seed-bar button:hover,
@@ -135,6 +159,15 @@ body {
 
   .seed-bar {
     grid-template-columns: auto 1fr auto auto;
+  }
+
+  .mode-toggle {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .seed-bar .mode-button {
+    width: 100%;
   }
 
   #seed-random,
