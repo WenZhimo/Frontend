@@ -215,6 +215,7 @@
   let positionCounts = new Map();
   let aiMoveTimer = null;
   let aiMoveToken = 0;
+  let stockfishSessions = new Map();
   let paused = false;
   let playbackSpeedIndex = 1;
   let lastFrame = 0;
@@ -694,6 +695,7 @@
   function markTimeoutLoss(side, elapsedMs = AI_MOVE_TIMEOUT_MS) {
     if (matchResult) return;
     clearAiMoveTimer();
+    clearStockfishSessions();
     aiThinking = false;
     active = null;
     nextMoveAt = Number.POSITIVE_INFINITY;
@@ -704,6 +706,8 @@
   }
 
   function markEngineError(message) {
+    clearAiMoveTimer();
+    clearStockfishSessions();
     matchEndReason = "engine-error";
     matchResult = message;
     winnerSide = null;
@@ -716,6 +720,7 @@
   function markCheckmateWin(side) {
     if (matchResult) return;
     clearAiMoveTimer();
+    clearStockfishSessions();
     aiThinking = false;
     active = null;
     timeoutSide = null;
@@ -728,6 +733,7 @@
   function markDraw(reason, message) {
     if (matchResult) return;
     clearAiMoveTimer();
+    clearStockfishSessions();
     aiThinking = false;
     active = null;
     timeoutSide = null;
@@ -968,63 +974,131 @@
     return moveFromUci(bestUci);
   }
 
-  function chooseStockfishMove(player, timeoutMs = AI_MOVE_TIMEOUT_MS) {
+  function stockfishSessionKey(player, side) {
+    return `${side}|${matchMode}|${player.name}`;
+  }
+
+  function configureStockfishWorker(worker, player) {
+    if (isReplayMode()) {
+      worker.postMessage("setoption name Threads value 1");
+      worker.postMessage("setoption name Hash value 16");
+      worker.postMessage(`setoption name MultiPV value ${player.replayMultiPV || 1}`);
+    } else {
+      worker.postMessage(`setoption name Skill Level value ${player.liveSkill ?? 8}`);
+      worker.postMessage("setoption name MultiPV value 1");
+    }
+    worker.postMessage("ucinewgame");
+    worker.postMessage("isready");
+  }
+
+  function completeStockfishSearch(session, move = null, error = null) {
+    const current = session.current;
+    if (!current) return;
+    session.current = null;
+    window.clearTimeout(current.timer);
+    if (error) current.reject(error);
+    else current.resolve(move);
+  }
+
+  function disposeStockfishSession(session, error = null) {
+    if (!session) return;
+    stockfishSessions.delete(session.key);
+    if (session.current) completeStockfishSearch(session, null, error);
+    else if (error) session.rejectReady?.(error);
+    try {
+      session.worker?.terminate();
+    } catch {}
+  }
+
+  function clearStockfishSessions() {
+    Array.from(stockfishSessions.values()).forEach((session) => disposeStockfishSession(session));
+    stockfishSessions.clear();
+  }
+
+  function createStockfishSession(player, side) {
+    const key = stockfishSessionKey(player, side);
+    const session = {
+      key,
+      player,
+      side,
+      worker: new Worker(stockfishWorkerPath()),
+      current: null,
+      ready: null,
+      resolveReady: null,
+      rejectReady: null,
+    };
+    session.ready = new Promise((resolve, reject) => {
+      session.resolveReady = resolve;
+      session.rejectReady = reject;
+    });
+    session.worker.onerror = (event) => {
+      disposeStockfishSession(session, new Error(event.message || "stockfish worker failed"));
+    };
+    session.worker.onmessage = (event) => {
+      const line = String(event.data || "");
+      if (line === "uciok") {
+        configureStockfishWorker(session.worker, player);
+      } else if (line === "readyok") {
+        session.resolveReady?.();
+      } else if (line.startsWith("info ") && session.current) {
+        const match = line.match(/\bmultipv\s+(\d+)\b.*\bpv\s+([a-h][1-8][a-h][1-8][qrbn]?)/);
+        if (match) session.current.multiPvMoves.set(Number(match[1]), match[2]);
+      } else if (line.startsWith("bestmove") && session.current) {
+        const uci = line.split(/\s+/)[1];
+        completeStockfishSearch(session, selectStockfishMove(uci, session.current.multiPvMoves, player));
+      }
+    };
+    session.worker.postMessage("uci");
+    stockfishSessions.set(key, session);
+    return session;
+  }
+
+  function stockfishSession(player, side) {
+    const key = stockfishSessionKey(player, side);
+    return stockfishSessions.get(key) || createStockfishSession(player, side);
+  }
+
+  function chooseStockfishMove(player, side, timeoutMs = AI_MOVE_TIMEOUT_MS) {
     if (!canUseStockfish()) return Promise.resolve(null);
+    let session = null;
+    try {
+      session = stockfishSession(player, side);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     return new Promise((resolve, reject) => {
-      let worker = null;
-      let finished = false;
-      const multiPvMoves = new Map();
-      const finish = (move, error = null) => {
-        if (finished) return;
-        finished = true;
-        window.clearTimeout(timer);
-        try {
-          worker?.terminate();
-        } catch {}
-        if (error) reject(error);
-        else resolve(move);
-      };
-      const timer = window.setTimeout(() => finish(null), timeoutMs);
-      try {
-        worker = new Worker(stockfishWorkerPath());
-      } catch (error) {
-        finish(null, error);
+      if (session.current) {
+        reject(new Error("stockfish worker is already searching"));
         return;
       }
-      worker.onerror = (event) => finish(null, new Error(event.message || "stockfish worker failed"));
-      worker.onmessage = (event) => {
-        const line = String(event.data || "");
-        if (line === "uciok") {
-          if (isReplayMode()) {
-            worker.postMessage("setoption name Threads value 1");
-            worker.postMessage("setoption name Hash value 16");
-            worker.postMessage(`setoption name MultiPV value ${player.replayMultiPV || 1}`);
-          } else {
-            worker.postMessage(`setoption name Skill Level value ${player.liveSkill ?? 8}`);
-            worker.postMessage("setoption name MultiPV value 1");
-          }
-          worker.postMessage("ucinewgame");
-          worker.postMessage("isready");
-        } else if (line === "readyok") {
-          worker.postMessage(`position fen ${engineGame.fen()}`);
-          if (isReplayMode()) worker.postMessage(`go depth ${player.depth || 5}`);
-          else worker.postMessage(`go movetime ${player.liveMovetime || player.movetime || 250}`);
-        } else if (line.startsWith("info ")) {
-          const match = line.match(/\bmultipv\s+(\d+)\b.*\bpv\s+([a-h][1-8][a-h][1-8][qrbn]?)/);
-          if (match) multiPvMoves.set(Number(match[1]), match[2]);
-        } else if (line.startsWith("bestmove")) {
-          const uci = line.split(/\s+/)[1];
-          finish(selectStockfishMove(uci, multiPvMoves, player));
-        }
+      const current = {
+        resolve,
+        reject,
+        multiPvMoves: new Map(),
+        timer: null,
       };
-      worker.postMessage("uci");
+      current.timer = window.setTimeout(() => {
+        try {
+          session.worker.postMessage("stop");
+        } catch {}
+        disposeStockfishSession(session);
+      }, timeoutMs);
+      session.current = current;
+      session.ready
+        .then(() => {
+          if (session.current !== current) return;
+          session.worker.postMessage(`position fen ${engineGame.fen()}`);
+          if (isReplayMode()) session.worker.postMessage(`go depth ${player.depth || 5}`);
+          else session.worker.postMessage(`go movetime ${player.liveMovetime || player.movetime || 250}`);
+        })
+        .catch((error) => disposeStockfishSession(session, error));
     });
   }
 
   function chooseAIMove(player, side, timeoutMs = AI_MOVE_TIMEOUT_MS) {
     if (!engineGame) return null;
     if (player.kind === "engine") return chooseEngineMove(player);
-    if (player.kind === "stockfish") return chooseStockfishMove(player, timeoutMs);
+    if (player.kind === "stockfish") return chooseStockfishMove(player, side, timeoutMs);
     return chooseHeuristicMove(player, side);
   }
 
@@ -1069,6 +1143,7 @@
     if (options.mode) matchMode = normalizeMatchMode(options.mode);
     syncModeButtons();
     clearAiMoveTimer();
+    clearStockfishSessions();
     aiMoveToken += 1;
     pieces = [];
     fragments = [];
@@ -1217,7 +1292,7 @@
         return;
       }
 
-      primeActiveMove(now, move, from, to);
+      primeActiveMove(performance.now(), move, from, to);
     }, playbackDelay(30, 0));
   }
 
@@ -1283,9 +1358,7 @@
     if (!boardState || matchResult) return;
     if (boardState.checkMate) {
       const winner = boardState.turn === "white" ? "black" : "white";
-      winnerSide = winner;
-      matchEndReason = "checkmate";
-      matchResult = `checkmate - ${playerName(winner)} wins`;
+      markCheckmateWin(winner);
     } else if (boardState.staleMate) {
       markStalemateDraw();
     } else if (halfMoveClock() >= FIFTY_MOVE_HALF_MOVES) {
@@ -1413,6 +1486,7 @@
     }
 
     const snapshot = publicState();
+    clearStockfishSessions();
     return {
       ...snapshot,
       signature: matchSignature(),
