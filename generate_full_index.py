@@ -65,7 +65,7 @@ def generate_tree_html(current_dir):
         if sub_html:
             html += f'''
             <li class="folder-item">
-                <details> 
+                <details>
                     <summary class="folder-name"><span class="icon">📂</span>{d}</summary>
                     {sub_html}
                 </details>
@@ -249,9 +249,11 @@ def main():
 </html>
     """
 
+    full_html = "\n".join(line.rstrip() for line in full_html.splitlines()) + "\n"
+
     with open(OUTPUT_FILENAME, 'w', encoding='utf-8') as f:
         f.write(full_html)
-        print(f"✅ 更新完成！Markdown 文件现在指向渲染页面: {OUTPUT_FILENAME}")
+        print(f"Done. Markdown files now point to rendered pages: {OUTPUT_FILENAME}")
 
 if __name__ == "__main__":
     main()
