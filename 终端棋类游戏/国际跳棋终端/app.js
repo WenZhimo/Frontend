@@ -51,8 +51,8 @@
     whiteAlt: "#e7e9e4",
     blackStone: "#f0a245",
     blackAlt: "#ffd06f",
-    whiteCrown: "#fff08a",
-    blackCrown: "#fff9e8",
+    whiteCrown: "#ff5d73",
+    blackCrown: "#6ed5ec",
     blue: "#6ed5ec",
     red: "#ff4e59",
     win: "#ff4e59",
@@ -81,8 +81,8 @@
   const layout = {
     left: { x: 1, y: 1, w: 88, h: 58 },
     right: { x: 92, y: 1, w: 39, h: 58 },
-    boardBox: { x: 8, y: 7, w: 74, h: 45 },
-    board: { x: 10, y: 7, cellW: 7, cellH: 4 },
+    boardBox: { x: 8, y: 7, w: 74, h: 49 },
+    board: { x: 10, y: 11, cellW: 7, cellH: 4 },
   };
 
   const state = {
@@ -739,23 +739,36 @@
     const sx = Math.round(pos.x * DOT_W);
     const sy = Math.round(pos.y * DOT_H);
     const fg = sideCrownColor(side);
-    const dots = [
-      [-4, -4, 0.9],
-      [0, -5, 1],
-      [4, -4, 0.9],
-      [-3, -2, 1],
-      [-1, -2, 0.92],
-      [1, -2, 0.92],
-      [3, -2, 1],
-      [-4, 0, 0.96],
-      [-2, 0, 0.88],
-      [0, 0, 1],
-      [2, 0, 0.88],
-      [4, 0, 0.96],
-      [-2, 2, 0.9],
-      [0, 2, 0.98],
-      [2, 2, 0.9],
-    ];
+    const dots = side === 1
+      ? [
+          [0, -5, 1],
+          [-2, -4, 0.96],
+          [2, -4, 0.96],
+          [-4, -2, 0.94],
+          [0, -2, 1],
+          [4, -2, 0.94],
+          [-2, 0, 0.98],
+          [2, 0, 0.98],
+          [0, 2, 1],
+          [-2, 3, 0.9],
+          [2, 3, 0.9],
+        ]
+      : [
+          [-4, -5, 0.92],
+          [0, -5, 1],
+          [4, -5, 0.92],
+          [-5, -2, 0.96],
+          [-3, -2, 1],
+          [-1, -2, 0.94],
+          [1, -2, 0.94],
+          [3, -2, 1],
+          [5, -2, 0.96],
+          [-4, 1, 0.98],
+          [-2, 1, 0.9],
+          [0, 1, 1],
+          [2, 1, 0.9],
+          [4, 1, 0.98],
+        ];
     for (const [dx, dy, power] of dots) {
       putDotSub(sx + dx, sy + dy, fg, (1.22 + power * 0.16) * fade);
       putDotSub(sx + dx + 1, sy + dy, fg, (1.08 + power * 0.12) * fade);
@@ -822,7 +835,7 @@
     const origin = centerOfCell(mark.x, mark.y);
     const cx = Math.round(origin.x * DOT_W);
     const cy = Math.round(origin.y * DOT_H);
-    const beamTop = (layout.board.y - 1) * DOT_H;
+    const beamTop = layout.boardBox.y * DOT_H;
     const beamBottom = Math.round(lerp(beamTop, cy + 8, smooth(clamp(age / 0.34, 0, 1))));
     const beamFade = 1 - smooth(clamp((age - 0.68) / 0.32, 0, 1));
     const beamWidth = lerp(2.2, 6.2, Math.sin(Math.min(age, 0.5) * Math.PI));
