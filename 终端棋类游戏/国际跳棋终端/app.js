@@ -47,10 +47,12 @@
     dim: "#586472",
     muted: "#7a8397",
     header: "#b8c0ca",
-    whiteStone: "#f7ffff",
-    whiteAlt: "#aaf6ff",
+    whiteStone: "#ffffff",
+    whiteAlt: "#e7e9e4",
     blackStone: "#f0a245",
     blackAlt: "#ffd06f",
+    whiteCrown: "#fff08a",
+    blackCrown: "#fff9e8",
     blue: "#6ed5ec",
     red: "#ff4e59",
     win: "#ff4e59",
@@ -252,6 +254,10 @@
 
   function sideEffectColor(side) {
     return side === 1 ? color.blue : color.red;
+  }
+
+  function sideCrownColor(side) {
+    return side === 1 ? color.whiteCrown : color.blackCrown;
   }
 
   function sidePlayer(side) {
@@ -727,10 +733,27 @@
   function drawCrown(pos, side, fade) {
     const sx = Math.round(pos.x * DOT_W);
     const sy = Math.round(pos.y * DOT_H);
-    const fg = sideAltColor(side);
-    for (let i = -4; i <= 4; i += 2) {
-      putDotSub(sx + i, sy - 6, fg, 0.82 * fade);
-      putDotSub(sx + i / 2, sy - 4, fg, 0.68 * fade);
+    const fg = sideCrownColor(side);
+    const dots = [
+      [-4, -4, 0.9],
+      [0, -5, 1],
+      [4, -4, 0.9],
+      [-3, -2, 1],
+      [-1, -2, 0.92],
+      [1, -2, 0.92],
+      [3, -2, 1],
+      [-4, 0, 0.96],
+      [-2, 0, 0.88],
+      [0, 0, 1],
+      [2, 0, 0.88],
+      [4, 0, 0.96],
+      [-2, 2, 0.9],
+      [0, 2, 0.98],
+      [2, 2, 0.9],
+    ];
+    for (const [dx, dy, power] of dots) {
+      putDotSub(sx + dx, sy + dy, fg, (1.22 + power * 0.16) * fade);
+      putDotSub(sx + dx + 1, sy + dy, fg, (1.08 + power * 0.12) * fade);
     }
   }
 
