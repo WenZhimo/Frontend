@@ -7,11 +7,11 @@
   const seedCopyButton = document.getElementById("seed-copy");
   const seedStatus = document.getElementById("seed-status");
 
-  const COLS = 132;
-  const ROWS = 60;
-  const CELL_W = 11;
-  const CELL_H = 18;
-  const FONT_SIZE = 16;
+  const COLS = 180;
+  const ROWS = 84;
+  const CELL_W = 9;
+  const CELL_H = 14;
+  const FONT_SIZE = 13;
   const FONT = '"Cascadia Mono", "Courier New", Consolas, monospace';
   const DOT_W = 2;
   const DOT_H = 4;
@@ -34,14 +34,145 @@
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const ANIMALS = {
-    RAT: { code: "R", rank: 1, name: "RAT" },
-    CAT: { code: "C", rank: 2, name: "CAT" },
-    DOG: { code: "D", rank: 3, name: "DOG" },
-    WOLF: { code: "W", rank: 4, name: "WOLF" },
-    LEOPARD: { code: "P", rank: 5, name: "LEOPARD" },
-    TIGER: { code: "T", rank: 6, name: "TIGER" },
-    LION: { code: "L", rank: 7, name: "LION" },
-    ELEPHANT: { code: "E", rank: 8, name: "ELEPHANT" },
+    RAT: { code: "R", rank: 1, name: "RAT", tag: "RAT" },
+    CAT: { code: "C", rank: 2, name: "CAT", tag: "CAT" },
+    DOG: { code: "D", rank: 3, name: "DOG", tag: "DOG" },
+    WOLF: { code: "W", rank: 4, name: "WOLF", tag: "WLF" },
+    LEOPARD: { code: "P", rank: 5, name: "LEOPARD", tag: "LEP" },
+    TIGER: { code: "T", rank: 6, name: "TIGER", tag: "TIG" },
+    LION: { code: "L", rank: 7, name: "LION", tag: "LIO" },
+    ELEPHANT: { code: "E", rank: 8, name: "ELEPHANT", tag: "ELE" },
+  };
+
+  const AVATAR_PATTERNS = {
+    RAT: [
+      "   ++       ++   ",
+      "  +##+     +##+  ",
+      "   +#+     +#+   ",
+      "    #########    ",
+      "   ###########   ",
+      "  #####o#o#####  ",
+      "  ######+######  ",
+      "   #########+++  ",
+      "    #######  ++  ",
+      "     #####    ++ ",
+      "      ###       +",
+      "      ###        ",
+      "     ++          ",
+      "    ++           ",
+    ],
+    CAT: [
+      "  ##         ##  ",
+      " ###         ### ",
+      " ####       #### ",
+      " ############### ",
+      "######o###o######",
+      "#######+++#######",
+      "++#############++",
+      "  #####+# #####  ",
+      "   ####### ###   ",
+      "    #########    ",
+      "      #####      ",
+      "     ### ###     ",
+      "    ##     ##    ",
+      "   ++       ++   ",
+    ],
+    DOG: [
+      "   ####   ####   ",
+      "  ###### ######  ",
+      " #######+####### ",
+      " #######+####### ",
+      " ############### ",
+      "######o###o######",
+      "########+########",
+      " ######+++###### ",
+      "  #############  ",
+      "   #####+#####   ",
+      "    #########    ",
+      "     ### ###     ",
+      "    ##     ##    ",
+      "   ++       ++   ",
+    ],
+    WOLF: [
+      "  ##         ##  ",
+      " ###        ###  ",
+      " ####      ####  ",
+      " #####    #####  ",
+      " ############### ",
+      "#####+##### +####",
+      "######o###o######",
+      " ######+++###### ",
+      "  ######+#####   ",
+      "   ##########    ",
+      "    #######++    ",
+      "     #####  ++   ",
+      "     ###     ++  ",
+      "    ##        ++ ",
+    ],
+    LEOPARD: [
+      "    ###   ###    ",
+      "   #####+#####   ",
+      "  #############  ",
+      " ####o###o#####+ ",
+      "#######+++#######",
+      "##+####o####+####",
+      "###############++",
+      " ####+#####o###  ",
+      "  ############   ",
+      "   ###o###o##    ",
+      "    ########     ",
+      "   ##  ###  ##   ",
+      "  ++    ##   ++  ",
+      " ++          ++  ",
+    ],
+    TIGER: [
+      "  ###       ###  ",
+      " ####+     +#### ",
+      " ############### ",
+      "###+####+####+###",
+      "#####o###o#######",
+      "###++#####++#####",
+      "########+########",
+      "####+##+++##+####",
+      "  #############  ",
+      "   ###++#++###   ",
+      "    #########    ",
+      "   ##  ###  ##   ",
+      "  ++    ##   ++  ",
+      " ++          ++  ",
+    ],
+    LION: [
+      "   +++++++++++   ",
+      "  ++#########++  ",
+      " ++###########++ ",
+      "++####+###+####++",
+      "+#####o###o#####+",
+      "######+++++######",
+      "+###############+",
+      "++#####+++#####++",
+      " ++###########++ ",
+      "  +++#######+++  ",
+      "     #######     ",
+      "    ###   ###    ",
+      "   ##       ##   ",
+      "  ++         ++  ",
+    ],
+    ELEPHANT: [
+      "  ####     ####  ",
+      " ######   ###### ",
+      "#################",
+      "#################",
+      "#####o#####o#####",
+      "########+########",
+      "#################",
+      " #######+####### ",
+      "  #####+++#####  ",
+      "   ####+++####   ",
+      "    ###+++###    ",
+      "      ##+##      ",
+      "       #+#       ",
+      "       +++       ",
+    ],
   };
 
   const color = {
@@ -95,10 +226,10 @@
   };
 
   const layout = {
-    left: { x: 1, y: 1, w: 88, h: 58 },
-    right: { x: 92, y: 1, w: 39, h: 58 },
-    boardBox: { x: 10, y: 7, w: 68, h: 48 },
-    board: { x: 20, y: 8, cellW: 7, cellH: 5 },
+    left: { x: 1, y: 1, w: 132, h: 82 },
+    right: { x: 136, y: 1, w: 43, h: 82 },
+    boardBox: { x: 13, y: 7, w: 102, h: 73 },
+    board: { x: 25, y: 10, cellW: 11, cellH: 7 },
   };
 
   const state = {
@@ -655,7 +786,7 @@
     drawBox(layout.right, "MATCH");
     writeText(4, 3, "BRAILLE DOU SHOU QI / JUNGLE", color.header);
     writeText(4, 4, "RIVER JUMPS / TRAPS / DEN ENTRY", color.dim);
-    writeText(4, 56, "1 0.5x  2 1x  3 2x  4 4x  SPACE pause  R reroll  P play", color.dim);
+    writeText(4, ROWS - 4, "1 0.5x  2 1x  3 2x  4 4x  SPACE pause  R reroll  P play", color.dim);
   }
 
   function terrainBg(x, y) {
@@ -798,20 +929,35 @@
     const sy0 = Math.round(pos.y * DOT_H);
     const scale = options.scale ?? 1;
     const fade = options.fade ?? 1;
-    const rx = 5.0 * scale;
-    const ry = 5.8 * scale;
     const main = sideColor(piece.side);
     const alt = sideAltColor(piece.side);
-    for (let sy = -Math.ceil(ry); sy <= Math.ceil(ry); sy += 1) {
-      for (let sx = -Math.ceil(rx); sx <= Math.ceil(rx); sx += 1) {
-        const nx = sx / rx;
-        const ny = sy / ry;
-        const d = Math.sqrt(nx * nx + ny * ny);
-        if (d > 1) continue;
-        const rim = d > 0.72;
-        const sparkle = hash(sx0 * 17 + sy0 * 19 + sx * 23 + sy * 29);
-        if (!rim && sparkle > 0.92) continue;
-        putDotSub(sx0 + sx, sy0 + sy, rim || sparkle > 0.63 ? alt : main, (rim ? 0.9 : 1.06) * fade);
+    const pattern = AVATAR_PATTERNS[piece.type] || AVATAR_PATTERNS.RAT;
+    const width = Math.max(...pattern.map((row) => row.length));
+    const height = pattern.length;
+    const cx = (width - 1) / 2;
+    const cy = (height - 1) / 2 + 1.2;
+
+    for (let py = 0; py < height; py += 1) {
+      const row = pattern[py].padEnd(width, " ");
+      for (let px = 0; px < width; px += 1) {
+        const mark = row[px];
+        if (mark === " ") continue;
+        const dx = (px - cx) * scale;
+        const dy = (py - cy) * scale;
+        const sparkle = hash(sx0 * 17 + sy0 * 19 + px * 23 + py * 29);
+        let fg = main;
+        let power = 1.02;
+        if (mark === "+") {
+          fg = alt;
+          power = 1.12;
+        } else if (mark === "o") {
+          fg = color.denGlow;
+          power = 1.28;
+        } else if (mark === ".") {
+          power = 0.62;
+        }
+        putDotSub(sx0 + dx, sy0 + dy, fg, power * fade);
+        if (scale > 1.02 && sparkle > 0.72) putDotSub(sx0 + dx + 1, sy0 + dy, fg, power * 0.74 * fade);
       }
     }
   }
@@ -830,12 +976,13 @@
   }
 
   function drawPieceLabel(pos, piece) {
-    const x = Math.round(pos.x) - 1;
-    const y = Math.round(pos.y);
     const animal = ANIMALS[piece.type];
+    const text = `${animal.tag}${animal.rank}`;
+    const x = Math.round(pos.x - text.length / 2);
+    const y = Math.round(pos.y + 2);
     const fg = color.page;
     const bg = sideColor(piece.side);
-    writeText(x, y, `${animal.code}${animal.rank}`, fg, bg);
+    writeText(x, y, text, fg, bg);
   }
 
   function drawLegalHints(now) {
@@ -1030,13 +1177,13 @@
     }
 
     if (state.winner || state.result) {
-      writeText(r.x + 3, r.y + 52, "RESULT", color.header);
-      writeText(r.x + 3, r.y + 54, state.result.slice(0, 31), state.winner ? color.denGlow : color.dim);
+      writeText(r.x + 3, r.y + 74, "RESULT", color.header);
+      writeText(r.x + 3, r.y + 76, state.result.slice(0, 31), state.winner ? color.denGlow : color.dim);
     } else if (state.paused) {
-      writeText(r.x + 3, r.y + 54, "PAUSED", color.win);
+      writeText(r.x + 3, r.y + 76, "PAUSED", color.win);
     } else {
       const pulse = Math.floor(now / 500) % 2 ? ">" : " ";
-      writeText(r.x + 3, r.y + 54, `${pulse} stalking the riverbank`, color.dim);
+      writeText(r.x + 3, r.y + 76, `${pulse} stalking the riverbank`, color.dim);
     }
   }
 
