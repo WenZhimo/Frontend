@@ -98,6 +98,7 @@
     active: null,
     capturedMarks: [],
     crownMarks: [],
+    boardShake: null,
     winner: 0,
     result: "",
     nextMoveAt: 0,
@@ -214,6 +215,7 @@
     state.active = null;
     state.capturedMarks = [];
     state.crownMarks = [];
+    state.boardShake = null;
     state.winner = 0;
     state.result = "";
     state.paused = false;
@@ -466,8 +468,11 @@
     for (const capture of move.captures) shatterChar(centerOfCell(capture.x, capture.y), otherSide(move.side), reducedMotion ? 5 : 20, 0.86, now);
     for (const point of move.path.slice(1)) rippleChar(centerOfCell(point.x, point.y), move.side, move.captures.length ? 0.95 : 0.65, now);
     if (promoted) {
-      state.crownMarks.push({ x: move.to.x, y: move.to.y, side: move.side, at: now });
-      shatterChar(centerOfCell(move.to.x, move.to.y), move.side, reducedMotion ? 8 : 34, 1.15, now);
+      const crownOrigin = centerOfCell(move.to.x, move.to.y);
+      state.crownMarks.push({ x: move.to.x, y: move.to.y, side: move.side, at: now, life: reducedMotion ? 620 : 1240 });
+      rippleChar(crownOrigin, move.side, reducedMotion ? 0.9 : 1.9, now, reducedMotion ? 520 : 940);
+      shatterChar(crownOrigin, move.side, reducedMotion ? 14 : 92, reducedMotion ? 1.05 : 1.95, now);
+      triggerBoardShake(now, 1.45, 460);
     }
     state.moves.push(move);
     state.moveLog.push({
@@ -769,6 +774,8 @@
   }
 
   function drawTerminalEffects(now) {
+    for (const mark of state.crownMarks) drawPromotionBeam(mark, now);
+
     for (const r of state.ripples) {
       const age = (now - r.born) / r.life;
       const radius = lerp(1.4, 10 * r.strength, smooth(age));
@@ -808,6 +815,53 @@
         }
       }
     });
+  }
+
+  function drawPromotionBeam(mark, now) {
+    const age = clamp((now - mark.at) / (mark.life || 1240), 0, 1);
+    const origin = centerOfCell(mark.x, mark.y);
+    const cx = Math.round(origin.x * DOT_W);
+    const cy = Math.round(origin.y * DOT_H);
+    const beamTop = (layout.board.y - 1) * DOT_H;
+    const beamBottom = Math.round(lerp(beamTop, cy + 8, smooth(clamp(age / 0.34, 0, 1))));
+    const beamFade = 1 - smooth(clamp((age - 0.68) / 0.32, 0, 1));
+    const beamWidth = lerp(2.2, 6.2, Math.sin(Math.min(age, 0.5) * Math.PI));
+    const crownFg = sideCrownColor(mark.side);
+    const burstFg = sideEffectColor(mark.side);
+
+    for (let sy = beamTop; sy <= beamBottom; sy += 1) {
+      for (let sx = Math.floor(cx - beamWidth); sx <= Math.ceil(cx + beamWidth); sx += 1) {
+        const dx = Math.abs(sx - cx);
+        const core = 1 - dx / Math.max(1, beamWidth);
+        if (core <= 0) continue;
+        if ((sx + sy + Math.floor(age * 18)) % (core > 0.52 ? 2 : 3) !== 0) continue;
+        putEffectDot(sx, sy, crownFg, (1.18 + core * 0.55) * beamFade);
+      }
+    }
+
+    if (age < 0.16) return;
+    const burstAge = clamp((age - 0.16) / 0.78, 0, 1);
+    const radius = lerp(2, 22, smooth(burstAge));
+    const thickness = lerp(2.3, 0.55, burstAge);
+    const minX = Math.floor(cx - radius * DOT_W - 4);
+    const maxX = Math.ceil(cx + radius * DOT_W + 4);
+    const minY = Math.floor(cy - radius * DOT_H * 0.56 - 4);
+    const maxY = Math.ceil(cy + radius * DOT_H * 0.56 + 4);
+    const fade = 1 - smooth(burstAge);
+
+    for (let sy = minY; sy <= maxY; sy += 1) {
+      for (let sx = minX; sx <= maxX; sx += 1) {
+        const dx = (sx - cx) / DOT_W;
+        const dy = ((sy - cy) / DOT_H) / 0.56;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const onRing = Math.abs(dist - radius) <= thickness;
+        const inRay = Math.abs(Math.sin(Math.atan2(dy, dx) * 6)) < 0.13 && dist < radius && dist > 2;
+        if (!onRing && !inRay) continue;
+        if ((sx * 3 + sy * 5 + Math.floor(burstAge * 12)) % (onRing ? 3 : 5) === 0) {
+          putEffectDot(sx, sy, onRing ? burstFg : crownFg, clamp(0.2 + fade * (onRing ? 0.95 : 0.72), 0.14, 1.22));
+        }
+      }
+    }
   }
 
   function rippleChar(origin, side, strength, now = performance.now(), life = 660) {
@@ -853,6 +907,32 @@
     }
   }
 
+  function triggerBoardShake(now, strength, life) {
+    if (reducedMotion) return;
+    state.boardShake = { at: now, strength, life };
+  }
+
+  function boardShakeOffset(now) {
+    const shake = state.boardShake;
+    if (!shake || reducedMotion) return { x: 0, y: 0 };
+    const age = (now - shake.at) / shake.life;
+    if (age >= 1) return { x: 0, y: 0 };
+    const amp = shake.strength * 3.2 * (1 - smooth(age));
+    return {
+      x: Math.round(Math.sin(age * 54) * amp),
+      y: Math.round(Math.cos(age * 47) * amp * 0.58),
+    };
+  }
+
+  function shakesBoardCell(x, y) {
+    const box = layout.boardBox;
+    return x >= box.x - 3 && x < box.x + box.w + 3 && y >= box.y - 2 && y < box.y + box.h + 5;
+  }
+
+  function cellShake(shake, x, y) {
+    return shakesBoardCell(x, y) ? shake : { x: 0, y: 0 };
+  }
+
   function update(now, dt) {
     if (state.paused) return;
     const frameScale = dt / 16.67;
@@ -875,7 +955,8 @@
     });
     state.ripples = state.ripples.filter((r) => now - r.born < r.life);
     state.capturedMarks = state.capturedMarks.filter((mark) => now - mark.at < 560);
-    state.crownMarks = state.crownMarks.filter((mark) => now - mark.at < 900);
+    state.crownMarks = state.crownMarks.filter((mark) => now - mark.at < (mark.life || 1240));
+    if (state.boardShake && now - state.boardShake.at >= state.boardShake.life) state.boardShake = null;
     if (state.winner && now - state.lastWinEmit > (reducedMotion ? 1100 : 760)) {
       emitWinBurst(state.winner, now, false);
       state.lastWinEmit = now;
@@ -946,10 +1027,10 @@
     drawPieces(now);
     flushDotLayer(layout.left);
     drawPanel(now);
-    renderTerminal();
+    renderTerminal(now);
   }
 
-  function renderTerminal() {
+  function renderTerminal(now) {
     const dpr = window.devicePixelRatio || 1;
     const width = COLS * CELL_W;
     const height = ROWS * CELL_H;
@@ -961,10 +1042,12 @@
     }
     ctx.fillStyle = color.page;
     ctx.fillRect(0, 0, width, height);
+    const shake = boardShakeOffset(now);
     for (let y = 0; y < ROWS; y += 1) {
       for (let x = 0; x < COLS; x += 1) {
+        const offset = cellShake(shake, x, y);
         ctx.fillStyle = screen.bg[idx(x, y)];
-        ctx.fillRect(x * CELL_W, y * CELL_H, CELL_W, CELL_H);
+        ctx.fillRect(x * CELL_W + offset.x, y * CELL_H + offset.y, CELL_W, CELL_H);
       }
     }
     ctx.font = `${FONT_SIZE}px ${FONT}`;
@@ -974,8 +1057,9 @@
       for (let x = 0; x < COLS; x += 1) {
         const ch = screen.ch[idx(x, y)];
         if (ch === " ") continue;
+        const offset = cellShake(shake, x, y);
         ctx.fillStyle = screen.fg[idx(x, y)];
-        ctx.fillText(ch, x * CELL_W, y * CELL_H + 1);
+        ctx.fillText(ch, x * CELL_W + offset.x, y * CELL_H + 1 + offset.y);
       }
     }
   }
