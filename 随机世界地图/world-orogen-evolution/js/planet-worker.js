@@ -17,6 +17,7 @@ import { classifyKoppen } from './koppen.js';
 import { computeTerrainMetrics } from './terrain-metrics.js';
 import { applyPlatePhysics, expandPlatePhysicsDebug } from './plate-physics.js';
 import { attachPlateMotionDebugLayers } from './evolution/plate-motion.js';
+import { attachGeologyMemoryDebugLayers } from './evolution/geology-memory.js';
 import { SUPER_PLATE_PHYSICS_MULT, DETAIL_NOISE_DAMPEN_STRENGTH } from './terrain-config.js';
 import Delaunator from 'https://cdn.jsdelivr.net/npm/delaunator@5.0.1/+esm';
 
@@ -58,6 +59,34 @@ function attachPlateMotionDiagnostics(debugLayers, mesh, r_xyz, r_plate, plateVe
             anchorPlateId: null,
             rotations: { type: 'stage-euler', poleByPlateId: {}, omegaByPlateId: {}, units: 'world-orogen-v1' },
             diagnostics: { velocityScale: 1, source: 'plateVec', warnings: [err?.message || 'Plate motion diagnostics failed.'] },
+        };
+    }
+}
+
+function attachGeologyMemoryDiagnostics(debugLayers, mesh, r_elevation, r_plate, plateIsOcean) {
+    try {
+        return attachGeologyMemoryDebugLayers(debugLayers, {
+            mesh,
+            r_elevation,
+            r_plate,
+            plateIsOcean,
+            debugLayers,
+        });
+    } catch (err) {
+        if (debugLayers && mesh?.numRegions) {
+            debugLayers.crustAge = new Float32Array(mesh.numRegions);
+            debugLayers.riftStage = new Float32Array(mesh.numRegions);
+            debugLayers.oldOrogeny = new Float32Array(mesh.numRegions);
+            debugLayers.transformMemory = new Float32Array(mesh.numRegions);
+            debugLayers.fractureZoneMemory = new Float32Array(mesh.numRegions);
+            debugLayers.sedimentMemory = new Float32Array(mesh.numRegions);
+            debugLayers.oceanConnectivity = new Float32Array(mesh.numRegions);
+        }
+        return {
+            schema: 'world-orogen-geology-memory',
+            version: 1,
+            metrics: {},
+            warnings: [err?.message || 'Geology memory diagnostics failed.'],
         };
     }
 }
@@ -411,6 +440,7 @@ function handleGenerate(data) {
         }
 
         const plateMotion = attachPlateMotionDiagnostics(debugLayers, mesh, r_xyz, r_plate, plateVec, plateSeeds, 0);
+        const geologyMemory = attachGeologyMemoryDiagnostics(debugLayers, mesh, r_elevation, r_plate, plateIsOcean);
 
         progress(skipClimate ? 75 : 90, 'Computing triangle elevations\u2026');
         t0 = performance.now();
@@ -435,6 +465,7 @@ function handleGenerate(data) {
             temperatureOffset, precipitationOffset, landCoverage,
             cachedWind: windResult, cachedOcean: oceanResult,
             plateMotion,
+            geologyMemory,
             // Retain detail-noise dampen + orogenic fields so reapply (which
             // reuses prePostElev) shapes the noise the same way as the initial
             // generate over craton/basin and orogenic regions.
@@ -477,6 +508,7 @@ function handleGenerate(data) {
             plateSeeds: Array.from(plateSeeds),
             plateVec,
             plateMotion,
+            geologyMemory,
             plateIsOcean: Array.from(plateIsOcean),
             originalPlateIsOcean: Array.from(originalPlateIsOcean),
             plateDensity, plateDensityLand, plateDensityOcean,
@@ -705,7 +737,9 @@ function handleEditRecompute(data) {
         }
 
         const plateMotion = attachPlateMotionDiagnostics(debugLayers, mesh, r_xyz, r_plate, plateVec, plateSeeds, W.plateMotion?.timeMyr || 0);
+        const geologyMemory = attachGeologyMemoryDiagnostics(debugLayers, mesh, r_elevation, r_plate, plateIsOcean);
         W.plateMotion = plateMotion;
+        W.geologyMemory = geologyMemory;
 
         progress(skipClimate ? 75 : 90, 'Computing triangle elevations\u2026');
         t0 = performance.now();
@@ -736,6 +770,7 @@ function handleEditRecompute(data) {
             ...buildClimateFields(windResult, oceanResult, precipResult, tempResult),
             debugLayers,
             plateMotion,
+            geologyMemory,
             _editTiming: {
                 elevation: tElev,
                 postProcessing: tPost,
@@ -1061,6 +1096,7 @@ function handleImportHeightmap(data) {
         }
 
         const plateMotion = attachPlateMotionDiagnostics(debugLayers, mesh, r_xyz, r_plate, plateVec, plateSeeds, 0);
+        const geologyMemory = attachGeologyMemoryDiagnostics(debugLayers, mesh, r_elevation, r_plate, plateIsOcean);
 
         progress(skipClimate ? 75 : 92, 'Computing triangle elevations\u2026');
         t0 = performance.now();
@@ -1081,7 +1117,8 @@ function handleImportHeightmap(data) {
             mountain_r: new Set(mountain_r), coastline_r: new Set(coastline_r), ocean_r: new Set(ocean_r),
             r_stress: new Float32Array(r_stress),
             cachedWind: windResult, cachedOcean: oceanResult,
-            plateMotion
+            plateMotion,
+            geologyMemory
         };
         timing.push({ stage: 'Clone state for retention', ms: performance.now() - t0 });
 
@@ -1097,6 +1134,7 @@ function handleImportHeightmap(data) {
             plateSeeds: Array.from(plateSeeds),
             plateVec,
             plateMotion,
+            geologyMemory,
             plateIsOcean: Array.from(plateIsOcean),
             originalPlateIsOcean: Array.from(plateIsOcean),
             plateDensity: {}, plateDensityLand: {}, plateDensityOcean: {},

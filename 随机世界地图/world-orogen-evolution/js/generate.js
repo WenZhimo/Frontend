@@ -205,6 +205,7 @@ if (worker) {
                     plateSeeds: new Set(msg.plateSeeds),
                     plateVec: msg.plateVec,
                     plateMotion: msg.plateMotion || null,
+                    geologyMemory: msg.geologyMemory || null,
                     plateIsOcean: new Set(msg.plateIsOcean),
                     originalPlateIsOcean: new Set(msg.originalPlateIsOcean),
                     plateDensity: msg.plateDensity,
@@ -555,6 +556,7 @@ if (worker) {
                 }
                 d.debugLayers = msg.debugLayers;
                 d.plateMotion = msg.plateMotion || d.plateMotion || null;
+                d.geologyMemory = msg.geologyMemory || d.geologyMemory || null;
                 // Fallback: compute precip/temp on main thread if climate was
                 // requested but data is missing (e.g. partial worker result)
                 if (!msg.skipClimate && d.r_wind_east_summer) {
@@ -696,7 +698,7 @@ if (worker) {
 let _fallbackModules = null;
 async function loadFallback() {
     if (_fallbackModules) return _fallbackModules;
-    const [rng, simplex, sphere, plates, ocean, elev, post, wind, oceanCurrents, precip, temp, coarsePlates, plateMotion] = await Promise.all([
+    const [rng, simplex, sphere, plates, ocean, elev, post, wind, oceanCurrents, precip, temp, coarsePlates, plateMotion, geologyMemory] = await Promise.all([
         import('./rng.js'),
         import('./simplex-noise.js'),
         import('./sphere-mesh.js'),
@@ -709,9 +711,10 @@ async function loadFallback() {
         import('./precipitation.js'),
         import('./temperature.js'),
         import('./coarse-plates.js'),
-        import('./evolution/plate-motion.js')
+        import('./evolution/plate-motion.js'),
+        import('./evolution/geology-memory.js')
     ]);
-    _fallbackModules = { rng, simplex, sphere, plates, ocean, elev, post, wind, oceanCurrents, precip, temp, coarsePlates, plateMotion };
+    _fallbackModules = { rng, simplex, sphere, plates, ocean, elev, post, wind, oceanCurrents, precip, temp, coarsePlates, plateMotion, geologyMemory };
     return _fallbackModules;
 }
 
@@ -844,6 +847,13 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
                 plateSeeds: ctx.plateSeeds,
                 timeMyr: 0,
             });
+            ctx.geologyMemory = m.geologyMemory.attachGeologyMemoryDebugLayers(debugLayers, {
+                mesh: ctx.mesh,
+                r_elevation,
+                r_plate: ctx.r_plate,
+                plateIsOcean: ctx.plateIsOcean,
+                debugLayers,
+            });
             const t_elevation = new Float32Array(ctx.mesh.numTriangles);
             for (let t = 0; t < ctx.mesh.numTriangles; t++) {
                 const s0 = 3 * t;
@@ -857,6 +867,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
                 mesh: ctx.mesh, r_xyz: ctx.r_xyz, t_xyz: ctx.t_xyz,
                 r_plate: ctx.r_plate, plateSeeds: ctx.plateSeeds, plateVec: ctx.plateVec,
                 plateMotion: ctx.plateMotion || null,
+                geologyMemory: ctx.geologyMemory || null,
                 plateIsOcean: ctx.plateIsOcean, originalPlateIsOcean: ctx.originalPlateIsOcean,
                 plateDensity: ctx.plateDensity, plateDensityLand: ctx.plateDensityLand,
                 plateDensityOcean: ctx.plateDensityOcean, prePostElev: ctx.prePostElev,
