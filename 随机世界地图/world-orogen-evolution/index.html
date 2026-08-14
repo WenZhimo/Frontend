@@ -245,6 +245,25 @@
                 <div id="evolutionStatus" class="evolution-status">Generate a world to capture the first snapshot.</div>
             </div>
         </details>
+        <details class="section civilization-section" open>
+            <summary>Civilization MVP</summary>
+            <div class="section-body">
+                <div class="evolution-readout">
+                    <span>Year</span>
+                    <strong id="civilizationYear">0</strong>
+                </div>
+                <div class="evolution-controls">
+                    <button id="civilizationSeed" title="Seed population groups from environment inputs">Seed</button>
+                    <button id="civilizationStep" title="Advance civilization simulation">Step</button>
+                </div>
+                <div class="cg">
+                    <label>Step Size <span class="v">years</span></label>
+                    <input type="number" id="civilizationStepYears" min="10" max="1000" value="100" step="10">
+                </div>
+                <div id="civilizationMetrics" class="evolution-status">Generate a world, then seed civilization.</div>
+                <div id="civilizationStatus" class="evolution-status">Civilization layer is inactive.</div>
+            </div>
+        </details>
         <details class="section">
             <summary>Terrain Sculpting <span class="tip" data-tip="Erosion and smoothing passes that refine the raw terrain. Adjust sliders and click Reapply — no full rebuild needed.">?</span></summary>
             <div class="section-body">
@@ -355,6 +374,16 @@
                             <option value="riverTravel">River Travel</option>
                             <option value="naturalBarrier">Natural Barrier</option>
                             <option value="resourceAttraction">Resource Attraction</option>
+                        </optgroup>
+                        <optgroup label="Civilization">
+                            <option value="populationDensity">Population Density</option>
+                            <option value="migrationPressure">Migration Pressure</option>
+                            <option value="settlementRank">Settlement Rank</option>
+                            <option value="cultureId">Culture ID</option>
+                            <option value="languageId">Language ID</option>
+                            <option value="polityId">Polity ID</option>
+                            <option value="subsistenceMode">Subsistence Mode</option>
+                            <option value="civilizationActivity">Civilization Activity</option>
                         </optgroup>
                         <optgroup label="Geology">
                             <option value="base">Base</option>

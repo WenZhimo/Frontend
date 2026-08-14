@@ -15,6 +15,7 @@ import { elevationToColor } from './color-map.js';
 import { advanceEvolutionState, ensureEvolutionState, formatEvolutionLabel } from './evolution/evolution-state.js';
 import { snapshotCache } from './evolution/snapshot-cache.js';
 import { applyGeologyTerrainInfluenceInPlace, evolveGeologyMemoryInPlace } from './evolution/geology-memory.js';
+import { ensureCivilizationState, stepCivilizationInPlace } from './evolution/civilization.js';
 
 // Slider value displays + stale tracking
 const sliderIds = ['sN','sP','sCn','sJ','sNs','sCsv','sLc'];
@@ -762,6 +763,7 @@ function rebuildWorldAfterSnapshotApply(snapshotId) {
     updateLegend(state.debugLayer || '');
     updatePlanetCode(false);
     renderSnapshotList();
+    renderCivilizationPanel();
     return compareWarning;
 }
 
@@ -903,6 +905,91 @@ function initEvolutionTimeline() {
 }
 
 initEvolutionTimeline();
+
+const civilizationEls = {
+    year: document.getElementById('civilizationYear'),
+    seed: document.getElementById('civilizationSeed'),
+    step: document.getElementById('civilizationStep'),
+    stepYears: document.getElementById('civilizationStepYears'),
+    metrics: document.getElementById('civilizationMetrics'),
+    status: document.getElementById('civilizationStatus'),
+};
+
+function setCivilizationStatus(message, kind = '') {
+    if (!civilizationEls.status) return;
+    civilizationEls.status.textContent = message;
+    civilizationEls.status.classList.toggle('ok', kind === 'ok');
+    civilizationEls.status.classList.toggle('warn', kind === 'warn');
+}
+
+function renderCivilizationPanel() {
+    const civ = state.curData?.civilizationState || null;
+    const hasWorld = !!state.curData;
+    if (civilizationEls.seed) civilizationEls.seed.disabled = !hasWorld;
+    if (civilizationEls.step) civilizationEls.step.disabled = !hasWorld;
+    if (civilizationEls.year) civilizationEls.year.textContent = civ ? civ.timeYear.toLocaleString() : '0';
+    if (!civilizationEls.metrics) return;
+    if (!hasWorld) {
+        civilizationEls.metrics.textContent = 'Generate a world, then seed civilization.';
+        return;
+    }
+    if (!civ) {
+        civilizationEls.metrics.textContent = 'No civilization state yet.';
+        return;
+    }
+    const m = civ.metrics || {};
+    civilizationEls.metrics.textContent = [
+        `Groups ${m.livingGroups ?? civ.populationGroups?.length ?? 0}`,
+        `Population ${(m.population || 0).toLocaleString()}`,
+        `Settlements ${m.settlements || 0}`,
+        `Cultures ${m.cultures || 0}`,
+        `Languages ${m.languages || 0}`,
+        `Polities ${m.polities || 0}`,
+    ].join(' · ');
+}
+
+function showCivilizationLayer(layer = 'civilizationActivity') {
+    state.debugLayer = layer;
+    if (debugLayerEl) debugLayerEl.value = layer;
+    syncTabsToLayer(layer);
+    buildWindArrows(null);
+    buildOceanCurrentArrows(null);
+    buildMesh();
+    updateLegend(layer);
+}
+
+function seedCivilization() {
+    if (!state.curData) {
+        setCivilizationStatus('Generate a world before seeding civilization.', 'warn');
+        return;
+    }
+    refreshEnvironmentInputs(state.curData);
+    const civ = ensureCivilizationState(state.curData);
+    renderCivilizationPanel();
+    showCivilizationLayer('populationDensity');
+    setCivilizationStatus(`Seeded ${civ.populationGroups.length} population groups.`, 'ok');
+}
+
+function stepCivilizationOnce() {
+    if (!state.curData) {
+        setCivilizationStatus('Generate a world before stepping civilization.', 'warn');
+        return;
+    }
+    refreshEnvironmentInputs(state.curData);
+    const dtYear = Math.max(10, +(civilizationEls.stepYears?.value || 100));
+    const civ = stepCivilizationInPlace(state.curData, { dtYear });
+    renderCivilizationPanel();
+    showCivilizationLayer('civilizationActivity');
+    setCivilizationStatus(`Advanced civilization to Year ${civ.timeYear.toLocaleString()}.`, 'ok');
+}
+
+function initCivilizationPanel() {
+    civilizationEls.seed?.addEventListener('click', seedCivilization);
+    civilizationEls.step?.addEventListener('click', stepCivilizationOnce);
+    renderCivilizationPanel();
+}
+
+initCivilizationPanel();
 genBtn.addEventListener('generate-done', captureGeneratedSnapshot);
 genBtn.addEventListener('generate-done', () => {
     // If climate not computed and current view is a climate layer, switch to Terrain
@@ -927,6 +1014,7 @@ genBtn.addEventListener('generate-done', () => {
         buildOceanCurrentArrows(v.includes('Winter') ? 'winter' : 'summer');
     }
 });
+genBtn.addEventListener('generate-done', renderCivilizationPanel);
 
 document.addEventListener('plates-edited', () => {
     updatePlanetCode(true);
