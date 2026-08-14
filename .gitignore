@@ -1,14 +1,18 @@
+# Local tool state
 .claude/
-*/.claude/
-*/*/.claude/
-*/*/*/.claude/
+.agent/
+.vscode/settings.json
+.idea/
+__pycache__/
 
+# SNAKE_AI checkpoints
 SNAKE_AI/snake_models/exports/pc/checkpoints/best-so-far.json
 SNAKE_AI/snake_models/exports/pc/checkpoints/best.json
 #SNAKE_AI/snake_models/exports/pc/checkpoints/**-latest/
-.idea/
 
 # Large local media files
 asset/song/*.flac
 *.flac
+
+# Generated/debug outputs
 随机世界地图/_debug_*/
