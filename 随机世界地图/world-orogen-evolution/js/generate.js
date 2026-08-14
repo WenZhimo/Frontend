@@ -10,6 +10,7 @@ import { computeOceanCurrents } from './ocean.js';
 import { computePrecipitation } from './precipitation.js';
 import { computeTemperature } from './temperature.js';
 import { classifyKoppen } from './koppen.js';
+import { attachEnvironmentInputDebugLayers } from './evolution/environment-inputs.js';
 
 // Main thread still needs Delaunator for SphereMesh reconstruction
 setDelaunator(Delaunator);
@@ -312,6 +313,8 @@ if (worker) {
                     }
                 }
 
+                refreshEnvironmentInputs(state.curData);
+
                 const tBuildStart = performance.now();
                 buildMesh();
                 const tBuild = performance.now() - tBuildStart;
@@ -481,6 +484,8 @@ if (worker) {
                     }
                 }
 
+                refreshEnvironmentInputs(d);
+
                 const tBuildStart = performance.now();
                 buildMesh();
                 const tBuild = performance.now() - tBuildStart;
@@ -603,6 +608,8 @@ if (worker) {
                     }
                 }
 
+                refreshEnvironmentInputs(d);
+
                 const tColorsStart = performance.now();
                 computePlateColors(d.plateSeeds, d.plateIsOcean);
                 const tColors = performance.now() - tColorsStart;
@@ -665,6 +672,7 @@ if (worker) {
                         Object.assign(d.debugLayers, msg.climateDebugLayers);
                     }
                 }
+                refreshEnvironmentInputs(d);
                 state.climateComputed = true;
                 buildMesh();
 
@@ -899,6 +907,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
                 r_temperature_winter: ctx.tempResult ? ctx.tempResult.r_temperature_winter : null
             };
             state.climateComputed = !skipClimate;
+            refreshEnvironmentInputs(state.curData);
             buildMesh();
             progress(100, 'Done');
             resetUI();
@@ -928,6 +937,33 @@ export function syncEvolutionTerrainViaWorker(curData) {
         geologyMemory: curData.geologyMemory || null,
     }, [r_elevation.buffer]);
     return true;
+}
+
+export function refreshEnvironmentInputs(curData = state.curData) {
+    if (!curData?.mesh || !curData?.r_elevation || !curData?.debugLayers) return null;
+    try {
+        curData.environmentInputs = attachEnvironmentInputDebugLayers(curData.debugLayers, {
+            mesh: curData.mesh,
+            r_xyz: curData.r_xyz,
+            r_elevation: curData.r_elevation,
+            debugLayers: curData.debugLayers,
+            r_precip_summer: curData.r_precip_summer || curData.debugLayers.precipSummer,
+            r_precip_winter: curData.r_precip_winter || curData.debugLayers.precipWinter,
+            r_temperature_summer: curData.r_temperature_summer || curData.debugLayers.tempSummer,
+            r_temperature_winter: curData.r_temperature_winter || curData.debugLayers.tempWinter,
+        });
+        return curData.environmentInputs;
+    } catch (err) {
+        console.warn('[EnvironmentInputs] refresh failed:', err);
+        curData.environmentInputs = {
+            schema: 'world-orogen-environment-inputs',
+            version: 1,
+            layers: [],
+            metrics: {},
+            warnings: [err?.message || 'Environment input refresh failed.'],
+        };
+        return curData.environmentInputs;
+    }
 }
 
 export function generate(overrideSeed, toggledIndices = [], onProgress, skipClimate = false) {

@@ -5,7 +5,7 @@ import { renderer, scene, camera, ctrl, waterMesh, atmosMesh, starsMesh,
          mapCamera, updateMapCameraFrustum, mapCtrl, canvas,
          tickZoom, tickMapZoom } from './scene.js';
 import { state } from './state.js';
-import { generate, reapplyViaWorker, computeClimateViaWorker, editRecomputeViaWorker, syncEvolutionTerrainViaWorker } from './generate.js';
+import { generate, reapplyViaWorker, computeClimateViaWorker, editRecomputeViaWorker, refreshEnvironmentInputs, syncEvolutionTerrainViaWorker } from './generate.js';
 import { encodePlanetCode, decodePlanetCode } from './planet-code.js';
 import { computePlateColors, buildMesh, updateMeshColors, updateSuperPlateBorders, buildMapMesh, rebuildGrids, exportMap, exportMapBatch, buildWindArrows, buildOceanCurrentArrows, updateKoppenHoverHighlight, updateMapKoppenHoverHighlight, updatePendingHighlight, updateMapPendingHighlight } from './planet-mesh.js';
 import { setupEditMode } from './edit-mode.js';
@@ -593,6 +593,7 @@ function clearTerrainDependentClimateData(curData) {
     if (curData.debugLayers) {
         for (const field of debugFields) curData.debugLayers[field] = null;
     }
+    curData.environmentInputs = null;
 }
 
 function readEvolutionParams() {
@@ -829,6 +830,7 @@ function stepEvolutionOnce() {
             nextState.dependencies.climateComputed = false;
             state.curData.evolutionState.dependencies.climateComputed = false;
             clearTerrainDependentClimateData(state.curData);
+            refreshEnvironmentInputs(state.curData);
             syncEvolutionTerrainViaWorker(state.curData);
         }
     }
