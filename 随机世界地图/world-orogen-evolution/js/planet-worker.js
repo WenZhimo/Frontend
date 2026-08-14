@@ -16,6 +16,7 @@ import { computeTemperature } from './temperature.js';
 import { classifyKoppen } from './koppen.js';
 import { computeTerrainMetrics } from './terrain-metrics.js';
 import { applyPlatePhysics, expandPlatePhysicsDebug } from './plate-physics.js';
+import { attachPlateMotionDebugLayers } from './evolution/plate-motion.js';
 import { SUPER_PLATE_PHYSICS_MULT, DETAIL_NOISE_DAMPEN_STRENGTH } from './terrain-config.js';
 import Delaunator from 'https://cdn.jsdelivr.net/npm/delaunator@5.0.1/+esm';
 
@@ -26,6 +27,39 @@ let W = null;
 
 function progress(pct, label) {
     self.postMessage({ type: 'progress', pct, label });
+}
+
+function attachPlateMotionDiagnostics(debugLayers, mesh, r_xyz, r_plate, plateVec, plateSeeds, timeMyr = 0) {
+    try {
+        return attachPlateMotionDebugLayers(debugLayers, {
+            mesh,
+            r_xyz,
+            r_plate,
+            plateVec,
+            plateSeeds,
+            timeMyr,
+        });
+    } catch (err) {
+        if (debugLayers && mesh?.numRegions) {
+            debugLayers.plateVelocity = new Float32Array(mesh.numRegions);
+            debugLayers.boundaryKind = new Float32Array(mesh.numRegions);
+            debugLayers.boundaryNormalSpeed = new Float32Array(mesh.numRegions);
+            debugLayers.boundaryShearSpeed = new Float32Array(mesh.numRegions);
+            debugLayers.boundaryRelativeSpeed = new Float32Array(mesh.numRegions);
+            debugLayers.boundaryConfidence = new Float32Array(mesh.numRegions);
+        }
+        return {
+            schema: 'world-orogen-plate-motion-model',
+            version: 1,
+            id: 'pmm_error',
+            timeMyr,
+            plateIds: [],
+            plateIdByCellField: 'r_plate',
+            anchorPlateId: null,
+            rotations: { type: 'stage-euler', poleByPlateId: {}, omegaByPlateId: {}, units: 'world-orogen-v1' },
+            diagnostics: { velocityScale: 1, source: 'plateVec', warnings: [err?.message || 'Plate motion diagnostics failed.'] },
+        };
+    }
 }
 
 // Compute triangle elevations from region elevations
@@ -376,6 +410,8 @@ function handleGenerate(data) {
             timing.push({ stage: 'Köppen classification', ms: performance.now() - t0 });
         }
 
+        const plateMotion = attachPlateMotionDiagnostics(debugLayers, mesh, r_xyz, r_plate, plateVec, plateSeeds, 0);
+
         progress(skipClimate ? 75 : 90, 'Computing triangle elevations\u2026');
         t0 = performance.now();
         const t_elevation = computeTriangleElevations(mesh, r_elevation);
@@ -398,6 +434,7 @@ function handleGenerate(data) {
             r_stress: new Float32Array(r_stress),
             temperatureOffset, precipitationOffset, landCoverage,
             cachedWind: windResult, cachedOcean: oceanResult,
+            plateMotion,
             // Retain detail-noise dampen + orogenic fields so reapply (which
             // reuses prePostElev) shapes the noise the same way as the initial
             // generate over craton/basin and orogenic regions.
@@ -439,6 +476,7 @@ function handleGenerate(data) {
             r_xyz, t_xyz, r_plate,
             plateSeeds: Array.from(plateSeeds),
             plateVec,
+            plateMotion,
             plateIsOcean: Array.from(plateIsOcean),
             originalPlateIsOcean: Array.from(originalPlateIsOcean),
             plateDensity, plateDensityLand, plateDensityOcean,
@@ -666,6 +704,9 @@ function handleEditRecompute(data) {
             W.cachedOcean = null;
         }
 
+        const plateMotion = attachPlateMotionDiagnostics(debugLayers, mesh, r_xyz, r_plate, plateVec, plateSeeds, W.plateMotion?.timeMyr || 0);
+        W.plateMotion = plateMotion;
+
         progress(skipClimate ? 75 : 90, 'Computing triangle elevations\u2026');
         t0 = performance.now();
         const t_elevation = computeTriangleElevations(mesh, r_elevation);
@@ -694,6 +735,7 @@ function handleEditRecompute(data) {
             r_stress,
             ...buildClimateFields(windResult, oceanResult, precipResult, tempResult),
             debugLayers,
+            plateMotion,
             _editTiming: {
                 elevation: tElev,
                 postProcessing: tPost,
@@ -1018,6 +1060,8 @@ function handleImportHeightmap(data) {
             timing.push({ stage: 'Köppen classification', ms: performance.now() - t0 });
         }
 
+        const plateMotion = attachPlateMotionDiagnostics(debugLayers, mesh, r_xyz, r_plate, plateVec, plateSeeds, 0);
+
         progress(skipClimate ? 75 : 92, 'Computing triangle elevations\u2026');
         t0 = performance.now();
         const t_elevation = computeTriangleElevations(mesh, r_elevation);
@@ -1036,7 +1080,8 @@ function handleImportHeightmap(data) {
             seed, nMag, noise: new SimplexNoise(seed),
             mountain_r: new Set(mountain_r), coastline_r: new Set(coastline_r), ocean_r: new Set(ocean_r),
             r_stress: new Float32Array(r_stress),
-            cachedWind: windResult, cachedOcean: oceanResult
+            cachedWind: windResult, cachedOcean: oceanResult,
+            plateMotion
         };
         timing.push({ stage: 'Clone state for retention', ms: performance.now() - t0 });
 
@@ -1051,6 +1096,7 @@ function handleImportHeightmap(data) {
             r_xyz, t_xyz, r_plate,
             plateSeeds: Array.from(plateSeeds),
             plateVec,
+            plateMotion,
             plateIsOcean: Array.from(plateIsOcean),
             originalPlateIsOcean: Array.from(plateIsOcean),
             plateDensity: {}, plateDensityLand: {}, plateDensityOcean: {},

@@ -204,6 +204,7 @@ if (worker) {
                     r_plate: msg.r_plate,
                     plateSeeds: new Set(msg.plateSeeds),
                     plateVec: msg.plateVec,
+                    plateMotion: msg.plateMotion || null,
                     plateIsOcean: new Set(msg.plateIsOcean),
                     originalPlateIsOcean: new Set(msg.originalPlateIsOcean),
                     plateDensity: msg.plateDensity,
@@ -553,6 +554,7 @@ if (worker) {
                     d.r_temperature_winter = msg.r_temperature_winter;
                 }
                 d.debugLayers = msg.debugLayers;
+                d.plateMotion = msg.plateMotion || d.plateMotion || null;
                 // Fallback: compute precip/temp on main thread if climate was
                 // requested but data is missing (e.g. partial worker result)
                 if (!msg.skipClimate && d.r_wind_east_summer) {
@@ -694,7 +696,7 @@ if (worker) {
 let _fallbackModules = null;
 async function loadFallback() {
     if (_fallbackModules) return _fallbackModules;
-    const [rng, simplex, sphere, plates, ocean, elev, post, wind, oceanCurrents, precip, temp, coarsePlates] = await Promise.all([
+    const [rng, simplex, sphere, plates, ocean, elev, post, wind, oceanCurrents, precip, temp, coarsePlates, plateMotion] = await Promise.all([
         import('./rng.js'),
         import('./simplex-noise.js'),
         import('./sphere-mesh.js'),
@@ -706,9 +708,10 @@ async function loadFallback() {
         import('./ocean.js'),
         import('./precipitation.js'),
         import('./temperature.js'),
-        import('./coarse-plates.js')
+        import('./coarse-plates.js'),
+        import('./evolution/plate-motion.js')
     ]);
-    _fallbackModules = { rng, simplex, sphere, plates, ocean, elev, post, wind, oceanCurrents, precip, temp, coarsePlates };
+    _fallbackModules = { rng, simplex, sphere, plates, ocean, elev, post, wind, oceanCurrents, precip, temp, coarsePlates, plateMotion };
     return _fallbackModules;
 }
 
@@ -833,6 +836,14 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
                 debugLayers.tempContinentality = tempResult.r_tempContinentality;
                 debugLayers.koppen = classifyKoppen(ctx.mesh, r_elevation, tempResult, precipResult);
             }
+            ctx.plateMotion = m.plateMotion.attachPlateMotionDebugLayers(debugLayers, {
+                mesh: ctx.mesh,
+                r_xyz: ctx.r_xyz,
+                r_plate: ctx.r_plate,
+                plateVec: ctx.plateVec,
+                plateSeeds: ctx.plateSeeds,
+                timeMyr: 0,
+            });
             const t_elevation = new Float32Array(ctx.mesh.numTriangles);
             for (let t = 0; t < ctx.mesh.numTriangles; t++) {
                 const s0 = 3 * t;
@@ -845,6 +856,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
             state.curData = {
                 mesh: ctx.mesh, r_xyz: ctx.r_xyz, t_xyz: ctx.t_xyz,
                 r_plate: ctx.r_plate, plateSeeds: ctx.plateSeeds, plateVec: ctx.plateVec,
+                plateMotion: ctx.plateMotion || null,
                 plateIsOcean: ctx.plateIsOcean, originalPlateIsOcean: ctx.originalPlateIsOcean,
                 plateDensity: ctx.plateDensity, plateDensityLand: ctx.plateDensityLand,
                 plateDensityOcean: ctx.plateDensityOcean, prePostElev: ctx.prePostElev,
