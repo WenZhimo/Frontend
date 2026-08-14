@@ -201,3 +201,88 @@ export function attachGeologyMemoryDebugLayers(targetDebugLayers, input = {}) {
         metrics: diagnostics.metrics,
     };
 }
+
+export function evolveGeologyMemoryInPlace(curData, { dtMyr = 1 } = {}) {
+    const debugLayers = curData?.debugLayers;
+    if (!debugLayers?.crustAge || !debugLayers?.riftStage) return null;
+
+    const n = debugLayers.crustAge.length;
+    const dt = Math.max(0, Number(dtMyr) || 0);
+    const boundaryKind = debugLayers.boundaryKind || null;
+    const boundaryConfidence = debugLayers.boundaryConfidence || null;
+    const crustAge = debugLayers.crustAge;
+    const riftStage = debugLayers.riftStage;
+    const oldOrogeny = debugLayers.oldOrogeny;
+    const transformMemory = debugLayers.transformMemory;
+    const fractureZoneMemory = debugLayers.fractureZoneMemory;
+    const sedimentMemory = debugLayers.sedimentMemory;
+    const r_elevation = curData.r_elevation;
+
+    const oldOrogenDecay = Math.exp(-dt / 120);
+    const transformDecay = Math.exp(-dt / 35);
+    const fractureDecay = Math.exp(-dt / 180);
+    let crustCellsAdvanced = 0;
+    let riftCellsActive = 0;
+    let transformCellsActive = 0;
+
+    for (let r = 0; r < n; r++) {
+        const elevation = r_elevation ? r_elevation[r] : 0;
+        const isWater = elevation <= 0;
+        const kind = boundaryKind ? boundaryKind[r] : 0;
+        const confidence = boundaryConfidence ? boundaryConfidence[r] : 1;
+        const isDivergent = confidence > 0 && kind < -0.25;
+        const isConvergent = confidence > 0 && kind > 0.75;
+        const isTransform = confidence > 0 && kind > 0.25 && kind < 0.75;
+
+        if (isWater) {
+            crustAge[r] = isDivergent ? 0 : Math.min(220, crustAge[r] + dt);
+            crustCellsAdvanced++;
+        } else {
+            crustAge[r] = Math.max(0, crustAge[r] - dt * 0.25);
+        }
+
+        if (!isWater && isDivergent) {
+            riftStage[r] = Math.min(5, riftStage[r] + dt * 0.15);
+            riftCellsActive++;
+        } else {
+            riftStage[r] = Math.max(0, riftStage[r] - dt * 0.04);
+        }
+
+        if (oldOrogeny) {
+            const activeOrogen = isConvergent ? 1 : 0;
+            oldOrogeny[r] = Math.max(oldOrogeny[r] * oldOrogenDecay, activeOrogen);
+        }
+
+        if (transformMemory) {
+            const activeTransform = isTransform ? 1 : 0;
+            transformMemory[r] = Math.max(transformMemory[r] * transformDecay, activeTransform);
+            if (isTransform) transformCellsActive++;
+        }
+
+        if (fractureZoneMemory) {
+            const activeFracture = isTransform ? (isWater ? 1 : 0.35) : 0;
+            fractureZoneMemory[r] = Math.max(fractureZoneMemory[r] * fractureDecay, activeFracture);
+        }
+
+        if (sedimentMemory) {
+            const lowland = clamp01((0.08 - elevation) / 0.25);
+            const deposition = (isWater ? 0.004 : 0.0025) * lowland * dt;
+            const upliftErosion = Math.max(0, elevation - 0.25) * 0.0015 * dt;
+            sedimentMemory[r] = clamp01(sedimentMemory[r] + deposition - upliftErosion);
+        }
+    }
+
+    curData.geologyMemory = {
+        ...(curData.geologyMemory || { schema: MEMORY_SCHEMA, version: MEMORY_VERSION }),
+        schema: MEMORY_SCHEMA,
+        version: MEMORY_VERSION,
+        lastStep: {
+            dtMyr: dt,
+            crustCellsAdvanced,
+            riftCellsActive,
+            transformCellsActive,
+        },
+    };
+
+    return curData.geologyMemory;
+}

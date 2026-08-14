@@ -733,6 +733,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
             const { mesh, r_xyz } = m.sphere.buildSphere(N, jitter, ctx.rng);
             ctx.mesh = mesh; ctx.r_xyz = r_xyz;
             ctx.t_xyz = m.sphere.generateTriangleCenters(mesh, r_xyz);
+            ctx.neighborDist = m.sphere.computeNeighborDist(mesh, r_xyz);
         }},
         { pct: 10, label: 'Generating coarse plates\u2026', work() {
             const { coarseMesh, coarse_xyz, coarse_r_plate, coarsePlateSeeds, coarsePlateVec, coarsePlateIsOcean } =
@@ -811,7 +812,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
                 amplitudeField: r_orogenic,
             });
             if (glacialErosion > 0 || hydraulicErosion > 0 || thermalErosion > 0)
-                m.post.erodeComposite(ctx.mesh, r_elevation, ctx.r_xyz, r_isOcean, Math.round(hydraulicErosion * 20), hydraulicErosion * 0.0006, 0.5, 1.0, Math.round(thermalErosion * 10), 1.2 - thermalErosion * 0.4, thermalErosion * 0.15, Math.round(glacialErosion * 10), glacialErosion);
+                m.post.erodeComposite(ctx.mesh, r_elevation, ctx.r_xyz, r_isOcean, Math.round(hydraulicErosion * 20), hydraulicErosion * 0.0006, 0.5, 1.0, Math.round(thermalErosion * 10), 1.2 - thermalErosion * 0.4, thermalErosion * 0.15, Math.round(glacialErosion * 10), glacialErosion, ctx.neighborDist);
             if (ridgeSharpening > 0) m.post.sharpenRidges(ctx.mesh, r_elevation, r_isOcean, Math.round(1 + ridgeSharpening * 3), ridgeSharpening * 0.08);
             m.post.applySoilCreep(ctx.mesh, r_elevation, r_isOcean, 3, 0.1125);
             const dl_erosionDelta = new Float32Array(ctx.mesh.numRegions);

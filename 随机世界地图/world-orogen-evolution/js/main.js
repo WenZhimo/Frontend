@@ -14,6 +14,7 @@ import { KOPPEN_CLASSES } from './koppen.js';
 import { elevationToColor } from './color-map.js';
 import { advanceEvolutionState, ensureEvolutionState, formatEvolutionLabel } from './evolution/evolution-state.js';
 import { snapshotCache } from './evolution/snapshot-cache.js';
+import { evolveGeologyMemoryInPlace } from './evolution/geology-memory.js';
 
 // Slider value displays + stale tracking
 const sliderIds = ['sN','sP','sCn','sJ','sNs','sCsv','sLc'];
@@ -786,6 +787,7 @@ function stepEvolutionOnce() {
     });
     const nextState = advanceEvolutionState(baseState, { dtMyr });
     state.curData.evolutionState = nextState;
+    evolveGeologyMemoryInPlace(state.curData, { dtMyr });
     try {
         const snapshot = snapshotCache.capture({
             label: formatEvolutionLabel(nextState),
