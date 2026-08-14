@@ -1,5 +1,7 @@
 const HISTORY_SUMMARY_SCHEMA = 'world-orogen-history-summary';
 const HISTORY_SUMMARY_VERSION = 1;
+const HISTORY_TIMELINE_SCHEMA = 'world-orogen-history-timeline';
+const HISTORY_TIMELINE_VERSION = 1;
 
 function round(value, digits = 3) {
     if (!Number.isFinite(value)) return 0;
@@ -11,6 +13,10 @@ function eventCounts(events = []) {
     const counts = {};
     for (const event of events) counts[event.type] = (counts[event.type] || 0) + 1;
     return counts;
+}
+
+function clonePlain(value) {
+    return JSON.parse(JSON.stringify(value));
 }
 
 function topByPopulation(items = [], limit = 8) {
@@ -203,6 +209,129 @@ export function formatHistorySummaryJson(summary) {
     return JSON.stringify(summary, null, 2);
 }
 
+export function createHistoryPoint(summary, {
+    source = 'manual',
+    snapshotId = null,
+    label = '',
+} = {}) {
+    const safeSummary = clonePlain(summary);
+    return {
+        id: `${safeSummary.world.seed || 'world'}:${safeSummary.civilization.year}:${source}:${safeSummary.civilization.stepIndex}`,
+        source,
+        snapshotId,
+        label: label || `Year ${safeSummary.civilization.year}`,
+        capturedAt: new Date().toISOString(),
+        year: safeSummary.civilization.year,
+        geologyTimeMyr: safeSummary.world.geologyTimeMyr,
+        metrics: safeSummary.civilization.metrics,
+        eventCounts: safeSummary.civilization.eventCounts,
+        narrativeSignals: safeSummary.narrativeSignals,
+        summary: safeSummary,
+    };
+}
+
+function mergeEventCounts(points) {
+    const totals = {};
+    for (const point of points) {
+        for (const [type, count] of Object.entries(point.eventCounts || {})) {
+            totals[type] = Math.max(totals[type] || 0, count);
+        }
+    }
+    return totals;
+}
+
+function timelineDeltas(points) {
+    const deltas = [];
+    for (let i = 1; i < points.length; i++) {
+        const prev = points[i - 1];
+        const current = points[i];
+        deltas.push({
+            fromYear: prev.year,
+            toYear: current.year,
+            populationChange: (current.metrics.population || 0) - (prev.metrics.population || 0),
+            settlementChange: (current.metrics.settlements || 0) - (prev.metrics.settlements || 0),
+            cultureChange: (current.metrics.cultures || 0) - (prev.metrics.cultures || 0),
+            languageChange: (current.metrics.languages || 0) - (prev.metrics.languages || 0),
+            polityChange: (current.metrics.polities || 0) - (prev.metrics.polities || 0),
+        });
+    }
+    return deltas;
+}
+
+function dedupePoints(points) {
+    const byKey = new Map();
+    for (const point of points) {
+        const stepIndex = point.summary?.civilization?.stepIndex ?? point.metrics?.stepIndex ?? '';
+        const key = `${point.snapshotId || 'runtime'}:${point.year}:${stepIndex}`;
+        byKey.set(key, point);
+    }
+    return Array.from(byKey.values()).sort((a, b) => (
+        (a.year - b.year) ||
+        String(a.capturedAt).localeCompare(String(b.capturedAt))
+    ));
+}
+
+export function buildHistoryTimeline(points, { currentSummary = null } = {}) {
+    const rawPoints = points.slice();
+    if (currentSummary) rawPoints.push(createHistoryPoint(currentSummary, { source: 'current' }));
+    const ordered = dedupePoints(rawPoints).map(clonePlain);
+    if (!ordered.length) throw new Error('Build or record at least one history summary before building a timeline.');
+    const latest = ordered[ordered.length - 1];
+    return {
+        schema: HISTORY_TIMELINE_SCHEMA,
+        version: HISTORY_TIMELINE_VERSION,
+        world: {
+            seed: latest.summary.world.seed,
+            regions: latest.summary.world.regions,
+            pointCount: ordered.length,
+        },
+        range: {
+            startYear: ordered[0].year,
+            endYear: latest.year,
+            startGeologyTimeMyr: ordered[0].geologyTimeMyr,
+            endGeologyTimeMyr: latest.geologyTimeMyr,
+        },
+        points: ordered,
+        eventTotals: mergeEventCounts(ordered),
+        deltas: timelineDeltas(ordered),
+        latestSummary: latest.summary,
+    };
+}
+
+export function formatHistoryTimelineMarkdown(timeline) {
+    const latest = timeline.latestSummary;
+    const lines = [
+        '# World Orogen History Timeline',
+        '',
+        `- Seed: ${timeline.world.seed}`,
+        `- Regions: ${timeline.world.regions.toLocaleString()}`,
+        `- Time range: Year ${timeline.range.startYear.toLocaleString()} -> Year ${timeline.range.endYear.toLocaleString()}`,
+        `- History points: ${timeline.world.pointCount}`,
+        '',
+        '## Timeline Points',
+        ...timeline.points.map(point => {
+            const m = point.metrics;
+            return `- Year ${point.year.toLocaleString()}: pop ${m.population.toLocaleString()}, groups ${m.livingGroups}, settlements ${m.settlements}, cultures ${m.cultures}, languages ${m.languages}, polities ${m.polities}`;
+        }),
+        '',
+        '## Change Chain',
+        ...(timeline.deltas.length
+            ? timeline.deltas.map(delta => `- Year ${delta.fromYear.toLocaleString()} -> ${delta.toYear.toLocaleString()}: population ${delta.populationChange >= 0 ? '+' : ''}${delta.populationChange.toLocaleString()}, settlements ${delta.settlementChange >= 0 ? '+' : ''}${delta.settlementChange}, cultures ${delta.cultureChange >= 0 ? '+' : ''}${delta.cultureChange}, languages ${delta.languageChange >= 0 ? '+' : ''}${delta.languageChange}, polities ${delta.polityChange >= 0 ? '+' : ''}${delta.polityChange}`)
+            : ['- Only one history point is recorded so far.']),
+        '',
+        '## Event Totals',
+        ...Object.entries(timeline.eventTotals).sort((a, b) => a[0].localeCompare(b[0])).map(([type, count]) => `- ${type}: ${count}`),
+        '',
+        '## Latest Narrative Signals',
+        ...latest.narrativeSignals.map(signal => `- ${signal}`),
+    ];
+    return lines.join('\n');
+}
+
+export function formatHistoryTimelineJson(timeline) {
+    return JSON.stringify(timeline, null, 2);
+}
+
 function downloadText(filename, text, type) {
     const blob = new Blob([text], { type });
     const url = URL.createObjectURL(blob);
@@ -225,5 +354,19 @@ export function downloadHistorySummary(summary, format = 'markdown') {
     }
     const filename = `world-orogen-history-${seed}-year-${year}.md`;
     downloadText(filename, formatHistorySummaryMarkdown(summary), 'text/markdown');
+    return filename;
+}
+
+export function downloadHistoryTimeline(timeline, format = 'markdown') {
+    const start = timeline.range.startYear || 0;
+    const end = timeline.range.endYear || 0;
+    const seed = timeline.world.seed ?? 'world';
+    if (format === 'json') {
+        const filename = `world-orogen-history-timeline-${seed}-year-${start}-to-${end}.json`;
+        downloadText(filename, formatHistoryTimelineJson(timeline), 'application/json');
+        return filename;
+    }
+    const filename = `world-orogen-history-timeline-${seed}-year-${start}-to-${end}.md`;
+    downloadText(filename, formatHistoryTimelineMarkdown(timeline), 'text/markdown');
     return filename;
 }

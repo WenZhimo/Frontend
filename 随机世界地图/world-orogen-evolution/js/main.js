@@ -16,7 +16,15 @@ import { advanceEvolutionState, ensureEvolutionState, formatEvolutionLabel } fro
 import { snapshotCache } from './evolution/snapshot-cache.js';
 import { applyGeologyTerrainInfluenceInPlace, evolveGeologyMemoryInPlace } from './evolution/geology-memory.js';
 import { ensureCivilizationState, stepCivilizationInPlace } from './evolution/civilization.js';
-import { buildHistorySummary, downloadHistorySummary, formatHistorySummaryMarkdown } from './evolution/history-export.js';
+import {
+    buildHistorySummary,
+    buildHistoryTimeline,
+    createHistoryPoint,
+    downloadHistorySummary,
+    downloadHistoryTimeline,
+    formatHistorySummaryMarkdown,
+    formatHistoryTimelineMarkdown,
+} from './evolution/history-export.js';
 
 // Slider value displays + stale tracking
 const sliderIds = ['sN','sP','sCn','sJ','sNs','sCsv','sLc'];
@@ -765,7 +773,7 @@ function rebuildWorldAfterSnapshotApply(snapshotId) {
     updatePlanetCode(false);
     renderSnapshotList();
     renderCivilizationPanel();
-    invalidateHistorySummary('Snapshot restored. Build a fresh history summary.');
+    invalidateHistorySummary('Snapshot restored. Build a fresh history summary.', { resetArchive: true });
     return compareWarning;
 }
 
@@ -969,7 +977,8 @@ function seedCivilization() {
     const civ = ensureCivilizationState(state.curData);
     renderCivilizationPanel();
     showCivilizationLayer('populationDensity');
-    invalidateHistorySummary('Civilization seeded. Build a history summary when ready.');
+    const point = recordHistoryPoint('civilization-seed');
+    invalidateHistorySummary(`Recorded ${point?.label || 'civilization seed'}. Build summary or timeline when ready.`);
     setCivilizationStatus(`Seeded ${civ.populationGroups.length} population groups.`, 'ok');
 }
 
@@ -983,7 +992,8 @@ function stepCivilizationOnce() {
     const civ = stepCivilizationInPlace(state.curData, { dtYear });
     renderCivilizationPanel();
     showCivilizationLayer('civilizationActivity');
-    invalidateHistorySummary('Civilization advanced. Rebuild history summary.');
+    const point = recordHistoryPoint('civilization-step');
+    invalidateHistorySummary(`Recorded ${point?.label || 'civilization step'}. Rebuild summary or timeline.`);
     setCivilizationStatus(`Advanced civilization to Year ${civ.timeYear.toLocaleString()}.`, 'ok');
 }
 
@@ -997,12 +1007,14 @@ initCivilizationPanel();
 
 const historyEls = {
     build: document.getElementById('historyBuild'),
+    timeline: document.getElementById('historyBuildTimeline'),
     json: document.getElementById('historyExportJson'),
     markdown: document.getElementById('historyExportMarkdown'),
     preview: document.getElementById('historyPreview'),
     status: document.getElementById('historyStatus'),
 };
-let lastHistorySummary = null;
+let historyArchive = [];
+let lastHistoryArtifact = null;
 
 function setHistoryStatus(message, kind = '') {
     if (!historyEls.status) return;
@@ -1014,19 +1026,42 @@ function setHistoryStatus(message, kind = '') {
 function renderHistoryPanel() {
     const hasWorld = !!state.curData;
     if (historyEls.build) historyEls.build.disabled = !hasWorld;
+    if (historyEls.timeline) historyEls.timeline.disabled = !hasWorld;
     if (historyEls.json) historyEls.json.disabled = !hasWorld;
     if (historyEls.markdown) historyEls.markdown.disabled = !hasWorld;
     if (!hasWorld && historyEls.preview) {
         historyEls.preview.value = '';
-        lastHistorySummary = null;
+        lastHistoryArtifact = null;
+        historyArchive = [];
     }
 }
 
-function invalidateHistorySummary(message = 'Build a fresh history summary.') {
-    lastHistorySummary = null;
+function invalidateHistorySummary(message = 'Build a fresh history summary.', { resetArchive = false } = {}) {
+    lastHistoryArtifact = null;
+    if (resetArchive) historyArchive = [];
     if (historyEls.preview) historyEls.preview.value = '';
     setHistoryStatus(message, state.curData ? 'warn' : '');
     renderHistoryPanel();
+}
+
+function recordHistoryPoint(source = 'manual') {
+    if (!state.curData?.civilizationState) return null;
+    try {
+        refreshEnvironmentInputs(state.curData);
+        const summary = buildHistorySummary(state.curData);
+        const point = createHistoryPoint(summary, {
+            source,
+            snapshotId: state.curData.evolutionState?.snapshot?.id || state.evolution.currentId || null,
+            label: `Year ${summary.civilization.year.toLocaleString()}`,
+        });
+        historyArchive = historyArchive.filter(item => item.id !== point.id);
+        historyArchive.push(point);
+        historyArchive.sort((a, b) => a.year - b.year || String(a.capturedAt).localeCompare(String(b.capturedAt)));
+        return point;
+    } catch (err) {
+        console.warn('[HistoryExport] record failed:', err);
+        return null;
+    }
 }
 
 function buildHistorySummaryForUi() {
@@ -1041,7 +1076,8 @@ function buildHistorySummaryForUi() {
     }
     try {
         const summary = buildHistorySummary(state.curData);
-        lastHistorySummary = summary;
+        lastHistoryArtifact = { type: 'summary', data: summary };
+        recordHistoryPoint('summary-build');
         if (historyEls.preview) historyEls.preview.value = formatHistorySummaryMarkdown(summary);
         setHistoryStatus(`Built history summary for Year ${summary.civilization.year.toLocaleString()}.`, 'ok');
         renderHistoryPanel();
@@ -1052,17 +1088,43 @@ function buildHistorySummaryForUi() {
     }
 }
 
-function exportHistorySummary(format) {
-    const summary = lastHistorySummary || buildHistorySummaryForUi();
-    if (!summary) return;
-    const filename = downloadHistorySummary(summary, format);
+function buildHistoryTimelineForUi() {
+    if (!state.curData) {
+        setHistoryStatus('Generate a world before building history timeline.', 'warn');
+        return null;
+    }
+    if (!historyArchive.length && !state.curData.civilizationState) {
+        ensureCivilizationState(state.curData);
+        renderCivilizationPanel();
+    }
+    recordHistoryPoint('timeline-build');
+    try {
+        const timeline = buildHistoryTimeline(historyArchive);
+        lastHistoryArtifact = { type: 'timeline', data: timeline };
+        if (historyEls.preview) historyEls.preview.value = formatHistoryTimelineMarkdown(timeline);
+        setHistoryStatus(`Built ${timeline.world.pointCount}-point history timeline.`, 'ok');
+        renderHistoryPanel();
+        return timeline;
+    } catch (err) {
+        setHistoryStatus(err?.message || 'History timeline failed.', 'warn');
+        return null;
+    }
+}
+
+function exportHistoryArtifact(format) {
+    const artifact = lastHistoryArtifact || { type: 'summary', data: buildHistorySummaryForUi() };
+    if (!artifact.data) return;
+    const filename = artifact.type === 'timeline'
+        ? downloadHistoryTimeline(artifact.data, format)
+        : downloadHistorySummary(artifact.data, format);
     setHistoryStatus(`Downloaded ${filename}.`, 'ok');
 }
 
 function initHistoryPanel() {
     historyEls.build?.addEventListener('click', buildHistorySummaryForUi);
-    historyEls.json?.addEventListener('click', () => exportHistorySummary('json'));
-    historyEls.markdown?.addEventListener('click', () => exportHistorySummary('markdown'));
+    historyEls.timeline?.addEventListener('click', buildHistoryTimelineForUi);
+    historyEls.json?.addEventListener('click', () => exportHistoryArtifact('json'));
+    historyEls.markdown?.addEventListener('click', () => exportHistoryArtifact('markdown'));
     renderHistoryPanel();
 }
 
@@ -1092,7 +1154,7 @@ genBtn.addEventListener('generate-done', () => {
     }
 });
 genBtn.addEventListener('generate-done', renderCivilizationPanel);
-genBtn.addEventListener('generate-done', () => invalidateHistorySummary('World generated. Seed or step civilization, then build history summary.'));
+genBtn.addEventListener('generate-done', () => invalidateHistorySummary('World generated. Seed or step civilization, then build history summary.', { resetArchive: true }));
 
 document.addEventListener('plates-edited', () => {
     updatePlanetCode(true);
