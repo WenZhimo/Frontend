@@ -7,6 +7,9 @@
   const seedCopyButton = document.getElementById("seed-copy");
   const seedStatus = document.getElementById("seed-status");
   const modeButtons = Array.from(document.querySelectorAll("[data-mode]"));
+  const playModeSelect = document.getElementById("play-mode");
+  const humanSideSelect = document.getElementById("human-side");
+  const aiSelect = document.getElementById("ai-select");
 
   const COLS = 126;
   const ROWS = 60;
@@ -212,6 +215,10 @@
   let matchSeedCode = 1;
   let matchRng = () => 0.5;
   let matchMode = DEFAULT_MATCH_MODE;
+  let playMode = "ai-vs-ai";
+  let humanSide = "white";
+  let selectedAIName = "";
+  let selectedSquare = null;
   let positionCounts = new Map();
   let aiMoveTimer = null;
   let aiMoveToken = 0;
@@ -817,6 +824,59 @@
     return roster[Math.floor(matchRng() * roster.length)];
   }
 
+  function populatePlayControls() {
+    if (humanSideSelect && !humanSideSelect.options.length) {
+      humanSideSelect.innerHTML = [
+        '<option value="white">HUMAN WHITE</option>',
+        '<option value="black">HUMAN BLACK</option>',
+      ].join("");
+    }
+    if (aiSelect && !aiSelect.options.length) {
+      aiSelect.innerHTML = availableAI().map((ai) => `<option value="${ai.name}">${ai.name}</option>`).join("");
+    }
+    selectedAIName = aiSelect?.value || availableAI()[0]?.name || "";
+  }
+
+  function readPlayControls() {
+    playMode = playModeSelect?.value || "ai-vs-ai";
+    humanSide = humanSideSelect?.value || "white";
+    selectedAIName = aiSelect?.value || availableAI()[0]?.name || "";
+  }
+
+  function localHumanPlayer() {
+    return { name: "HUMAN", source: "local", kind: "human" };
+  }
+
+  function selectedAIPlayer() {
+    return resolveForcedPlayer(selectedAIName) || pickAI();
+  }
+
+  function playModePlayers() {
+    if (playMode === "human-vs-human") {
+      return { white: localHumanPlayer(), black: localHumanPlayer() };
+    }
+    if (playMode === "human-vs-ai") {
+      const ai = selectedAIPlayer();
+      return humanSide === "white"
+        ? { white: localHumanPlayer(), black: ai }
+        : { white: ai, black: localHumanPlayer() };
+    }
+    return null;
+  }
+
+  function isHumanSide(side) {
+    return matchPlayers?.[side]?.kind === "human";
+  }
+
+  function isHumanTurn() {
+    return isHumanSide(currentSide());
+  }
+
+  function scheduleNextMove(now, delay) {
+    selectedSquare = null;
+    nextMoveAt = isHumanTurn() ? Number.POSITIVE_INFINITY : now + playbackDelay(delay);
+  }
+
   function pieceTypeFromSymbol(symbol) {
     return SYMBOL_TO_TYPE[String(symbol).toLowerCase()] || "pawn";
   }
@@ -1141,6 +1201,7 @@
 
   function reset(now = performance.now(), options = {}) {
     if (options.mode) matchMode = normalizeMatchMode(options.mode);
+    readPlayControls();
     syncModeButtons();
     clearAiMoveTimer();
     clearStockfishSessions();
@@ -1158,6 +1219,7 @@
     moveLog = [];
     moveScroll = 0;
     moveCursor = 0;
+    selectedSquare = null;
     ply = 0;
     prepareMatchSeed(Boolean(options.forceRandom), options.seedOverride ?? null);
     matchPlayers = { white: null, black: null };
@@ -1172,7 +1234,15 @@
     if (options.immediatePlayers) {
       matchPlayers = pickPlayers(options.players);
       selectingPlayers = false;
-      nextMoveAt = Number.POSITIVE_INFINITY;
+      scheduleNextMove(now, 0);
+      return;
+    }
+
+    const localPlayers = options.players ? null : playModePlayers();
+    if (localPlayers) {
+      matchPlayers = localPlayers;
+      selectingPlayers = false;
+      scheduleNextMove(now, 520);
       return;
     }
 
@@ -1180,7 +1250,7 @@
       if (token !== selectionToken) return;
       matchPlayers = pickPlayers(options.players);
       selectingPlayers = false;
-      nextMoveAt = performance.now() + playbackDelay(520);
+      scheduleNextMove(performance.now(), 520);
     }, playbackDelay(760));
   }
 
@@ -1236,6 +1306,7 @@
 
   function startMove(now) {
     if (paused || active || aiThinking || selectingPlayers || !engineGame || !boardState || matchResult) return;
+    if (isHumanTurn()) return;
     if (boardState.checkMate || boardState.staleMate || hasRuleDraw()) {
       settleResult();
       return;
@@ -1351,7 +1422,7 @@
     if (move.flag.includes("#")) shatter(boardPos(to.file, to.rank), moving.side, 62, 1.35);
     settleResult();
     active = null;
-    nextMoveAt = now + playbackDelay(165);
+    scheduleNextMove(now, 165);
   }
 
   function settleResult() {
@@ -1872,6 +1943,38 @@
     };
   }
 
+  function boardSquareFromPointer(event) {
+    const cell = cellFromPointer(event);
+    const file = Math.floor((cell.x - board.x) / board.sw);
+    const rank = Math.floor((cell.y - board.y) / board.sh);
+    if (file < 0 || rank < 0 || file >= 8 || rank >= 8) return null;
+    return squareName(file, rank).toLowerCase();
+  }
+
+  function selectedLegalMove(from, to) {
+    const moves = legalMoves().filter((move) => move.from === from && move.to === to);
+    return moves.find((move) => move.promotion === "q") || moves[0] || null;
+  }
+
+  function handleHumanBoardClick(event) {
+    if (!isHumanTurn() || paused || active || aiThinking || selectingPlayers || matchResult) return false;
+    const squareId = boardSquareFromPointer(event);
+    if (!squareId) return false;
+    const symbol = pieceAt(boardState, squareId);
+    if (symbol && sideFromSymbol(symbol) === currentSide()) {
+      selectedSquare = squareId;
+      return true;
+    }
+    if (!selectedSquare) return true;
+    const choice = selectedLegalMove(selectedSquare, squareId);
+    if (!choice) return true;
+    const side = currentSide();
+    const move = buildMoveRecord(choice, side, matchPlayers[side]);
+    selectedSquare = null;
+    primeActiveMove(performance.now(), move, squareFromEngine(choice.from), squareFromEngine(choice.to));
+    return true;
+  }
+
   function hitsReplayButton(cell) {
     return Boolean(
       replayButton &&
@@ -1907,6 +2010,12 @@
       releaseControlFocus();
     });
   });
+  for (const control of [playModeSelect, humanSideSelect, aiSelect]) {
+    control?.addEventListener("change", () => {
+      reset(performance.now());
+      releaseControlFocus();
+    });
+  }
 
   function shouldLetControlHandleKey(event) {
     const target = event.target;
@@ -1935,14 +2044,20 @@
   canvas.addEventListener("click", (event) => {
     releaseControlFocus();
     if (hitsReplayButton(cellFromPointer(event))) reset(performance.now());
+    else handleHumanBoardClick(event);
   });
   canvas.addEventListener("mousemove", (event) => {
-    canvas.style.cursor = hitsReplayButton(cellFromPointer(event)) ? "pointer" : "default";
+    const cell = cellFromPointer(event);
+    const squareId = boardSquareFromPointer(event);
+    const canSelect = squareId && pieceAt(boardState, squareId) && sideFromSymbol(pieceAt(boardState, squareId)) === currentSide();
+    const canMove = squareId && selectedSquare && selectedLegalMove(selectedSquare, squareId);
+    canvas.style.cursor = hitsReplayButton(cell) || (isHumanTurn() && (canSelect || canMove)) ? "pointer" : "default";
   });
   canvas.addEventListener("mouseleave", () => {
     canvas.style.cursor = "default";
   });
 
+  populatePlayControls();
   syncModeButtons();
   reset(performance.now());
   window.__dotChessState = publicState;

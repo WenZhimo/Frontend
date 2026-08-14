@@ -34,8 +34,8 @@ body {
 }
 
 .seed-bar {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-height: 34px;
@@ -53,7 +53,8 @@ body {
 }
 
 .seed-bar input,
-.seed-bar button {
+.seed-bar button,
+.seed-bar select {
   height: 22px;
   border: 1px solid #2b3446;
   border-radius: 0;
@@ -64,6 +65,7 @@ body {
 }
 
 .seed-bar input {
+  flex: 1 1 280px;
   min-width: 0;
   padding: 0 8px;
   color: #eef7ff;
@@ -76,6 +78,12 @@ body {
 
 .seed-bar button {
   padding: 0 10px;
+  cursor: pointer;
+}
+
+.seed-bar select {
+  min-width: 112px;
+  padding: 0 8px;
   cursor: pointer;
 }
 
@@ -104,13 +112,16 @@ body {
 }
 
 .seed-bar button:hover,
-.seed-bar button:focus-visible {
+.seed-bar button:focus-visible,
+.seed-bar select:hover,
+.seed-bar select:focus-visible {
   border-color: #6ed5ec;
   color: #6ed5ec;
   outline: none;
 }
 
 #seed-status {
+  margin-left: auto;
   min-width: 104px;
   text-align: right;
   color: #7a8397;

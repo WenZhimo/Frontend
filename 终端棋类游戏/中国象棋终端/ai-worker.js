@@ -367,6 +367,26 @@ self.onmessage = (event) => {
       });
       return;
     }
+    if (context.requestedMove) {
+      const selectedMove = legal.find((move) => moveText(move) === context.requestedMove);
+      if (!selectedMove) {
+        self.postMessage({ ok: true, choice: null, illegal: true });
+        return;
+      }
+      const nextBoard = makeMove(board, selectedMove);
+      const nextFen = boardToFen(nextBoard, side, context.fen);
+      const nextSide = otherSide(side);
+      self.postMessage({
+        ok: true,
+        choice: {
+          text: moveText(selectedMove),
+          score: 0,
+          nextFen,
+          check: isInCheck(nextBoard, nextSide),
+        },
+      });
+      return;
+    }
     const selected = chooseMove(board, side, player, context);
     if (!selected) {
       self.postMessage({ ok: true, choice: null });

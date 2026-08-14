@@ -6,6 +6,9 @@
   const seedRandomButton = document.getElementById("seed-random");
   const seedCopyButton = document.getElementById("seed-copy");
   const seedStatus = document.getElementById("seed-status");
+  const playModeSelect = document.getElementById("play-mode");
+  const humanSideSelect = document.getElementById("human-side");
+  const aiSelect = document.getElementById("ai-select");
 
   const COLS = 132;
   const ROWS = 60;
@@ -103,6 +106,9 @@
     lastFrame: 0,
     speed: 1,
     paused: false,
+    matchMode: "ai-vs-ai",
+    humanSide: "black",
+    selectedAI: "",
   };
 
   function idx(x, y) {
@@ -170,6 +176,58 @@
     return list[Math.floor(rng() * list.length) % list.length];
   }
 
+  function populateMatchControls() {
+    if (humanSideSelect && !humanSideSelect.options.length) {
+      humanSideSelect.innerHTML = [
+        '<option value="black">HUMAN BLACK</option>',
+        '<option value="white">HUMAN WHITE</option>',
+      ].join("");
+    }
+    if (aiSelect && !aiSelect.options.length) {
+      aiSelect.innerHTML = AI_ROSTER.map((ai) => `<option value="${ai.name}">${ai.name}</option>`).join("");
+    }
+  }
+
+  function selectedAIPlayer() {
+    const name = aiSelect?.value || AI_ROSTER[0].name;
+    return { ...(AI_ROSTER.find((ai) => ai.name === name) || AI_ROSTER[0]) };
+  }
+
+  function setupPlayers() {
+    const black = { ...pick(state.rng, AI_ROSTER) };
+    const white = { ...pick(state.rng, AI_ROSTER) };
+    if (state.matchMode === "human-vs-human") {
+      return { black: { name: "HUMAN", source: "local" }, white: { name: "HUMAN", source: "local" } };
+    }
+    if (state.matchMode === "human-vs-ai") {
+      const ai = selectedAIPlayer();
+      return state.humanSide === "black"
+        ? { black: { name: "HUMAN", source: "local" }, white: ai }
+        : { black: ai, white: { name: "HUMAN", source: "local" } };
+    }
+    return { black, white };
+  }
+
+  function isHumanSide(side) {
+    const name = sideName(side);
+    return state.matchMode === "human-vs-human" || (state.matchMode === "human-vs-ai" && state.humanSide === name);
+  }
+
+  function isHumanTurn() {
+    return isHumanSide(state.toMove);
+  }
+
+  function updateSeedStatus() {
+    if (state.winner || state.result) seedStatus.value = "FINISHED";
+    else if (state.paused) seedStatus.value = "PAUSED";
+    else seedStatus.value = isHumanTurn() ? "HUMAN TURN" : "PLAYING";
+  }
+
+  function scheduleNextTurn(now, delay) {
+    state.nextMoveAt = isHumanTurn() ? Infinity : now + delay / state.speed;
+    updateSeedStatus();
+  }
+
   function blankBoard() {
     return Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
   }
@@ -178,8 +236,11 @@
     state.seed = normalizeSeed(seed || randomSeed());
     seedInput.value = state.seed.trimEnd();
     state.rng = makeRng(`${state.seed}|gomoku`);
+    state.matchMode = playModeSelect?.value || "ai-vs-ai";
+    state.humanSide = humanSideSelect?.value || "black";
+    state.selectedAI = aiSelect?.value || AI_ROSTER[0].name;
     state.board = blankBoard();
-    state.players = { black: { ...pick(state.rng, AI_ROSTER) }, white: { ...pick(state.rng, AI_ROSTER) } };
+    state.players = setupPlayers();
     state.toMove = 1;
     state.moves = [];
     state.moveLog = [];
@@ -192,9 +253,9 @@
     state.winLine = [];
     state.result = "";
     state.paused = false;
-    state.nextMoveAt = performance.now() + 420;
+    state.nextMoveAt = 0;
     state.lastFrame = 0;
-    seedStatus.value = "PLAYING";
+    scheduleNextTurn(performance.now(), 420);
   }
 
   function sideName(side) {
@@ -363,14 +424,16 @@
     return `${"ABCDEFGHIJKLMNO"[x]}${SIZE - y}`;
   }
 
-  function playAIMove(now) {
+  function playMove(move, now) {
     if (state.paused || state.winner) return;
-    const move = chooseMove();
     if (!move) {
       finishGame(0, "DRAW / board full");
       return;
     }
     const side = state.toMove;
+    const opponent = side === 1 ? 2 : 1;
+    const attack = move.attack || evaluateSideAt(move.x, move.y, side);
+    const block = move.block || evaluateSideAt(move.x, move.y, opponent);
     state.board[move.y][move.x] = side;
     state.moves.push({ x: move.x, y: move.y, side });
     state.lastMove = { x: move.x, y: move.y, side, at: now };
@@ -378,7 +441,7 @@
       ply: state.moves.length,
       side,
       coord: coordinate(move.x, move.y),
-      kind: move.attack.best.score >= move.block.best.score ? move.attack.best.kind : `BLOCK ${move.block.best.kind}`,
+      kind: attack.best.score >= block.best.score ? attack.best.kind : `BLOCK ${block.best.kind}`,
     });
     state.effects.push({
       type: "drop",
@@ -403,13 +466,37 @@
       return;
     }
     state.toMove = side === 1 ? 2 : 1;
-    state.nextMoveAt = now + 600 / state.speed;
+    scheduleNextTurn(now, 600);
+  }
+
+  function playAIMove(now) {
+    if (state.paused || state.winner || isHumanTurn()) return;
+    playMove(chooseMove(), now);
   }
 
   function finishGame(winner, result) {
     state.winner = winner;
     state.result = result;
-    seedStatus.value = "FINISHED";
+    updateSeedStatus();
+  }
+
+  function cellFromPointer(event) {
+    const rect = canvas.getBoundingClientRect();
+    const tx = ((event.clientX - rect.left) / rect.width) * COLS;
+    const ty = ((event.clientY - rect.top) / rect.height) * ROWS;
+    const x = Math.round((tx - layout.board.x) / layout.board.stepX);
+    const y = Math.round((ty - layout.board.y) / layout.board.stepY);
+    if (!inBounds(x, y)) return null;
+    const c = pointToChar({ x, y });
+    if (Math.abs(tx - c.x) > layout.board.stepX * 0.5 || Math.abs(ty - c.y) > layout.board.stepY * 0.6) return null;
+    return { x, y };
+  }
+
+  function handleHumanClick(event) {
+    if (!isHumanTurn() || state.paused || state.winner) return;
+    const cell = cellFromPointer(event);
+    if (!cell || !isEmpty(cell.x, cell.y)) return;
+    playMove({ x: cell.x, y: cell.y }, performance.now());
   }
 
   function clearScreen() {
@@ -921,19 +1008,36 @@
       await navigator.clipboard.writeText(state.seed);
       seedStatus.value = "COPIED";
       setTimeout(() => {
-        if (!state.winner) seedStatus.value = state.paused ? "PAUSED" : "PLAYING";
+        if (!state.winner) updateSeedStatus();
       }, 900);
     } catch (error) {
       seedStatus.value = "COPY ERR";
     }
   });
 
+  for (const control of [playModeSelect, humanSideSelect, aiSelect]) {
+    control?.addEventListener("change", () => {
+      startGame(seedInput.value || state.seed || randomSeed());
+    });
+  }
+
+  canvas.addEventListener("click", handleHumanClick);
+
+  canvas.addEventListener("mousemove", (event) => {
+    const cell = cellFromPointer(event);
+    canvas.style.cursor = isHumanTurn() && cell && isEmpty(cell.x, cell.y) ? "pointer" : "default";
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    canvas.style.cursor = "default";
+  });
+
   window.addEventListener("keydown", (event) => {
-    if (event.target === seedInput) return;
+    if (seedForm.contains(event.target)) return;
     if (event.key === " ") {
       event.preventDefault();
       state.paused = !state.paused;
-      seedStatus.value = state.paused ? "PAUSED" : state.winner ? "FINISHED" : "PLAYING";
+      updateSeedStatus();
     } else if (event.key.toLowerCase() === "r") {
       startGame(randomSeed());
     } else if (event.key.toLowerCase() === "p") {
@@ -943,6 +1047,7 @@
     }
   });
 
+  populateMatchControls();
   startGame(randomSeed());
   requestAnimationFrame(loop);
 })();

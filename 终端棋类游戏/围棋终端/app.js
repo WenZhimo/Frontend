@@ -6,6 +6,10 @@
   const seedRandomButton = document.getElementById("seed-random");
   const seedCopyButton = document.getElementById("seed-copy");
   const seedStatus = document.getElementById("seed-status");
+  const playModeSelect = document.getElementById("play-mode");
+  const humanSideSelect = document.getElementById("human-side");
+  const aiSelect = document.getElementById("ai-select");
+  const passButton = document.getElementById("pass-turn");
   const sizeButtons = Array.from(document.querySelectorAll("[data-size]"));
 
   const Goban = window["goban-engine"];
@@ -151,6 +155,9 @@
     result: "",
     positionCounts: new Map(),
     bootError: "",
+    matchMode: "ai-vs-ai",
+    humanSide: "black",
+    selectedAI: "",
   };
 
   function idx(x, y) {
@@ -218,6 +225,57 @@
     return list[Math.floor(rng() * list.length) % list.length];
   }
 
+  function populateMatchControls() {
+    if (humanSideSelect && !humanSideSelect.options.length) {
+      humanSideSelect.innerHTML = [
+        '<option value="black">HUMAN BLACK</option>',
+        '<option value="white">HUMAN WHITE</option>',
+      ].join("");
+    }
+    if (aiSelect && !aiSelect.options.length) {
+      aiSelect.innerHTML = AI_ROSTER.map((ai) => `<option value="${ai.name}">${ai.name}</option>`).join("");
+    }
+  }
+
+  function selectedAIPlayer() {
+    const name = aiSelect?.value || AI_ROSTER[0].name;
+    return { ...(AI_ROSTER.find((ai) => ai.name === name) || AI_ROSTER[0]) };
+  }
+
+  function setupPlayers() {
+    const black = { ...pick(state.rng, AI_ROSTER) };
+    const white = { ...pick(state.rng, AI_ROSTER) };
+    if (state.matchMode === "human-vs-human") {
+      return { black: { name: "HUMAN", source: "local" }, white: { name: "HUMAN", source: "local" } };
+    }
+    if (state.matchMode === "human-vs-ai") {
+      const ai = selectedAIPlayer();
+      return state.humanSide === "black"
+        ? { black: { name: "HUMAN", source: "local" }, white: ai }
+        : { black: ai, white: { name: "HUMAN", source: "local" } };
+    }
+    return { black, white };
+  }
+
+  function isHumanSide(side) {
+    return state.matchMode === "human-vs-human" || (state.matchMode === "human-vs-ai" && state.humanSide === side);
+  }
+
+  function isHumanTurn() {
+    return state.engine ? isHumanSide(state.engine.colorToMove()) : false;
+  }
+
+  function updateSeedStatus() {
+    if (state.ended) seedStatus.value = "FINISHED";
+    else if (state.paused) seedStatus.value = "PAUSED";
+    else seedStatus.value = isHumanTurn() ? "HUMAN TURN" : "PLAYING";
+  }
+
+  function scheduleNextTurn(now, delay) {
+    state.nextMoveAt = isHumanTurn() ? Infinity : now + delay / state.speed;
+    updateSeedStatus();
+  }
+
   function createEngine(size) {
     return new Engine({
       width: size,
@@ -242,10 +300,11 @@
     state.seed = normalizeSeed(seed || randomSeed());
     seedInput.value = state.seed.trimEnd();
     state.rng = makeRng(`${state.seed}|${state.size}`);
+    state.matchMode = playModeSelect?.value || "ai-vs-ai";
+    state.humanSide = humanSideSelect?.value || "black";
+    state.selectedAI = aiSelect?.value || AI_ROSTER[0].name;
     state.engine = createEngine(state.size);
-    const black = { ...pick(state.rng, AI_ROSTER) };
-    const white = { ...pick(state.rng, AI_ROSTER) };
-    state.players = { black, white };
+    state.players = setupPlayers();
     state.moves = [];
     state.moveLog = [];
     state.effects = [];
@@ -256,8 +315,8 @@
     state.result = "";
     state.paused = false;
     state.positionCounts = new Map([[state.engine.currentPositionId(), 1]]);
-    state.nextMoveAt = performance.now() + 480;
-    seedStatus.value = "PLAYING";
+    state.nextMoveAt = 0;
+    scheduleNextTurn(performance.now(), 480);
     updateSizeButtons();
   }
 
@@ -798,10 +857,9 @@
     return out;
   }
 
-  function playAIMove(now) {
+  function playMove(move, now) {
     if (!state.engine || state.ended || state.paused) return;
     const side = state.engine.colorToMove();
-    const move = chooseMove();
     if (move.pass) {
       state.engine.place(-1, -1, true, true, false, false, true, []);
       state.moves.push({ pass: true, side });
@@ -818,6 +876,7 @@
         state.engine.place(-1, -1, true, true, false, false, true, []);
         state.consecutivePasses += 1;
         state.moveLog.push({ ply: state.moves.length + 1, side, pass: true, coord: "--", captures: 0 });
+        scheduleNextTurn(now, 720);
         return;
       }
       const captured = diffCaptured(before, state.engine.board);
@@ -844,7 +903,12 @@
 
     const maxPlies = Math.floor(state.size * state.size * 1.35);
     if (!state.ended && state.moves.length >= maxPlies) finishGame("move limit");
-    state.nextMoveAt = now + 720 / state.speed;
+    if (!state.ended) scheduleNextTurn(now, 720);
+  }
+
+  function playAIMove(now) {
+    if (!state.engine || state.ended || state.paused || isHumanTurn()) return;
+    playMove(chooseMove(), now);
   }
 
   function finishGame(reason) {
@@ -854,7 +918,32 @@
     const diff = score.black.total - score.white.total;
     const winner = diff >= 0 ? "BLACK" : "WHITE";
     state.result = `${winner} +${Math.abs(diff).toFixed(1)} / ${reason}`;
-    seedStatus.value = "FINISHED";
+    updateSeedStatus();
+  }
+
+  function cellFromPointer(event) {
+    const b = boardLayout();
+    const rect = canvas.getBoundingClientRect();
+    const tx = ((event.clientX - rect.left) / rect.width) * COLS;
+    const ty = ((event.clientY - rect.top) / rect.height) * ROWS;
+    const x = Math.round((tx - b.x) / b.stepX);
+    const y = Math.round((ty - b.y) / b.stepY);
+    if (x < 0 || y < 0 || x >= state.size || y >= state.size) return null;
+    const c = { x: b.x + x * b.stepX, y: b.y + y * b.stepY };
+    if (Math.abs(tx - c.x) > b.stepX * 0.5 || Math.abs(ty - c.y) > b.stepY * 0.65) return null;
+    return { x, y };
+  }
+
+  function handleHumanClick(event) {
+    if (!isHumanTurn() || state.paused || state.ended) return;
+    const cell = cellFromPointer(event);
+    if (!cell || !legalSimulation(cell.x, cell.y)) return;
+    playMove({ pass: false, x: cell.x, y: cell.y }, performance.now());
+  }
+
+  function handleHumanPass() {
+    if (!isHumanTurn() || state.paused || state.ended) return;
+    playMove({ pass: true, reason: "human pass" }, performance.now());
   }
 
   function renderTerminal() {
@@ -909,7 +998,7 @@
   }
 
   function loop(now) {
-    if (!state.paused && !state.ended && now >= state.nextMoveAt) playAIMove(now);
+    if (!state.paused && !state.ended && !isHumanTurn() && now >= state.nextMoveAt) playAIMove(now);
     draw(now);
     requestAnimationFrame(loop);
   }
@@ -928,7 +1017,7 @@
       await navigator.clipboard.writeText(state.seed);
       seedStatus.value = "COPIED";
       setTimeout(() => {
-        if (!state.ended) seedStatus.value = state.paused ? "PAUSED" : "PLAYING";
+        if (!state.ended) updateSeedStatus();
       }, 900);
     } catch (error) {
       seedStatus.value = "COPY ERR";
@@ -942,12 +1031,31 @@
     });
   }
 
+  for (const control of [playModeSelect, humanSideSelect, aiSelect]) {
+    control?.addEventListener("change", () => {
+      startGame(seedInput.value || state.seed || randomSeed());
+    });
+  }
+
+  passButton?.addEventListener("click", handleHumanPass);
+
+  canvas.addEventListener("click", handleHumanClick);
+
+  canvas.addEventListener("mousemove", (event) => {
+    const cell = cellFromPointer(event);
+    canvas.style.cursor = isHumanTurn() && cell && legalSimulation(cell.x, cell.y) ? "pointer" : "default";
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    canvas.style.cursor = "default";
+  });
+
   window.addEventListener("keydown", (event) => {
-    if (event.target === seedInput) return;
+    if (seedForm.contains(event.target)) return;
     if (event.key === " ") {
       event.preventDefault();
       state.paused = !state.paused;
-      seedStatus.value = state.paused ? "PAUSED" : state.ended ? "FINISHED" : "PLAYING";
+      updateSeedStatus();
     } else if (event.key.toLowerCase() === "r") {
       startGame(randomSeed());
     } else if (event.key.toLowerCase() === "p") {
@@ -957,6 +1065,7 @@
     }
   });
 
+  populateMatchControls();
   startGame(randomSeed());
   requestAnimationFrame(loop);
 })();

@@ -6,6 +6,9 @@
   const seedRandomButton = document.getElementById("seed-random");
   const seedCopyButton = document.getElementById("seed-copy");
   const seedStatus = document.getElementById("seed-status");
+  const playModeSelect = document.getElementById("play-mode");
+  const humanSideSelect = document.getElementById("human-side");
+  const aiSelect = document.getElementById("ai-select");
 
   const COLS = 132;
   const ROWS = 60;
@@ -99,6 +102,10 @@
     speed: 1,
     paused: false,
     lastMove: null,
+    selected: null,
+    matchMode: "ai-vs-ai",
+    humanSide: "north",
+    selectedAI: "",
   };
 
   function idx(x, y) {
@@ -175,6 +182,60 @@
     return list[Math.floor(rng() * list.length) % list.length];
   }
 
+  function populateMatchControls() {
+    if (humanSideSelect && !humanSideSelect.options.length) {
+      humanSideSelect.innerHTML = [
+        '<option value="north">HUMAN NORTH</option>',
+        '<option value="south">HUMAN SOUTH</option>',
+      ].join("");
+    }
+    if (aiSelect && !aiSelect.options.length) {
+      aiSelect.innerHTML = AI_ROSTER.map((ai) => `<option value="${ai.name}">${ai.name}</option>`).join("");
+    }
+  }
+
+  function selectedAIPlayer() {
+    const name = aiSelect?.value || AI_ROSTER[0].name;
+    return { ...(AI_ROSTER.find((ai) => ai.name === name) || AI_ROSTER[0]) };
+  }
+
+  function setupPlayers() {
+    const north = { ...pick(state.rng, AI_ROSTER) };
+    const south = { ...pick(state.rng, AI_ROSTER) };
+    if (state.matchMode === "human-vs-human") {
+      return { north: { name: "HUMAN", source: "local" }, south: { name: "HUMAN", source: "local" } };
+    }
+    if (state.matchMode === "human-vs-ai") {
+      const ai = selectedAIPlayer();
+      return state.humanSide === "north"
+        ? { north: { name: "HUMAN", source: "local" }, south: ai }
+        : { north: ai, south: { name: "HUMAN", source: "local" } };
+    }
+    return { north, south };
+  }
+
+  function isHumanSide(side) {
+    const name = sideName(side);
+    return state.matchMode === "human-vs-human" || (state.matchMode === "human-vs-ai" && state.humanSide === name);
+  }
+
+  function isHumanTurn() {
+    return isHumanSide(state.toMove);
+  }
+
+  function updateSeedStatus() {
+    if (state.winner || state.result) seedStatus.value = "FINISHED";
+    else if (state.paused) seedStatus.value = "PAUSED";
+    else if (state.selected !== null) seedStatus.value = "SELECT TO";
+    else seedStatus.value = isHumanTurn() ? "HUMAN TURN" : "PLAYING";
+  }
+
+  function scheduleNextTurn(now, delay) {
+    state.selected = null;
+    state.nextMoveAt = isHumanTurn() ? Infinity : now + delay / state.speed;
+    updateSeedStatus();
+  }
+
   function buildHoles() {
     const out = [];
     let id = 0;
@@ -237,8 +298,11 @@
     state.seed = normalizeSeed(seed || randomSeed());
     seedInput.value = state.seed.trimEnd();
     state.rng = makeRng(`${state.seed}|chinese-checkers`);
+    state.matchMode = playModeSelect?.value || "ai-vs-ai";
+    state.humanSide = humanSideSelect?.value || "north";
+    state.selectedAI = aiSelect?.value || AI_ROSTER[0].name;
     state.pieces = new Map();
-    state.players = { north: { ...pick(state.rng, AI_ROSTER) }, south: { ...pick(state.rng, AI_ROSTER) } };
+    state.players = setupPlayers();
     for (const id of northHome) state.pieces.set(id, 1);
     for (const id of southHome) state.pieces.set(id, 2);
     state.toMove = 1;
@@ -251,9 +315,10 @@
     state.result = "";
     state.paused = false;
     state.lastMove = null;
-    state.nextMoveAt = performance.now() + 480;
+    state.selected = null;
+    state.nextMoveAt = 0;
     state.lastFrame = 0;
-    seedStatus.value = "PLAYING";
+    scheduleNextTurn(performance.now(), 480);
   }
 
   function sideName(side) {
@@ -379,8 +444,11 @@
   }
 
   function beginAIMove(now) {
-    if (state.paused || state.active || state.winner) return;
-    const move = chooseMove();
+    if (state.paused || state.active || state.winner || isHumanTurn()) return;
+    beginMove(chooseMove(), now);
+  }
+
+  function beginMove(move, now) {
     if (!move) {
       finishGame(state.toMove === 1 ? 2 : 1, `${sideTitle(state.toMove)} STALLED`);
       return;
@@ -428,8 +496,8 @@
     }
 
     state.toMove = move.side === 1 ? 2 : 1;
-    state.nextMoveAt = now + 260 / state.speed;
     state.active = null;
+    scheduleNextTurn(now, 260);
   }
 
   function hasWon(side) {
@@ -440,12 +508,46 @@
   function finishGame(winner, result) {
     state.winner = winner;
     state.result = result;
-    seedStatus.value = "FINISHED";
+    updateSeedStatus();
   }
 
   function holeChar(id) {
     const h = holeById.get(id);
     return { x: h.x, y: h.y };
+  }
+
+  function holeFromPointer(event) {
+    const rect = canvas.getBoundingClientRect();
+    const tx = ((event.clientX - rect.left) / rect.width) * COLS;
+    const ty = ((event.clientY - rect.top) / rect.height) * ROWS;
+    let best = null;
+    let bestDist = Infinity;
+    for (const hole of holes) {
+      const dist = (hole.x - tx) ** 2 + ((hole.y - ty) / 0.82) ** 2;
+      if (dist < bestDist) {
+        best = hole;
+        bestDist = dist;
+      }
+    }
+    return bestDist <= 4.2 ? best : null;
+  }
+
+  function handleHumanClick(event) {
+    if (!isHumanTurn() || state.paused || state.active || state.winner) return;
+    const hole = holeFromPointer(event);
+    if (!hole) return;
+    const owner = state.pieces.get(hole.id);
+    if (owner === state.toMove) {
+      state.selected = hole.id;
+      updateSeedStatus();
+      return;
+    }
+    if (state.selected === null) return;
+    const move = legalMoves(state.toMove).find((candidate) => candidate.from === state.selected && candidate.to === hole.id);
+    if (move) {
+      state.selected = null;
+      beginMove(move, performance.now());
+    }
   }
 
   function clearScreen() {
@@ -741,7 +843,7 @@
   function update(now, dt) {
     if (state.paused) return;
     const frameScale = dt / 16.67;
-    if (!state.active && !state.winner && now >= state.nextMoveAt) beginAIMove(now);
+    if (!state.active && !state.winner && !isHumanTurn() && now >= state.nextMoveAt) beginAIMove(now);
     if (state.active) {
       const t = clamp((now - state.active.start) / state.active.duration, 0, 1);
       const pos = activePosition(t);
@@ -886,19 +988,38 @@
       await navigator.clipboard.writeText(state.seed);
       seedStatus.value = "COPIED";
       setTimeout(() => {
-        if (!state.winner) seedStatus.value = state.paused ? "PAUSED" : "PLAYING";
+        if (!state.winner) updateSeedStatus();
       }, 900);
     } catch (error) {
       seedStatus.value = "COPY ERR";
     }
   });
 
+  for (const control of [playModeSelect, humanSideSelect, aiSelect]) {
+    control?.addEventListener("change", () => {
+      startGame(seedInput.value || state.seed || randomSeed());
+    });
+  }
+
+  canvas.addEventListener("click", handleHumanClick);
+
+  canvas.addEventListener("mousemove", (event) => {
+    const hole = holeFromPointer(event);
+    const canSelect = hole && state.pieces.get(hole.id) === state.toMove;
+    const canMove = hole && state.selected !== null && legalMoves(state.toMove).some((move) => move.from === state.selected && move.to === hole.id);
+    canvas.style.cursor = isHumanTurn() && (canSelect || canMove) ? "pointer" : "default";
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    canvas.style.cursor = "default";
+  });
+
   window.addEventListener("keydown", (event) => {
-    if (event.target === seedInput) return;
+    if (seedForm.contains(event.target)) return;
     if (event.key === " ") {
       event.preventDefault();
       state.paused = !state.paused;
-      seedStatus.value = state.paused ? "PAUSED" : state.winner ? "FINISHED" : "PLAYING";
+      updateSeedStatus();
     } else if (event.key.toLowerCase() === "r") {
       startGame(randomSeed());
     } else if (event.key.toLowerCase() === "p") {
@@ -908,6 +1029,7 @@
     }
   });
 
+  populateMatchControls();
   startGame(randomSeed());
   requestAnimationFrame(loop);
 })();

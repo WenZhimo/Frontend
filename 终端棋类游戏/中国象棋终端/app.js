@@ -7,6 +7,9 @@
   const seedCopyButton = document.getElementById("seed-copy");
   const seedStatus = document.getElementById("seed-status");
   const modeButtons = Array.from(document.querySelectorAll("[data-mode]"));
+  const playModeSelect = document.getElementById("play-mode");
+  const humanSideSelect = document.getElementById("human-side");
+  const aiSelect = document.getElementById("ai-select");
 
   const COLS = 126;
   const ROWS = 60;
@@ -268,6 +271,10 @@
   let matchSeedText = "".padEnd(SEED_LENGTH, " ");
   let matchMode = DEFAULT_MATCH_MODE;
   let matchRng = () => 0.5;
+  let playMode = "ai-vs-ai";
+  let humanSide = "red";
+  let selectedAIName = "";
+  let selectedSquare = null;
   let paused = false;
   let playbackSpeedIndex = 1;
   let lastFrame = 0;
@@ -719,7 +726,67 @@
     return AI_ROSTER.slice();
   }
 
+  function populatePlayControls() {
+    if (humanSideSelect && !humanSideSelect.options.length) {
+      humanSideSelect.innerHTML = [
+        '<option value="red">HUMAN RED</option>',
+        '<option value="black">HUMAN BLACK</option>',
+      ].join("");
+    }
+    if (aiSelect && !aiSelect.options.length) {
+      aiSelect.innerHTML = selectableRoster().map((ai) => `<option value="${ai.name}">${ai.name}</option>`).join("");
+    }
+    selectedAIName = aiSelect?.value || selectableRoster()[0]?.name || "";
+  }
+
+  function readPlayControls() {
+    playMode = playModeSelect?.value || "ai-vs-ai";
+    humanSide = humanSideSelect?.value || "red";
+    selectedAIName = aiSelect?.value || selectableRoster()[0]?.name || "";
+  }
+
+  function localHumanPlayer() {
+    return { name: "HUMAN", source: "local", kind: "human" };
+  }
+
+  function selectedAIPlayer() {
+    return { ...(selectableRoster().find((ai) => ai.name === selectedAIName) || selectableRoster()[0]) };
+  }
+
+  function playModePlayers() {
+    if (playMode === "human-vs-human") {
+      return { red: localHumanPlayer(), black: localHumanPlayer() };
+    }
+    if (playMode === "human-vs-ai") {
+      const ai = selectedAIPlayer();
+      return humanSide === "red"
+        ? { red: localHumanPlayer(), black: ai }
+        : { red: ai, black: localHumanPlayer() };
+    }
+    return null;
+  }
+
+  function isHumanSide(side) {
+    return matchPlayers?.[side]?.kind === "human";
+  }
+
+  function isHumanTurn() {
+    return isHumanSide(sideFromEngine());
+  }
+
+  function scheduleNextMove(now, delay) {
+    selectedSquare = null;
+    nextMoveAt = isHumanTurn() ? Number.POSITIVE_INFINITY : now + playbackDelay(delay);
+  }
+
   function choosePlayersNow() {
+    const localPlayers = playModePlayers();
+    if (localPlayers) {
+      matchPlayers = localPlayers;
+      selectingPlayers = false;
+      scheduleNextMove(performance.now(), 360);
+      return;
+    }
     const roster = selectableRoster();
     const pick = (stream) => {
       const roll = isReplayMode() ? matchRng() : Math.random();
@@ -731,7 +798,7 @@
       black: pick("black"),
     };
     selectingPlayers = false;
-    nextMoveAt = performance.now() + playbackDelay(360);
+    scheduleNextMove(performance.now(), 360);
   }
 
   function reset(now = performance.now(), options = {}) {
@@ -749,8 +816,10 @@
     winnerSide = null;
     timeoutSide = null;
     positionCounts = new Map();
+    selectedSquare = null;
     selectionToken += 1;
     aiMoveToken += 1;
+    readPlayControls();
     matchMode = normalizeMatchMode(options.mode || matchMode);
     prepareMatchSeed(Boolean(options.forceRandom), options.seedOverride ?? null);
     syncModeButtons();
@@ -762,6 +831,12 @@
     if (options.players) {
       matchPlayers = { red: options.players.red, black: options.players.black };
       selectingPlayers = false;
+    } else {
+      const localPlayers = playModePlayers();
+      if (localPlayers) {
+        matchPlayers = localPlayers;
+        selectingPlayers = false;
+      }
     }
     nextMoveAt = now + playbackDelay(selectingPlayers ? 650 : 320);
     if (selectingPlayers) {
@@ -770,6 +845,8 @@
         if (token !== selectionToken || matchResult) return;
         choosePlayersNow();
       }, 620);
+    } else if (matchPlayers.red && matchPlayers.black) {
+      scheduleNextMove(now, 320);
     } else if (!matchPlayers.red || !matchPlayers.black) {
       choosePlayersNow();
     }
@@ -848,6 +925,48 @@
     });
   }
 
+  function chooseRequestedMoveTimed(moveText, side, timeoutMs = AI_MOVE_TIMEOUT_MS) {
+    const startedAt = performance.now();
+    clearAiWorker();
+    return new Promise((resolve) => {
+      let settled = false;
+      const worker = new Worker("ai-worker.js");
+      currentAiWorker = worker;
+      const finish = (payload) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        if (currentAiWorker === worker) currentAiWorker = null;
+        worker.terminate();
+        resolve({
+          choice: payload.choice || null,
+          error: payload.error || null,
+          elapsedMs: performance.now() - startedAt,
+          timedOut: Boolean(payload.timedOut),
+          illegal: Boolean(payload.illegal),
+        });
+      };
+      const timer = window.setTimeout(() => finish({ timedOut: true }), timeoutMs);
+      worker.onmessage = (event) => {
+        const data = event.data || {};
+        if (!data.ok) {
+          finish({ error: new Error(data.error || "move validation failed") });
+          return;
+        }
+        finish({ choice: data.choice ? choiceFromWorker(data.choice) : null, illegal: data.illegal });
+      };
+      worker.onerror = (event) => finish({ error: new Error(event.message || "move validation error") });
+      worker.postMessage({
+        fen: currentFen,
+        player: matchPlayers[side] || localHumanPlayer(),
+        side,
+        seed: matchSeedText,
+        mode: matchMode,
+        ply,
+        requestedMove: moveText,
+      });
+    });
+  }
   function markTimeoutLoss(side, elapsedMs = AI_MOVE_TIMEOUT_MS) {
     if (matchResult) return;
     aiThinking = false;
@@ -930,6 +1049,7 @@
 
   function startMove(now) {
     if (paused || active || aiThinking || selectingPlayers || matchResult) return;
+    if (isHumanTurn()) return;
     aiThinking = true;
     const token = ++aiMoveToken;
     window.setTimeout(async () => {
@@ -1001,7 +1121,7 @@
     }
     settleResult();
     active = null;
-    nextMoveAt = now + playbackDelay(165);
+    scheduleNextMove(now, 165);
   }
 
   function applyInstantMove(choice, side) {
@@ -1022,7 +1142,7 @@
 
   function update(now, dt) {
     if (paused) return;
-    if (now >= nextMoveAt) startMove(now);
+    if (!isHumanTurn() && now >= nextMoveAt) startMove(now);
     if (active) {
       const t = clamp((now - active.start) / active.duration, 0, 1);
       const pos = activeCharPosition(smooth(t));
@@ -1493,6 +1613,47 @@
     );
   }
 
+  function boardSquareFromPointer(event) {
+    const cell = cellFromPointer(event);
+    const file = Math.round((cell.x - board.x) / board.sw);
+    const rank = 9 - Math.round((cell.y - board.y) / board.sh);
+    if (file < 0 || rank < 0 || file >= board.files || rank >= board.ranks) return null;
+    const pos = boardPos(file, rank);
+    if (Math.abs(cell.x - pos.x) > board.sw * 0.48 || Math.abs(cell.y - pos.y) > board.sh * 0.55) return null;
+    return { file, rank };
+  }
+
+  async function handleHumanBoardClick(event) {
+    if (!isHumanTurn() || paused || active || aiThinking || selectingPlayers || matchResult) return false;
+    const square = boardSquareFromPointer(event);
+    if (!square) return false;
+    const clicked = findPiece(square.file, square.rank);
+    const side = sideFromEngine();
+    if (clicked?.side === side) {
+      selectedSquare = square;
+      return true;
+    }
+    if (!selectedSquare) return true;
+    const moveText = `${squareName(selectedSquare.file, selectedSquare.rank)}${squareName(square.file, square.rank)}`;
+    const token = ++aiMoveToken;
+    aiThinking = true;
+    const { choice, error, elapsedMs, timedOut, illegal } = await chooseRequestedMoveTimed(moveText, side, AI_MOVE_TIMEOUT_MS);
+    if (token !== aiMoveToken || matchResult) return true;
+    aiThinking = false;
+    if (timedOut) {
+      markTimeoutLoss(side, elapsedMs);
+      return true;
+    }
+    if (error) {
+      markEngineError(`engine error: ${playerName(side)} move failed`);
+      return true;
+    }
+    if (!choice || illegal) return true;
+    const move = buildMoveRecord(choice, side, matchPlayers[side]);
+    selectedSquare = null;
+    primeActiveMove(performance.now(), move, choice.from, choice.to);
+    return true;
+  }
   async function runHeadlessMatch(seed, options = {}) {
     const oldPaused = paused;
     reset(performance.now(), { seedOverride: seed, immediatePlayers: true, players: options.players, mode: options.mode || "deterministic" });
@@ -1539,9 +1700,22 @@
   modeButtons.forEach((button) => {
     button.addEventListener("click", () => setMatchMode(button.dataset.mode, true));
   });
+  for (const control of [playModeSelect, humanSideSelect, aiSelect]) {
+    control?.addEventListener("change", () => reset(performance.now()));
+  }
   canvas.addEventListener("click", (event) => {
     const cell = cellFromPointer(event);
     if (hitsReplayButton(cell)) reset(performance.now());
+    else handleHumanBoardClick(event);
+  });
+  canvas.addEventListener("mousemove", (event) => {
+    const square = boardSquareFromPointer(event);
+    const clicked = square ? findPiece(square.file, square.rank) : null;
+    const canSelect = clicked?.side === sideFromEngine();
+    canvas.style.cursor = hitsReplayButton(cellFromPointer(event)) || (isHumanTurn() && (canSelect || selectedSquare)) ? "pointer" : "default";
+  });
+  canvas.addEventListener("mouseleave", () => {
+    canvas.style.cursor = "default";
   });
   window.addEventListener("keydown", (event) => {
     const activeElement = document.activeElement;
@@ -1574,6 +1748,7 @@
     publicState,
   };
 
+  populatePlayControls();
   syncModeButtons();
   reset(performance.now(), { forceRandom: true });
   requestAnimationFrame(frame);
