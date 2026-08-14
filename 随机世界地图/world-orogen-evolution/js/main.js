@@ -16,6 +16,7 @@ import { advanceEvolutionState, ensureEvolutionState, formatEvolutionLabel } fro
 import { snapshotCache } from './evolution/snapshot-cache.js';
 import { applyGeologyTerrainInfluenceInPlace, evolveGeologyMemoryInPlace } from './evolution/geology-memory.js';
 import { ensureCivilizationState, stepCivilizationInPlace } from './evolution/civilization.js';
+import { buildHistorySummary, downloadHistorySummary, formatHistorySummaryMarkdown } from './evolution/history-export.js';
 
 // Slider value displays + stale tracking
 const sliderIds = ['sN','sP','sCn','sJ','sNs','sCsv','sLc'];
@@ -764,6 +765,7 @@ function rebuildWorldAfterSnapshotApply(snapshotId) {
     updatePlanetCode(false);
     renderSnapshotList();
     renderCivilizationPanel();
+    invalidateHistorySummary('Snapshot restored. Build a fresh history summary.');
     return compareWarning;
 }
 
@@ -967,6 +969,7 @@ function seedCivilization() {
     const civ = ensureCivilizationState(state.curData);
     renderCivilizationPanel();
     showCivilizationLayer('populationDensity');
+    invalidateHistorySummary('Civilization seeded. Build a history summary when ready.');
     setCivilizationStatus(`Seeded ${civ.populationGroups.length} population groups.`, 'ok');
 }
 
@@ -980,6 +983,7 @@ function stepCivilizationOnce() {
     const civ = stepCivilizationInPlace(state.curData, { dtYear });
     renderCivilizationPanel();
     showCivilizationLayer('civilizationActivity');
+    invalidateHistorySummary('Civilization advanced. Rebuild history summary.');
     setCivilizationStatus(`Advanced civilization to Year ${civ.timeYear.toLocaleString()}.`, 'ok');
 }
 
@@ -990,6 +994,79 @@ function initCivilizationPanel() {
 }
 
 initCivilizationPanel();
+
+const historyEls = {
+    build: document.getElementById('historyBuild'),
+    json: document.getElementById('historyExportJson'),
+    markdown: document.getElementById('historyExportMarkdown'),
+    preview: document.getElementById('historyPreview'),
+    status: document.getElementById('historyStatus'),
+};
+let lastHistorySummary = null;
+
+function setHistoryStatus(message, kind = '') {
+    if (!historyEls.status) return;
+    historyEls.status.textContent = message;
+    historyEls.status.classList.toggle('ok', kind === 'ok');
+    historyEls.status.classList.toggle('warn', kind === 'warn');
+}
+
+function renderHistoryPanel() {
+    const hasWorld = !!state.curData;
+    if (historyEls.build) historyEls.build.disabled = !hasWorld;
+    if (historyEls.json) historyEls.json.disabled = !hasWorld;
+    if (historyEls.markdown) historyEls.markdown.disabled = !hasWorld;
+    if (!hasWorld && historyEls.preview) {
+        historyEls.preview.value = '';
+        lastHistorySummary = null;
+    }
+}
+
+function invalidateHistorySummary(message = 'Build a fresh history summary.') {
+    lastHistorySummary = null;
+    if (historyEls.preview) historyEls.preview.value = '';
+    setHistoryStatus(message, state.curData ? 'warn' : '');
+    renderHistoryPanel();
+}
+
+function buildHistorySummaryForUi() {
+    if (!state.curData) {
+        setHistoryStatus('Generate a world before building history summary.', 'warn');
+        return null;
+    }
+    refreshEnvironmentInputs(state.curData);
+    if (!state.curData.civilizationState) {
+        ensureCivilizationState(state.curData);
+        renderCivilizationPanel();
+    }
+    try {
+        const summary = buildHistorySummary(state.curData);
+        lastHistorySummary = summary;
+        if (historyEls.preview) historyEls.preview.value = formatHistorySummaryMarkdown(summary);
+        setHistoryStatus(`Built history summary for Year ${summary.civilization.year.toLocaleString()}.`, 'ok');
+        renderHistoryPanel();
+        return summary;
+    } catch (err) {
+        setHistoryStatus(err?.message || 'History summary failed.', 'warn');
+        return null;
+    }
+}
+
+function exportHistorySummary(format) {
+    const summary = lastHistorySummary || buildHistorySummaryForUi();
+    if (!summary) return;
+    const filename = downloadHistorySummary(summary, format);
+    setHistoryStatus(`Downloaded ${filename}.`, 'ok');
+}
+
+function initHistoryPanel() {
+    historyEls.build?.addEventListener('click', buildHistorySummaryForUi);
+    historyEls.json?.addEventListener('click', () => exportHistorySummary('json'));
+    historyEls.markdown?.addEventListener('click', () => exportHistorySummary('markdown'));
+    renderHistoryPanel();
+}
+
+initHistoryPanel();
 genBtn.addEventListener('generate-done', captureGeneratedSnapshot);
 genBtn.addEventListener('generate-done', () => {
     // If climate not computed and current view is a climate layer, switch to Terrain
@@ -1015,6 +1092,7 @@ genBtn.addEventListener('generate-done', () => {
     }
 });
 genBtn.addEventListener('generate-done', renderCivilizationPanel);
+genBtn.addEventListener('generate-done', () => invalidateHistorySummary('World generated. Seed or step civilization, then build history summary.'));
 
 document.addEventListener('plates-edited', () => {
     updatePlanetCode(true);

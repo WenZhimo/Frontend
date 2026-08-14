@@ -264,6 +264,18 @@
                 <div id="civilizationStatus" class="evolution-status">Civilization layer is inactive.</div>
             </div>
         </details>
+        <details class="section history-section" open>
+            <summary>History Export</summary>
+            <div class="section-body">
+                <div class="evolution-controls history-controls">
+                    <button id="historyBuild" title="Build a history summary from the current civilization state">Build</button>
+                    <button id="historyExportJson" title="Download the current history summary as JSON">JSON</button>
+                    <button id="historyExportMarkdown" title="Download the current history summary as Markdown">Markdown</button>
+                </div>
+                <textarea id="historyPreview" class="history-preview" readonly placeholder="Seed or step civilization, then build a history summary."></textarea>
+                <div id="historyStatus" class="evolution-status">History export is inactive.</div>
+            </div>
+        </details>
         <details class="section">
             <summary>Terrain Sculpting <span class="tip" data-tip="Erosion and smoothing passes that refine the raw terrain. Adjust sliders and click Reapply — no full rebuild needed.">?</span></summary>
             <div class="section-body">

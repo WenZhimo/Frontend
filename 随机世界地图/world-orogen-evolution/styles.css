@@ -261,6 +261,16 @@ button#generate.generating {
 }
 .evolution-status.warn { color: #d9a34a; }
 .evolution-status.ok { color: #67d49a; }
+.history-preview {
+    width: 100%; min-height: 130px; resize: vertical;
+    margin-bottom: 8px; padding: 8px 10px;
+    background: rgba(255,255,255,0.045); color: #9ab;
+    border: 1px solid rgba(255,255,255,0.10); border-radius: 6px;
+    font: 11px/1.45 'Consolas', 'Courier New', monospace;
+}
+.history-preview:focus {
+    outline: none; border-color: rgba(68,136,255,0.45);
+}
 
 /* Map type tabs */
 .map-tabs {
