@@ -204,10 +204,129 @@ function summarizeIdentityLineages(civ) {
     };
 }
 
+function summarizeTraceCorridors(groups = []) {
+    return groups
+        .filter(group => Array.isArray(group.path) && group.path.length > 2)
+        .sort((a, b) => (
+            b.path.length - a.path.length ||
+            (b.population || 0) - (a.population || 0)
+        ))
+        .slice(0, 8)
+        .map(group => ({
+            type: 'migration-corridor',
+            groupId: group.id,
+            originCell: group.originCell,
+            currentCell: group.cell,
+            cells: group.path.slice(-10),
+            pathLength: group.path.length,
+            population: Math.round(group.population || 0),
+            migrationPressure: round(group.migrationPressure || 0),
+            cultureId: group.cultureId,
+            languageId: group.languageId,
+        }));
+}
+
+function summarizeStressSignals(groups = []) {
+    return groups
+        .map(group => {
+            const collapseRisk = round(group.collapseRisk || 0);
+            const conflictPressure = round(group.conflictPressure || 0);
+            const migrationPressure = round(group.migrationPressure || 0);
+            const severity = round(Math.max(collapseRisk, conflictPressure, migrationPressure));
+            return {
+                type: 'stress-signal',
+                groupId: group.id,
+                cell: group.cell,
+                population: Math.round(group.population || 0),
+                severity,
+                collapseRisk,
+                conflictPressure,
+                migrationPressure,
+                cultureId: group.cultureId,
+                languageId: group.languageId,
+            };
+        })
+        .filter(signal => signal.severity >= 0.35)
+        .sort((a, b) => b.severity - a.severity || b.population - a.population)
+        .slice(0, 8);
+}
+
+function summarizeSettlementSites(settlements = [], year = 0) {
+    return settlements
+        .slice()
+        .sort((a, b) => (
+            (b.rank || 1) - (a.rank || 1) ||
+            (b.population || 0) - (a.population || 0)
+        ))
+        .slice(0, 8)
+        .map(settlement => ({
+            type: 'settlement-site',
+            settlementId: settlement.id,
+            cell: settlement.cell,
+            foundedYear: settlement.foundedYear,
+            ageYears: settlement.foundedYear == null ? 0 : Math.max(0, year - settlement.foundedYear),
+            population: Math.round(settlement.population || 0),
+            rank: settlement.rank || 1,
+            cultureId: settlement.cultureId,
+            languageId: settlement.languageId,
+            polityId: settlement.polityId ?? null,
+            traceValue: round((settlement.rank || 1) / 4 + Math.min(1, (year - (settlement.foundedYear ?? year)) / 2000), 3),
+        }));
+}
+
+function summarizeRuins(polities = []) {
+    return polities
+        .filter(polity => polity.status === 'collapsed' || polity.collapsedYear != null)
+        .sort((a, b) => (b.collapsedYear || 0) - (a.collapsedYear || 0))
+        .slice(0, 8)
+        .map(polity => ({
+            type: 'collapsed-polity-ruin',
+            polityId: polity.id,
+            cell: polity.capitalCell,
+            formedYear: polity.formedYear,
+            collapsedYear: polity.collapsedYear ?? null,
+            population: Math.round(polity.population || 0),
+            cultureId: polity.cultureId,
+            stabilityAtMemory: round(polity.stability || 0),
+        }));
+}
+
+function emptyHistoricalTraces() {
+    return {
+        ruins: [],
+        settlementSites: [],
+        migrationCorridors: [],
+        stressSignals: [],
+        traceSignals: ['No strong historical trace signal has emerged yet.'],
+    };
+}
+
+function summarizeHistoricalTraces(civ) {
+    const year = civ.timeYear || 0;
+    const ruins = summarizeRuins(civ.polities || []);
+    const settlementSites = summarizeSettlementSites(civ.settlements || [], year);
+    const migrationCorridors = summarizeTraceCorridors(civ.populationGroups || []);
+    const stressSignals = summarizeStressSignals(civ.populationGroups || []);
+    const traceSignals = [];
+    if (ruins.length) traceSignals.push(`${ruins.length} collapsed polity ruin${ruins.length === 1 ? '' : 's'} mark former centers of power.`);
+    if (settlementSites.length) traceSignals.push(`${settlementSites.length} settlement site${settlementSites.length === 1 ? '' : 's'} preserve durable habitation anchors.`);
+    if (migrationCorridors.length) traceSignals.push(`${migrationCorridors.length} migration corridor${migrationCorridors.length === 1 ? '' : 's'} preserve remembered movement paths.`);
+    if (stressSignals.length) traceSignals.push(`${stressSignals.length} high-stress population signal${stressSignals.length === 1 ? '' : 's'} indicate possible famine, conflict, displacement, or collapse pressure.`);
+    if (!traceSignals.length) traceSignals.push('No strong historical trace signal has emerged yet.');
+    return {
+        ruins,
+        settlementSites,
+        migrationCorridors,
+        stressSignals,
+        traceSignals,
+    };
+}
+
 function historySignals(summary) {
     const events = summary.civilization.eventCounts;
     const metrics = summary.civilization.metrics;
     const lineages = summary.civilization.lineages;
+    const traces = summary.civilization.historicalTraces;
     const signals = [];
     signals.push(`Population reached ${metrics.population.toLocaleString()} across ${metrics.livingGroups} living groups.`);
     signals.push(`${metrics.settlements} settlements emerged from habitability, freshwater, agriculture, and mobility inputs.`);
@@ -225,6 +344,9 @@ function historySignals(summary) {
         const topCulture = lineages.cultureFamilies?.[0];
         const topLanguage = lineages.languageFamilies?.[0];
         signals.push(`Dominant lineage roots are culture ${topCulture?.rootId ?? 'none'} and language ${topLanguage?.rootId ?? 'none'}, with ${lineages.cultures?.length || 0} tracked culture branches and ${lineages.languages?.length || 0} tracked language branches.`);
+    }
+    if (traces?.traceSignals?.length) {
+        signals.push(traces.traceSignals[0]);
     }
     if (summary.environment.climateEnhanced) {
         signals.push('Climate-enhanced environment inputs are present, so agriculture and habitability include computed temperature and precipitation.');
@@ -277,6 +399,7 @@ export function buildHistorySummary(curData) {
             polities: summarizePolities(civ.polities),
             migrationRoutes: summarizeMigration(civ.populationGroups),
             lineages: summarizeIdentityLineages(civ),
+            historicalTraces: summarizeHistoricalTraces(civ),
         },
         availableDebugLayers: Object.keys(curData.debugLayers || {}).filter(name => (
             name.includes('population') ||
@@ -297,6 +420,7 @@ export function buildHistorySummary(curData) {
 export function formatHistorySummaryMarkdown(summary) {
     const metrics = summary.civilization.metrics;
     const events = summary.civilization.eventCounts;
+    const traces = summary.civilization.historicalTraces || emptyHistoricalTraces();
     const lines = [
         '# World Orogen History Summary',
         '',
@@ -336,6 +460,21 @@ export function formatHistorySummaryMarkdown(summary) {
         ...(summary.civilization.lineages?.languageFamilies?.length
             ? summary.civilization.lineages.languageFamilies.map(family => `- Language root ${family.rootId}: pop ${family.population.toLocaleString()}, branches ${family.branchCount}, max depth ${family.maxDepth}, origin cell ${family.originCell ?? 'unknown'}`)
             : ['- No language lineage recorded yet.']),
+        '',
+        '## Historical Traces And Stress',
+        ...traces.traceSignals.map(signal => `- ${signal}`),
+        ...(traces.ruins.length
+            ? traces.ruins.map(ruin => `- Ruin polity ${ruin.polityId}: cell ${ruin.cell}, formed ${ruin.formedYear}, collapsed ${ruin.collapsedYear ?? 'unknown'}, pop memory ${ruin.population.toLocaleString()}`)
+            : ['- No collapsed polity ruins recorded yet.']),
+        ...(traces.settlementSites.length
+            ? traces.settlementSites.slice(0, 5).map(site => `- Settlement site ${site.settlementId}: cell ${site.cell}, age ${site.ageYears.toLocaleString()} years, rank ${site.rank}, pop ${site.population.toLocaleString()}`)
+            : ['- No settlement sites recorded yet.']),
+        ...(traces.migrationCorridors.length
+            ? traces.migrationCorridors.slice(0, 5).map(route => `- Corridor group ${route.groupId}: ${route.originCell} -> ${route.currentCell}, path length ${route.pathLength}, pressure ${route.migrationPressure}`)
+            : ['- No migration corridor traces recorded yet.']),
+        ...(traces.stressSignals.length
+            ? traces.stressSignals.slice(0, 5).map(signal => `- Stress group ${signal.groupId}: cell ${signal.cell}, severity ${signal.severity}, conflict ${signal.conflictPressure}, collapse ${signal.collapseRisk}`)
+            : ['- No high-stress population signals recorded yet.']),
     ];
     return lines.join('\n');
 }
@@ -489,6 +628,12 @@ function buildEraSummaries(points, deltas) {
             migrationRoutes: point.summary.civilization.migrationRoutes?.slice(0, 5) || [],
             cultureFamilies: point.summary.civilization.lineages?.cultureFamilies?.slice(0, 3) || [],
             languageFamilies: point.summary.civilization.lineages?.languageFamilies?.slice(0, 3) || [],
+            historicalTraces: {
+                ruins: point.summary.civilization.historicalTraces?.ruins?.slice(0, 3) || [],
+                settlementSites: point.summary.civilization.historicalTraces?.settlementSites?.slice(0, 3) || [],
+                migrationCorridors: point.summary.civilization.historicalTraces?.migrationCorridors?.slice(0, 3) || [],
+                stressSignals: point.summary.civilization.historicalTraces?.stressSignals?.slice(0, 3) || [],
+            },
         }];
     }
     return deltas.map((delta, i) => {
@@ -515,6 +660,12 @@ function buildEraSummaries(points, deltas) {
             migrationRoutes: end.summary.civilization.migrationRoutes?.slice(0, 5) || [],
             cultureFamilies: end.summary.civilization.lineages?.cultureFamilies?.slice(0, 3) || [],
             languageFamilies: end.summary.civilization.lineages?.languageFamilies?.slice(0, 3) || [],
+            historicalTraces: {
+                ruins: end.summary.civilization.historicalTraces?.ruins?.slice(0, 3) || [],
+                settlementSites: end.summary.civilization.historicalTraces?.settlementSites?.slice(0, 3) || [],
+                migrationCorridors: end.summary.civilization.historicalTraces?.migrationCorridors?.slice(0, 3) || [],
+                stressSignals: end.summary.civilization.historicalTraces?.stressSignals?.slice(0, 3) || [],
+            },
         };
     });
 }
@@ -522,6 +673,15 @@ function buildEraSummaries(points, deltas) {
 function lineageFamilyLine(kind, family) {
     if (!family) return `${kind} none`;
     return `${kind} root ${family.rootId} pop ${family.population.toLocaleString()} branches ${family.branchCount}`;
+}
+
+function traceLine(traces = {}) {
+    const parts = [];
+    if (traces.ruins?.length) parts.push(`${traces.ruins.length} ruin${traces.ruins.length === 1 ? '' : 's'}`);
+    if (traces.settlementSites?.length) parts.push(`${traces.settlementSites.length} settlement site${traces.settlementSites.length === 1 ? '' : 's'}`);
+    if (traces.migrationCorridors?.length) parts.push(`${traces.migrationCorridors.length} corridor${traces.migrationCorridors.length === 1 ? '' : 's'}`);
+    if (traces.stressSignals?.length) parts.push(`${traces.stressSignals.length} stress signal${traces.stressSignals.length === 1 ? '' : 's'}`);
+    return parts.length ? parts.join(', ') : 'no strong traces';
 }
 
 function dedupePoints(points) {
@@ -568,6 +728,7 @@ export function buildHistoryTimeline(points, { currentSummary = null } = {}) {
 
 export function formatHistoryTimelineMarkdown(timeline) {
     const latest = timeline.latestSummary;
+    const latestTraces = latest.civilization.historicalTraces || emptyHistoricalTraces();
     const lines = [
         '# World Orogen History Timeline',
         '',
@@ -583,6 +744,7 @@ export function formatHistoryTimelineMarkdown(timeline) {
                 `  - Highlights: ${era.highlights.join('; ')}`,
                 `  - Why: ${era.explanationChain.join(' ') || 'No causal signal recorded yet.'}`,
                 `  - Lineages: ${lineageFamilyLine('culture', era.cultureFamilies?.[0])}; ${lineageFamilyLine('language', era.languageFamilies?.[0])}`,
+                `  - Traces: ${traceLine(era.historicalTraces)}`,
             ])
             : ['- No era summaries available.']),
         '',
@@ -610,6 +772,21 @@ export function formatHistoryTimelineMarkdown(timeline) {
         ...(latest.civilization.lineages?.languageFamilies?.length
             ? latest.civilization.lineages.languageFamilies.map(family => `- Language root ${family.rootId}: pop ${family.population.toLocaleString()}, branches ${family.branchCount}, max depth ${family.maxDepth}`)
             : ['- No language lineage recorded yet.']),
+        '',
+        '## Latest Historical Traces And Stress',
+        ...latestTraces.traceSignals.map(signal => `- ${signal}`),
+        ...(latestTraces.ruins.length
+            ? latestTraces.ruins.map(ruin => `- Ruin polity ${ruin.polityId}: cell ${ruin.cell}, collapsed ${ruin.collapsedYear ?? 'unknown'}`)
+            : ['- No collapsed polity ruins recorded yet.']),
+        ...(latestTraces.settlementSites.length
+            ? latestTraces.settlementSites.slice(0, 5).map(site => `- Settlement site ${site.settlementId}: cell ${site.cell}, age ${site.ageYears.toLocaleString()} years, rank ${site.rank}`)
+            : ['- No settlement sites recorded yet.']),
+        ...(latestTraces.migrationCorridors.length
+            ? latestTraces.migrationCorridors.slice(0, 5).map(route => `- Corridor group ${route.groupId}: ${route.originCell} -> ${route.currentCell}, path length ${route.pathLength}`)
+            : ['- No migration corridor traces recorded yet.']),
+        ...(latestTraces.stressSignals.length
+            ? latestTraces.stressSignals.slice(0, 5).map(signal => `- Stress group ${signal.groupId}: cell ${signal.cell}, severity ${signal.severity}`)
+            : ['- No high-stress population signals recorded yet.']),
     ];
     return lines.join('\n');
 }
