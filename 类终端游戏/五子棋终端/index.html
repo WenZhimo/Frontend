@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Braille Gomoku Terminal</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell" aria-label="Braille Gomoku terminal">
+      <form class="seed-bar" autocomplete="off">
+        <a class="home-link" href="../index.html" aria-label="Back to terminal games hub">HOME</a>
+        <label for="seed-input">SEED</label>
+        <input id="seed-input" maxlength="100" spellcheck="false" inputmode="text" aria-label="100 character ASCII seed" />
+        <select id="play-mode" aria-label="Play mode">
+          <option value="ai-vs-ai">AI VS AI</option>
+          <option value="human-vs-ai">HUMAN VS AI</option>
+          <option value="human-vs-human">LOCAL 2P</option>
+        </select>
+        <select id="human-side" aria-label="Human side"></select>
+        <select id="ai-select" aria-label="AI opponent"></select>
+        <button id="seed-random" type="button">RANDOM</button>
+        <button id="seed-copy" type="button">COPY</button>
+        <button type="submit">PLAY</button>
+        <output id="seed-status">READY</output>
+      </form>
+      <section class="terminal-shell" aria-label="Gomoku terminal output">
+        <canvas id="terminal"></canvas>
+      </section>
+      <p class="sr-only">
+        A terminal-style Gomoku board rendered with Braille dot-matrix characters.
+      </p>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
