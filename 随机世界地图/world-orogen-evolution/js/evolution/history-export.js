@@ -84,9 +84,130 @@ function summarizeMigration(groups = []) {
         }));
 }
 
+function identityKey(kind) {
+    return kind === 'language' ? 'languageId' : 'cultureId';
+}
+
+function nodeDepth(node, byId, seen = new Set()) {
+    if (!node || node.parentId == null || seen.has(node.id)) return 0;
+    seen.add(node.id);
+    return 1 + nodeDepth(byId.get(node.parentId), byId, seen);
+}
+
+function nodeRootId(node, byId, seen = new Set()) {
+    if (!node || node.parentId == null || seen.has(node.id)) return node?.id ?? null;
+    seen.add(node.id);
+    const parent = byId.get(node.parentId);
+    return parent ? nodeRootId(parent, byId, seen) : node.id;
+}
+
+function summarizeIdentityNodes(items = [], groups = [], kind = 'culture') {
+    const key = identityKey(kind);
+    const byId = new Map(items.map(item => [item.id, item]));
+    const children = new Map();
+    const stats = new Map();
+
+    for (const item of items) {
+        if (item.parentId != null) {
+            const list = children.get(item.parentId) || [];
+            list.push(item.id);
+            children.set(item.parentId, list);
+        }
+        stats.set(item.id, {
+            population: 0,
+            groupCount: 0,
+            cells: new Set(),
+        });
+    }
+
+    for (const group of groups) {
+        const id = group[key];
+        if (id == null) continue;
+        if (!stats.has(id)) {
+            stats.set(id, {
+                population: 0,
+                groupCount: 0,
+                cells: new Set(),
+            });
+        }
+        const stat = stats.get(id);
+        stat.population += group.population || 0;
+        stat.groupCount++;
+        if (group.cell != null) stat.cells.add(group.cell);
+    }
+
+    return Array.from(stats.entries()).map(([id, stat]) => {
+        const item = byId.get(id) || { id, parentId: null, originCell: null, bornYear: null };
+        return {
+            id,
+            parentId: item.parentId ?? null,
+            rootId: nodeRootId(item, byId),
+            depth: nodeDepth(item, byId),
+            originCell: item.originCell ?? null,
+            bornYear: item.bornYear ?? null,
+            population: Math.round(stat.population || 0),
+            groupCount: stat.groupCount || 0,
+            activeCells: Array.from(stat.cells).slice(0, 8),
+            childCount: children.get(id)?.length || 0,
+        };
+    }).sort((a, b) => (
+        (b.population - a.population) ||
+        (b.groupCount - a.groupCount) ||
+        (a.bornYear ?? 0) - (b.bornYear ?? 0) ||
+        a.id - b.id
+    ));
+}
+
+function summarizeIdentityFamilies(nodes = []) {
+    const byRoot = new Map();
+    for (const node of nodes) {
+        const rootId = node.rootId ?? node.id;
+        if (!byRoot.has(rootId)) {
+            byRoot.set(rootId, {
+                rootId,
+                population: 0,
+                activeGroups: 0,
+                branchCount: 0,
+                maxDepth: 0,
+                originCell: node.originCell,
+                bornYear: node.bornYear,
+            });
+        }
+        const family = byRoot.get(rootId);
+        family.population += node.population || 0;
+        family.activeGroups += node.groupCount || 0;
+        family.branchCount++;
+        family.maxDepth = Math.max(family.maxDepth, node.depth || 0);
+        if (family.bornYear == null || (node.bornYear != null && node.bornYear < family.bornYear)) {
+            family.bornYear = node.bornYear;
+            family.originCell = node.originCell;
+        }
+    }
+    return Array.from(byRoot.values())
+        .sort((a, b) => (
+            (b.population - a.population) ||
+            (b.branchCount - a.branchCount) ||
+            a.rootId - b.rootId
+        ))
+        .slice(0, 8);
+}
+
+function summarizeIdentityLineages(civ) {
+    const groups = civ.populationGroups || [];
+    const cultures = summarizeIdentityNodes(civ.cultures || [], groups, 'culture');
+    const languages = summarizeIdentityNodes(civ.languages || [], groups, 'language');
+    return {
+        cultureFamilies: summarizeIdentityFamilies(cultures),
+        languageFamilies: summarizeIdentityFamilies(languages),
+        cultures: cultures.slice(0, 12),
+        languages: languages.slice(0, 12),
+    };
+}
+
 function historySignals(summary) {
     const events = summary.civilization.eventCounts;
     const metrics = summary.civilization.metrics;
+    const lineages = summary.civilization.lineages;
     const signals = [];
     signals.push(`Population reached ${metrics.population.toLocaleString()} across ${metrics.livingGroups} living groups.`);
     signals.push(`${metrics.settlements} settlements emerged from habitability, freshwater, agriculture, and mobility inputs.`);
@@ -99,6 +220,11 @@ function historySignals(summary) {
         signals.push(`${metrics.polities} active polities formed where settlement population, trade, technology, and agriculture aligned.`);
     } else {
         signals.push('No polity has formed yet; current settlements remain below the organization threshold.');
+    }
+    if (lineages?.cultureFamilies?.length || lineages?.languageFamilies?.length) {
+        const topCulture = lineages.cultureFamilies?.[0];
+        const topLanguage = lineages.languageFamilies?.[0];
+        signals.push(`Dominant lineage roots are culture ${topCulture?.rootId ?? 'none'} and language ${topLanguage?.rootId ?? 'none'}, with ${lineages.cultures?.length || 0} tracked culture branches and ${lineages.languages?.length || 0} tracked language branches.`);
     }
     if (summary.environment.climateEnhanced) {
         signals.push('Climate-enhanced environment inputs are present, so agriculture and habitability include computed temperature and precipitation.');
@@ -150,6 +276,7 @@ export function buildHistorySummary(curData) {
             settlements: summarizeSettlements(civ.settlements),
             polities: summarizePolities(civ.polities),
             migrationRoutes: summarizeMigration(civ.populationGroups),
+            lineages: summarizeIdentityLineages(civ),
         },
         availableDebugLayers: Object.keys(curData.debugLayers || {}).filter(name => (
             name.includes('population') ||
@@ -201,6 +328,14 @@ export function formatHistorySummaryMarkdown(summary) {
         ...(summary.civilization.migrationRoutes.length
             ? summary.civilization.migrationRoutes.map(route => `- Group ${route.groupId}: ${route.originCell} -> ${route.currentCell}, path length ${route.pathLength}, pressure ${route.migrationPressure}`)
             : ['- No multi-cell migration route recorded yet.']),
+        '',
+        '## Culture And Language Lineages',
+        ...(summary.civilization.lineages?.cultureFamilies?.length
+            ? summary.civilization.lineages.cultureFamilies.map(family => `- Culture root ${family.rootId}: pop ${family.population.toLocaleString()}, branches ${family.branchCount}, max depth ${family.maxDepth}, origin cell ${family.originCell ?? 'unknown'}`)
+            : ['- No culture lineage recorded yet.']),
+        ...(summary.civilization.lineages?.languageFamilies?.length
+            ? summary.civilization.lineages.languageFamilies.map(family => `- Language root ${family.rootId}: pop ${family.population.toLocaleString()}, branches ${family.branchCount}, max depth ${family.maxDepth}, origin cell ${family.originCell ?? 'unknown'}`)
+            : ['- No language lineage recorded yet.']),
     ];
     return lines.join('\n');
 }
@@ -352,6 +487,8 @@ function buildEraSummaries(points, deltas) {
             leadingSettlements: point.summary.civilization.settlements?.slice(0, 5) || [],
             leadingPolities: point.summary.civilization.polities?.slice(0, 5) || [],
             migrationRoutes: point.summary.civilization.migrationRoutes?.slice(0, 5) || [],
+            cultureFamilies: point.summary.civilization.lineages?.cultureFamilies?.slice(0, 3) || [],
+            languageFamilies: point.summary.civilization.lineages?.languageFamilies?.slice(0, 3) || [],
         }];
     }
     return deltas.map((delta, i) => {
@@ -376,8 +513,15 @@ function buildEraSummaries(points, deltas) {
             leadingSettlements: end.summary.civilization.settlements?.slice(0, 5) || [],
             leadingPolities: end.summary.civilization.polities?.slice(0, 5) || [],
             migrationRoutes: end.summary.civilization.migrationRoutes?.slice(0, 5) || [],
+            cultureFamilies: end.summary.civilization.lineages?.cultureFamilies?.slice(0, 3) || [],
+            languageFamilies: end.summary.civilization.lineages?.languageFamilies?.slice(0, 3) || [],
         };
     });
+}
+
+function lineageFamilyLine(kind, family) {
+    if (!family) return `${kind} none`;
+    return `${kind} root ${family.rootId} pop ${family.population.toLocaleString()} branches ${family.branchCount}`;
 }
 
 function dedupePoints(points) {
@@ -438,6 +582,7 @@ export function formatHistoryTimelineMarkdown(timeline) {
                 `- ${era.label}: pop ${era.metrics.population.toLocaleString()}, settlements ${era.metrics.settlements}, cultures ${era.metrics.cultures}, languages ${era.metrics.languages}, polities ${era.metrics.polities}`,
                 `  - Highlights: ${era.highlights.join('; ')}`,
                 `  - Why: ${era.explanationChain.join(' ') || 'No causal signal recorded yet.'}`,
+                `  - Lineages: ${lineageFamilyLine('culture', era.cultureFamilies?.[0])}; ${lineageFamilyLine('language', era.languageFamilies?.[0])}`,
             ])
             : ['- No era summaries available.']),
         '',
@@ -457,6 +602,14 @@ export function formatHistoryTimelineMarkdown(timeline) {
         '',
         '## Latest Narrative Signals',
         ...latest.narrativeSignals.map(signal => `- ${signal}`),
+        '',
+        '## Latest Culture And Language Lineages',
+        ...(latest.civilization.lineages?.cultureFamilies?.length
+            ? latest.civilization.lineages.cultureFamilies.map(family => `- Culture root ${family.rootId}: pop ${family.population.toLocaleString()}, branches ${family.branchCount}, max depth ${family.maxDepth}`)
+            : ['- No culture lineage recorded yet.']),
+        ...(latest.civilization.lineages?.languageFamilies?.length
+            ? latest.civilization.lineages.languageFamilies.map(family => `- Language root ${family.rootId}: pop ${family.population.toLocaleString()}, branches ${family.branchCount}, max depth ${family.maxDepth}`)
+            : ['- No language lineage recorded yet.']),
     ];
     return lines.join('\n');
 }
