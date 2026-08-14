@@ -1,5 +1,7 @@
 const MEMORY_SCHEMA = 'world-orogen-geology-memory';
 const MEMORY_VERSION = 1;
+const TERRAIN_DELTA_LAYER = 'geologyTerrainDelta';
+const TERRAIN_CUMULATIVE_LAYER = 'geologyTerrainCumulative';
 
 function asPlateSet(plateIsOcean) {
     if (plateIsOcean instanceof Set) return plateIsOcean;
@@ -9,6 +11,10 @@ function asPlateSet(plateIsOcean) {
 
 function clamp01(value) {
     return value < 0 ? 0 : (value > 1 ? 1 : value);
+}
+
+function clamp(value, min, max) {
+    return value < min ? min : (value > max ? max : value);
 }
 
 function buildMaskDistance(mesh, seedMask, passMask = null, maxDistance = 64) {
@@ -285,4 +291,154 @@ export function evolveGeologyMemoryInPlace(curData, { dtMyr = 1 } = {}) {
     };
 
     return curData.geologyMemory;
+}
+
+function recomputeTriangleElevations(mesh, r_elevation) {
+    if (!mesh?.numTriangles || !r_elevation) return null;
+    const t_elevation = new Float32Array(mesh.numTriangles);
+    for (let t = 0; t < mesh.numTriangles; t++) {
+        const s0 = 3 * t;
+        const a = mesh.s_begin_r(s0);
+        const b = mesh.s_begin_r(s0 + 1);
+        const c = mesh.s_begin_r(s0 + 2);
+        t_elevation[t] = (r_elevation[a] + r_elevation[b] + r_elevation[c]) / 3;
+    }
+    return t_elevation;
+}
+
+function refreshTerrainSets(curData) {
+    const { mesh, r_elevation, debugLayers = {} } = curData;
+    if (!mesh || !r_elevation) return;
+
+    const mountain_r = new Set();
+    const coastline_r = new Set();
+    const ocean_r = new Set();
+    const oldOrogeny = debugLayers.oldOrogeny || null;
+
+    for (let r = 0; r < mesh.numRegions; r++) {
+        const elevation = r_elevation[r];
+        const isWater = elevation <= 0;
+        if (isWater) ocean_r.add(r);
+        if (elevation > 0.45 || (elevation > 0.25 && (oldOrogeny?.[r] || 0) > 0.65)) {
+            mountain_r.add(r);
+        }
+
+        for (let ni = mesh.adjOffset[r], end = mesh.adjOffset[r + 1]; ni < end; ni++) {
+            const nb = mesh.adjList[ni];
+            if ((r_elevation[nb] <= 0) !== isWater) {
+                coastline_r.add(r);
+                break;
+            }
+        }
+    }
+
+    curData.mountain_r = mountain_r;
+    curData.coastline_r = coastline_r;
+    curData.ocean_r = ocean_r;
+}
+
+export function applyGeologyTerrainInfluenceInPlace(curData, { dtMyr = 1, strength = 1 } = {}) {
+    const debugLayers = curData?.debugLayers;
+    const r_elevation = curData?.r_elevation;
+    const mesh = curData?.mesh;
+    if (!debugLayers || !r_elevation || !mesh) return null;
+
+    const n = r_elevation.length;
+    const dt = Math.max(0, Number(dtMyr) || 0);
+    const influence = clamp(Number(strength) || 0, 0, 2);
+    if (dt <= 0 || influence <= 0) return null;
+
+    const crustAge = debugLayers.crustAge || null;
+    const riftStage = debugLayers.riftStage || null;
+    const oldOrogeny = debugLayers.oldOrogeny || null;
+    const transformMemory = debugLayers.transformMemory || null;
+    const fractureZoneMemory = debugLayers.fractureZoneMemory || null;
+    const sedimentMemory = debugLayers.sedimentMemory || null;
+    const boundaryKind = debugLayers.boundaryKind || null;
+    const boundaryConfidence = debugLayers.boundaryConfidence || null;
+    const delta = new Float32Array(n);
+    const cumulative = (debugLayers[TERRAIN_CUMULATIVE_LAYER]?.length === n)
+        ? debugLayers[TERRAIN_CUMULATIVE_LAYER]
+        : new Float32Array(n);
+
+    let changedCells = 0;
+    let coastFlips = 0;
+    let maxAbsDelta = 0;
+    let sumAbsDelta = 0;
+    let upliftCells = 0;
+    let subsidenceCells = 0;
+
+    for (let r = 0; r < n; r++) {
+        const before = r_elevation[r];
+        if (!Number.isFinite(before)) continue;
+
+        const isWater = before <= 0;
+        const confidence = boundaryConfidence ? clamp01(boundaryConfidence[r]) : 0;
+        const kind = boundaryKind ? boundaryKind[r] : 0;
+        const convergentPulse = kind > 0.75 ? confidence : 0;
+        const divergentPulse = kind < -0.25 ? confidence : 0;
+        const transformPulse = kind > 0.25 && kind < 0.75 ? confidence : 0;
+        const crustAgeNorm = clamp01((crustAge?.[r] || 0) / 220);
+        const riftNorm = clamp01((riftStage?.[r] || 0) / 5);
+        const orogen = clamp01(oldOrogeny?.[r] || 0);
+        const transform = clamp01(Math.max(transformMemory?.[r] || 0, transformPulse));
+        const fracture = clamp01(fractureZoneMemory?.[r] || 0);
+        const sediment = clamp01(sedimentMemory?.[r] || 0);
+        const lowland = clamp01((0.12 - Math.abs(before)) / 0.22);
+
+        let rate = 0;
+        if (isWater) {
+            rate -= 0.00009 * crustAgeNorm;
+            rate -= 0.00003 * fracture;
+            rate += 0.00010 * sediment * lowland;
+        } else {
+            rate += 0.00020 * orogen;
+            rate += 0.00008 * convergentPulse;
+            rate -= 0.00012 * Math.max(riftNorm, divergentPulse * 0.5);
+            rate -= 0.000025 * transform;
+            rate += 0.00007 * sediment * lowland;
+        }
+
+        const stepCap = 0.018 * Math.max(0.25, Math.min(1, influence));
+        const dElev = clamp(rate * dt * influence, -stepCap, stepCap);
+        if (Math.abs(dElev) < 1e-8) continue;
+
+        const after = clamp(before + dElev, -2, 2);
+        r_elevation[r] = after;
+        delta[r] = after - before;
+        cumulative[r] += delta[r];
+
+        const absDelta = Math.abs(delta[r]);
+        maxAbsDelta = Math.max(maxAbsDelta, absDelta);
+        sumAbsDelta += absDelta;
+        changedCells++;
+        if (delta[r] > 0) upliftCells++;
+        else subsidenceCells++;
+        if ((after <= 0) !== isWater) coastFlips++;
+    }
+
+    debugLayers[TERRAIN_DELTA_LAYER] = delta;
+    debugLayers[TERRAIN_CUMULATIVE_LAYER] = cumulative;
+    curData.t_elevation = recomputeTriangleElevations(mesh, r_elevation) || curData.t_elevation;
+    refreshTerrainSets(curData);
+
+    const result = {
+        dtMyr: dt,
+        strength: influence,
+        changedCells,
+        upliftCells,
+        subsidenceCells,
+        coastFlips,
+        maxAbsDelta,
+        meanAbsDelta: changedCells ? sumAbsDelta / changedCells : 0,
+    };
+
+    curData.geologyMemory = {
+        ...(curData.geologyMemory || { schema: MEMORY_SCHEMA, version: MEMORY_VERSION }),
+        schema: MEMORY_SCHEMA,
+        version: MEMORY_VERSION,
+        lastTerrainStep: result,
+    };
+
+    return result;
 }

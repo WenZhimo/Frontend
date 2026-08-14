@@ -681,6 +681,9 @@ if (worker) {
                 break;
             }
 
+            case 'evolutionTerrainSynced':
+                break;
+
             case 'error':
                 fail(msg.message);
                 if (_onDone) { _onDone(); _onDone = null; }
@@ -915,6 +918,17 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
 }
 
 // --- Public API ---
+
+export function syncEvolutionTerrainViaWorker(curData) {
+    if (!worker || !curData?.r_elevation) return false;
+    const r_elevation = new Float32Array(curData.r_elevation);
+    worker.postMessage({
+        cmd: 'syncEvolutionTerrain',
+        r_elevation,
+        geologyMemory: curData.geologyMemory || null,
+    }, [r_elevation.buffer]);
+    return true;
+}
 
 export function generate(overrideSeed, toggledIndices = [], onProgress, skipClimate = false) {
     const btn = document.getElementById('generate');

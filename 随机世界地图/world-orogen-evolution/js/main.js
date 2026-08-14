@@ -5,7 +5,7 @@ import { renderer, scene, camera, ctrl, waterMesh, atmosMesh, starsMesh,
          mapCamera, updateMapCameraFrustum, mapCtrl, canvas,
          tickZoom, tickMapZoom } from './scene.js';
 import { state } from './state.js';
-import { generate, reapplyViaWorker, computeClimateViaWorker, editRecomputeViaWorker } from './generate.js';
+import { generate, reapplyViaWorker, computeClimateViaWorker, editRecomputeViaWorker, syncEvolutionTerrainViaWorker } from './generate.js';
 import { encodePlanetCode, decodePlanetCode } from './planet-code.js';
 import { computePlateColors, buildMesh, updateMeshColors, updateSuperPlateBorders, buildMapMesh, rebuildGrids, exportMap, exportMapBatch, buildWindArrows, buildOceanCurrentArrows, updateKoppenHoverHighlight, updateMapKoppenHoverHighlight, updatePendingHighlight, updateMapPendingHighlight } from './planet-mesh.js';
 import { setupEditMode } from './edit-mode.js';
@@ -14,7 +14,7 @@ import { KOPPEN_CLASSES } from './koppen.js';
 import { elevationToColor } from './color-map.js';
 import { advanceEvolutionState, ensureEvolutionState, formatEvolutionLabel } from './evolution/evolution-state.js';
 import { snapshotCache } from './evolution/snapshot-cache.js';
-import { evolveGeologyMemoryInPlace } from './evolution/geology-memory.js';
+import { applyGeologyTerrainInfluenceInPlace, evolveGeologyMemoryInPlace } from './evolution/geology-memory.js';
 
 // Slider value displays + stale tracking
 const sliderIds = ['sN','sP','sCn','sJ','sNs','sCsv','sLc'];
@@ -560,9 +560,40 @@ const evolutionEls = {
     apply: document.getElementById('evolutionApply'),
     delete: document.getElementById('evolutionDelete'),
     compare: document.getElementById('evolutionCompare'),
+    terrain: document.getElementById('evolutionTerrain'),
     status: document.getElementById('evolutionStatus'),
 };
 let evolutionPlayTimer = null;
+
+function clearTerrainDependentClimateData(curData) {
+    if (!curData) return;
+    const directFields = [
+        'r_wind_east_summer', 'r_wind_north_summer',
+        'r_wind_east_winter', 'r_wind_north_winter',
+        'itczLons', 'itczLatsSummer', 'itczLatsWinter',
+        'r_ocean_current_east_summer', 'r_ocean_current_north_summer',
+        'r_ocean_current_east_winter', 'r_ocean_current_north_winter',
+        'r_ocean_speed_summer', 'r_ocean_speed_winter',
+        'r_ocean_warmth_summer', 'r_ocean_warmth_winter',
+        'r_precip_summer', 'r_precip_winter',
+        'r_temperature_summer', 'r_temperature_winter',
+    ];
+    for (const field of directFields) curData[field] = null;
+
+    const debugFields = [
+        'pressureSummer', 'pressureWinter',
+        'windSpeedSummer', 'windSpeedWinter',
+        'oceanCurrentSummer', 'oceanCurrentWinter',
+        'precipSummer', 'precipWinter',
+        'rainShadowSummer', 'rainShadowWinter',
+        'tempSummer', 'tempWinter',
+        'tempContinentality',
+        'koppen', 'biome', 'continentality',
+    ];
+    if (curData.debugLayers) {
+        for (const field of debugFields) curData.debugLayers[field] = null;
+    }
+}
 
 function readEvolutionParams() {
     const sliders = {};
@@ -575,6 +606,7 @@ function readEvolutionParams() {
         sliders,
         debugLayer: state.debugLayer || '',
         climateComputed: !!state.climateComputed,
+        terrainInfluence: !!evolutionEls.terrain?.checked,
     };
 }
 
@@ -738,6 +770,7 @@ function applySnapshotById(id) {
     restoreSnapshotParams(snapshot);
     try {
         snapshotCache.apply(id);
+        syncEvolutionTerrainViaWorker(state.curData);
         const warning = rebuildWorldAfterSnapshotApply(id);
         setEvolutionStatus(warning || `Restored ${snapshot.label}.`, warning ? 'warn' : 'ok');
     } catch (err) {
@@ -788,6 +821,17 @@ function stepEvolutionOnce() {
     const nextState = advanceEvolutionState(baseState, { dtMyr });
     state.curData.evolutionState = nextState;
     evolveGeologyMemoryInPlace(state.curData, { dtMyr });
+    let terrainStep = null;
+    if (evolutionEls.terrain?.checked) {
+        terrainStep = applyGeologyTerrainInfluenceInPlace(state.curData, { dtMyr });
+        if (terrainStep?.changedCells > 0) {
+            state.climateComputed = false;
+            nextState.dependencies.climateComputed = false;
+            state.curData.evolutionState.dependencies.climateComputed = false;
+            clearTerrainDependentClimateData(state.curData);
+            syncEvolutionTerrainViaWorker(state.curData);
+        }
+    }
     try {
         const snapshot = snapshotCache.capture({
             label: formatEvolutionLabel(nextState),
@@ -796,6 +840,12 @@ function stepEvolutionOnce() {
             evolutionState: nextState,
         });
         applySnapshotById(snapshot.id);
+        if (terrainStep?.changedCells > 0) {
+            setEvolutionStatus(
+                `Advanced ${formatEvolutionLabel(nextState)}; terrain delta max ${terrainStep.maxAbsDelta.toFixed(4)}.`,
+                'ok'
+            );
+        }
     } catch (err) {
         console.error('[Evolution] Timeline step failed:', err);
         setEvolutionPlaying(false);

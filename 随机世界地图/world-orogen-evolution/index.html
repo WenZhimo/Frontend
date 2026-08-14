@@ -224,6 +224,11 @@
                     <label>Step Size <span class="v">Myr</span></label>
                     <input type="number" id="evolutionStepMyr" min="0.1" max="100" value="1" step="0.1">
                 </div>
+                <label class="toggle-label evolution-terrain">
+                    <input type="checkbox" id="evolutionTerrain" checked>
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                    Terrain influence
+                </label>
                 <div class="cg">
                     <label>Snapshots</label>
                     <select id="evolutionSnapshotSelect"></select>
@@ -321,6 +326,8 @@
                         <option value="landheightmap">Land Heightmap</option>
                         <optgroup label="Evolution">
                             <option value="snapshotElevationDelta">Snapshot Elevation Delta</option>
+                            <option value="geologyTerrainDelta">Geology Terrain Delta</option>
+                            <option value="geologyTerrainCumulative">Geology Terrain Cumulative</option>
                         </optgroup>
                         <optgroup label="Plate Motion">
                             <option value="plateVelocity">Plate Velocity</option>

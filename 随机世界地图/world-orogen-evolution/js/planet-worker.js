@@ -1168,6 +1168,22 @@ function handleImportHeightmap(data) {
     }
 }
 
+function handleSyncEvolutionTerrain(data) {
+    if (!W) {
+        self.postMessage({ type: 'evolutionTerrainSynced', ok: false, reason: 'No retained state' });
+        return;
+    }
+    if (!data.r_elevation || data.r_elevation.length !== W.mesh.numRegions) {
+        self.postMessage({ type: 'evolutionTerrainSynced', ok: false, reason: 'Invalid elevation payload' });
+        return;
+    }
+    W.r_elevation_final = new Float32Array(data.r_elevation);
+    W.geologyMemory = data.geologyMemory || W.geologyMemory || null;
+    W.cachedWind = null;
+    W.cachedOcean = null;
+    self.postMessage({ type: 'evolutionTerrainSynced', ok: true });
+}
+
 self.onmessage = (e) => {
     const { cmd } = e.data;
     switch (cmd) {
@@ -1176,6 +1192,7 @@ self.onmessage = (e) => {
         case 'editRecompute': handleEditRecompute(e.data); break;
         case 'computeClimate': handleComputeClimate(e.data); break;
         case 'importHeightmap': handleImportHeightmap(e.data); break;
+        case 'syncEvolutionTerrain': handleSyncEvolutionTerrain(e.data); break;
         default: self.postMessage({ type: 'error', message: `Unknown command: ${cmd}` });
     }
 };
