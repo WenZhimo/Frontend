@@ -258,6 +258,128 @@ function timelineDeltas(points) {
     return deltas;
 }
 
+function eventCountDeltas(prev = {}, current = {}) {
+    const out = {};
+    const types = new Set([...Object.keys(prev || {}), ...Object.keys(current || {})]);
+    for (const type of types) {
+        const delta = (current?.[type] || 0) - (prev?.[type] || 0);
+        if (delta > 0) out[type] = delta;
+    }
+    return out;
+}
+
+function leadingEventTypes(events = {}, limit = 4) {
+    return Object.entries(events)
+        .filter(([, count]) => count > 0)
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, limit)
+        .map(([type, count]) => ({ type, count }));
+}
+
+function recentEventCountsInRange(summary, fromYear, toYear) {
+    const counts = {};
+    for (const event of summary?.civilization?.recentEvents || []) {
+        if (event.year <= fromYear || event.year > toYear) continue;
+        counts[event.type] = (counts[event.type] || 0) + 1;
+    }
+    return counts;
+}
+
+function hasEventCounts(events) {
+    return Object.keys(events || {}).length > 0;
+}
+
+function eraHighlights(delta, events, endSummary) {
+    const highlights = [];
+    if (delta.populationChange > 0) highlights.push(`population +${Math.round(delta.populationChange).toLocaleString()}`);
+    if (delta.settlementChange > 0) highlights.push(`${delta.settlementChange} new settlement${delta.settlementChange === 1 ? '' : 's'}`);
+    if (delta.cultureChange > 0 || delta.languageChange > 0) {
+        highlights.push(`${Math.max(0, delta.cultureChange)} culture and ${Math.max(0, delta.languageChange)} language splits`);
+    }
+    if (delta.polityChange > 0 || events['polity-formed']) {
+        const count = delta.polityChange > 0 ? delta.polityChange : events['polity-formed'];
+        highlights.push(`${count} polity formation signal${count === 1 ? '' : 's'}`);
+    }
+    if (events['polity-collapsed']) highlights.push(`${events['polity-collapsed']} polity collapse signal${events['polity-collapsed'] === 1 ? '' : 's'}`);
+    const route = endSummary.civilization.migrationRoutes?.[0];
+    if (route?.pathLength > 1) highlights.push(`longest migration route spans ${route.pathLength} cells`);
+    if (!highlights.length) highlights.push('slow consolidation with limited recorded structural change');
+    return highlights;
+}
+
+function eraExplanation(delta, events, endSummary) {
+    const lines = [];
+    const env = endSummary.environment;
+    const metrics = endSummary.civilization.metrics;
+    if (delta.settlementChange > 0) {
+        lines.push('Habitability, freshwater access, agriculture potential, and mobility inputs supported new settlements.');
+    }
+    if (delta.cultureChange > 0 || delta.languageChange > 0 || events['culture-split'] || events['language-split']) {
+        lines.push('Isolation pressure from barriers and mobility costs produced culture or language divergence.');
+    }
+    if (delta.polityChange > 0 || events['polity-formed']) {
+        lines.push('Dense settlements with trade reach, technology, agriculture, and resources crossed the polity threshold.');
+    }
+    if (events['polity-collapsed']) {
+        lines.push('Low stability, crowding, conflict pressure, or poor local habitability created collapse risk.');
+    }
+    if (delta.populationChange > 0 && metrics.settlements === 0) {
+        lines.push('Population expanded before durable settlement institutions emerged.');
+    }
+    if (env.climateEnhanced) {
+        lines.push('Climate-enhanced environment inputs shaped habitability and agriculture in this era.');
+    } else {
+        lines.push('Terrain-derived environment inputs shaped this era; climate computation would add stronger causal detail.');
+    }
+    return lines.slice(0, 5);
+}
+
+function buildEraSummaries(points, deltas) {
+    if (!points.length) return [];
+    if (points.length === 1) {
+        const point = points[0];
+        return [{
+            index: 1,
+            label: 'Founding snapshot',
+            fromYear: point.year,
+            toYear: point.year,
+            durationYears: 0,
+            metrics: point.metrics,
+            eventCounts: point.eventCounts || {},
+            leadingEvents: leadingEventTypes(point.eventCounts || {}),
+            highlights: point.narrativeSignals?.slice(0, 3) || ['Initial civilization snapshot recorded.'],
+            explanationChain: point.narrativeSignals?.slice(0, 5) || [],
+            leadingSettlements: point.summary.civilization.settlements?.slice(0, 5) || [],
+            leadingPolities: point.summary.civilization.polities?.slice(0, 5) || [],
+            migrationRoutes: point.summary.civilization.migrationRoutes?.slice(0, 5) || [],
+        }];
+    }
+    return deltas.map((delta, i) => {
+        const start = points[i];
+        const end = points[i + 1];
+        const recentEvents = recentEventCountsInRange(end.summary, start.year, end.year);
+        const events = hasEventCounts(recentEvents)
+            ? recentEvents
+            : eventCountDeltas(start.eventCounts || {}, end.eventCounts || {});
+        return {
+            index: i + 1,
+            label: `Era ${i + 1}: Year ${start.year} to ${end.year}`,
+            fromYear: start.year,
+            toYear: end.year,
+            durationYears: end.year - start.year,
+            metrics: end.metrics,
+            changes: delta,
+            eventCounts: events,
+            leadingEvents: leadingEventTypes(events),
+            highlights: eraHighlights(delta, events, end.summary),
+            explanationChain: eraExplanation(delta, events, end.summary),
+            leadingSettlements: end.summary.civilization.settlements?.slice(0, 5) || [],
+            leadingPolities: end.summary.civilization.polities?.slice(0, 5) || [],
+            migrationRoutes: end.summary.civilization.migrationRoutes?.slice(0, 5) || [],
+        };
+    });
+}
+
 function dedupePoints(points) {
     const byKey = new Map();
     for (const point of points) {
@@ -277,6 +399,7 @@ export function buildHistoryTimeline(points, { currentSummary = null } = {}) {
     const ordered = dedupePoints(rawPoints).map(clonePlain);
     if (!ordered.length) throw new Error('Build or record at least one history summary before building a timeline.');
     const latest = ordered[ordered.length - 1];
+    const deltas = timelineDeltas(ordered);
     return {
         schema: HISTORY_TIMELINE_SCHEMA,
         version: HISTORY_TIMELINE_VERSION,
@@ -293,7 +416,8 @@ export function buildHistoryTimeline(points, { currentSummary = null } = {}) {
         },
         points: ordered,
         eventTotals: mergeEventCounts(ordered),
-        deltas: timelineDeltas(ordered),
+        deltas,
+        eras: buildEraSummaries(ordered, deltas),
         latestSummary: latest.summary,
     };
 }
@@ -307,6 +431,15 @@ export function formatHistoryTimelineMarkdown(timeline) {
         `- Regions: ${timeline.world.regions.toLocaleString()}`,
         `- Time range: Year ${timeline.range.startYear.toLocaleString()} -> Year ${timeline.range.endYear.toLocaleString()}`,
         `- History points: ${timeline.world.pointCount}`,
+        '',
+        '## Era Summaries',
+        ...(timeline.eras?.length
+            ? timeline.eras.flatMap(era => [
+                `- ${era.label}: pop ${era.metrics.population.toLocaleString()}, settlements ${era.metrics.settlements}, cultures ${era.metrics.cultures}, languages ${era.metrics.languages}, polities ${era.metrics.polities}`,
+                `  - Highlights: ${era.highlights.join('; ')}`,
+                `  - Why: ${era.explanationChain.join(' ') || 'No causal signal recorded yet.'}`,
+            ])
+            : ['- No era summaries available.']),
         '',
         '## Timeline Points',
         ...timeline.points.map(point => {
