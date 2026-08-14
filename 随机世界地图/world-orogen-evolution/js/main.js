@@ -15,7 +15,7 @@ import { elevationToColor } from './color-map.js';
 import { advanceEvolutionState, ensureEvolutionState, formatEvolutionLabel } from './evolution/evolution-state.js';
 import { snapshotCache } from './evolution/snapshot-cache.js';
 import { applyGeologyTerrainInfluenceInPlace, evolveGeologyMemoryInPlace } from './evolution/geology-memory.js';
-import { ensureCivilizationState, stepCivilizationInPlace } from './evolution/civilization.js';
+import { attachCivilizationDebugLayers, ensureCivilizationState, stepCivilizationInPlace } from './evolution/civilization.js';
 import {
     buildHistorySummary,
     buildHistoryTimeline,
@@ -1008,6 +1008,8 @@ initCivilizationPanel();
 const historyEls = {
     build: document.getElementById('historyBuild'),
     timeline: document.getElementById('historyBuildTimeline'),
+    view: document.getElementById('historyViewPoint'),
+    point: document.getElementById('historyPointSelect'),
     json: document.getElementById('historyExportJson'),
     markdown: document.getElementById('historyExportMarkdown'),
     preview: document.getElementById('historyPreview'),
@@ -1025,14 +1027,37 @@ function setHistoryStatus(message, kind = '') {
 
 function renderHistoryPanel() {
     const hasWorld = !!state.curData;
-    if (historyEls.build) historyEls.build.disabled = !hasWorld;
-    if (historyEls.timeline) historyEls.timeline.disabled = !hasWorld;
-    if (historyEls.json) historyEls.json.disabled = !hasWorld;
-    if (historyEls.markdown) historyEls.markdown.disabled = !hasWorld;
-    if (!hasWorld && historyEls.preview) {
-        historyEls.preview.value = '';
+    if (!hasWorld) {
         lastHistoryArtifact = null;
         historyArchive = [];
+        if (historyEls.preview) historyEls.preview.value = '';
+    }
+    if (historyEls.build) historyEls.build.disabled = !hasWorld;
+    if (historyEls.timeline) historyEls.timeline.disabled = !hasWorld;
+    if (historyEls.view) historyEls.view.disabled = !hasWorld || !historyArchive.length;
+    if (historyEls.json) historyEls.json.disabled = !hasWorld;
+    if (historyEls.markdown) historyEls.markdown.disabled = !hasWorld;
+    if (historyEls.point) {
+        const previous = historyEls.point.value;
+        historyEls.point.innerHTML = '';
+        if (!historyArchive.length) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'No history points';
+            historyEls.point.appendChild(option);
+            historyEls.point.disabled = true;
+        } else {
+            for (const entry of historyArchive) {
+                const option = document.createElement('option');
+                option.value = entry.key;
+                option.textContent = `${entry.point.label} · pop ${(entry.point.metrics.population || 0).toLocaleString()}`;
+                historyEls.point.appendChild(option);
+            }
+            historyEls.point.disabled = false;
+            historyEls.point.value = historyArchive.some(entry => entry.key === previous)
+                ? previous
+                : historyArchive[historyArchive.length - 1].key;
+        }
     }
 }
 
@@ -1054,9 +1079,14 @@ function recordHistoryPoint(source = 'manual') {
             snapshotId: state.curData.evolutionState?.snapshot?.id || state.evolution.currentId || null,
             label: `Year ${summary.civilization.year.toLocaleString()}`,
         });
-        historyArchive = historyArchive.filter(item => item.id !== point.id);
-        historyArchive.push(point);
-        historyArchive.sort((a, b) => a.year - b.year || String(a.capturedAt).localeCompare(String(b.capturedAt)));
+        const key = `${point.snapshotId || 'runtime'}:${point.year}:${summary.civilization.stepIndex}`;
+        const civilizationState = JSON.parse(JSON.stringify(state.curData.civilizationState));
+        historyArchive = historyArchive.filter(item => item.key !== key);
+        historyArchive.push({ key, point, civilizationState });
+        historyArchive.sort((a, b) => (
+            a.point.year - b.point.year ||
+            String(a.point.capturedAt).localeCompare(String(b.point.capturedAt))
+        ));
         return point;
     } catch (err) {
         console.warn('[HistoryExport] record failed:', err);
@@ -1099,7 +1129,7 @@ function buildHistoryTimelineForUi() {
     }
     recordHistoryPoint('timeline-build');
     try {
-        const timeline = buildHistoryTimeline(historyArchive);
+        const timeline = buildHistoryTimeline(historyArchive.map(entry => entry.point));
         lastHistoryArtifact = { type: 'timeline', data: timeline };
         if (historyEls.preview) historyEls.preview.value = formatHistoryTimelineMarkdown(timeline);
         setHistoryStatus(`Built ${timeline.world.pointCount}-point history timeline.`, 'ok');
@@ -1109,6 +1139,27 @@ function buildHistoryTimelineForUi() {
         setHistoryStatus(err?.message || 'History timeline failed.', 'warn');
         return null;
     }
+}
+
+function viewHistoryPoint() {
+    if (!state.curData) {
+        setHistoryStatus('Generate a world before viewing history points.', 'warn');
+        return;
+    }
+    const key = historyEls.point?.value;
+    const entry = historyArchive.find(item => item.key === key);
+    if (!entry) {
+        setHistoryStatus('Select a recorded history point first.', 'warn');
+        return;
+    }
+    state.curData.civilizationState = JSON.parse(JSON.stringify(entry.civilizationState));
+    attachCivilizationDebugLayers(state.curData);
+    renderCivilizationPanel();
+    showCivilizationLayer('civilizationActivity');
+    lastHistoryArtifact = { type: 'summary', data: entry.point.summary };
+    if (historyEls.preview) historyEls.preview.value = formatHistorySummaryMarkdown(entry.point.summary);
+    setHistoryStatus(`Viewing ${entry.point.label} on civilization layers.`, 'ok');
+    renderHistoryPanel();
 }
 
 function exportHistoryArtifact(format) {
@@ -1123,6 +1174,7 @@ function exportHistoryArtifact(format) {
 function initHistoryPanel() {
     historyEls.build?.addEventListener('click', buildHistorySummaryForUi);
     historyEls.timeline?.addEventListener('click', buildHistoryTimelineForUi);
+    historyEls.view?.addEventListener('click', viewHistoryPoint);
     historyEls.json?.addEventListener('click', () => exportHistoryArtifact('json'));
     historyEls.markdown?.addEventListener('click', () => exportHistoryArtifact('markdown'));
     renderHistoryPanel();

@@ -270,8 +270,13 @@
                 <div class="evolution-controls history-controls">
                     <button id="historyBuild" title="Build a history summary from the current civilization state">Build</button>
                     <button id="historyBuildTimeline" title="Build a timeline from recorded civilization history points">Timeline</button>
+                    <button id="historyViewPoint" title="View the selected recorded civilization year on the map">View</button>
                     <button id="historyExportJson" title="Download the current history summary as JSON">JSON</button>
                     <button id="historyExportMarkdown" title="Download the current history summary as Markdown">Markdown</button>
+                </div>
+                <div class="cg">
+                    <label>History Point</label>
+                    <select id="historyPointSelect"></select>
                 </div>
                 <textarea id="historyPreview" class="history-preview" readonly placeholder="Seed or step civilization, then build a history summary."></textarea>
                 <div id="historyStatus" class="evolution-status">History export is inactive.</div>
