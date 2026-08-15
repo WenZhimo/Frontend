@@ -9,12 +9,12 @@
 //  Helpers
 // ────────────────────────────────────────────────────────────────────
 
-/** Average edge length in radians for the current mesh resolution. */
+/** 当前网格分辨率下的平均边长（弧度）。 */
 function avgEdgeRad(numRegions) {
     return Math.PI / Math.sqrt(numRegions);
 }
 
-/** Convert a BFS hop‐distance to approximate km (Earth radius). */
+/** 将 BFS 跳数距离换算为近似千米（地球半径）。 */
 function hopsToKm(hops, numRegions) {
     return hops * avgEdgeRad(numRegions) * 6371;
 }
@@ -61,7 +61,7 @@ function connectedComponents(mesh, mask) {
     return { label, components };
 }
 
-/** BFS distance (in hops) from a seed set, with optional barrier mask. */
+/** 从种子集合出发的 BFS 距离（跳数），可选障碍掩膜。 */
 function bfsDistance(mesh, seeds, barrier) {
     const N = mesh.numRegions;
     const dist = new Int32Array(N).fill(-1);
@@ -667,7 +667,7 @@ function shelfWidth(ctx) {
 }
 
 /**
- * Continental Interior Elevation Gradient
+ * 大陆内陆高程梯度
  * How steeply land rises from coastline inland.
  */
 function interiorGradient(ctx) {
@@ -799,7 +799,7 @@ function backArcFoldPresence(ctx) {
  * @returns {Object} flat scorecard of named metrics
  */
 export function computeTerrainMetrics(ctx) {
-    // Normalize plateIsOcean to an iterable of seed region IDs
+    // 将 plateIsOcean 规范为可迭代的种子区域 ID。
     if (ctx.plateIsOcean instanceof Set) {
         ctx.plateIsOcean = Array.from(ctx.plateIsOcean);
     }

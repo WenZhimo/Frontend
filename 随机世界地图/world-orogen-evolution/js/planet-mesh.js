@@ -14,7 +14,7 @@ const MAP_CLIP_PLANES = [
     new THREE.Plane(new THREE.Vector3(-1, 0, 0), 2),   // x <= 2
 ];
 
-// Precompute smoothed biome colors: each region blends with its neighbors' average.
+// 预计算平滑生物群系颜色：每个区域与邻域均值混合。
 // Uses mesh adjacency (~6 neighbors per region) so it's inherently scale-independent.
 // Cached on state to avoid redundant computation across render paths.
 let _biomeCache = null;
@@ -211,7 +211,7 @@ function rainShadowColor(value) {
 function continentalityColor(value) {
     const t = Math.max(0, Math.min(1, value));
     if (t < 0.15) {
-        // Ocean: dark blue → lighter blue
+        // 海洋: dark blue → lighter blue
         const s = t / 0.15;
         return [0.05 + s * 0.10, 0.10 + s * 0.20, 0.40 + s * 0.20];
     } else if (t < 0.4) {
@@ -237,13 +237,13 @@ function continentalityColor(value) {
 // 0.0 = Hyperoceanic (deep blue), 0.25 = Oceanic (teal), 0.5 = Subcontinental (green),
 // 0.75 = Continental (orange), 1.0 = Hypercontinental (red). Smoothed values interpolate.
 function tempContinentalityColor(value) {
-    // Ocean cells stored as -1 → clean dark blue
+    // 海洋 cells stored as -1 → clean dark blue
     if (value < 0) return [0.06, 0.08, 0.22];
     const t = Math.max(0, Math.min(1, value));
     // 5 zone colors
     const zones = [
         [0.10, 0.20, 0.65],  // Hyperoceanic: deep blue
-        [0.15, 0.55, 0.65],  // Oceanic: teal
+        [0.15, 0.55, 0.65],  // 海洋ic: teal
         [0.30, 0.70, 0.25],  // Subcontinental: green
         [0.85, 0.60, 0.15],  // Continental: orange
         [0.80, 0.15, 0.10],  // Hypercontinental: red
@@ -298,7 +298,7 @@ export function computePlateColors(plateSeeds, plateIsOcean) {
     }
 }
 
-// Build equirectangular map mesh.
+// 构建等距圆柱地图网格。
 export function buildMapMesh() {
     if (state.mapMesh) { scene.remove(state.mapMesh); state.mapMesh.geometry.dispose(); state.mapMesh.material.dispose(); state.mapMesh = null; }
     if (!state.curData || !state.mapMode) return;
@@ -317,7 +317,7 @@ export function buildMapMesh() {
     const oceanWarmth = isOceanCurrent ? state.curData[`r_ocean_warmth_${oceanSeason}`] : null;
     const oceanSpeed = isOceanCurrent ? state.curData[`r_ocean_speed_${oceanSeason}`] : null;
     if (isOceanCurrent && (!oceanWarmth || !oceanSpeed)) {
-        console.warn(`[buildMapMesh] Ocean current layer "${debugLayer}" selected but data missing (warmth=${!!oceanWarmth}, speed=${!!oceanSpeed}). Hard-refresh (Ctrl+Shift+R) and generate a new planet.`);
+        console.warn(`[buildMapMesh] 已选择洋流图层 "${debugLayer}"，但缺少数据（热量=${!!oceanWarmth}，速度=${!!oceanSpeed}）。请强制刷新（Ctrl+Shift+R）并生成新行星。`);
     }
     const isPrecip = debugLayer === 'precipSummer' || debugLayer === 'precipWinter';
     const precipArr = isPrecip ? (debugLayers && debugLayers[debugLayer]) : null;
@@ -499,7 +499,7 @@ export function buildMapMesh() {
     buildMapGrid();
 }
 
-// Build lat/lon grid overlay for map view.
+// 构建地图视图经纬网叠加层。
 function buildMapGrid() {
     if (state.mapGridMesh) {
         scene.remove(state.mapGridMesh);
@@ -541,7 +541,7 @@ function buildMapGrid() {
     scene.add(state.mapGridMesh);
 }
 
-// Build lat/lon grid on the 3D globe.
+// 在 3D 球体上构建经纬网。
 function buildGlobeGrid() {
     if (state.globeGridMesh) {
         scene.remove(state.globeGridMesh);
@@ -620,7 +620,7 @@ export function rebuildGrids() {
     buildGlobeGrid();
 }
 
-// Ocean current debug color: warmth × speed, with gray land.
+// 海洋 current debug color: warmth × speed, with gray land.
 function oceanCurrentColor(warmth, speed, isOcean) {
     if (!isOcean) return [0.45, 0.45, 0.45]; // gray land
 
@@ -646,7 +646,7 @@ function oceanCurrentColor(warmth, speed, isOcean) {
     }
 }
 
-// Build / destroy super plate boundary lines for both globe and map views.
+// 为球体和地图视图构建或销毁超级板块边界线。
 // Called from buildMesh, buildMapMesh, and the Show Plates checkbox handler.
 export function updateSuperPlateBorders() {
     // Cleanup existing
@@ -734,7 +734,7 @@ export function updateSuperPlateBorders() {
     }
 }
 
-// Build Voronoi mesh — each half-edge produces one triangle.
+// 构建 Voronoi 网格：每条半边生成一个三角形。
 export function buildMesh() {
     if (!state.curData) return;
     const { mesh, r_xyz, t_xyz, r_plate, r_elevation, t_elevation, mountain_r, coastline_r, ocean_r, r_stress, debugLayers } = state.curData;
@@ -743,7 +743,7 @@ export function buildMesh() {
     const waterLevel = 0;
     const debugLayer = state.debugLayer || '';
 
-    // Precompute debug layer min/max if active
+    // 若启用调试图层，则预计算最小/最大值。
     let dbgArr = null, dbgMin = 0, dbgMax = 0;
     const isHeightmap = debugLayer === 'heightmap';
     const isLandHeightmap = debugLayer === 'landheightmap';
@@ -752,7 +752,7 @@ export function buildMesh() {
     const oceanWarmth = isOceanCurrent ? state.curData[`r_ocean_warmth_${oceanSeason}`] : null;
     const oceanSpeed = isOceanCurrent ? state.curData[`r_ocean_speed_${oceanSeason}`] : null;
     if (isOceanCurrent && (!oceanWarmth || !oceanSpeed)) {
-        console.warn(`[buildMesh] Ocean current layer "${debugLayer}" selected but data missing (warmth=${!!oceanWarmth}, speed=${!!oceanSpeed}). Hard-refresh (Ctrl+Shift+R) and generate a new planet.`);
+        console.warn(`[buildMesh] 已选择洋流图层 "${debugLayer}"，但缺少数据（热量=${!!oceanWarmth}，速度=${!!oceanSpeed}）。请强制刷新（Ctrl+Shift+R）并生成新行星。`);
     }
     const isPrecip = debugLayer === 'precipSummer' || debugLayer === 'precipWinter';
     const precipArr = isPrecip ? (debugLayers && debugLayers[debugLayer]) : null;
@@ -976,7 +976,7 @@ export function buildMesh() {
     }
 }
 
-// Update only color buffers for globe + map meshes (no geometry rebuild).
+// 只更新球体与地图网格的颜色缓冲，不重建几何体。
 // Use this when switching display modes to avoid GPU memory spikes.
 export function updateMeshColors() {
     if (!state.curData || !state.planetMesh) return;
@@ -986,7 +986,7 @@ export function updateMeshColors() {
     const waterLevel = 0;
     const debugLayer = state.debugLayer || '';
 
-    // Precompute debug layer state
+    // 预计算调试图层状态。
     let dbgArr = null, dbgMin = 0, dbgMax = 0;
     const isHeightmap = debugLayer === 'heightmap';
     const isLandHeightmap = debugLayer === 'landheightmap';
@@ -1015,7 +1015,7 @@ export function updateMeshColors() {
         }
     }
 
-    // Precompute smoothed biome colors (one-pass neighbor blend)
+    // 预计算平滑生物群系颜色（单次邻域混合）。
     const biomeSmoothed = (isBiome && koppenArr) ? getCachedBiomeSmoothed(mesh, koppenArr, r_elevation) : null;
 
     // Color helper — returns [r,g,b] for a given region
@@ -1048,7 +1048,7 @@ export function updateMeshColors() {
         return elevationToColor(r_elevation[br] - waterLevel);
     };
 
-    // Update globe mesh colors in-place
+    // 就地更新球体网格颜色。
     const colorAttr = state.planetMesh.geometry.getAttribute('color');
     const colors = colorAttr.array;
     const { numSides } = mesh;
@@ -1086,7 +1086,7 @@ export function updateMeshColors() {
     state._koppenHoverBackup = null;
     state._pendingBackup = null;
 
-    // Update map mesh colors in-place (if map exists)
+    // 若地图存在，就地更新地图网格颜色。
     if (state.mapMesh && state.mapFaceToSide) {
         const mapColorAttr = state.mapMesh.geometry.getAttribute('color');
         const mapColors = mapColorAttr.array;
@@ -1122,7 +1122,7 @@ export function updateMeshColors() {
         state._mapPendingBackup = null;
     }
 
-    // Update water visibility
+    // 更新水体可见性。
     waterMesh.visible = !state.mapMode && !showPlates && !showStress && !debugLayer;
 
     updatePendingHighlight();
@@ -1147,7 +1147,7 @@ export function updateHoverHighlight() {
         state._hoverBackup = null;
     }
 
-    // Apply new highlight
+    // 应用新的高亮。
     if (state.hoveredPlate >= 0) {
         const { mesh, r_plate } = state.curData;
         // Count cells for this plate
@@ -1192,7 +1192,7 @@ export function updateMapHoverHighlight() {
         state._mapHoverBackup = null;
     }
 
-    // Apply new highlight
+    // 应用新的高亮。
     if (state.hoveredPlate >= 0) {
         const { mesh, r_plate } = state.curData;
         const fts = state.mapFaceToSide;
@@ -1348,7 +1348,7 @@ export function updatePendingHighlight() {
                 const isOcean = plateIsOcean.has(pid);
                 for (let j = 0; j < 3; j++) {
                     if (isOcean) {
-                        // Ocean → Land pending: strong green tint
+                        // 海洋 → Land pending: strong green tint
                         colors[off + j*3]     = colors[off + j*3]     * 0.7;
                         colors[off + j*3 + 1] = Math.min(1, colors[off + j*3 + 1] + 0.25);
                         colors[off + j*3 + 2] = colors[off + j*3 + 2] * 0.7;
@@ -1716,7 +1716,7 @@ export function buildWindArrows(season) {
     scene.add(state.windArrowGroup);
 }
 
-// Ocean current arrows — show current direction colored by heat transport.
+// 海洋 current arrows — show current direction colored by heat transport.
 export function buildOceanCurrentArrows(season) {
     // Clean up previous arrows
     if (state.oceanCurrentArrowGroup) {
@@ -1894,7 +1894,7 @@ export function buildOceanCurrentArrows(season) {
         }
     }
 
-    console.log(`[OceanArrows] ${season}: ${globePositions.length / 18} arrows (from ${gridRegions.length} grid cells)`);
+    console.log(`[洋流箭头] ${season}：${globePositions.length / 18} 个箭头（来自 ${gridRegions.length} 个网格单元）`);
 
     state.oceanCurrentArrowGroup = new THREE.Group();
 
@@ -1940,7 +1940,7 @@ export async function exportMap(type, width, onProgress) {
     const koppenArr = (type === 'biome' || type === 'koppen') ? (debugLayers && debugLayers.koppen) : null;
     const biomeSmoothed = (type === 'biome' && koppenArr) ? getCachedBiomeSmoothed(mesh, koppenArr, r_elevation) : null;
 
-    // Build map triangles (same projection as buildMapMesh, chosen coloring, no grid)
+    // 构建地图三角形（与 buildMapMesh 投影一致，使用所选着色，不含网格）。
     const { numSides, numTriangles } = mesh;
     const PI = Math.PI;
     const sx = 2 / PI;
@@ -2147,7 +2147,7 @@ export async function exportMap(type, width, onProgress) {
             }
 
             tilesDone++;
-            if (onProgress) onProgress(tilesDone / totalTiles * 80, 'Rendering...');
+            if (onProgress) onProgress(tilesDone / totalTiles * 80, '正在渲染…');
             await new Promise(r => setTimeout(r, 0));
         }
     }
@@ -2157,7 +2157,7 @@ export async function exportMap(type, width, onProgress) {
     mapMesh.material.dispose();
 
     // Encode & download
-    if (onProgress) onProgress(85, 'Encoding PNG...');
+    if (onProgress) onProgress(85, '正在编码 PNG…');
     await new Promise(r => setTimeout(r, 0));
 
     const code = location.hash.replace(/^#/, '').trim() || (state.curData ? state.curData.seed : '');
@@ -2218,7 +2218,7 @@ export async function exportMapBatch(types, width, onProgress) {
     const PI = Math.PI;
     const sx = 2 / PI;
 
-    // Precompute averaged elevation at each triangle center for smooth heightmap exports
+    // 为平滑高度图导出预计算每个三角形中心的平均高程。
     const t_elev = new Float32Array(numTriangles);
     const tris = mesh.triangles;
     for (let t = 0; t < numTriangles; t++) {
@@ -2226,7 +2226,7 @@ export async function exportMapBatch(types, width, onProgress) {
         t_elev[t] = (r_elevation[tris[s0]] + r_elevation[tris[s0 + 1]] + r_elevation[tris[s0 + 2]]) / 3;
     }
 
-    // Build positions once and record per-triangle vertex topology.
+    // 一次性构建位置，并记录每个三角形的顶点拓扑。
     // Positions are reused across all export types — only colors change.
     const posArr = new Float32Array(numSides * 18);
     const triRegions = new Uint32Array(numSides * 2); // max 2 tris per side (wrapping)
@@ -2320,7 +2320,7 @@ export async function exportMapBatch(types, width, onProgress) {
         let img16;
         if (is16Bit) img16 = new Uint16Array(width * height);
 
-        // Build fresh color array for this type
+        // 为此类型构建新的颜色数组。
         const colData = new Float32Array(triCount * 9);
         for (let i = 0; i < triCount; i++) {
             const br = triRegions[i];
@@ -2361,7 +2361,7 @@ export async function exportMapBatch(types, width, onProgress) {
         const mapMesh = new THREE.Mesh(geo, mat);
         offScene.add(mapMesh);
 
-        // Render tiles
+        // 渲染分块。
         let tilesDone = 0;
         for (let ty = 0; ty < tilesY; ty++) {
             for (let tx = 0; tx < tilesX; tx++) {
@@ -2428,7 +2428,7 @@ export async function exportMapBatch(types, width, onProgress) {
                 }
 
                 tilesDone++;
-                if (onProgress) onProgress(tilesDone / totalTiles * 80, `Exporting ${label} (${ti+1}/${total}): Rendering...`);
+                if (onProgress) onProgress(tilesDone / totalTiles * 80, `${label}（${ti+1}/${total}）：正在渲染…`);
                 await new Promise(r => setTimeout(r, 0));
             }
         }
@@ -2439,7 +2439,7 @@ export async function exportMapBatch(types, width, onProgress) {
         mat.dispose();
 
         // Encode & download
-        if (onProgress) onProgress(85, `Exporting ${label} (${ti+1}/${total}): Encoding PNG...`);
+        if (onProgress) onProgress(85, `${label}（${ti+1}/${total}）：正在编码 PNG…`);
         await new Promise(r => setTimeout(r, 0));
 
         const filename = exportFilename(type, code);

@@ -1,11 +1,11 @@
 /**
- * Autonomous terrain tuning script.
+ * 自动地形调参脚本。
  *
- * Runs the app headlessly with fixed seeds, collects metrics, saves results.
- * Designed to be driven by Claude Code — modify terrain-config.js between runs.
+ * 用固定种子无头运行应用，收集指标并保存结果。
+ * 设计为由 Claude Code 驱动：在多次运行之间修改 terrain-config.js。
  *
- * Usage:  node tuning/auto-tune.mjs [label]
- * Output: tuning/results/<label>.json with metrics from all seeds
+ * 用法：node tuning/auto-tune.mjs [标签]
+ * 输出：tuning/results/<label>.json，包含所有种子的指标
  */
 
 import http from 'node:http';
@@ -48,7 +48,7 @@ function startServer() {
   });
 }
 
-// Seeds chosen for diversity: different plate configs, land coverage, etc.
+// 种子按多样性选择：不同板块配置、陆地覆盖率等。
 const SEEDS = [42, 100, 200, 300, 400];
 
 async function runSeed(browser, baseUrl, seed) {
@@ -61,7 +61,7 @@ async function runSeed(browser, baseUrl, seed) {
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await new Promise((r) => setTimeout(r, 2000));
 
-    // Dismiss overlays
+    // 关闭浮层
     await page.evaluate(() => {
       for (const id of ['tutorialOverlay', 'whatsNewOverlay']) {
         const el = document.getElementById(id);
@@ -69,14 +69,14 @@ async function runSeed(browser, baseUrl, seed) {
       }
     });
 
-    // Set low detail for speed
+    // 设置低细节以加快速度
     await page.evaluate(() => {
       const el = document.getElementById('sN');
       el.value = 400;
       el.dispatchEvent(new Event('input', { bubbles: true }));
     });
 
-    // Patch seed
+    // 注入种子
     await page.evaluate((s) => {
       const origPost = Worker.prototype.postMessage;
       Worker.prototype.postMessage = function(msg, ...rest) {
@@ -85,11 +85,11 @@ async function runSeed(browser, baseUrl, seed) {
       };
     }, seed);
 
-    // Generate
+    // 生成
     const genDone = page.evaluate((timeout) => {
       return new Promise((resolve, reject) => {
         const btn = document.getElementById('generate');
-        const timer = setTimeout(() => reject(new Error('Generation timed out')), timeout);
+        const timer = setTimeout(() => reject(new Error('生成超时')), timeout);
         btn.addEventListener('generate-done', () => { clearTimeout(timer); resolve(); }, { once: true });
       });
     }, 120_000);
@@ -131,7 +131,7 @@ async function main() {
 
   const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
 
-  // Compute cross-seed averages for key metrics
+  // 计算关键指标的跨种子平均值
   const validMetrics = results.filter(r => !r.metrics._error).map(r => r.metrics);
   const avg = {};
   if (validMetrics.length > 0) {
@@ -145,10 +145,10 @@ async function main() {
   const output = { label, elapsed_s: +elapsed, seeds: SEEDS, results, averages: avg };
   const outPath = path.join(RESULTS_DIR, `${label}.json`);
   fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
-  console.log(`\nResults saved: ${outPath} (${elapsed}s total)`);
+  console.log(`\n结果已保存：${outPath}（总计 ${elapsed} 秒）`);
 
-  // Print summary
-  console.log('\n=== Cross-seed Averages ===');
+  // 打印摘要
+  console.log('\n=== 跨种子平均值 ===');
   const highlight = [
     'continent_count', 'island_count_total', 'flat_ocean_plate_land_fraction',
     'relief_headroom', 'coast_complexity_index', 'hypsometry_trough_depth',

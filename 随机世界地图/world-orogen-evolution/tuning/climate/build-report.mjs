@@ -1,7 +1,7 @@
 /**
- * Generates a self-contained before/after climate-tuning report page,
- * inlining the rendered Köppen maps as data URIs (Artifact CSP blocks
- * external images). Output: tuning/climate/report.html
+ * 生成一个自包含的气候调参前后对比报告页，
+ * 把渲染后的柯本地图以内联 data URI 写入（Artifact CSP 会阻止
+ * 外部图片）。输出：tuning/climate/report.html
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,29 +20,29 @@ const truth = uri('before-truth.png');
 const beforeDiff = uri('before-diff.png');
 const afterDiff = uri('run2-hires-diff.png');
 
-// Notable per-class F1 movers (160K regions, before → after)
+// 显著变化的单类 F1（160K 区域，调参前 → 调参后）
 const classes = [
-    ['BWh', 'Hot desert', 0.198, 0.519, 'Sahara, Arabia, Outback now read as desert instead of steppe/savanna'],
-    ['Dfc', 'Subarctic', 0.278, 0.438, 'Siberian & Canadian taiga belt sharpened'],
-    ['BSh', 'Hot steppe', 0.090, 0.153, 'Sahel & desert fringes'],
-    ['Af',  'Tropical rainforest', 0.453, 0.503, 'Amazon & Congo cores'],
-    ['Csa', 'Mediterranean', 0.016, 0.024, 'Still weak — needs a targeted seasonal-reversal mechanism'],
+    ['BWh', '热沙漠', 0.198, 0.519, '撒哈拉、阿拉伯和澳洲内陆现在识别为沙漠，而不是草原/稀树草原'],
+    ['Dfc', '亚寒带', 0.278, 0.438, '西伯利亚和加拿大针叶林带更加清晰'],
+    ['BSh', '热草原', 0.090, 0.153, '萨赫勒与沙漠边缘'],
+    ['Af',  '热带雨林', 0.453, 0.503, '亚马孙与刚果核心区'],
+    ['Csa', '地中海型', 0.016, 0.024, '仍然较弱，需要定向的季节反转机制'],
 ];
 
 const metrics = [
-    ['Objective', '0.199', '0.259', '+30%', 'Combined score (½ exact + ½ macro-F1)'],
-    ['Exact match', '27.4%', '36.4%', '+9.0 pts', 'Cell has the exact Köppen type (30 classes)'],
-    ['Major group', '56.4%', '61.8%', '+5.4 pts', 'Right family: tropical / arid / temperate / continental / polar'],
-    ['Macro F1', '0.124', '0.154', '+24%', 'Averaged across classes — rare types count equally'],
+    ['目标分', '0.199', '0.259', '+30%', '综合分（½ 精确匹配 + ½ 宏平均 F1）'],
+    ['精确匹配', '27.4%', '36.4%', '+9.0 个百分点', '单元格拥有完全正确的柯本类型（30 类）'],
+    ['大类匹配', '56.4%', '61.8%', '+5.4 个百分点', '大类正确：热带 / 干旱 / 温带 / 大陆性 / 极地'],
+    ['宏平均 F1', '0.124', '0.154', '+24%', '跨类别平均，稀有类型拥有同等权重'],
 ];
 
 const changes = [
-    ['Winter-heavy seasonal swing', 'temperature.js',
-     'Continental interiors now cool further below the annual mean in winter than they warm above it in summer — the physical reality behind D-climate winters. This also corrected a comment that had long claimed a 40/60 split the code never applied.'],
-    ['Wet/dry season contrast', 'precipitation.js',
-     'A control that pushes each season away from the annual mean, restoring the seasonal precipitation signal that model-blending and normalization had been averaging flat.'],
-    ['Tunable Köppen proxies', 'koppen.js',
-     'The classifier estimates monthly criteria from two-season data; those estimation constants were fixed guesses. Making them tunable (e.g. the precip-to-mm scale) drove much of the second round of gains.'],
+    ['冬季权重更高的季节温差', 'temperature.js',
+     '大陆内部在冬季低于年均温的幅度，现在大于夏季高于年均温的幅度，这更贴近 D 类气候冬季的物理现实。同时修正了一个长期声称 40/60 拆分、但代码从未实际采用的注释。'],
+    ['干湿季对比', 'precipitation.js',
+     '新增控制项让每个季节偏离年均值，恢复此前被模型混合与归一化抹平的季节降水信号。'],
+    ['可调柯本代理参数', 'koppen.js',
+     '分类器用两季数据估计月度判据；这些估计常数原本是固定猜测。把它们变为可调参数（例如降水到毫米的换算比例）带来了第二轮提升的大部分收益。'],
 ];
 
 const css = `
@@ -87,7 +87,7 @@ section{margin-top:clamp(44px,6vw,76px);}
 h2{font-size:clamp(20px,3vw,26px);letter-spacing:-.01em;font-weight:750;color:var(--ink-strong);margin:0 0 6px;text-wrap:balance;}
 .sub{color:var(--muted);margin:0 0 22px;max-width:64ch;}
 
-/* ── comparison slider ── */
+/* ── 对比滑块 ── */
 .compare{position:relative;border:1px solid var(--hair);border-radius:14px;overflow:hidden;
   background:var(--panel-2);box-shadow:var(--shadow);aspect-ratio:2/1;touch-action:none;user-select:none;}
 .compare img{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:auto;pointer-events:none;}
@@ -107,7 +107,7 @@ h2{font-size:clamp(20px,3vw,26px);letter-spacing:-.01em;font-weight:750;color:va
 .tag.r{color:var(--pos);}
 .hint{text-align:center;color:var(--muted);font-size:13px;margin:12px 0 0;}
 
-/* ── reference + diff grid ── */
+/* ── 参考与差异网格 ── */
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
 @media (max-width:720px){.grid2{grid-template-columns:1fr;}}
 figure{margin:0;border:1px solid var(--hair);border-radius:12px;overflow:hidden;background:var(--panel-2);box-shadow:var(--shadow);}
@@ -115,7 +115,7 @@ figure img{display:block;width:100%;aspect-ratio:2/1;object-fit:cover;}
 figcaption{padding:11px 14px;font-size:13px;color:var(--muted);border-top:1px solid var(--hair);}
 figcaption b{color:var(--ink);font-weight:600;}
 
-/* ── metrics ── */
+/* ── 指标 ── */
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
 @media (max-width:860px){.metrics{grid-template-columns:repeat(2,1fr);}}
 @media (max-width:460px){.metrics{grid-template-columns:1fr;}}
@@ -130,7 +130,7 @@ figcaption b{color:var(--ink);font-weight:600;}
   background:color-mix(in oklab,var(--pos) 15%,transparent);padding:3px 8px;border-radius:20px;letter-spacing:.02em;}
 .metric .note{font-size:12px;color:var(--muted);line-height:1.4;margin-top:2px;}
 
-/* ── per-class bars ── */
+/* ── 单类柱状条 ── */
 .bars{display:flex;flex-direction:column;gap:2px;border:1px solid var(--hair);border-radius:12px;
   overflow:hidden;box-shadow:var(--shadow);}
 .bar{display:grid;grid-template-columns:150px 1fr 132px;align-items:center;gap:16px;
@@ -150,7 +150,7 @@ figcaption b{color:var(--ink);font-weight:600;}
 .legend-row span{display:inline-flex;align-items:center;gap:7px;}
 .sw{width:12px;height:12px;border-radius:3px;display:inline-block;}
 
-/* ── changes ── */
+/* ── 改动 ── */
 .changes{display:grid;gap:14px;}
 .change{border:1px solid var(--hair);border-left:2px solid var(--pos);border-radius:10px;
   padding:18px 20px;background:var(--panel);box-shadow:var(--shadow);}
@@ -170,47 +170,47 @@ footer p{margin:0 0 8px;}
 
 const html = `<div class="wrap">
   <header>
-    <p class="eyebrow">World Orogen · Climate Calibration</p>
-    <h1>Teaching a procedural planet to look like Earth</h1>
-    <p class="dek">The climate engine now runs against the real world as an answer key. Simulating climate on an imported Earth heightmap and scoring the resulting Köppen zones against the observed Köppen-Geiger map, then tuning ~90 parameters and three model changes, lifted the exact-zone match from <b>27.4%</b> to <b>36.4%</b>.</p>
+    <p class="eyebrow">World Orogen · 气候校准</p>
+    <h1>让程序化行星更像地球</h1>
+    <p class="dek">气候引擎现在以真实世界作为答案键：在导入的地球高度图上模拟气候，把生成的柯本气候区与观测到的 Köppen-Geiger 地图评分对比；经过约 90 个参数和 3 个模型改动的调校后，精确气候区匹配率从 <b>27.4%</b> 提升到 <b>36.4%</b>。</p>
   </header>
 
   <section>
-    <p class="label">Simulated Köppen zones · drag to compare</p>
-    <h2>Before &amp; after tuning</h2>
-    <p class="sub">Both maps are World Orogen's own climate simulation of Earth's terrain — the only difference is the parameter set. Drag the divider; the deserts, taiga belt, and rainforest cores are where the change reads loudest.</p>
+    <p class="label">模拟柯本气候区 · 拖动对比</p>
+    <h2>调参前后对比</h2>
+    <p class="sub">两张地图都来自 World Orogen 对地球地形的气候模拟，唯一差异是参数集。拖动分割线即可看到沙漠、针叶林带和雨林核心区的变化最明显。</p>
     <div class="compare" id="cmp">
-      <img class="bottom" src="${beforeSim}" alt="Köppen zones simulated with the original parameters">
-      <img class="top" src="${afterSim}" alt="Köppen zones simulated with the tuned parameters">
-      <span class="tag l">Before</span>
-      <span class="tag r">After</span>
+      <img class="bottom" src="${beforeSim}" alt="使用原始参数模拟的柯本气候区">
+      <img class="top" src="${afterSim}" alt="使用调校参数模拟的柯本气候区">
+      <span class="tag l">调参前</span>
+      <span class="tag r">调参后</span>
       <div class="divider"></div>
       <div class="handle" aria-hidden="true">⇆</div>
       <input class="range" type="range" min="0" max="100" value="50" step="0.1"
-             aria-label="Reveal before or after simulation" id="cmpRange">
+             aria-label="显示调参前或调参后的模拟结果" id="cmpRange">
     </div>
-    <p class="hint">Left of the line: original defaults · Right: tuned defaults</p>
+    <p class="hint">分割线左侧：原始默认值 · 右侧：调校后的默认值</p>
   </section>
 
   <section>
-    <p class="label">The target · what &quot;correct&quot; looks like</p>
-    <h2>Scored against observed Earth</h2>
-    <p class="sub">The reference is the Köppen-Geiger classification of real Earth (Kottek et&nbsp;al., observed 1976–2000). The agreement map grades every scored land cell against it.</p>
+    <p class="label">目标 · “正确答案”的样子</p>
+    <h2>对照真实地球评分</h2>
+    <p class="sub">参考答案是真实地球的 Köppen-Geiger 分类（Kottek 等，1976–2000 年观测）。一致性地图会对每个参与评分的陆地单元格进行分级。</p>
     <div class="grid2">
       <figure>
-        <img src="${truth}" alt="Real Earth Köppen-Geiger classification">
-        <figcaption><b>Ground truth</b> — observed Köppen-Geiger, the answer key</figcaption>
+        <img src="${truth}" alt="真实地球 Köppen-Geiger 分类">
+        <figcaption><b>真实答案</b> — 观测得到的 Köppen-Geiger，作为答案键</figcaption>
       </figure>
       <figure>
-        <img src="${afterDiff}" alt="Agreement map after tuning">
-        <figcaption><b>Agreement (after)</b> — <span style="color:var(--pos)">green</span> exact · <span style="color:var(--amber)">amber</span> right family · <span style="color:#d24">red</span> miss</figcaption>
+        <img src="${afterDiff}" alt="调参后的一致性地图">
+        <figcaption><b>一致性（调参后）</b> — <span style="color:var(--pos)">绿色</span> 精确 · <span style="color:var(--amber)">琥珀色</span> 大类正确 · <span style="color:#d24">红色</span> 未命中</figcaption>
       </figure>
     </div>
   </section>
 
   <section>
-    <p class="label">The numbers · 160K-cell mesh, land where both agree</p>
-    <h2>Every metric moved up</h2>
+    <p class="label">数字 · 160K 单元网格，双方都认为是陆地的区域</p>
+    <h2>所有指标均有提升</h2>
     <div class="metrics">
       ${metrics.map(([n, b, a, d, note]) => `
       <div class="metric">
@@ -223,12 +223,12 @@ const html = `<div class="wrap">
   </section>
 
   <section>
-    <p class="label">Per-climate accuracy · F1 score</p>
-    <h2>Where the gains landed</h2>
+    <p class="label">各气候类型准确率 · F1 分数</p>
+    <h2>提升落在哪里</h2>
     <div class="legend-row">
-      <span><i class="sw" style="background:color-mix(in oklab,var(--amber) 55%,transparent)"></i> before</span>
-      <span><i class="sw" style="background:var(--pos)"></i> after</span>
-      <span>F1 combines precision &amp; recall (1.0 = perfect)</span>
+      <span><i class="sw" style="background:color-mix(in oklab,var(--amber) 55%,transparent)"></i> 调参前</span>
+      <span><i class="sw" style="background:var(--pos)"></i> 调参后</span>
+      <span>F1 结合精确率与召回率（1.0 = 完美）</span>
     </div>
     <div class="bars">
       ${classes.map(([code, name, b, a, desc]) => `
@@ -245,9 +245,9 @@ const html = `<div class="wrap">
   </section>
 
   <section>
-    <p class="label">Beyond the knobs</p>
-    <h2>Three model changes the benchmark motivated</h2>
-    <p class="sub">Tuning plateaus; these are structural fixes the confusion matrix pointed to. Each ships behind a parameter and is exactly neutral at its default, so nothing changed until the optimizer asked for it.</p>
+    <p class="label">不只是旋钮</p>
+    <h2>基准测试推动的三个模型改动</h2>
+    <p class="sub">单纯调参会遇到平台期；这些是混淆矩阵指出的结构性修正。每个改动都挂在参数后面，并且默认值严格中性，因此只有优化器需要时才会产生影响。</p>
     <div class="changes">
       ${changes.map(([t, file, body]) => `
       <div class="change">
@@ -258,8 +258,8 @@ const html = `<div class="wrap">
   </section>
 
   <footer>
-    <p>Rendered by <code>tuning/climate/evaluate.mjs</code> at a 160,000-cell resolution. Scoring counts only land cells where the simulated and real land masks agree (96.6% of simulated land).</p>
-    <p>Reproduce: <code>node tuning/climate/optimize.mjs</code> → <code>apply-params.mjs</code>. Still open: Mediterranean (Csa) and monsoon subtypes score near zero — the seasonal precipitation reversal isn't yet strong enough for the classifier to catch them.</p>
+    <p>由 <code>tuning/climate/evaluate.mjs</code> 以 160,000 单元分辨率渲染。评分只统计模拟与真实陆地掩膜一致的陆地单元（占模拟陆地的 96.6%）。</p>
+    <p>复现：<code>node tuning/climate/optimize.mjs</code> → <code>apply-params.mjs</code>。仍待解决：地中海型（Csa）和季风子类型得分接近零，季节性降水反转还不够强，分类器暂时捕捉不到。</p>
   </footer>
 </div>
 
@@ -273,4 +273,4 @@ const html = `<div class="wrap">
 </script>`;
 
 fs.writeFileSync(OUT, `<style>${css}</style>\n${html}`);
-console.log('Wrote ' + OUT + ' (' + (fs.statSync(OUT).size / 1024).toFixed(0) + ' KB)');
+console.log('已写入 ' + OUT + '（' + (fs.statSync(OUT).size / 1024).toFixed(0) + ' KB）');

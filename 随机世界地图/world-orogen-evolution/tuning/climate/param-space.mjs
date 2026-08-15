@@ -119,7 +119,7 @@ export const PARAM_SPACE = {
     HEUR_ORO_SHADOW_MAX:              { min: 0.4,  max: 0.9 },
 };
 
-// Ordering constraints the optimizer must maintain: [lowerKey, upperKey, minGap]
+// 优化器必须维护的排序约束：[lowerKey, upperKey, minGap]。
 export const ORDER_CONSTRAINTS = [
     ['HEUR_ZONAL_DESERT_END_DEG', 'HEUR_ZONAL_DRY_POLEWARD_DEG', 2],
     ['HEUR_ZONAL_DRY_POLEWARD_DEG', 'HEUR_ZONAL_WESTERLY_PEAK_DEG', 5],
@@ -127,14 +127,14 @@ export const ORDER_CONSTRAINTS = [
     ['PRECIP_SUBTROP_CENTER_WINTER_DEG', 'PRECIP_SUBTROP_CENTER_SUMMER_DEG', 0],
 ];
 
-// Sanity: every space key must exist in the config, and defaults must lie in range.
+// 健全性检查：参数空间中的键必须存在于配置中，默认值必须位于范围内。
 for (const [k, s] of Object.entries(PARAM_SPACE)) {
-    if (!(k in CLIMATE_DEFAULTS)) throw new Error(`param-space key not in climate-config: ${k}`);
+    if (!(k in CLIMATE_DEFAULTS)) throw new Error(`param-space 中的键不在 climate-config 中：${k}`);
     const d = CLIMATE_DEFAULTS[k];
-    if (d < s.min || d > s.max) throw new Error(`default of ${k} (${d}) outside [${s.min}, ${s.max}]`);
+    if (d < s.min || d > s.max) throw new Error(`${k} 的默认值（${d}）超出范围 [${s.min}, ${s.max}]`);
 }
 for (const k of Object.keys(CLIMATE_DEFAULTS)) {
-    if (!(k in PARAM_SPACE)) throw new Error(`climate-config key missing from param-space: ${k}`);
+    if (!(k in PARAM_SPACE)) throw new Error(`climate-config 中的键未在 param-space 中定义：${k}`);
 }
 
 export const HIGH_IMPACT_KEYS = Object.keys(PARAM_SPACE).filter(k => PARAM_SPACE[k].high);

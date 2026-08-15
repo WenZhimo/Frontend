@@ -1,4 +1,4 @@
-// Ocean / land assignment.
+// 海洋 / land assignment.
 // Targets ~30% land by surface area. numContinents controls how many
 // separate landmasses to create. Small trapped interior seas are absorbed.
 
@@ -11,7 +11,7 @@ export function assignOceanLand(mesh, r_plate, plateSeeds, r_xyz, seed, numConti
     const numPlates = plateIds.length;
     const { adjOffset, adjList } = mesh;
 
-    // 1. Plate areas and centroids
+    // 1. 板块面积与质心。
     const plateArea = {};
     const plateCentroid = {};
     for (const pid of plateIds) {
@@ -33,7 +33,7 @@ export function assignOceanLand(mesh, r_plate, plateSeeds, r_xyz, seed, numConti
         plateCentroid[pid][2] /= a;
     }
 
-    // 2. Plate adjacency graph + perimeter
+    // 2. 板块邻接图与周长。
     const plateAdj = {};
     const platePerim = {};
     for (const pid of plateIds) { plateAdj[pid] = new Set(); platePerim[pid] = 0; }
@@ -50,7 +50,7 @@ export function assignOceanLand(mesh, r_plate, plateSeeds, r_xyz, seed, numConti
         if (isBoundary) platePerim[myPlate]++;
     }
 
-    // Plate compactness
+    // 板块紧凑度。
     const plateCompact = {};
     let maxCompact = 0;
     for (const pid of plateIds) {
@@ -98,7 +98,7 @@ export function assignOceanLand(mesh, r_plate, plateSeeds, r_xyz, seed, numConti
         chosen.add(pick.pid);
     }
 
-    // If seeds alone exceed the land budget, trim the largest seeds
+    // 如果仅种子就超过陆地预算，则裁剪最大的种子。
     let seedArea = 0;
     for (const pid of continentSeeds) seedArea += plateArea[pid];
     while (continentSeeds.length > 1 && seedArea > targetLandArea) {
@@ -118,7 +118,7 @@ export function assignOceanLand(mesh, r_plate, plateSeeds, r_xyz, seed, numConti
     }
     let landArea = seedArea;
 
-    // 5. Round-robin growth with per-continent targets
+    // 5. 按大陆目标进行轮询扩张。
     const growTarget = targetLandArea * 0.9;
     const numC = continentSeeds.length;
 
@@ -229,7 +229,7 @@ export function assignOceanLand(mesh, r_plate, plateSeeds, r_xyz, seed, numConti
         }
     }
 
-    // 7. Build plateIsOcean set
+    // 7. 构建 plateIsOcean 集合。
     const plateIsOcean = new Set();
     for (const pid of plateIds) {
         if (plateContinent[pid] === undefined) plateIsOcean.add(pid);

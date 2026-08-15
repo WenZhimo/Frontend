@@ -1,7 +1,7 @@
-// Heuristic precipitation model: smooth zonal patterns blended with the
+// 启发式降水模型：平滑纬向格局与
 // complex advection model to reduce splotchiness and strengthen deserts.
-// Computes precipitation from four multiplicative factors: zonal base curve
-// (distance from ITCZ), seasonal modifier, continental dryness, and
+// 根据四个相乘因子计算降水：纬向基础曲线、
+// （到 ITCZ 的距离）、季节修正、大陆干燥度，以及
 // orographic rain shadow.
 
 import { CLIMATE } from './climate-config.js';
@@ -12,7 +12,7 @@ import { smoothField, makeItczLookup } from './climate-util.js';
 const DEG = Math.PI / 180;
 
 // ── Zonal base curve ────────────────────────────────────────────────────────
-// Returns a value in [0.03, 1.0] based on distance from the ITCZ in degrees.
+// 根据到 ITCZ 的纬度距离返回 [0.03, 1.0] 范围内的值。
 
 function zonalBase(distDeg) {
     const tradeValue = CLIMATE.HEUR_ZONAL_TRADE_VALUE;
@@ -32,7 +32,7 @@ function zonalBase(distDeg) {
         return 1.0 - (1.0 - tradeValue) * smoothstep(5, 10, distDeg);
     } else if (distDeg < dryPolewardDeg) {
         // Subtropical highs (desert factory): 0.35 → 0.02
-        // Very aggressive minimum — core of the desert belt.
+        // 非常强的下限压制：沙漠带核心。
         return tradeValue - (tradeValue - desertMin) * smoothstep(10, desertEndDeg, distDeg);
     } else if (distDeg < westerlyPeakDeg) {
         // Mid-lat westerlies recovery: 0.02 → 0.5
@@ -47,8 +47,8 @@ function zonalBase(distDeg) {
 }
 
 // ── Heuristic zonal wind ────────────────────────────────────────────────────
-// Idealized wind direction based on latitude relative to the ITCZ.
-// Returns local east/north components (positive east = blowing eastward,
+// 根据相对 ITCZ 的纬度估计理想化风向。
+// 返回本地东/北分量（东向为正表示向东吹，
 // positive north = blowing poleward in NH).
 //
 // Zonal wind belts (Earth-like):
@@ -59,7 +59,7 @@ function zonalBase(distDeg) {
 //   Polar easterlies (60-90°): east→west, deflected equatorward
 
 function heuristicWind(distFromItczDeg, isNorthOfItcz) {
-    // Sign for hemisphere: +1 if north of ITCZ, -1 if south
+    // 半球符号：ITCZ 以北为 +1，以南为 -1。
     const hemiSign = isNorthOfItcz ? 1 : -1;
     let we, wn;
 
@@ -68,20 +68,20 @@ function heuristicWind(distFromItczDeg, isNorthOfItcz) {
         we = 0;
         wn = -hemiSign * 0.1;
     } else if (distFromItczDeg < 30) {
-        // Trade winds: easterlies (blowing westward) with equatorward component
-        // Strength ramps up from ITCZ edge, peaks ~15-20°, fades toward subtropics
+        // 信风：东风（向西吹），带有赤道向分量。
+        // 强度从 ITCZ 边缘升高，在约 15–20° 达峰，并向副热带减弱。
         const tradeStrength = smoothstep(5, 15, distFromItczDeg)
             * (1 - smoothstep(25, 32, distFromItczDeg));
         we = -tradeStrength * 0.8;                 // strong westward
         wn = -hemiSign * tradeStrength * 0.3;      // equatorward (toward ITCZ)
     } else if (distFromItczDeg < 60) {
-        // Westerlies: blowing eastward with poleward component
+        // 西风：向东吹，带有极向分量。
         const westStrength = smoothstep(30, 40, distFromItczDeg)
             * (1 - smoothstep(55, 65, distFromItczDeg));
         we = westStrength * 0.9;                    // strong eastward
         wn = hemiSign * westStrength * 0.25;        // poleward
     } else {
-        // Polar easterlies: blowing westward with equatorward component
+        // 极地东风：向西吹，带有赤道向分量。
         const polarStrength = smoothstep(60, 70, distFromItczDeg);
         we = -polarStrength * 0.4;                  // moderate westward
         wn = -hemiSign * polarStrength * 0.15;      // equatorward
@@ -90,8 +90,8 @@ function heuristicWind(distFromItczDeg, isNorthOfItcz) {
     return { we, wn };
 }
 
-// ── Heuristic wind field for a full season ──────────────────────────────────
-// Computes idealized zonal wind E/N arrays for all regions.
+// ── 完整季节的启发式风场 ──────────────────────────────────
+// 为所有区域计算理想化纬向风东/北分量数组。
 
 export function computeHeuristicWindField(numRegions, r_lat, r_lon, itczLookup) {
     const hWindE = new Float32Array(numRegions);
@@ -132,9 +132,9 @@ export function computeHeuristicPrecipitation(mesh, r_xyz, r_elevation, windResu
 
     const avgEdgeKm = (Math.PI * 6371) / Math.sqrt(numRegions);
 
-    // Precompute west-coast proximity: positive = west coast, negative = east coast.
-    // Coastal land cells check which side ocean is on relative to the local east
-    // direction, then the signal is smoothed ~300 km inland through land only.
+    // 预计算西岸接近度：正值为西岸，负值为东岸。
+    // 沿海陆地单元检查海洋相对本地东向位于哪一侧，
+    // 然后只沿陆地向内陆平滑传播约 300 km。
     const { r_eastX, r_eastY, r_eastZ } = windResult;
     const { adjOffset, adjList } = mesh;
     const r_westCoast = new Float32Array(numRegions);
@@ -154,11 +154,11 @@ export function computeHeuristicPrecipitation(mesh, r_xyz, r_elevation, windResu
             }
         }
         if (count > 0) {
-            // Negative dot = ocean is to the west = west coast
+            // 负点积 = 海洋在西侧 = 西海岸。
             r_westCoast[r] = oceanDotEast < 0 ? 1 : -1;
         }
     }
-    // Smooth through land only (~300 km) so the signal bleeds inland
+    // 只沿陆地平滑约 300 km，让信号渗入内陆。
     const wcPasses = Math.max(2, Math.round(300 / avgEdgeKm));
     const wcTmp = new Float32Array(numRegions);
     for (let pass = 0; pass < wcPasses; pass++) {
@@ -194,12 +194,12 @@ export function computeHeuristicPrecipitation(mesh, r_xyz, r_elevation, windResu
             const lat = r_lat[r];
             const lon = r_lon[r];
 
-            // ── A. Zonal base curve (distance from ITCZ) ──
-            // Dampen ITCZ shift: use only 30% of the complex model's ITCZ
-            // displacement so the zonal bands stay close to the geographic
-            // equator. The full ITCZ swing (up to 15-20°) would drag the
-            // subtropical desert belt too far, drying the true equator and
-            // wetting the mid-latitudes in the shifted season.
+            // ── A. 纬向基础曲线（到 ITCZ 的距离）──
+            // 抑制 ITCZ 位移：只使用复杂模型 ITCZ 的 30%
+            // 位移，使纬向带保持接近地理
+            // 赤道。完整 ITCZ 摆幅（最高 15–20°）会把
+            // 副热带沙漠带拖得过远，使真实赤道变干并
+            // 在偏移季节把中纬度变湿。
             const itczLat = itczLookup(lon) * CLIMATE.HEUR_ITCZ_SHIFT_DAMPEN;
             const signedDist = lat - itczLat;
             const distFromItczDeg = Math.abs(signedDist) / DEG;
@@ -213,11 +213,11 @@ export function computeHeuristicPrecipitation(mesh, r_xyz, r_elevation, windResu
 
             // Mediterranean suppression: subtropical highs expand poleward in
             // local summer, strongly suppressing rainfall at 25-42° latitude.
-            // In local winter the highs retreat equatorward and westerlies
-            // bring rain to these latitudes.  This seasonal contrast is the
+            // 当地冬季，高压向赤道退缩，西风
+            // 为这些纬度带来降雨。这种季节对比是
             // primary driver of Mediterranean (Cs) climates.
             // Stronger on west coasts (subtropical highs sit over eastern ocean
-            // basins, drying the adjacent western continental margins) and
+            // 洋盆，使相邻大陆西缘变干）并
             // weaker on east coasts (onshore tropical moisture counters drying).
             if (inSummerHemi && absLatDeg > 22 && absLatDeg < 45) {
                 const medSuppress = smoothstep(22, 30, absLatDeg)
@@ -254,7 +254,7 @@ export function computeHeuristicPrecipitation(mesh, r_xyz, r_elevation, windResu
                 }
             }
 
-            // ── E. Hard distance-from-coast cutoff ──
+            // ── E. 硬性离岸距离截断 ──
             // Fixed 2000-3000km cutoff regardless of latitude.
             let distMod = 1.0;
             if (r_isLand[r] && r_coastDistLand[r] > 0) {

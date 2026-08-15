@@ -1,5 +1,5 @@
-// Wind simulation: pressure-driven seasonal wind with longitude-varying ITCZ.
-// Computes pressure fields and wind vectors for summer and winter seasons.
+// 风场模拟：由气压驱动、ITCZ 随经度变化的季节性风。
+// 计算夏季和冬季的气压场与风矢量。
 
 import { CLIMATE } from './climate-config.js';
 import { elevToHeightKm } from './color-map.js';
@@ -12,11 +12,11 @@ const RAD = 180 / Math.PI;
 
 function buildPeriodicSpline(xs, ys) {
     // xs: sorted longitude samples (radians), ys: ITCZ latitude values
-    // Returns spline data for evaluateSpline()
+    // 返回供 evaluateSpline() 使用的样条数据。
     const n = xs.length;
     const period = 2 * Math.PI;
 
-    // Build tridiagonal system for periodic natural cubic spline
+    // 为周期自然三次样条构建三对角系统。
     const h = new Float64Array(n);
     const alpha = new Float64Array(n);
     for (let i = 0; i < n; i++) {
@@ -30,8 +30,8 @@ function buildPeriodicSpline(xs, ys) {
         alpha[i] = (3 / h[i]) * (ys[next] - ys[i]) - (3 / h[prev]) * (ys[i] - ys[prev]);
     }
 
-    // Solve with Thomas-like algorithm for periodic system
-    // Simplified: use iterative relaxation (fast enough for n=72)
+    // 使用类 Thomas 算法求解周期系统。
+    // 简化处理：使用迭代松弛（n=72 时足够快）。
     const c = new Float64Array(n);
     for (let iter = 0; iter < 20; iter++) {
         for (let i = 0; i < n; i++) {
@@ -55,7 +55,7 @@ function buildPeriodicSpline(xs, ys) {
 
 function evaluateSpline(spline, lon) {
     const { xs, ys, b, c, d, n, period } = spline;
-    // Normalize lon to [xs[0], xs[0] + period)
+    // 将经度归一化到 [xs[0], xs[0] + period)。
     let t = ((lon - xs[0]) % period + period) % period + xs[0];
 
     // Direct index calculation — segments are equally spaced
@@ -89,7 +89,7 @@ function buildGeoIndex(r_lat, r_lon, r_sinLat, r_cosLat, r_elevation, r_isLand, 
     const numBins = LAT_BINS * LON_BINS;
 
     // CSR (compressed sparse row) format: count regions per bin, then prefix-sum
-    // Cache bin index per region to avoid recomputing in the fill pass
+    // 缓存每个区域的分箱索引，避免填充阶段重复计算。
     const r_bin = new Uint32Array(numRegions);
     const binCount = new Uint32Array(numBins);
     for (let r = 0; r < numRegions; r++) {
@@ -120,7 +120,7 @@ function buildGeoIndex(r_lat, r_lon, r_sinLat, r_cosLat, r_elevation, r_isLand, 
     const _outLocal = { landFrac: 0, avgElev: 0 };
     const _outWide = { landFrac: 0, avgElev: 0 };
 
-    // Cache cosRadius for commonly used radii
+    // 缓存常用半径的 cosRadius。
     const cosRadiusCache = new Map();
     function getCosRadius(radius) {
         let c = cosRadiusCache.get(radius);
@@ -233,15 +233,15 @@ function buildGeoIndex(r_lat, r_lon, r_sinLat, r_cosLat, r_elevation, r_isLand, 
 function computeITCZ(geoIndex, season, tiltRad) {
     const { sample: geoSample, sampleDual, _outLocal, _outWide } = geoIndex;
     const NUM_LON = 72;
-    // Two sampling radii: local (5°) for precise land detection, wide (30°) for continental scale
+    // 两个采样半径：局部 5° 用于精确陆地检测，宽域 30° 用于大陆尺度。
     const localRadius = 5 * DEG;
     const wideRadius = 30 * DEG;
 
     // +1 = NH summer, -1 = SH summer (NH winter)
     const sign = season === 'summer' ? 1 : -1;
 
-    // Subsolar latitude: where the sun is directly overhead this season
-    // Full tilt in summer hemisphere (e.g. +23.5° for NH summer)
+    // 直射纬度：本季太阳直射的位置。
+    // 夏半球采用完整倾角（例如北半球夏季为 +23.5°）。
     const subsolarLat = sign * tiltRad;
 
     // Scan range: -30° to +30° in 2.5° steps
@@ -250,7 +250,7 @@ function computeITCZ(geoIndex, season, tiltRad) {
     const SCAN_STEP = 2.5;
     const numScans = Math.round((SCAN_MAX - SCAN_MIN) / SCAN_STEP) + 1;
 
-    // Pre-compute scan latitudes and their trig values (reused across all longitudes)
+    // 预计算扫描纬度及其三角函数值（跨所有经度复用）。
     const scanLats = new Float64Array(numScans);
     const scanLatDegs = new Float64Array(numScans);
     const scanSolarScores = new Float64Array(numScans);
@@ -262,7 +262,7 @@ function computeITCZ(geoIndex, season, tiltRad) {
         scanSolarScores[si] = Math.exp(-0.5 * (dSolar / 25) ** 2);
     }
 
-    // Pre-compute poleward latitudes for each scan step
+    // 为每个扫描步预计算极向纬度。
     const polewardLats = new Float64Array(numScans);
     for (let si = 0; si < numScans; si++) {
         polewardLats[si] = scanLats[si] + sign * 15 * DEG;
@@ -284,20 +284,20 @@ function computeITCZ(geoIndex, season, tiltRad) {
             sampleDual(lat, lon, localRadius, wideRadius);
             const local = _outLocal, wide = _outWide;
 
-            // (a) Solar insolation: pre-computed Gaussian falloff from subsolar point
+            // (a) 太阳辐照：从直射点预计算的高斯衰减。
             const solarScore = scanSolarScores[si];
 
             // (b) Land thermal boost: uses multi-scale sampling.
-            // Only truly continental-scale landmasses pull the ITCZ significantly.
+            // 只有真正大陆尺度的陆块才会显著牵引 ITCZ。
             // Islands, thin peninsulas, and coastlines near ocean register low at
-            // the wide (30°) radius and get suppressed by the steep ramp.
+            // 宽域（30°）半径会将其纳入，并由陡峭斜坡压制。
             const localLand = local.landFrac;
             const wideLand = wide.landFrac;
 
             // Also sample poleward of this latitude: a massive continent extending
             // poleward (like Asia beyond 20°N) creates an enormous heat reservoir
-            // that pulls the ITCZ toward it even if the scan point itself is at
-            // the continent's edge. Sample 15° poleward in the summer hemisphere.
+            // 即使扫描点本身位于
+            // 大陆边缘，也会把 ITCZ 拉向它。夏半球向极方向采样 15°。
             const poleward = geoSample(polewardLats[si], lon, wideRadius);  // single-radius, reuses _out
             // Combined land signal: max of local-wide and poleward-wide.
             // Poleward land contributes at 70% strength (heat diffuses equatorward).
@@ -319,14 +319,14 @@ function computeITCZ(geoIndex, season, tiltRad) {
             const elevKm = elevToHeightKm(Math.max(0, wide.avgElev));
             const elevBoost = Math.min(0.30, elevKm * 0.12) * scaledLand;
 
-            // (d) Cross-equatorial anchoring: if this latitude is in the
+            // (d) 跨赤道锚定：如果该纬度位于
             // winter hemisphere but there's significant land, it anchors
-            // the ITCZ closer to the equator (resists poleward migration).
+            // 则将 ITCZ 拉近赤道（抵抗向极迁移）。
             const isWinterHemi = (sign > 0 && latDeg < 0) || (sign < 0 && latDeg > 0);
             const anchorBoost = isWinterHemi ? landBoost * CLIMATE.WIND_ITCZ_ANCHOR_FACTOR : 0;
 
             // (e) Ocean baseline: slight poleward bias in summer hemisphere
-            // even over open ocean (~6-8° from equator on average).
+            // 即使在开阔海洋上也如此（平均离赤道约 6–8°）。
             const isSummerHemi = !isWinterHemi;
             const oceanBias = isSummerHemi && localLand < 0.1
                 ? 0.08 * Math.exp(-0.5 * ((Math.abs(latDeg) - 7) / 5) ** 2)
@@ -343,13 +343,13 @@ function computeITCZ(geoIndex, season, tiltRad) {
         rawLats[i] = bestLat;
     }
 
-    // Pull extreme outliers toward the zonal mean before longitude smoothing.
-    // The ITCZ is a planetary-scale feature — individual longitude columns
-    // shouldn't deviate too far from the overall trend.
+    // 在经向平滑前，将极端离群值拉回纬向均值。
+    // ITCZ 是行星尺度特征，单个经度列
+    // 不应偏离整体趋势太远。
     const lats = new Float64Array(rawLats);
     const tmp = new Float64Array(NUM_LON);
-    // Wide periodic moving average (kernel = 5 neighbors) for heavy smoothing,
-    // then narrow (kernel = 3) for fine cleanup. More passes = smoother ITCZ.
+    // 宽周期移动平均（核=5 个邻居）用于强平滑，
+    // 再用窄核（核=3）做细清理。轮数越多，ITCZ 越平滑。
     // Wide kernel: weights [0.1, 0.2, 0.4, 0.2, 0.1] over 5 neighbors
     for (let pass = 0; pass < 4; pass++) {
         for (let i = 0; i < NUM_LON; i++) {
@@ -371,7 +371,7 @@ function computeITCZ(geoIndex, season, tiltRad) {
         lats.set(tmp);
     }
 
-    // Clamp to ±30° (ITCZ never migrates beyond the tropics)
+    // 钳制到 ±30°（ITCZ 不会迁出热带）。
     for (let i = 0; i < NUM_LON; i++) {
         lats[i] = Math.max(-CLIMATE.WIND_ITCZ_CLAMP_DEG * DEG, Math.min(CLIMATE.WIND_ITCZ_CLAMP_DEG * DEG, lats[i]));
     }
@@ -393,10 +393,10 @@ function regionPressure(lat, lon, itczSpline, season, landFrac, elevation, noise
     let p = 1013; // baseline hPa
 
     // (a) ITCZ low — follows thermal equator
-    const dItcz = (lat - itczLat) * RAD; // degrees from ITCZ
+    const dItcz = (lat - itczLat) * RAD; // 与 ITCZ 的纬度差（度）。
     p -= CLIMATE.WIND_ITCZ_LOW_DEPTH_HPA * Math.exp(-0.5 * (dItcz / CLIMATE.WIND_ITCZ_LOW_WIDTH_DEG) ** 2);
 
-    // (b) Subtropical highs — shift with season, weaker over hot land
+    // (b) 副热带高压：随季节移动，在炎热陆地上较弱。
     const shiftDeg = seasonSign * CLIMATE.WIND_SUBTROP_SEASONAL_SHIFT_DEG;
     const nhSubHigh = CLIMATE.WIND_SUBTROP_HIGH_LAT_DEG + shiftDeg;
     const shSubHigh = -(CLIMATE.WIND_SUBTROP_HIGH_LAT_DEG - shiftDeg);
@@ -494,7 +494,7 @@ function pressureToWind(r_gradE, r_gradN, r_sinLat,
     const sin5 = Math.sin(5 * DEG);
 
     for (let r = 0; r < numRegions; r++) {
-        // PGF: from high to low = negative gradient
+        // 气压梯度力：从高压到低压 = 负梯度。
         const pgfE = -r_gradE[r];
         const pgfN = -r_gradN[r];
 
@@ -508,7 +508,7 @@ function pressureToWind(r_gradE, r_gradN, r_sinLat,
         const frictionAngle = CLIMATE.WIND_FRICTION_BACK_ANGLE_DEG * DEG;
 
         // Net rotation: NH = clockwise (negative), SH = counterclockwise (positive)
-        // The rotation matrix [cosθ,-sinθ; sinθ,cosθ] is counterclockwise for +θ,
+        // 旋转矩阵 [cosθ,-sinθ; sinθ,cosθ] 在 +θ 时为逆时针，
         // so NH right-deflection needs negative angle, SH left-deflection needs positive.
         const sign = sinLat >= 0 ? -1 : 1;
         const totalAngle = sign * (geoAngle - frictionAngle);
@@ -546,7 +546,7 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
     const tiltRad = axialTilt * DEG;
     const timing = [];
 
-    // ── Step 0: Precompute per-region properties ──
+    // ── 步骤 0：预计算每个区域的属性 ──
 
     let t0 = performance.now();
 
@@ -591,17 +591,17 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
         r_northX[r] = nx; r_northY[r] = ny; r_northZ[r] = nz;
     }
 
-    timing.push({ stage: 'Wind: precompute lat/lon/tangent', ms: performance.now() - t0 });
+    timing.push({ stage: '风场：预计算纬度/经度/切线', ms: performance.now() - t0 });
 
-    // ── Step 1: Build geographic index + compute ITCZ ──
+    // ── 步骤 1：构建地理索引并计算 ITCZ ──
 
     t0 = performance.now();
     const geoIndex = buildGeoIndex(r_lat, r_lon, r_sinLat, r_cosLat, r_elevation, r_isLand, numRegions);
     const itczSummer = computeITCZ(geoIndex, 'summer', tiltRad);
     const itczWinter = computeITCZ(geoIndex, 'winter', tiltRad);
-    timing.push({ stage: 'Wind: ITCZ computation', ms: performance.now() - t0 });
+    timing.push({ stage: '风场：ITCZ 计算', ms: performance.now() - t0 });
 
-    // ── Step 2–5: Compute pressure & wind for each season ──
+    // ── 步骤 2–5：计算每个季节的气压与风 ──
 
     const seasons = [
         { name: 'summer', itcz: itczSummer },
@@ -610,23 +610,23 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
 
     const result = {};
 
-    // Precompute continentality via BFS coast distance.
+    // 通过 BFS 海岸距离预计算大陆性。
     // Laplacian smoothing of binary r_isLand converges too fast — interior
-    // cells hit 0.95+ within a few hundred km. Instead, compute actual
-    // hop distance from coast through land, convert to km, and map with
-    // smoothstep for a wide, tunable gradient.
+    // 会让单元在几百 km 内就达到 0.95+。因此改为计算实际
+    // 穿越陆地的离岸跳数，换算成 km，再用
+    // smoothstep 映射为宽且可调的梯度。
     //   0 km (coast):  cont ≈ 0.0
     //   500 km:        cont ≈ 0.16
     //   1000 km:       cont ≈ 0.50
     //   1500 km:       cont ≈ 0.84
     //   2000 km+:      cont ≈ 1.0
-    // Ocean cells near coast get a small value (~0.05–0.15) via a few
+    // 海洋 cells near coast get a small value (~0.05–0.15) via a few
     // smoothing passes, giving a natural land/sea thermal gradient.
     t0 = performance.now();
     const { adjOffset, adjList } = mesh;
 
-    // Find the main ocean: largest connected component of non-land cells.
-    // Inland seas / small lakes don't count as "ocean" for continentality.
+    // 查找主海洋：非陆地单元中最大的连通分量。
+    // 内陆海/小湖泊在大陆性计算中不算作“海洋”。
     const r_oceanLabel = new Int32Array(numRegions);
     r_oceanLabel.fill(-1);
     let mainOceanLabel = -1, mainOceanSize = 0;
@@ -656,7 +656,7 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
         }
     }
 
-    // BFS coast distance through land, seeded only from main-ocean coastline
+    // 穿越陆地的 BFS 海岸距离，只以主海岸线作为种子。
     const r_coastDist = new Int32Array(numRegions);
     r_coastDist.fill(-1);
     const bfsQueue = [];
@@ -694,8 +694,8 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
             const distKm = r_coastDist[r] * avgEdgeKm;
             r_continentality[r] = smoothstep(0, CONT_RANGE_KM, distKm);
         }
-        // Ocean cells stay at 0; a few smooth passes below will bleed
-        // small values onto nearshore ocean for thermal gradient.
+        // 海洋 cells stay at 0; a few smooth passes below will bleed
+        // 为热力梯度把小值写到近岸海洋上。
     }
     // Light smoothing (~100 km) to soften BFS stepping artifacts and
     // bleed a small thermal signal onto nearshore ocean cells.
@@ -703,10 +703,10 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
     smoothField(mesh, r_continentality, contSmoothPasses);
 
     // ── West/east coast field (r_westness ∈ [−1, +1]) ──
-    // +1 near a WEST coast (ocean lies to the west, e.g. Europe, US Pacific NW),
-    // −1 near an EAST coast (ocean to the east, e.g. E. China, US SE), ~0 deep
-    // interior. Two land-BFS passes from west- and east-facing coast seeds; the
-    // signed normalized difference penetrates inland smoothly. This is the
+    // 西海岸附近为 +1（海洋在西侧，如欧洲、美国太平洋西北部），
+    // 东海岸附近为 -1（海洋在东侧，如华东、美国东南部），深内陆约 0，
+    // 从面西/面东海岸种子分别做两次陆地 BFS，
+    // 有符号归一化差值会平滑渗入内陆。该值是
     // primitive Earth's subtropical asymmetry needs — dry subsidence over west
     // coasts, moist onshore flow over east coasts — that latitude alone can't see.
     const r_westness = new Float32Array(numRegions);
@@ -761,7 +761,7 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
     }
 
     // Plate-based continentality: uses plate type (continental vs oceanic)
-    // instead of actual land/ocean. Same BFS approach for wide gradient.
+    // 而不是真实海陆。使用同样的 BFS 方法生成宽梯度。
     const r_plateContinentality = new Float32Array(numRegions);
     // BFS through continental-plate cells
     const r_plateDist = new Int32Array(numRegions);
@@ -798,7 +798,7 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
         }
     }
     smoothField(mesh, r_plateContinentality, contSmoothPasses);
-    timing.push({ stage: 'Wind: continentality BFS', ms: performance.now() - t0 });
+    timing.push({ stage: '风场：大陆性 BFS', ms: performance.now() - t0 });
 
     // Shared gradient scratch arrays
     const r_gradE = new Float32Array(numRegions);
@@ -808,7 +808,7 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
     const pressSmoothPasses = Math.max(1, Math.round(75 / avgEdgeKm));
 
     for (const { name, itcz } of seasons) {
-        // Step 2: Pressure field
+        // 步骤 2：气压场。
         t0 = performance.now();
         const r_pressure = new Float32Array(numRegions);
 
@@ -820,18 +820,18 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
             );
         }
         smoothField(mesh, r_pressure, pressSmoothPasses);
-        timing.push({ stage: `Wind: pressure field (${name})`, ms: performance.now() - t0 });
+        timing.push({ stage: `风场：气压场（${name}）`, ms: performance.now() - t0 });
 
-        // Step 3: Gradient
+        // 步骤 3：梯度。
         t0 = performance.now();
         r_gradE.fill(0);
         r_gradN.fill(0);
         computeGradients(mesh, r_xyz, r_pressure,
             r_eastX, r_eastY, r_eastZ, r_northX, r_northY, r_northZ,
             r_gradE, r_gradN);
-        timing.push({ stage: `Wind: gradient (${name})`, ms: performance.now() - t0 });
+        timing.push({ stage: `风场：梯度（${name}）`, ms: performance.now() - t0 });
 
-        // Step 4: Wind
+        // 步骤 4：风。
         t0 = performance.now();
         const r_windE = new Float32Array(numRegions);
         const r_windN = new Float32Array(numRegions);
@@ -839,14 +839,14 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
         pressureToWind(r_gradE, r_gradN, r_sinLat,
             r_windE, r_windN, r_windSpeed, numRegions);
 
-        // Step 5: Normalize wind speed to 0-1
+        // 步骤 5：将风速归一化到 0–1。
         const maxSpeed = percentile(r_windSpeed, 0.95);
         for (let r = 0; r < numRegions; r++) {
             r_windSpeed[r] = Math.min(1, r_windSpeed[r] / maxSpeed);
         }
-        timing.push({ stage: `Wind: pressure→wind (${name})`, ms: performance.now() - t0 });
+        timing.push({ stage: `风场：气压转风（${name}）`, ms: performance.now() - t0 });
 
-        // Store pressure as deviation from 1013 for visualization (blue=low, red=high)
+        // 将气压存为相对 1013 的偏差以便可视化（蓝=低，红=高）。
         const r_pressureDev = new Float32Array(numRegions);
         for (let r = 0; r < numRegions; r++) {
             r_pressureDev[r] = r_pressure[r] - 1013;
@@ -859,7 +859,7 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
         result[`r_wind_speed_${name}`] = r_windSpeed;
     }
 
-    // Pre-evaluate ITCZ splines at 360 longitude points for visualization
+    // 为可视化在 360 个经度点预评估 ITCZ 样条。
     const ITCZ_SAMPLES = 360;
     const itczLons = new Float32Array(ITCZ_SAMPLES);
     const itczLatsSummer = new Float32Array(ITCZ_SAMPLES);
@@ -874,7 +874,7 @@ export function computeWind(mesh, r_xyz, r_elevation, plateIsOcean, r_plate, noi
     result.itczLatsSummer = itczLatsSummer;
     result.itczLatsWinter = itczLatsWinter;
 
-    // Expose precomputed geographic data for downstream modules (ocean.js)
+    // 向下游模块（ocean.js）暴露预计算地理数据。
     result.r_lat = r_lat;
     result.r_lon = r_lon;
     result.r_sinLat = r_sinLat;

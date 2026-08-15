@@ -33,22 +33,22 @@ const PREV_LEN = 14; // previous 14-char codes (before ridge/creep)
 const LEGACY_LEN = 13; // legacy 13-char codes (single erosion slider)
 const IDX_CHARS = 2; // base36 chars per plate index (max index 119 = "3b")
 
-// Legacy radices for decoding old 13-char codes (single erosion slider)
+// 用于解码旧 13 字符行星码的旧进制表（单侵蚀滑块）。
 const LEGACY_RADICES = [21, 21, 51, 10, 117, 21, 2559];
 
-// Previous-gen radices for decoding 14-char codes (two erosion sliders, no ridge/creep)
+// 用于解码 14 字符行星码的上一代进制表（两个侵蚀滑块，无山脊/蠕变）。
 const PREV_RADICES = [21, 21, 21, 51, 10, 117, 21, 2559];
 
-// Previous2-gen radices for decoding 16-char codes (no glacial erosion)
+// 用于解码 16 字符行星码的上一代第二版进制表（无冰川侵蚀）。
 const PREV2_RADICES = [21, 21, 21, 21, 21, 51, 10, 117, 21, 2559];
 
-// Previous3-gen radices for decoding 17-char codes (no terrain warp)
+// 用于解码 17 字符行星码的上一代第三版进制表（无地形扭曲）。
 const PREV3_RADICES = [21, 21, 21, 21, 21, 21, 51, 10, 117, 21, 2559];
 
-// Previous5-gen radices for decoding 21-char codes (before land coverage)
+// 用于解码 21 字符行星码的上一代第五版进制表（陆地覆盖率之前）。
 const PREV5_RADICES = [21, 31, 21, 21, 21, 21, 21, 21, 21, 21, 51, 10, 117, 21, 2556];
 
-// Previous4-gen radices for decoding 18-char codes (before continent variety/temp/precip)
+// 用于解码 18 字符行星码的上一代第四版进制表（大陆差异/温度/降水之前）。
 const PREV4_RADICES = [21, 21, 21, 21, 21, 21, 21, 51, 10, 117, 21, 2556];
 
 function toIndex(value, slider) {
@@ -62,11 +62,11 @@ function fromIndex(idx, slider) {
     return decimals > 0 ? parseFloat(raw.toFixed(decimals)) : raw;
 }
 
-/** Parse a base36 string into a BigInt (char-by-char for full precision). */
+/** 将 base36 字符串解析为 BigInt（逐字符处理以保持完整精度）。 */
 function parseBase36(str) {
     return [...str].reduce((acc, ch) => {
         const d = parseInt(ch, 36);
-        if (isNaN(d)) throw new Error('bad char');
+        if (isNaN(d)) throw new Error('无效字符');
         return acc * 36n + BigInt(d);
     }, 0n);
 }
@@ -253,7 +253,7 @@ export function decodePlanetCode(code) {
     if (typeof code !== 'string') return null;
     code = code.trim().toLowerCase();
 
-    // Split base code from optional toggle suffix
+    // 从可选切换后缀中拆分基础行星码。
     const dashIdx = code.indexOf('-');
     const base = dashIdx === -1 ? code : code.slice(0, dashIdx);
     const toggleStr = dashIdx === -1 ? '' : code.slice(dashIdx + 1);

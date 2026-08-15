@@ -616,7 +616,7 @@ button#generate.generating {
     text-align: center;
 }
 
-/* Export button */
+/* 导出按钮 */
 #exportBtn {
     width: 100%; padding: 9px; margin-bottom: 12px;
     background: none;
@@ -626,7 +626,7 @@ button#generate.generating {
 }
 #exportBtn:hover { border-color: rgba(255,255,255,0.25); color: #cde; background: rgba(255,255,255,0.04); }
 
-/* Export overlay */
+/* 导出浮层 */
 #exportOverlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.6);
@@ -818,7 +818,7 @@ button#generate.generating {
     50% { box-shadow: 0 4px 24px rgba(34,170,90,0.55); }
 }
 
-/* ─── Import page ─── */
+/* ─── 导入页面 ─── */
 .import-upload-area {
     display: flex; align-items: center; gap: 8px;
     margin-bottom: 8px;
@@ -1010,7 +1010,7 @@ button#generate.generating {
         font-size: 16px;
     }
 
-    /* Import page touch targets */
+    /* 导入页面触控目标 */
     .import-file-label { padding: 12px 18px; font-size: 14px; min-height: 44px; }
     .import-btn { padding: 14px; font-size: 16px; min-height: 48px; }
     .import-hint { font-size: 12px; }

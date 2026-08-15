@@ -1,8 +1,8 @@
-// Ocean current simulation: rule-based geographic approach with wind-belt-driven gyres.
-// Wind belts drive zonal currents; continental shelves deflect them into gyres.
+// 洋流模拟：基于规则的地理方法，由风带驱动环流。
+// 风带驱动纬向洋流，大陆架将其偏转为环流。
 // Warmth is classified geographically: western coasts = warm, eastern coasts = cold.
 
-console.log('[ocean.js] Module loaded');
+console.log('[ocean.js] 模块已加载');
 import { smoothstep } from './wind.js';
 import { makeItczLookup, percentile } from './climate-util.js';
 
@@ -42,8 +42,8 @@ function computeCoastFields(mesh, r_xyz, r_isOcean,
         // Project land direction into tangent frame east component
         const normalE = landDirX * r_eastX[r] + landDirY * r_eastY[r] + landDirZ * r_eastZ[r];
 
-        // normalE < -0.2 → land is to the west → western coast seed
-        // normalE > +0.2 → land is to the east → eastern coast seed
+        // normalE < -0.2 → 陆地在西侧 → 西岸种子。
+        // normalE > +0.2 → 陆地在东侧 → 东岸种子。
         if (normalE < -0.2) {
             westSeeds.push(r);
         } else if (normalE > 0.2) {
@@ -54,7 +54,7 @@ function computeCoastFields(mesh, r_xyz, r_isOcean,
         }
     }
 
-    // BFS: compute hop distance from seed set through ocean cells.
+    // BFS：沿海洋单元计算到种子集合的跳数距离。
     // Reuses a single queue array (capacity allocated once) across all three passes.
     const bfsQueue = new Int32Array(numRegions);
 
@@ -114,7 +114,7 @@ function hasCircumpolarChannel(r_lat, r_lon, r_isOcean, numRegions, targetLat, b
 }
 
 // ── Geographic heat classification ──────────────────────────────────────────
-// Warmth is determined by coast type and wind cell. The prevailing wind
+// 冷暖由海岸类型和风带单元决定。盛行风
 // direction determines which side of a basin accumulates warm water:
 //   Hadley cell (trades westward):   western=warm, eastern=cold
 //   Ferrel cell (westerlies eastward): western=cold, eastern=warm  (flipped)
@@ -127,10 +127,10 @@ function classifyWarmth(r_isOcean, r_lat, numRegions,
     for (let r = 0; r < numRegions; r++) {
         if (!r_isOcean[r]) continue;
 
-        // Shifted latitude for cell boundaries (matches wind band shift)
+        // 用于单元边界的偏移纬度（匹配风带偏移）。
         const bandLatDeg = Math.abs(r_lat[r] / DEG - seasonalShiftDeg);
 
-        // Wind cell sign: trades/polar push water west (western=warm → +1),
+        // 风带符号：信风/极地风把水推向西侧（西侧暖 → +1），
         // westerlies push water east (western=cold → -1)
         let cellSign;
         if (bandLatDeg < 28) {
@@ -205,7 +205,7 @@ function smoothOcean(mesh, field, r_isOcean, passes) {
  * @returns {object} current vectors, warmth, and speed arrays for both seasons
  */
 export function computeOceanCurrents(mesh, r_xyz, r_elevation, windResult) {
-    console.log('[ocean.js] computeOceanCurrents called, numRegions:', mesh.numRegions);
+    console.log('[ocean.js] 已调用 computeOceanCurrents，区域数：', mesh.numRegions);
     const numRegions = mesh.numRegions;
     const avgEdgeKm = (Math.PI * 6371) / Math.sqrt(numRegions);
     const timing = [];
@@ -214,11 +214,11 @@ export function computeOceanCurrents(mesh, r_xyz, r_elevation, windResult) {
         r_eastX, r_eastY, r_eastZ,
         r_northX, r_northY, r_northZ } = windResult;
 
-    // Ocean mask
+    // 海洋 mask
     const r_isOcean = new Uint8Array(numRegions);
     for (let r = 0; r < numRegions; r++) r_isOcean[r] = r_isLand[r] ? 0 : 1;
 
-    // Step 0: Setup — r_lon and ITCZ lookups
+    // 步骤 0：设置 r_lon 与 ITCZ 查询表。
     let t0 = performance.now();
     let r_lon = windResult.r_lon;
     if (!r_lon) {
@@ -230,21 +230,21 @@ export function computeOceanCurrents(mesh, r_xyz, r_elevation, windResult) {
 
     const itczLookupSummer = makeItczLookup(windResult.itczLons, windResult.itczLatsSummer);
     const itczLookupWinter = makeItczLookup(windResult.itczLons, windResult.itczLatsWinter);
-    timing.push({ stage: 'Ocean: setup (ITCZ lookup + lon)', ms: performance.now() - t0 });
+    timing.push({ stage: '海洋：初始化（ITCZ 查找 + 经度）', ms: performance.now() - t0 });
 
-    // Step 1: Coast distance & classification (shared between seasons)
+    // 步骤 1：海岸距离与分类（季节间共享）。
     t0 = performance.now();
     const { r_coastDist, r_westCoastDist, r_eastCoastDist } =
         computeCoastFields(mesh, r_xyz, r_isOcean,
             r_eastX, r_eastY, r_eastZ);
-    timing.push({ stage: 'Ocean: coast BFS (3 passes)', ms: performance.now() - t0 });
+    timing.push({ stage: '海洋：海岸 BFS（3 轮）', ms: performance.now() - t0 });
 
-    // Step 2: Circumpolar channel detection
+    // 步骤 2：环极通道检测。
     t0 = performance.now();
     const circumpolarNH = hasCircumpolarChannel(r_lat, r_lon, r_isOcean, numRegions, 60 * DEG, 5 * DEG);
     const circumpolarSH = hasCircumpolarChannel(r_lat, r_lon, r_isOcean, numRegions, -60 * DEG, 5 * DEG);
-    console.log(`[ocean.js] Circumpolar: NH=${circumpolarNH}, SH=${circumpolarSH}`);
-    timing.push({ stage: 'Ocean: circumpolar detection', ms: performance.now() - t0 });
+    console.log(`[ocean.js] 绕极通道：北半球=${circumpolarNH}，南半球=${circumpolarSH}`);
+    timing.push({ stage: '海洋：绕极通道检测', ms: performance.now() - t0 });
 
     // Coast influence threshold
     const coastThreshold = Math.max(5, Math.round(Math.sqrt(numRegions) * 0.035));
@@ -261,7 +261,7 @@ export function computeOceanCurrents(mesh, r_xyz, r_elevation, windResult) {
         // Seasonal shift: wind cells migrate ~5° toward summer hemisphere
         const seasonalShiftDeg = name === 'summer' ? 5 : -5;
 
-        // Steps 3–4: Wind band classification + current vectors
+        // 步骤 3–4：风带分类 + 洋流矢量。
         t0 = performance.now();
         const currentE = new Float32Array(numRegions);
         const currentN = new Float32Array(numRegions);
@@ -274,14 +274,14 @@ export function computeOceanCurrents(mesh, r_xyz, r_elevation, windResult) {
             const lon = r_lon[r];
             const hemisphereSign = lat >= 0 ? 1 : -1;
 
-            // Shifted latitude for wind band boundaries (cells migrate with season)
+            // 用于风带边界的偏移纬度（单元随季节迁移）。
             const bandLatDeg = Math.abs(lat / DEG - seasonalShiftDeg);
 
             // ITCZ latitude at this longitude
             const itczLat = itczLookup(lon);
             const distFromItcz = Math.abs(lat - itczLat) / DEG;
 
-            // Step 3: Base zonal flow from wind band (using shifted boundaries)
+            // 步骤 3：根据风带生成基础纬向流（使用偏移后的边界）。
             let baseE;
             if (distFromItcz < 3) {
                 // ITCZ zone: eastward countercurrent at center, blends to westward at edges
@@ -306,7 +306,7 @@ export function computeOceanCurrents(mesh, r_xyz, r_elevation, windResult) {
             currentE[r] = baseE;
             currentN[r] = 0;
 
-            // Step 4: Coast deflection
+            // 步骤 4：海岸偏转。
             const wDist = r_westCoastDist[r];
             const eDist = r_eastCoastDist[r];
 
@@ -326,7 +326,7 @@ export function computeOceanCurrents(mesh, r_xyz, r_elevation, windResult) {
                 currentE[r] *= (1 - t * t * 0.5);
             }
 
-            // Circumpolar override (55–75° with open channel)
+            // 环极覆盖（55–75° 且有开放通道）。
             const isCircumpolar = (lat > 0 && circumpolarNH) || (lat < 0 && circumpolarSH);
             if (isCircumpolar && absLatDeg >= 55 && absLatDeg <= 75) {
                 const cStrength = 1 - Math.abs(absLatDeg - 65) / 10;
@@ -334,9 +334,9 @@ export function computeOceanCurrents(mesh, r_xyz, r_elevation, windResult) {
                 currentN[r] *= (1 - cStrength * 0.8);
             }
         }
-        timing.push({ stage: `Ocean: wind bands + vectors (${name})`, ms: performance.now() - t0 });
+        timing.push({ stage: `海洋：风带与向量（${name}）`, ms: performance.now() - t0 });
 
-        // Step 5: Smooth ~125 km (scale-invariant)
+        // 步骤 5：平滑约 125 km（尺度不变）。
         t0 = performance.now();
         const oceanSmoothPasses = Math.max(2, Math.round(125 / avgEdgeKm));
         smoothOcean(mesh, currentE, r_isOcean, oceanSmoothPasses);
@@ -346,9 +346,9 @@ export function computeOceanCurrents(mesh, r_xyz, r_elevation, windResult) {
         for (let r = 0; r < numRegions; r++) {
             if (!r_isOcean[r]) { currentE[r] = 0; currentN[r] = 0; }
         }
-        timing.push({ stage: `Ocean: smoothing (${name})`, ms: performance.now() - t0 });
+        timing.push({ stage: `海洋：平滑（${name}）`, ms: performance.now() - t0 });
 
-        // Step 6: Geographic warmth classification (coast type, not flow direction)
+        // 步骤 6：地理冷暖分类（按海岸类型，而非流向）。
         // Smoothed heavily to blend out jagged coastline noise and dilute
         // small island contributions (few coast cells → weak signal after smoothing).
         t0 = performance.now();
@@ -357,9 +357,9 @@ export function computeOceanCurrents(mesh, r_xyz, r_elevation, windResult) {
         const warmthSmoothPasses = Math.max(3, Math.round(900 / avgEdgeKm));
         smoothOcean(mesh, r_warmth, r_isOcean, warmthSmoothPasses);
 
-        // Step 7: Normalize speed (95th percentile)
-        // Use speed-squared to avoid sqrt in the hot loop; sqrt is monotonic
-        // so percentile on squared values gives the same ranking.
+        // 步骤 7：速度归一化（第 95 百分位）。
+        // 使用速度平方，避免在热点循环中开方；sqrt 单调，
+        // 因此在平方值上取百分位会得到相同排序。
         const r_speed = new Float32Array(numRegions);
         const oceanSpeedsSq = new Float32Array(numRegions);
         let oceanCount = 0;
@@ -375,8 +375,8 @@ export function computeOceanCurrents(mesh, r_xyz, r_elevation, windResult) {
             r_speed[r] = Math.min(1, Math.sqrt(r_speed[r] * invP95Sq));
         }
 
-        console.log(`[Ocean ${name}] coastThreshold=${coastThreshold}, warmthRange=${warmthRange}, p95Sq=${p95Sq.toExponential(3)}, oceanCells=${oceanCount}`);
-        timing.push({ stage: `Ocean: warmth + normalize (${name})`, ms: performance.now() - t0 });
+        console.log(`[海洋 ${name}] 海岸阈值=${coastThreshold}，热量范围=${warmthRange}，p95Sq=${p95Sq.toExponential(3)}，海洋单元=${oceanCount}`);
+        timing.push({ stage: `海洋：热量与归一化（${name}）`, ms: performance.now() - t0 });
 
         result[`r_ocean_current_east_${name}`] = currentE;
         result[`r_ocean_current_north_${name}`] = currentN;

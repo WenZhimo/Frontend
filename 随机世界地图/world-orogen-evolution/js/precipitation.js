@@ -1,4 +1,4 @@
-// Precipitation simulation: moisture advection driven by wind, ocean warmth,
+// 降水模拟：由风场、海洋热量、
 // orographic effects, ITCZ uplift, frontal convergence, and polar fronts.
 // Computes per-region precipitation for summer and winter seasons.
 
@@ -69,7 +69,7 @@ function advectMoisture(mesh, r_xyz, r_heightKm, r_isLand,
     // ocean cells from their own warmth
     for (let r = 0; r < numRegions; r++) {
         if (!r_isLand[r]) {
-            // Ocean cells: base moisture proportional to warmth
+            // 海洋 cells: base moisture proportional to warmth
             const warmth = r_oceanWarmth ? r_oceanWarmth[r] : 0;
             moisture[r] = CLIMATE.PRECIP_OCEAN_MOISTURE_BASE + 0.35 * Math.max(0, warmth);
             continue;
@@ -195,7 +195,7 @@ function advectMoisture(mesh, r_xyz, r_heightKm, r_isLand,
  * @returns {{ r_precip_summer, r_precip_winter }} normalized 0–1 arrays
  */
 export function computePrecipitation(mesh, r_xyz, r_elevation, windResult, oceanResult, precipitationOffset = 0, landCoverage = 0.3) {
-    console.log('[precipitation.js] computePrecipitation called, numRegions:', mesh.numRegions);
+    console.log('[precipitation.js] 已调用 computePrecipitation，区域数：', mesh.numRegions);
     const numRegions = mesh.numRegions;
     const timing = [];
 
@@ -232,7 +232,7 @@ export function computePrecipitation(mesh, r_xyz, r_elevation, windResult, ocean
     computeGradients(mesh, r_xyz, r_elevSmoothed,
         r_eastX, r_eastY, r_eastZ, r_northX, r_northY, r_northZ,
         r_elevGradE, r_elevGradN);
-    timing.push({ stage: 'Precip: elevation gradients (smoothed)', ms: performance.now() - t0 });
+    timing.push({ stage: '降水：高程梯度（已平滑）', ms: performance.now() - t0 });
 
     // Pre-compute height in km for advection and mechanisms (elevation is constant across seasons)
     const r_heightKm = new Float32Array(numRegions);
@@ -490,7 +490,7 @@ export function computePrecipitation(mesh, r_xyz, r_elevation, windResult, ocean
                 }
             }
 
-            // Ocean cells: precipitation over ocean (for visual completeness)
+            // 海洋 cells: precipitation over ocean (for visual completeness)
             if (!isLand) {
                 // ITCZ and frontal zones already contribute above.
                 // Add baseline ocean precipitation, suppressed under high pressure
@@ -697,9 +697,9 @@ export function computePrecipitation(mesh, r_xyz, r_elevation, windResult, ocean
         smoothField(mesh, precip, precipSmoothPasses);
         const tSmooth = performance.now() - t0;
 
-        timing.push({ stage: `Precip: advection (${name})`, ms: tAdvect });
-        timing.push({ stage: `Precip: mechanisms (${name})`, ms: tMechanisms });
-        timing.push({ stage: `Precip: smooth (${name})`, ms: tSmooth });
+        timing.push({ stage: `降水：平流（${name}）`, ms: tAdvect });
+        timing.push({ stage: `降水：机制（${name}）`, ms: tMechanisms });
+        timing.push({ stage: `降水：平滑（${name}）`, ms: tSmooth });
 
         result[`r_precip_${name}`] = precip;
         result[`r_rainshadow_${name}`] = rainShadow;
@@ -760,7 +760,7 @@ export function computePrecipitation(mesh, r_xyz, r_elevation, windResult, ocean
             }
         }
     }
-    timing.push({ stage: 'Precip: heuristic blend+normalize', ms: performance.now() - t0 });
+    timing.push({ stage: '降水：启发式混合与归一化', ms: performance.now() - t0 });
 
     // Pass the west/east field through so the Köppen classifier can give east
     // coasts a selective aridity discount (they're humid-subtropical, not desert).

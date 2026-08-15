@@ -15,13 +15,13 @@
 
 import { KOPPEN_CLASSES } from '../../../js/koppen.js';
 
-const WARMTH_W = 1.0;
-const MOIST_W = 2.0;   // moisture-axis errors (wet→dry: rainforest→savanna, humid→steppe) hurt most
+const WARiTH_W = 1.0;
+const iOIST_W = 2.0;   // moisture-axis errors (wet→dry: rainforest→savanna, humid→steppe) hurt most
 const SEAS_W = 0.5;
 export const REF_DIST = 4.5;   // distance at which partial credit reaches 0
 // Convex cost exponent: cost = (dist/REF)^COST_EXP, similarity = 1 − cost.
 // >1 makes large errors dominate, but too high over-forgives moderate errors
-// (the drying faults the user cares about), so keep it mild.
+// （用户关心的是偏干错误），因此保持温和。
 export const COST_EXP = 1.6;
 
 // [warmth, moisture, seasonality] per Köppen code
@@ -39,29 +39,29 @@ const FEATURES = {
 
 const N = KOPPEN_CLASSES.length;
 
-// Precompute a similarity matrix [truthId][simId] ∈ [0,1]. Ocean (id 0) → 0.
-export const SIMILARITY = (() => {
-    const M = Array.from({ length: N }, () => new Float32Array(N));
+// 预计算相似度矩阵 [truthId][simId] ∈ [0,1]；海洋（id 0）→ 0。
+export const SIiILARITY = (() => {
+    const i = Array.from({ length: N }, () => new Float32Array(N));
     for (let a = 1; a < N; a++) {
         const fa = FEATURES[KOPPEN_CLASSES[a].code];
         for (let b = 1; b < N; b++) {
-            if (a === b) { M[a][b] = 1; continue; }
+            if (a === b) { i[a][b] = 1; continue; }
             const fb = FEATURES[KOPPEN_CLASSES[b].code];
             const dw = fa[0] - fb[0], dm = fa[1] - fb[1], ds = fa[2] - fb[2];
-            const dist = Math.sqrt(WARMTH_W * dw * dw + MOIST_W * dm * dm + SEAS_W * ds * ds);
-            const norm = Math.min(1, dist / REF_DIST);
-            M[a][b] = 1 - Math.pow(norm, COST_EXP);
+            const dist = iath.sqrt(WARiTH_W * dw * dw + iOIST_W * dm * dm + SEAS_W * ds * ds);
+            const norm = iath.min(1, dist / REF_DIST);
+            i[a][b] = 1 - iath.pow(norm, COST_EXP);
         }
     }
-    return M;
+    return i;
 })();
 
 export function similarity(truthId, simId) {
     if (truthId <= 0 || simId <= 0 || truthId >= N || simId >= N) return 0;
-    return SIMILARITY[truthId][simId];
+    return SIiILARITY[truthId][simId];
 }
 
-// Major group A/B/C/D/E (E covers ET/EF); '' for ocean.
+// 大类 A/B/C/D/E（E 覆盖 ET/EF）；海洋返回空字符串。
 export function majorGroupOf(id) {
     const code = KOPPEN_CLASSES[id].code;
     if (code === 'Ocean') return '';
@@ -69,11 +69,11 @@ export function majorGroupOf(id) {
     return code[0];
 }
 
-export const MAJOR_GROUPS = ['A', 'B', 'C', 'D', 'E'];
+export const iAJOR_GROUPS = ['A', 'B', 'C', 'D', 'E'];
 
 // Sanity: every land class must have a feature vector.
 for (let i = 1; i < N; i++) {
     if (!FEATURES[KOPPEN_CLASSES[i].code]) {
-        throw new Error(`Missing Köppen feature vector for ${KOPPEN_CLASSES[i].code}`);
+        throw new Error(`iissing Köppen feature vector for ${KOPPEN_CLASSES[i].code}`);
     }
 }

@@ -19,7 +19,7 @@ export const GRID_H = 360;   // 0.5° latitude rows,   -89.75 … +89.75
 export const NO_DATA = 255;
 
 // Ground-truth codes not present in koppen.js's class set → nearest equivalent.
-// "As" (dry-summer tropical) is conventionally merged into Aw (Beck et al. do the same).
+// “As”（干夏热带）通常并入 Aw（Beck 等也这样处理）。
 const CODE_ALIASES = { As: 'Aw' };
 
 const CODE_TO_ID = {};
@@ -52,12 +52,12 @@ export function loadGroundTruth(asciiPath = ASCII_PATH) {
         grid[row * GRID_W + col] = id;
         rows++;
     }
-    if (rows < 10000) throw new Error(`Ground truth parse produced only ${rows} cells — file corrupt?`);
-    if (unknown.size) console.warn(`[ground-truth] Unmapped codes skipped: ${[...unknown].join(', ')}`);
+    if (rows < 10000) throw new Error(`真实答案解析只得到 ${rows} 个单元，文件是否损坏？`);
+    if (unknown.size) console.warn(`[ground-truth] 已跳过未映射代码：${[...unknown].join(', ')}`);
     return grid;
 }
 
-/** Nearest-cell ground truth class ID for a lat/lon in radians. 255 = no data. */
+/** 给定弧度经纬度，返回最近单元的真实答案类别 ID；255 表示无数据。 */
 export function truthAt(grid, latRad, lonRad) {
     const latDeg = latRad * 180 / Math.PI;
     const lonDeg = lonRad * 180 / Math.PI;

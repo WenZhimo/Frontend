@@ -47,15 +47,15 @@ function contDFrac(ov) {   // continental D at 45-60N
 
 const SCHINA = [22, 31, 105, 120], FLA = [27, 35, -88, -80], WEUR = [44, 60, -8, 18], USWEST = [38, 50, -124, -118];
 
-console.log('WESTNESS by region (want: west coasts +, east coasts −)');
+console.log('各区域西岸性（目标：西海岸为 +，东海岸为 −）');
 for (const [nm, box] of [['S.China (E)', SCHINA], ['Florida (E)', FLA], ['W.Europe (W)', WEUR], ['US West (W)', USWEST]]) {
     console.log(`  ${nm.padEnd(13)} ${meanWestness(box).toFixed(2)}`);
 }
-console.log('\nSUBTROP_EAST_RELIEF — arid fraction on east coasts (want: drops as relief rises)');
+console.log('\nSUBTROP_EAST_RELIEF：东海岸干旱占比（目标：随 relief 增大而下降）');
 for (const [nm, box] of [['S.China', SCHINA], ['Florida', FLA]]) {
     const off = aridFrac({}, box), on = aridFrac({ PRECIP_SUBTROP_EAST_RELIEF: 0.9 }, box);
     console.log(`  ${nm.padEnd(9)} relief0 ${(off * 100).toFixed(0)}%  ->  relief0.9 ${(on * 100).toFixed(0)}%`);
 }
-console.log('\nWINTER_COOL_WEST_RELIEF — continental D at 45-60N (want: drops, west coasts stay oceanic)');
+console.log('\nWINTER_COOL_WEST_RELIEF：45-60N 大陆性 D 类（目标：下降，西海岸保持海洋性）');
 console.log(`  relief0    ${(contDFrac({}) * 100).toFixed(1)}%`);
 console.log(`  relief0.9  ${(contDFrac({ TEMP_WINTER_COOL_WEST_RELIEF: 0.9 }) * 100).toFixed(1)}%`);

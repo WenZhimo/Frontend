@@ -1,5 +1,5 @@
 // Terrain generation tunable constants.
-// Grouped by subsystem for iterative tuning.
+// 按子系统分组，便于迭代调参。
 // These are internal algorithm constants, NOT user-facing slider parameters.
 
 // ── Collision & Stress ──
@@ -32,7 +32,7 @@ export const STRESS_PASSES_PER_SPREAD = 3;
 
 export const STRESS_PERCENTILE = 0.97;
 
-// Blend weights for dual-layer orogeny (small plates vs super plates)
+// 双层造山权重（小板块与超级板块）。
 export const SMALL_W = 0.05;
 export const SUPER_W = 0.95;
 
@@ -116,7 +116,7 @@ export const BACK_ARC_END_BASE = 5;
 export const BACK_ARC_DEPTH = 0.10;
 export const BACK_ARC_SUBDUCT_THRESH = 0.50;
 
-// ── Noise Layering ──
+// ── 噪声分层 ──
 export const WARP_SCALE = 0.4;
 export const OROGENIC_FREQ = 1.5;
 export const NOISE_ACTIVITY_SCALE = 4;
@@ -142,7 +142,7 @@ export const SUMMIT_STRESS_MIN = 0.05;
 export const SUMMIT_SPIKE_OFFSET = 0.45;
 export const SUMMIT_STRESS_FLOOR = 0.3;
 
-// ── Interior Elevation ──
+// ── 内陆高程 ──
 export const PLATE_BASE_HEIGHT_MEAN = -0.15;
 export const PLATE_BASE_HEIGHT_STDDEV = 0.025;
 export const INTERIOR_BASE_SHIELD = 0.14;
@@ -171,7 +171,7 @@ export const ABYSS_BASE = -0.35;
 export const ABYSS_NOISE_AMP = 0.03;
 export const OCEAN_FLOOR_CLAMP = -0.005;
 
-// ── Mid-Ocean Features ──
+// ── 大洋中部特征 ──
 export const RIDGE_HALF_WIDTH_BASE = 4;
 export const RIDGE_UPLIFT_NOISE = 0.12;
 export const RIDGE_UPLIFT_BASE = 0.06;
@@ -315,7 +315,7 @@ export const VALLEY_FLOOR_MIN = 0.001;
 export const FLOOD_NOISE_AMP = 0.01;
 export const FLOOD_CARVE_RADIUS_FRAC = 0.3;
 
-// ── Plate Generation ──
+// ── 板块生成 ──
 export const PLATE_LOW_PLATE_T_HIGH = 80;
 export const PLATE_LOW_PLATE_T_RANGE = 60;
 export const PLATE_RATE_MIN_BASE = 0.7;

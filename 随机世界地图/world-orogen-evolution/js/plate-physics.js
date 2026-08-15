@@ -91,7 +91,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
     const seedArr = Array.from(plateSeeds);
     const numPlates = seedArr.length;
 
-    // ── Step 1: Compute per-plate areas and centroids ──
+    // ── 步骤 1：计算每个板块的面积与质心 ──
     const plateArea = {};
     const plateCentroid = {};
     for (const pid of seedArr) {
@@ -115,7 +115,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
     }
     const avgArea = numRegions / numPlates;
 
-    // ── Step 2: Build boundary catalog ──
+    // ── 步骤 2：构建边界目录 ──
     // For each plate pair, collect boundary midpoints and classify
     const boundaryPoints = {};  // key "pidA:pidB" → [positions...]
     for (let r = 0; r < numRegions; r++) {
@@ -137,7 +137,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
 
     // Per-plate diagnostic values
     const plateDebug = {};
-    // Store original velocity per region for before/after comparison
+    // 保存每个区域的原始速度，用于前后对比。
     const velBefore = new Float32Array(numRegions * 3);
     for (let r = 0; r < numRegions; r++) {
         const pid = r_plate[r];
@@ -155,7 +155,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
         };
     }
 
-    // Compute mean and stddev of land plate areas for continental drag scaling
+    // 计算陆地板块面积的均值和标准差，用于大陆拖曳缩放。
     const landAreas = [];
     for (const pid of seedArr) {
         if (!plateIsOcean.has(pid)) landAreas.push(plateArea[pid]);
@@ -167,7 +167,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
         landStdDev = Math.sqrt(variance) || 1;
     }
 
-    // ── Step 3: Omega scaling — continental drag + size-velocity ──
+    // ── 步骤 3：角速度缩放：大陆拖曳 + 尺寸-速度关系 ──
     for (const pid of seedArr) {
         // Continental drag: land plates smaller than the land-plate mean get
         // reduced drag (faster movement).  Measured in standard deviations
@@ -193,7 +193,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
         plateVec[pid].omega *= dragFactor * sizeFactor;
     }
 
-    // ── Step 4: Mantle flow field ──
+    // ── 步骤 4：地幔流场 ──
     // Place convection cells based on plate boundary geometry:
     //   - Downwelling cells at convergent boundary clusters (subduction zones)
     //   - Upwelling cells at positions farthest from downwellings (gaps)
@@ -311,7 +311,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
         }
     }
 
-    // Fallback: if no convergent boundaries found, place cells randomly
+    // 回退：若没有找到汇聚边界，则随机放置单元。
     if (mantleCenters.length === 0) {
         for (let i = 0; i < MANTLE_CELLS; i++) {
             const theta = mantleRng() * 2 * Math.PI;
@@ -325,7 +325,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
         }
     }
 
-    // Compute per-region mantle flow vector (tangent to sphere)
+    // 计算每个区域的地幔流矢量（球面切向）。
     const mantleField = new Float32Array(numRegions); // scalar magnitude for debug
     const plateMantleFlow = {};
     for (const pid of seedArr) plateMantleFlow[pid] = [0, 0, 0];
@@ -387,7 +387,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
         plateMantleFlow[pid][2] += flowZ;
     }
 
-    // Apply mantle flow pole bias per plate
+    // 为每个板块应用地幔流极点偏置。
     for (const pid of seedArr) {
         const flow = plateMantleFlow[pid];
         const flowLen = len(flow);
@@ -410,7 +410,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
         );
     }
 
-    // ── Step 4b: Plate speed modulation by flow alignment ──
+    // ── 步骤 4b：按流向一致性调制板块速度 ──
     // Plates moving with the mantle flow get a speed boost
     for (const pid of seedArr) {
         const flow = plateMantleFlow[pid];
@@ -431,7 +431,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
         plateVec[pid].omega *= speedMult;
     }
 
-    // ── Step 5: Classify boundaries with updated velocities ──
+    // ── 步骤 5：使用更新后的速度分类边界 ──
     // For each plate pair, compute relative velocity at boundary midpoints
     // and identify convergent (slab pull) and divergent (ridge push) segments
     const plateConvergentBdry = {};   // pid → [boundary midpoint positions toward subduction]
@@ -485,7 +485,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
         }
     }
 
-    // ── Step 6: Apply slab pull pole bias ──
+    // ── 步骤 6：应用板片拉力极点偏置 ──
     for (const pid of seedArr) {
         if (!plateIsOcean.has(pid)) continue;
         const convPts = plateConvergentBdry[pid];
@@ -511,7 +511,7 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
         plateDebug[pid].slabPullStrength = SLAB_PULL_POLE_BLEND;
     }
 
-    // ── Step 7: Apply ridge push pole bias ──
+    // ── 步骤 7：应用洋脊推力极点偏置 ──
     for (const pid of seedArr) {
         const divPts = plateDivergentBdry[pid];
         if (divPts.length === 0) continue;
@@ -536,13 +536,13 @@ export function applyPlatePhysics(plateVec, plateSeeds, plateIsOcean, r_plate, m
         plateDebug[pid].ridgePushStrength = RIDGE_PUSH_POLE_BLEND;
     }
 
-    // ── Step 8: Normalize all poles ──
+    // ── 步骤 8：归一化所有极点 ──
     for (const pid of seedArr) {
         plateVec[pid].pole = normalize(plateVec[pid].pole);
         plateDebug[pid].omegaAfter = Math.abs(plateVec[pid].omega);
     }
 
-    // ── Step 9: Compute per-region velocity change for debug ──
+    // ── 步骤 9：计算每个区域的速度变化以供调试 ──
     // Compare velocity at each region before vs. after all modifications
     const velDelta = new Float32Array(numRegions); // magnitude of velocity change
     for (let r = 0; r < numRegions; r++) {

@@ -1,8 +1,8 @@
-// Temperature simulation: computes per-region surface temperature for summer
+// 温度模拟：计算每个区域的夏季
 // and winter seasons based on ITCZ position, continentality, moisture-dependent
 // elevation lapse rate (dry adiabatic 9.3 C/km to moist adiabatic 4.5 C/km),
 // ocean current warmth, and precipitation/cloud cover moderation.
-// Returns normalized 0-1 values mapped to a fixed -45 to +45 C range.
+// 返回归一化到 0–1 的数值，并映射到固定的 -45 到 +45 °C 范围。
 
 import { CLIMATE } from './climate-config.js';
 import { smoothstep } from './wind.js';
@@ -130,7 +130,7 @@ function lookupSwingAmplitude(latDeg, zoneVal) {
 // remains for precipitation and pressure.
 
 const ZONE_HO = 0.0;    // Hyperoceanic
-const ZONE_OC = 0.25;   // Oceanic
+const ZONE_OC = 0.25;   // 海洋ic
 const ZONE_SC = 0.5;    // Subcontinental
 const ZONE_CO = 0.75;   // Continental
 const ZONE_HC = 1.0;    // Hypercontinental
@@ -194,7 +194,7 @@ function computeTempContinentality(
         }
     }
 
-    // Compute E-W width per component per hemisphere
+    // 计算每个分量、每个半球的东西向宽度。
     function computeEWWidth(lonBinArr) {
         const widths = new Float32Array(numComponents);
         const cosLat52 = Math.cos(52.5 * DEG);
@@ -314,12 +314,12 @@ function computeTempContinentality(
         else if (zone[r] <= 0.8) zoneCountsA.CO++;
         else zoneCountsA.HC++;
     }
-    console.log(`[tempCont] After Stage A: HO=${zoneCountsA.HO} OC=${zoneCountsA.OC} SC=${zoneCountsA.SC} CO=${zoneCountsA.CO} HC=${zoneCountsA.HC}`);
-    console.log(`[tempCont] Component stats: ${numComponents} landmasses, avgEdgeKm=${avgEdgeKm.toFixed(1)}`);
+    console.log(`[tempCont] 阶段 A 后：HO=${zoneCountsA.HO} OC=${zoneCountsA.OC} SC=${zoneCountsA.SC} CO=${zoneCountsA.CO} HC=${zoneCountsA.HC}`);
+    console.log(`[tempCont] 组分统计：${numComponents} 个陆块，平均边缘距离=${avgEdgeKm.toFixed(1)} km`);
     for (let id = 0; id < numComponents; id++) {
         const areaKm2 = compSizes[id] * cellAreaKm2;
         if (areaKm2 > 1_000_000) {
-            console.log(`[tempCont]   Landmass ${id}: ${(areaKm2/1e6).toFixed(1)}M km² | N: band35-70=${(bandArea_35_70_N[id]/1e6).toFixed(1)}M, >35=${(bandArea_above35_N[id]/1e6).toFixed(1)}M, EW=${ewWidthKmN[id].toFixed(0)}km | S: band35-70=${(bandArea_35_70_S[id]/1e6).toFixed(1)}M, >35=${(bandArea_above35_S[id]/1e6).toFixed(1)}M, EW=${ewWidthKmS[id].toFixed(0)}km`);
+            console.log(`[tempCont]   陆块 ${id}：${(areaKm2/1e6).toFixed(1)}M km² | 北：35-70 带=${(bandArea_35_70_N[id]/1e6).toFixed(1)}M，>35=${(bandArea_above35_N[id]/1e6).toFixed(1)}M，东西宽度=${ewWidthKmN[id].toFixed(0)}km | 南：35-70 带=${(bandArea_35_70_S[id]/1e6).toFixed(1)}M，>35=${(bandArea_above35_S[id]/1e6).toFixed(1)}M，东西宽度=${ewWidthKmS[id].toFixed(0)}km`);
         }
     }
 
@@ -335,7 +335,7 @@ function computeTempContinentality(
         const SC_LON_BINS = 720;
         const SC_LAT_BAND = 2;
         const SC_NUM_LAT = Math.ceil(90 / SC_LAT_BAND); // 18 bands per hemisphere
-        // Build per-component per-hemisphere per-lat-band lon occupancy
+        // 构建按分量、半球、纬度带统计的经度占用。
         // Index: [id * SC_NUM_LAT * SC_LON_BINS + latIdx * SC_LON_BINS + lonBin]
         const scLonBinsN = new Uint8Array(numComponents * SC_NUM_LAT * SC_LON_BINS);
         const scLonBinsS = new Uint8Array(numComponents * SC_NUM_LAT * SC_LON_BINS);
@@ -356,7 +356,7 @@ function computeTempContinentality(
             }
         }
 
-        // Compute per-lat-band E-W width
+        // 计算每个纬度带的东西向宽度。
         const scBinRad = 2 * Math.PI / SC_LON_BINS;
         for (let r = 0; r < numRegions; r++) {
             if (zone[r] < ZONE_SC) continue; // only refine SC+
@@ -367,7 +367,7 @@ function computeTempContinentality(
             const bins = latDeg >= 0 ? scLonBinsN : scLonBinsS;
             const base = id * SC_NUM_LAT * SC_LON_BINS + latIdx * SC_LON_BINS;
 
-            // Find largest gap to get span
+            // 查找最大间隙以得到跨度。
             let occupied = 0;
             for (let b = 0; b < SC_LON_BINS; b++) {
                 if (bins[base + b]) occupied++;
@@ -537,7 +537,7 @@ function computeTempContinentality(
         }
     }
 
-    console.log(`[tempCont] Stage B (west shave) applied`);
+    console.log(`[tempCont] 阶段 B（西侧削减）已应用`);
 
     // ── Stage C: Small island override ──────────────────────────────────────
 
@@ -747,7 +747,7 @@ function diffuseOceanWarmth(mesh, r_oceanWarmth, r_isLand, r_plateContinentality
             // Skip deep-interior continental cells (plate-based)
             if (r_plateContinentality && r_plateContinentality[r] >= 0.95) continue;
 
-            // Ocean cells also participate in diffusion so continental-shelf
+            // 海洋 cells also participate in diffusion so continental-shelf
             // cells inherit warmth from nearby open-ocean neighbors
             let sum = coastal[r];
             let count = 1;
@@ -792,12 +792,12 @@ export function computeTemperature(mesh, r_xyz, r_elevation, windResult, oceanRe
 
     const result = {};
 
-    // Pre-compute constants shared across seasons
+    // 预计算跨季节共享的常量。
     const avgEdgeKm = (Math.PI * 6371) / Math.sqrt(numRegions);
     const oceanWarmthPasses = Math.max(4, Math.round(CLIMATE.TEMP_OCEAN_WARMTH_DIFFUSE_KM / avgEdgeKm));
     const plateCont = r_plateContinentality || r_continentality;
 
-    // Compute zone-based temperature continentality (Stages A-E)
+    // 计算基于分区的温度大陆性（阶段 A–E）。
     const tCont0 = performance.now();
     const { r_eastX, r_eastY, r_eastZ, r_northX, r_northY, r_northZ,
             r_coastDistLand } = windResult;
@@ -808,7 +808,7 @@ export function computeTemperature(mesh, r_xyz, r_elevation, windResult, oceanRe
         r_coastDistLand,
         avgEdgeKm
     );
-    timing.push({ stage: 'Temp: continentality zones', ms: performance.now() - tCont0 });
+    timing.push({ stage: '温度：大陆性分区', ms: performance.now() - tCont0 });
 
     // Both ITCZ lookups needed for estimating ITCZ seasonal contribution
     const itczLookupSummer = makeItczLookup(windResult.itczLons, windResult.itczLatsSummer);
@@ -826,7 +826,7 @@ export function computeTemperature(mesh, r_xyz, r_elevation, windResult, oceanRe
         const itczLookup = makeItczLookup(windResult.itczLons,
             name === 'summer' ? windResult.itczLatsSummer : windResult.itczLatsWinter);
 
-        // Pre-compute diffused ocean warmth for coastal land influence
+        // 预计算扩散后的海洋暖流，用于影响沿海陆地。
         // Use plate-based continentality for diffusion so warmth crosses
         // continental shelves and reaches further inland
         const coastalWarmth = diffuseOceanWarmth(mesh, r_oceanWarmth, r_isLand, plateCont, oceanWarmthPasses);
@@ -969,7 +969,7 @@ export function computeTemperature(mesh, r_xyz, r_elevation, windResult, oceanRe
                     T -= cont * CLIMATE.TEMP_CONT_WINTER_COOL_C * westRelief;
                 }
 
-                // Oceanic warming offset: ocean thermal inertia keeps oceanic
+                // 海洋ic warming offset: ocean thermal inertia keeps oceanic
                 // zones warmer than their latitude alone suggests.  Strongest
                 // at mid-high latitudes, zero in tropics.
                 if (isLand) {
@@ -991,16 +991,16 @@ export function computeTemperature(mesh, r_xyz, r_elevation, windResult, oceanRe
         smoothField(mesh, temp, smoothPasses);
         const tSmooth = performance.now() - tSmooth0;
 
-        // ── 8. Normalize to 0-1 using fixed range ──
+        // ── 8. 使用固定范围归一化到 0–1 ──
         const tNorm0 = performance.now();
         for (let r = 0; r < numRegions; r++) {
             temp[r] = Math.max(0, Math.min(1, (temp[r] - T_MIN) / T_RANGE));
         }
         const tNorm = performance.now() - tNorm0;
 
-        timing.push({ stage: `Temp: compute (${name})`, ms: tCompute });
-        timing.push({ stage: `Temp: smooth (${name})`, ms: tSmooth });
-        timing.push({ stage: `Temp: normalize (${name})`, ms: tNorm });
+        timing.push({ stage: `温度：计算（${name}）`, ms: tCompute });
+        timing.push({ stage: `温度：平滑（${name}）`, ms: tSmooth });
+        timing.push({ stage: `温度：归一化（${name}）`, ms: tNorm });
 
         result[`r_temperature_${name}`] = temp;
     }

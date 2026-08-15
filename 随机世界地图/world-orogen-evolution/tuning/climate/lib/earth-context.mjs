@@ -27,7 +27,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 const EARTH_PNG = path.join(PROJECT_ROOT, 'assets', 'earth.png');
 
-// ── Verbatim ports of tiny private helpers from js/planet-worker.js ──
+// ── 从 js/planet-worker.js 移植的少量私有辅助函数 ──
 
 function sampleBilinear(pixels, imgW, imgH, px, py) {
     py = Math.max(0, Math.min(py, imgH - 1));
@@ -117,7 +117,7 @@ export function buildEarthContext({ N = 40000, seed = 1234, jitter = 0.75 } = {}
     const { gray, width, height } = loadEarthGrayscale();
     const r_elevation = sampleHeightmap(mesh, r_xyz, gray, width, height);
 
-    // Post-processing exactly as handleImportHeightmap with all sculpting sliders
+    // 后处理与 handleImportHeightmap 完全一致，并使用所有雕刻滑块。
     // at 0: detail noise L1 + L2 (always on), soil creep (always on). Terrain
     // warp / smoothing / erosion / ridge sharpening are all skipped at 0.
     const r_isOcean = new Uint8Array(mesh.numRegions);
@@ -144,8 +144,8 @@ export function buildEarthContext({ N = 40000, seed = 1234, jitter = 0.75 } = {}
 
     const { r_plate, plateSeeds, plateIsOcean, plateVec } = deriveSyntheticPlates(mesh, r_elevation);
 
-    // Per-region lat/lon (radians) — same formulas as sampleHeightmap, so the
-    // ground-truth lookup aligns with the heightmap sampling.
+    // 每区域经/纬度（弧度）：与 sampleHeightmap 使用相同公式，因此
+    // 真实答案查询会与高度图采样对齐。
     const numRegions = mesh.numRegions;
     const r_lat = new Float32Array(numRegions);
     const r_lon = new Float32Array(numRegions);
@@ -161,7 +161,7 @@ export function buildEarthContext({ N = 40000, seed = 1234, jitter = 0.75 } = {}
         r_truth[r] = truthAt(truthGrid, r_lat[r], r_lon[r]);
     }
 
-    // Scoring mask: sim says land AND truth has data. Report mask agreement too.
+    // 评分掩膜：模拟为陆地且真实答案有数据；同时报告掩膜一致性。
     const r_scored = new Uint8Array(numRegions);
     let simLand = 0, truthLand = 0, bothLand = 0;
     for (let r = 0; r < numRegions; r++) {

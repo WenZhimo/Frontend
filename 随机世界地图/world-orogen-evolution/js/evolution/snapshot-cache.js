@@ -66,9 +66,9 @@ export class SnapshotCache {
     }
 
     capture({ label = '', source = 'manual', params = {}, evolutionState = null } = {}) {
-        if (!state.curData) throw new Error('No generated world is available to snapshot.');
+        if (!state.curData) throw new Error('没有可用于快照的已生成世界。');
         if (this.order.length >= this.maxSnapshots) {
-            throw new Error(`Snapshot cache is full (${this.maxSnapshots}). Delete a snapshot before capturing another.`);
+            throw new Error(`快照缓存已满（${this.maxSnapshots}）。请删除一张快照后再捕获。`);
         }
 
         const id = makeSnapshotId();
@@ -120,7 +120,7 @@ export class SnapshotCache {
 
     apply(id) {
         const snapshot = this.byId.get(id);
-        if (!snapshot) throw new Error(`Unknown snapshot: ${id}`);
+        if (!snapshot) throw new Error(`未知快照：${id}`);
         const curData = restoreCurDataFromSnapshot(snapshot);
         state.curData = curData;
         state.climateComputed = !!snapshot.evolutionState.dependencies?.climateComputed;

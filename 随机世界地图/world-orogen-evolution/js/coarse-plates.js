@@ -1,6 +1,6 @@
-// Coarse reference grid for resolution-independent plate boundaries.
-// Generates plates on a fixed ~20K-region mesh, then projects onto any
-// high-res mesh with FBM noise perturbation for fractal boundaries.
+// 粗参考网格，用于生成不随显示分辨率改变的板块边界。
+// 先在固定约 20K 区域的网格上生成板块，再投影到任意
+// 高分辨率网格，并用 FBM 噪声扰动形成分形边界。
 
 import { makeRng } from './rng.js';
 import { buildSphere } from './sphere-mesh.js';
@@ -14,9 +14,9 @@ import {
 } from './terrain-config.js';
 
 /**
- * Generate plates and ocean/land on a fixed coarse reference mesh.
- * Uses isolated RNG so it doesn't affect the main mesh's random stream.
- * Jitter is fixed so plate shapes don't change when the user adjusts irregularity.
+ * 在固定粗参考网格上生成板块与海陆分配。
+ * 使用独立随机流，避免影响主网格的随机序列。
+ * 抖动固定，因此用户调整不规则度时板块形状不会变化。
  */
 export function generateCoarsePlates(seed, numPlates, numContinents, continentSizeVariety = 0, landCoverage = 0.3) {
     const coarseRng = makeRng(seed + 137);
@@ -40,36 +40,34 @@ export function generateCoarsePlates(seed, numPlates, numContinents, continentSi
 }
 
 /**
- * Project coarse plate assignments onto a high-res mesh via nearest-neighbor
- * with FBM noise perturbation for fractal plate boundaries.
+ * 通过最近邻查询把粗网格板块分配投影到高分辨率网格，
+ * 并用 FBM 噪声扰动生成分形板块边界。
  *
- * Each hi-res point is shifted by multi-octave simplex noise before the
- * nearest-neighbor lookup, which wobbles the plate boundary by ~2 coarse
- * cell widths with fractal detail at multiple scales.
+ * 每个高分辨率点在最近邻查询前都会被多倍频 simplex 噪声偏移，
+ * 让板块边界在约两个粗单元宽度内摆动，并带有多尺度分形细节。
  *
- * Uses adjacency-walk on the coarse mesh with warm-starting for O(1)
- * amortized cost per region.
+ * 在粗网格上使用带热启动的邻接步行，单区域均摊成本为 O(1)。
  */
 export function projectCoarsePlates(mesh, r_xyz, coarseMesh, coarse_xyz, coarse_r_plate, seed, numPlates) {
     const N = mesh.numRegions;
     const r_plate = new Int32Array(N);
     const { adjOffset: cOff, adjList: cAdj } = coarseMesh;
 
-    // FBM noise for fractal boundary perturbation
+    // 用于分形边界扰动的 FBM 噪声。
     const noise = new SimplexNoise(seed + 999);
     const coarseEdgeRad = Math.PI / Math.sqrt(coarseMesh.numRegions);
     const lowPlateT = numPlates != null ? Math.max(0, Math.min(1, (PLATE_LOW_PLATE_T_HIGH - numPlates) / PLATE_LOW_PLATE_T_RANGE)) : 0;
-    const perturbAmp = coarseEdgeRad * (COARSE_PERTURB_BASE + COARSE_PERTURB_LOW_T * lowPlateT); // 1.5 → 2.5 coarse cells
-    const BASE_FREQ = COARSE_FBM_BASE_FREQ; // ~8 features per sphere diameter → ~16 around equator
+    const perturbAmp = coarseEdgeRad * (COARSE_PERTURB_BASE + COARSE_PERTURB_LOW_T * lowPlateT); // 1.5 → 2.5 个粗单元
+    const BASE_FREQ = COARSE_FBM_BASE_FREQ; // 球直径约 8 个特征，赤道约 16 个
 
     const NC = coarseMesh.numRegions;
-    const MAX_WALK = Math.ceil(Math.sqrt(NC)); // safety cap for greedy walk
-    let cur = 0; // current best coarse region — warm-started across iterations
+    const MAX_WALK = Math.ceil(Math.sqrt(NC)); // 贪婪步行安全上限
+    let cur = 0; // 当前最佳粗区域，会在迭代之间热启动
 
     for (let r = 0; r < N; r++) {
         const ox = r_xyz[3 * r], oy = r_xyz[3 * r + 1], oz = r_xyz[3 * r + 2];
 
-        // FBM perturbation: shift lookup point for fractal boundaries
+        // FBM 扰动：偏移查询点以生成分形边界。
         let dx = 0, dy = 0, dz = 0;
         let amp = perturbAmp;
         let fx = ox * BASE_FREQ, fy = oy * BASE_FREQ, fz = oz * BASE_FREQ;
@@ -81,12 +79,12 @@ export function projectCoarsePlates(mesh, r_xyz, coarseMesh, coarse_xyz, coarse_
             fx *= COARSE_FBM_FREQ_MULT; fy *= COARSE_FBM_FREQ_MULT; fz *= COARSE_FBM_FREQ_MULT;
         }
 
-        // Project perturbed point back onto unit sphere
+        // 将扰动后的点投回单位球面。
         let px = ox + dx, py = oy + dy, pz = oz + dz;
         const len = Math.sqrt(px * px + py * py + pz * pz) || 1;
         px /= len; py /= len; pz /= len;
 
-        // Greedy walk: find nearest coarse region to the perturbed point
+        // 贪婪步行：查找离扰动点最近的粗区域。
         let bestDot = px * coarse_xyz[3 * cur] + py * coarse_xyz[3 * cur + 1] + pz * coarse_xyz[3 * cur + 2];
 
         let improved = true;
@@ -105,7 +103,7 @@ export function projectCoarsePlates(mesh, r_xyz, coarseMesh, coarse_xyz, coarse_
             }
         }
 
-        // Fallback: if greedy walk hit the step limit, brute-force search
+        // 回退：若贪婪步行触及步数上限，则改用暴力搜索。
         if (steps >= MAX_WALK) {
             for (let c = 0; c < NC; c++) {
                 const d = px * coarse_xyz[3 * c] + py * coarse_xyz[3 * c + 1] + pz * coarse_xyz[3 * c + 2];

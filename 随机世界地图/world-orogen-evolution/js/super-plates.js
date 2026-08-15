@@ -36,7 +36,7 @@ export function buildSuperPlates(coarseMesh, coarse_r_plate, plateSeeds, plateVe
         plateArea[coarse_r_plate[r]]++;
     }
 
-    // 2. Build plate adjacency graph from COARSE mesh
+    // 2. 从粗网格构建板块邻接图。
     // plateNeighbors: pid → Set of neighbor plate IDs
     const plateNeighbors = {};
     for (const pid of plateSeeds) plateNeighbors[pid] = new Set();
@@ -115,7 +115,7 @@ export function buildSuperPlates(coarseMesh, coarse_r_plate, plateSeeds, plateVe
                 const visited = new Set();
                 for (const s of startPids) dist[s] = 0;
                 for (let iter = 0; iter < comp.length; iter++) {
-                    // Find unvisited node with smallest dist
+                    // 查找距离最小的未访问节点。
                     let cur = -1, minD = Infinity;
                     for (const pid of comp) {
                         if (!visited.has(pid) && dist[pid] < minD) {
@@ -185,7 +185,7 @@ export function buildSuperPlates(coarseMesh, coarse_r_plate, plateSeeds, plateVe
 
     const numSuperPlates = nextSuperPlate;
 
-    // 5. Build r_superPlate: HI-RES region → super plate ID via the
+    // 5. 构建 r_superPlate：通过
     //    detail-independent plate→superPlate mapping computed above.
     const hiResNumRegions = hiResRPlate.length;
     const r_superPlate = new Int32Array(hiResNumRegions);
@@ -193,7 +193,7 @@ export function buildSuperPlates(coarseMesh, coarse_r_plate, plateSeeds, plateVe
         r_superPlate[r] = plateToSuperPlate[hiResRPlate[r]];
     }
 
-    // 6. Compute super plate Euler poles (area-weighted)
+    // 6. 计算超级板块欧拉极点（面积加权）。
     // L = sum(area_i * omega_i * pole_i) — resultant angular momentum vector
     // omega_avg = sum(area_i * |omega_i|) / sum(area_i) — restores magnitude
     const spLx = new Float64Array(numSuperPlates);
@@ -229,7 +229,7 @@ export function buildSuperPlates(coarseMesh, coarse_r_plate, plateSeeds, plateVe
         const totalArea = spAreaSum[sp];
 
         if (lLen < 1e-8 || totalArea < 1) {
-            // Fallback: use largest constituent plate's pole
+            // 回退：使用最大组成板块的极点。
             const largest = spLargestPlate[sp];
             if (largest) {
                 const pv = plateVec[largest.pid];

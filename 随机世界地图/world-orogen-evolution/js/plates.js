@@ -38,7 +38,7 @@ export function generatePlates(mesh, r_xyz, numPlates, seed) {
     minDistToSeed[firstSeed] = 0;
 
     while (plateSeeds.size < numPlates && plateSeeds.size < numRegions) {
-        // Find top-3 farthest regions (flat vars, no object allocation)
+        // 查找最远的前三个区域（使用扁平变量，避免对象分配）。
         let t0r = -1, t0d = -1, t1r = -1, t1d = -1, t2r = -1, t2d = -1;
         for (let r = 0; r < numRegions; r++) {
             if (isSeed[r]) continue;
@@ -167,7 +167,7 @@ export function generatePlates(mesh, r_xyz, numPlates, seed) {
             const expectedChordDist = Math.sqrt((plateAreaCount[pid] || 1) * invNumRegions / Math.PI) * 2;
             const compactThreshold = expectedChordDist * PLATE_COMPACT_THRESHOLD_MULT;
 
-            // Precompute seed coordinates
+            // 预计算种子坐标。
             const sx = r_xyz[3*pid], sy = r_xyz[3*pid+1], sz = r_xyz[3*pid+2];
 
             for (let s = 0; s < steps && frontier.length > 0; s++) {
@@ -256,7 +256,7 @@ export function smoothAndReconnectPlates(mesh, r_plate, plateSeeds, numPasses) {
     const { numRegions, adjOffset, adjList } = mesh;
     const plateIds = Array.from(plateSeeds);
 
-    // Build seed lookup for protection during smoothing.
+    // 构建种子查询表，用于平滑期间的保护。
     // Protects plate seed regions from being reassigned by majority-vote.
     // After coarse→hi-res projection the seed IDs are coarse-mesh indices
     // that won't satisfy r_plate[pid] === pid on the hi-res mesh, so the

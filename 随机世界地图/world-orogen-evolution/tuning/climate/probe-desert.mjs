@@ -34,8 +34,8 @@ const cases = [
     ['KOPPEN_PRECIP_SCALE 1400mm', { KOPPEN_PRECIP_SCALE_MM: 1400 }],
 ];
 
-console.log('Desert (B) fraction at 30-45° latitude (truth ≈ 39.7%)\n');
-console.log('case                            desertB_3045');
+console.log('30-45° 纬度沙漠（B）占比（真实 ≈ 39.7%）\n');
+console.log('情形                            desertB_3045');
 for (const [name, ov] of cases) {
     console.log(`${name.padEnd(32)} ${(desertFrac(ov) * 100).toFixed(1)}%`);
 }

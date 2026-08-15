@@ -107,7 +107,7 @@ export function formatEvolutionLabel(evolutionState) {
     const time = evolutionState?.time || {};
     if (time.scale === 'civilization') {
         const year = Number.isFinite(time.timeYear) ? time.timeYear : 0;
-        return `Year ${year}`;
+        return `第 ${year} 年`;
     }
     const myr = Number.isFinite(time.timeMyr) ? time.timeMyr : 0;
     return `${myr.toLocaleString(undefined, { maximumFractionDigits: 2 })} Myr`;

@@ -20,8 +20,8 @@ function aridFrac(ov, box) {
 }
 const R = { 'S.China(want~0)': [22, 31, 105, 120], 'Florida(want 0)': [27, 35, -88, -80],
     'N.India(want~0)': [22, 31, 74, 88], 'Sahara(want 100)': [19, 28, -4, 28] };
-console.log('arid fraction vs KOPPEN_ARIDITY_SCALE');
-console.log('region            scale1.0   scale1.5   scale2.0');
+console.log('干旱占比 vs KOPPEN_ARIDITY_SCALE');
+console.log('区域              scale1.0   scale1.5   scale2.0');
 for (const [nm, box] of Object.entries(R)) {
     const a = aridFrac({}, box), b = aridFrac({ KOPPEN_ARIDITY_SCALE: 1.5 }, box), c = aridFrac({ KOPPEN_ARIDITY_SCALE: 2.0 }, box);
     console.log(`${nm.padEnd(17)} ${(a * 100).toFixed(0).padStart(6)}%   ${(b * 100).toFixed(0).padStart(6)}%   ${(c * 100).toFixed(0).padStart(6)}%`);

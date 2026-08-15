@@ -1,12 +1,12 @@
 /**
- * Spatial diagnostics: where is the simulated Köppen map systematically wrong?
+ * 空间诊断：模拟柯本地图在哪里系统性出错？
  *
- * Prints:
- *   - major-group area fraction (sim vs truth) per 10° latitude band
- *   - dominant truth vs sim class for a set of named real-world regions
- *   - top confusion pairs with their latitude-band distribution
+ * 输出：
+ *   - 每 10° 纬度带的大类面积占比（模拟 vs 真实）
+ *   - 一组真实世界命名区域中的主导真实类别与模拟类别
+ *   - 主要混淆对及其纬度带分布
  *
- * Usage: node tuning/climate/diagnose.mjs [--params file] [--n 160000]
+ * 用法：node tuning/climate/diagnose.mjs [--params 文件] [--n 160000]
  */
 import path from 'node:path';
 import fs from 'node:fs';
@@ -28,7 +28,7 @@ function parseArgs(argv) {
     return a;
 }
 
-// name → [latMin, latMax, lonMin, lonMax] (degrees, lon -180..180)
+// 名称 → [纬度最小, 纬度最大, 经度最小, 经度最大]（度，经度 -180..180）
 const REGIONS = {
     'Western Europe':      [44, 60, -8, 18],
     'Mediterranean basin': [31, 44, -6, 36],
@@ -60,13 +60,13 @@ function dominantClass(counts) {
 async function main() {
     const args = parseArgs(process.argv);
     const overrides = args.params ? (JSON.parse(fs.readFileSync(args.params, 'utf8')).params ?? {}) : {};
-    console.log(`Building Earth context (N=${args.n})…`);
+    console.log(`正在构建地球上下文（N=${args.n}）…`);
     const ctx = buildEarthContext({ N: args.n });
     const { r_koppen } = runClimate(ctx, overrides);
     const { r_truth, r_scored, r_lat, r_lon } = ctx;
     const n = ctx.mesh.numRegions;
 
-    // ── 1. Group fractions per latitude band ──
+    // ── 1. 各纬度带大类占比 ──
     const BAND = 15;
     const bands = {};
     for (let r = 0; r < n; r++) {
@@ -80,8 +80,8 @@ async function main() {
         bands[b].n++;
         bands[b].graded += similarity(r_truth[r], r_koppen[r]);
     }
-    console.log('\n=== Major-group area by latitude band (sim → truth; ✗ = >5pt off) ===');
-    console.log('band        graded   A tropical    B arid       C temperate  D contin.    E polar');
+    console.log('\n=== 按纬度带统计的大类面积（模拟 → 真实；✗ = 偏差 >5 个百分点）===');
+    console.log('纬度带      分级    A 热带       B 干旱       C 温带       D 大陆性    E 极地');
     for (const b of Object.keys(bands).map(Number).sort((x, y) => y - x)) {
         const bd = bands[b];
         const cell = (g) => {
@@ -93,9 +93,9 @@ async function main() {
         console.log(`${lbl} ${(bd.graded / bd.n).toFixed(2)}    ${cell('A')}     ${cell('B')}     ${cell('C')}     ${cell('D')}     ${cell('E')}`);
     }
 
-    // ── 2. Named region probes ──
-    console.log('\n=== Named regions: dominant truth vs sim ===');
-    console.log('region                    truth        sim          graded  exact  n');
+    // ── 2. 命名区域探针 ──
+    console.log('\n=== 命名区域：主导真实类别 vs 模拟类别 ===');
+    console.log('区域                      真实        模拟         分级   精确   n');
     for (const [name, [laMin, laMax, loMin, loMax]] of Object.entries(REGIONS)) {
         const tc = {}, sc = {};
         let cnt = 0, exact = 0, graded = 0;
@@ -109,7 +109,7 @@ async function main() {
             if (r_truth[r] === r_koppen[r]) exact++;
             graded += similarity(r_truth[r], r_koppen[r]);
         }
-        if (cnt < 5) { console.log(`${name.padEnd(25)} (only ${cnt} cells)`); continue; }
+        if (cnt < 5) { console.log(`${name.padEnd(25)} （仅 ${cnt} 个单元）`); continue; }
         const dt = dominantClass(tc), ds = dominantClass(sc);
         const tCode = `${KOPPEN_CLASSES[dt.id].code}(${(dt.frac * 100).toFixed(0)}%)`;
         const sCode = `${KOPPEN_CLASSES[ds.id].code}(${(ds.frac * 100).toFixed(0)}%)`;
@@ -117,7 +117,7 @@ async function main() {
         console.log(`${name.padEnd(25)} ${tCode.padEnd(12)} ${sCode.padEnd(12)} ${(graded / cnt).toFixed(2)}    ${(exact / cnt * 100).toFixed(0).padStart(3)}%  ${cnt}${flag}`);
     }
 
-    // ── 3. Top confusions with latitude signature ──
+    // ── 3. 带纬度特征的主要混淆 ──
     const conf = {};
     for (let r = 0; r < n; r++) {
         if (!r_scored[r] || r_truth[r] === NO_DATA) continue;
@@ -131,8 +131,8 @@ async function main() {
         const [t, s] = k.split(',').map(Number);
         return { t, s, count: v.count, meanAbsLat: v.latSum / v.count, sim: similarity(t, s) };
     }).sort((a, b) => b.count * (1 - b.sim) - a.count * (1 - a.sim)).slice(0, 16);
-    console.log('\n=== Costliest confusions (count × dissimilarity), with mean |lat| ===');
-    console.log('truth → sim      count   mean|lat|  similarity');
+    console.log('\n=== 代价最高的混淆（数量 × 差异度），含平均 |纬度| ===');
+    console.log('真实 → 模拟     数量    平均|纬度|  相似度');
     for (const p of pairs) {
         console.log(`${(KOPPEN_CLASSES[p.t].code + ' → ' + KOPPEN_CLASSES[p.s].code).padEnd(16)} ${String(p.count).padStart(5)}   ${p.meanAbsLat.toFixed(0).padStart(3)}°       ${p.sim.toFixed(2)}`);
     }

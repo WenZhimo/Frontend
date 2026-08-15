@@ -1,45 +1,41 @@
-# World Orogen
+# 世界造山（World Orogen）
 
-> Procedural planet generator — free, browser-based, no signup required.
+> 免费、浏览器端、无需注册的程序化行星生成器。
 
-World Orogen generates realistic procedural planets shaped by tectonic plate simulation, erosion, and climate modeling. It runs entirely in the browser using Three.js and requires no installation, account, or payment.
+世界造山会生成由构造板块、侵蚀和气候塑造的可信程序化行星。它完全在浏览器中运行，使用 Three.js，不需要安装、账号或付费。
 
-## What it does
+## 功能
 
-- Generates unique terrestrial planets with realistic continents, mountains, ocean trenches, and volcanic islands
-- Simulates tectonic plates with convergent, divergent, and transform boundaries
-- Applies glacial, hydraulic, and thermal erosion to carve fjords, river valleys, and talus slopes
-- Simulates seasonal climate: wind patterns, ocean currents, precipitation, and Köppen classification
-- Creates hotspot volcanism with drift-trail island chains (like Hawaii)
-- Allows interactive editing — select multiple tectonic plates for batch reshaping with visual preview before rebuild
-- Import your own equirectangular B&W heightmaps (Earth, Mars, hand-drawn) onto a 3D globe with automatic climate simulation
+- 生成具有大陆、山脉、海沟和火山岛的类地行星。
+- 模拟汇聚、张裂和转换构造边界。
+- 使用冰川、水力和热侵蚀雕刻峡湾、河谷和崖积坡。
+- 模拟季节风、洋流、降水、温度和柯本气候。
+- 支持多板块交互编辑和高度图导入。
+- 支持时间轴、快照、环境输入、文明 MVP 和历史导出。
 
-## Who it's for
+## 适用人群
 
-- Worldbuilders creating fantasy or sci-fi settings
-- Game developers who need heightmaps for Unity, Unreal, or other engines
-- Tabletop RPG players building campaign worlds (D&D, Pathfinder, etc.)
-- Fantasy/sci-fi authors designing believable planets
-- Artists and hobbyists who enjoy procedural generation
-- Educators teaching plate tectonics and planetary science
+- 架空世界、奇幻或科幻设定创作者。
+- 需要 Unity、Unreal 或其他引擎高度图的游戏开发者。
+- 桌面角色扮演玩家、作者、艺术家和教育者。
 
-## Key capabilities
+## 关键能力
 
-- Multiple views: terrain, satellite biome, Köppen climate, heightmap
-- 26 detailed inspection layers (geology, atmosphere, ocean, climate)
-- Export high-resolution equirectangular maps up to 65,536px wide
-- Shareable planet codes — copy a compact code to reproduce any planet exactly
-- Works on desktop and mobile browsers
-- No build step, no dependencies to install — pure ES modules
+- 地形、卫星图、柯本气候、高度图等多视图。
+- 地质、大气、海洋、气候、板块运动、地质记忆、环境输入和文明检查图层。
+- 最高 65,536 像素宽的高分辨率等距圆柱地图导出。
+- 可分享行星码，可复现同一个世界。
+- 支持桌面和移动浏览器。
+- 无构建步骤，无需安装依赖。
 
 ## URL
 
 https://orogen.studio/
 
-## Technical details
+## 技术细节
 
-- Built with Three.js (WebGL), vanilla JavaScript ES modules
-- Fibonacci sphere meshing with Voronoi tessellation
-- Braun-Willett stream power erosion, Barnes et al. pit-filling algorithm
-- Dual-model precipitation (advection simulation + zonal heuristic)
-- Fully client-side — no server, no data collection
+- Three.js / WebGL / 原生 JavaScript ES 模块。
+- Fibonacci 球面网格和 Voronoi 剖分。
+- Braun-Willett 流功率侵蚀和 Barnes 等人的洼地处理思路。
+- 平流模拟 + 纬向启发式的双模型降水。
+- 完全客户端运行，不需要服务器，也不收集数据。

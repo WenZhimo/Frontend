@@ -1,4 +1,4 @@
-﻿// Entry point 鈥?wires UI controls, animation loop, and kicks off initial generation.
+// Entry point 鈥?wires UI controls, animation loop, and kicks off initial generation.
 
 import * as THREE from 'three';
 import { renderer, scene, camera, ctrl, waterMesh, atmosMesh, starsMesh,
@@ -44,12 +44,12 @@ function checkStale() {
     btn.classList.remove('stale', 'regen');
     if (plateChanged) {
         btn.classList.add('regen');
-        btn.textContent = 'Regenerate';
+        btn.textContent = '重新生成';
     } else if (detailChanged) {
         btn.classList.add('stale');
-        btn.textContent = 'Rebuild';
+        btn.textContent = '重建';
     } else {
-        btn.textContent = 'Build New World';
+        btn.textContent = '生成新世界';
     }
 }
 
@@ -62,7 +62,7 @@ function reapplyPostProcessing() {
     reapplyViaWorker(() => {
         reapplyBtn.classList.remove('spinning');
         updatePlanetCode(false);
-        // If climate invalidated and viewing a climate layer, switch to Terrain
+        // 如果气候已失效且当前查看气候图层，则切回地形。
         if (skipClimate && CLIMATE_LAYERS.has(state.debugLayer)) {
             state.debugLayer = '';
             if (debugLayerEl) debugLayerEl.value = '';
@@ -92,10 +92,10 @@ reapplyBtn.addEventListener('click', () => {
     reapplyPostProcessing();
 });
 
-// Auto Climate checkbox 鈥?default OFF above threshold
+// 自动气候阈值：高于阈值时默认跳过。
 const AUTO_CLIMATE_THRESHOLD = 300000;
 
-// Detail slider warning update (lower thresholds on touch devices)
+// 细节滑块警告更新（触控设备阈值更低）。
 const WARN_ORANGE = state.isTouchDevice ? 200000 : 640000;
 const WARN_RED    = state.isTouchDevice ? 500000 : 1280000;
 
@@ -107,17 +107,17 @@ function updateDetailWarning(detail) {
     if (detail > WARN_RED) {
         cg.classList.add('detail-red');
         warn.classList.add('red');
-        warn.textContent = '\u26A0 Very high \u2014 generation may be slow and unstable';
+        warn.textContent = '\u26A0 细节极高，生成可能较慢且不稳定';
     } else if (detail > WARN_ORANGE) {
         cg.classList.add('detail-orange');
         warn.classList.add('orange');
-        warn.textContent = '\u26A0 High detail \u2014 generation may be slow and unstable';
+        warn.textContent = '\u26A0 细节较高，生成可能较慢且不稳定';
     } else {
         warn.textContent = '';
     }
 }
 
-// Slider thumb tooltip 鈥?floating value bubble near the thumb during drag
+// 滑块浮动提示：拖动时在滑块拇指附近显示当前值。
 function initSliderTooltip(slider) {
     const cg = slider.closest('.cg');
     if (!cg) return;
@@ -190,7 +190,7 @@ for (const [s,v] of [['sN','vN'],['sP','vP'],['sCn','vCn'],['sJ','vJ'],['sNs','v
 }
 
 // Force range input re-render when <details> sections are opened.
-// Browsers may not update the visual thumb position for sliders that were
+// 浏览器可能不会更新某些滑块的可见滑块位置，
 // hidden (inside a closed <details>) when their value was set via JS.
 document.querySelectorAll('details.section').forEach(det => {
     det.addEventListener('toggle', () => {
@@ -224,7 +224,7 @@ const debugLayerEl = document.getElementById('debugLayer');
 
 function switchVisualization(layer) {
     if (CLIMATE_LAYERS.has(layer) && !state.climateComputed) {
-        // Need to compute climate first
+        // 需要先计算气候。
         showBuildOverlay();
         computeClimateViaWorker(onProgress, () => {
             hideBuildOverlay();
@@ -262,7 +262,7 @@ function syncTabsToLayer(layer) {
     mapTabs.querySelectorAll('.map-tab').forEach(tab => {
         tab.classList.toggle('active', tab.dataset.layer === layer);
     });
-    // Sync mobile view switcher (only for main views it knows about)
+    // 同步移动端视图切换器（仅处理它知道的主视图）。
     const mvs = document.getElementById('mobileViewSwitch');
     if (mvs && [...mvs.options].some(o => o.value === layer)) {
         mvs.value = layer;
@@ -273,7 +273,7 @@ mapTabs.addEventListener('click', (e) => {
     const tab = e.target.closest('.map-tab');
     if (!tab) return;
     const layer = tab.dataset.layer;
-    // Update active tab
+    // 更新当前标签。
     mapTabs.querySelectorAll('.map-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     // Sync debug dropdown + mobile switcher
@@ -291,46 +291,46 @@ mobileViewSwitch.addEventListener('change', (e) => {
     switchVisualization(layer);
 });
 
-// Koppen climate zone descriptions for hover tooltips
+// 柯本气候区悬停说明。
 const KOPPEN_DESCRIPTIONS = {
-    Af:  'Tropical rainforest 鈥?Hot and wet year-round. Amazon Basin, Congo Basin, Southeast Asia.',
-    Am:  'Tropical monsoon 鈥?Brief dry season offset by heavy monsoon rains. Southern India, West Africa, Northern Australia.',
-    Aw:  'Tropical savanna 鈥?Distinct wet and dry seasons. Sub-Saharan Africa, Brazilian Cerrado, Northern Australia.',
-    BWh: 'Hot desert 鈥?Extremely dry with scorching summers. Sahara, Arabian Desert, Sonoran Desert.',
-    BWk: 'Cold desert 鈥?Arid with cold winters. Gobi Desert, Patagonian steppe, Great Basin.',
-    BSh: 'Hot steppe 鈥?Semi-arid grassland with hot summers. Sahel, outback Australia, northern Mexico.',
-    BSk: 'Cold steppe 鈥?Semi-arid with cold winters. Central Asian steppe, Montana, Anatolian plateau.',
-    Cfa: 'Humid subtropical 鈥?Hot humid summers, mild winters. Southeastern US, eastern China, Buenos Aires.',
-    Cfb: 'Oceanic 鈥?Mild year-round, cool summers, frequent rain. Western Europe, New Zealand, Pacific Northwest.',
-    Cfc: 'Subpolar oceanic 鈥?Cool year-round with short summers. Iceland, southern Chile, Faroe Islands.',
-    Csa: 'Hot-summer Mediterranean 鈥?Dry hot summers, mild wet winters. Southern California, Greece, coastal Turkey.',
-    Csb: 'Warm-summer Mediterranean 鈥?Dry warm summers, mild wet winters. San Francisco, Porto, Cape Town.',
-    Csc: 'Cold-summer Mediterranean 鈥?Cool dry summers, mild wet winters. Rare; high-altitude Mediterranean coasts.',
-    Cwa: 'Humid subtropical monsoon 鈥?Warm with dry winters. Hong Kong, northern India, Southeastern Brazil highlands.',
-    Cwb: 'Subtropical highland 鈥?Mild with dry winters. Mexico City, Bogota, Ethiopian Highlands.',
-    Cwc: 'Cold subtropical highland 鈥?Cool with dry winters. Rare; high-altitude tropical mountains.',
-    Dfa: 'Hot-summer continental 鈥?Hot summers, cold snowy winters. Chicago, Kyiv, Beijing.',
-    Dfb: 'Warm-summer continental 鈥?Warm summers, cold winters. Moscow, southern Scandinavia, New England.',
-    Dfc: 'Subarctic 鈥?Long cold winters, brief cool summers. Siberia, northern Canada, interior Alaska.',
-    Dfd: 'Extremely cold subarctic 鈥?Harshest winters on Earth. Yakutsk, Verkhoyansk (eastern Siberia).',
-    Dsa: 'Hot-summer continental, dry summer 鈥?Hot dry summers, cold winters. Parts of eastern Turkey, Iran.',
-    Dsb: 'Warm-summer continental, dry summer 鈥?Dry warm summers, cold winters. Parts of the western US highlands.',
-    Dsc: 'Subarctic, dry summer 鈥?Cool dry summers, very cold winters. Rare; high-altitude inland regions.',
-    Dsd: 'Extremely cold subarctic, dry summer 鈥?Very rare; extreme cold with dry summers.',
-    Dwa: 'Hot-summer continental, monsoon 鈥?Wet hot summers, dry cold winters. Northern China, Korea.',
-    Dwb: 'Warm-summer continental, monsoon 鈥?Wet warm summers, dry cold winters. Parts of northeast China.',
-    Dwc: 'Subarctic monsoon 鈥?Brief wet summers, long dry frigid winters. Eastern Siberia, far northeast China.',
-    Dwd: 'Extremely cold subarctic, monsoon 鈥?Extreme cold, driest in winter. Interior eastern Siberia.',
-    ET:  'Tundra 鈥?Permafrost, only warmest month above 0 C. Arctic coasts, high mountain plateaus.',
-    EF:  'Ice cap 鈥?Permanent ice, never above 0 C. Antarctica interior, Greenland ice sheet.',
+    Af:  '热带雨林：全年炎热潮湿。典型地区：亚马孙盆地、刚果盆地、东南亚。',
+    Am:  '热带季风：短暂旱季被强季风降水抵消。典型地区：印度南部、西非、澳大利亚北部。',
+    Aw:  '热带稀树草原：干湿季分明。典型地区：撒哈拉以南非洲、巴西塞拉多、澳大利亚北部。',
+    BWh: '热带沙漠：极端干燥，夏季酷热。典型地区：撒哈拉、阿拉伯沙漠、索诺拉沙漠。',
+    BWk: '寒带沙漠：干旱且冬季寒冷。典型地区：戈壁、巴塔哥尼亚干草原、大盆地。',
+    BSh: '热带草原：半干旱草地，夏季炎热。典型地区：萨赫勒、澳大利亚内陆、墨西哥北部。',
+    BSk: '寒带草原：半干旱且冬季寒冷。典型地区：中亚草原、蒙大拿、安纳托利亚高原。',
+    Cfa: '湿润亚热带：夏季炎热潮湿，冬季温和。典型地区：美国东南部、中国东部、布宜诺斯艾利斯。',
+    Cfb: '海洋性气候：全年温和，夏季凉爽，降雨频繁。典型地区：西欧、新西兰、太平洋西北部。',
+    Cfc: '副极地海洋性：全年凉爽，夏季短暂。典型地区：冰岛、智利南部、法罗群岛。',
+    Csa: '炎夏地中海：夏季炎热干燥，冬季温和多雨。典型地区：南加州、希腊、土耳其海岸。',
+    Csb: '暖夏地中海：夏季温暖干燥，冬季温和多雨。典型地区：旧金山、波尔图、开普敦。',
+    Csc: '冷夏地中海：夏季凉爽干燥，冬季温和多雨，较罕见。',
+    Cwa: '季风湿润亚热带：温暖且冬季偏干。典型地区：香港、印度北部、巴西东南高地。',
+    Cwb: '亚热带高原：气候温和，冬季偏干。典型地区：墨西哥城、波哥大、埃塞俄比亚高地。',
+    Cwc: '寒冷亚热带高原：气候凉爽，冬季偏干，较罕见。',
+    Dfa: '炎夏大陆性：夏季炎热，冬季寒冷多雪。典型地区：芝加哥、基辅、北京。',
+    Dfb: '暖夏大陆性：夏季温暖，冬季寒冷。典型地区：莫斯科、斯堪的纳维亚南部、新英格兰。',
+    Dfc: '亚寒带：冬季漫长寒冷，夏季短暂凉爽。典型地区：西伯利亚、加拿大北部、阿拉斯加内陆。',
+    Dfd: '极寒亚寒带：地球上最严酷的冬季类型。典型地区：雅库茨克、维尔霍扬斯克。',
+    Dsa: '夏干炎夏大陆性：夏季炎热干燥，冬季寒冷。',
+    Dsb: '夏干暖夏大陆性：夏季温暖干燥，冬季寒冷。',
+    Dsc: '夏干亚寒带：夏季凉爽干燥，冬季非常寒冷。',
+    Dsd: '夏干极寒亚寒带：极为罕见，严寒且夏季干燥。',
+    Dwa: '季风炎夏大陆性：夏季炎热潮湿，冬季寒冷干燥。典型地区：中国北方、朝鲜半岛。',
+    Dwb: '季风暖夏大陆性：夏季温暖潮湿，冬季寒冷干燥。典型地区：中国东北部分地区。',
+    Dwc: '季风亚寒带：夏季短暂潮湿，冬季漫长严寒。典型地区：东西伯利亚、中国远东北部。',
+    Dwd: '季风极寒亚寒带：极端寒冷，冬季最干。',
+    ET:  '苔原：多年冻土，最暖月仅高于 0°C。典型地区：北极海岸、高山高原。',
+    EF:  '冰原：永久冰盖，全年不高于 0°C。典型地区：南极内陆、格陵兰冰盖。',
 };
 
-// Legend rendering
+// 图例渲染。
 function updateLegend(layer) {
     if (!vizLegend) return;
 
     if (layer === '' || !layer) {
-        // Terrain legend
+        // 地形图例。
         const stops = [
             { e: -0.50, label: '' },
             { e: -0.25, label: '' },
@@ -349,10 +349,10 @@ function updateLegend(layer) {
         const pcts = stops.map((_, i) => Math.round(i / (stops.length - 1) * 100));
         const gradStr = colors.map((c, i) => `${c} ${pcts[i]}%`).join(', ');
         vizLegend.innerHTML = `<div class="legend-gradient" style="background:linear-gradient(to right,${gradStr})"></div>` +
-            `<div class="legend-labels"><span>Deep Ocean</span><span>Sea Level</span><span>Peak</span></div>`;
+            `<div class="legend-labels"><span>深海</span><span>海平面</span><span>高峰</span></div>`;
     } else if (layer === 'koppen') {
-        // Koppen legend 鈥?Wikipedia link + swatches with hover tooltips
-        let html = '<div class="legend-koppen-header"><a href="https://en.wikipedia.org/wiki/K%C3%B6ppen_climate_classification" target="_blank" rel="noopener">K\u00f6ppen climate classification</a></div>';
+        // 柯本图例：Wikipedia 链接 + 色块悬停说明。
+        let html = '<div class="legend-koppen-header"><a href="https://en.wikipedia.org/wiki/K%C3%B6ppen_climate_classification" target="_blank" rel="noopener">柯本气候分类</a></div>';
         html += '<div class="legend-koppen">';
         for (let i = 1; i < KOPPEN_CLASSES.length; i++) {
             const k = KOPPEN_CLASSES[i];
@@ -364,7 +364,7 @@ function updateLegend(layer) {
         html += '<div class="legend-koppen-tooltip" id="koppenTip"></div>';
         html += '</div>';
         vizLegend.innerHTML = html;
-        // Wire hover tooltips with dynamic positioning
+        // 绑定动态定位的悬停提示。
         const tipEl = document.getElementById('koppenTip');
         const container = vizLegend.querySelector('.legend-koppen');
         vizLegend.querySelectorAll('.legend-koppen-item').forEach(item => {
@@ -373,7 +373,7 @@ function updateLegend(layer) {
                 const desc = KOPPEN_DESCRIPTIONS[code] || '';
                 tipEl.textContent = desc;
                 tipEl.classList.add('visible');
-                // Position above the hovered item, clamped within the container
+                // 定位在悬停项上方，并限制在容器内。
                 const itemRect = item.getBoundingClientRect();
                 const containerRect = container.getBoundingClientRect();
                 const tipWidth = 240;
@@ -381,7 +381,7 @@ function updateLegend(layer) {
                 left = Math.max(0, Math.min(left, containerRect.width - tipWidth));
                 tipEl.style.left = left + 'px';
                 tipEl.style.bottom = (containerRect.bottom - itemRect.top + 6) + 'px';
-                // Highlight matching cells on the mesh
+                // 高亮网格上的匹配单元。
                 const classId = KOPPEN_CLASSES.findIndex(c => c.code === code);
                 if (classId >= 0) {
                     state.hoveredKoppen = classId;
@@ -397,15 +397,15 @@ function updateLegend(layer) {
             });
         });
     } else if (layer === 'biome') {
-        // Satellite biome legend 鈥?gradient bar of key biome colors
+        // 卫星生物群系图例：关键生物群系颜色渐变。
         const biomeStops = [
-            { color: [0.82,0.72,0.50], label: 'Desert' },
-            { color: [0.72,0.62,0.30], label: 'Steppe' },
-            { color: [0.42,0.50,0.18], label: 'Savanna' },
-            { color: [0.12,0.38,0.10], label: 'Forest' },
-            { color: [0.06,0.22,0.08], label: 'Taiga' },
-            { color: [0.35,0.32,0.22], label: 'Tundra' },
-            { color: [0.78,0.80,0.84], label: 'Ice' },
+            { color: [0.82,0.72,0.50], label: '沙漠' },
+            { color: [0.72,0.62,0.30], label: '草原' },
+            { color: [0.42,0.50,0.18], label: '稀树草原' },
+            { color: [0.12,0.38,0.10], label: '森林' },
+            { color: [0.06,0.22,0.08], label: '泰加林' },
+            { color: [0.35,0.32,0.22], label: '苔原' },
+            { color: [0.78,0.80,0.84], label: '冰原' },
         ];
         const biomeColors = biomeStops.map(s => {
             const [r, g, b] = s.color;
@@ -416,18 +416,18 @@ function updateLegend(layer) {
         vizLegend.innerHTML = `<div class="legend-gradient" style="background:linear-gradient(to right,${biomeGrad})"></div>` +
             `<div class="legend-labels"><span>${biomeStops[0].label}</span><span>${biomeStops[3].label}</span><span>${biomeStops[6].label}</span></div>`;
     } else if (layer === 'rainShadowSummer' || layer === 'rainShadowWinter') {
-        // Rain shadow diverging legend: leeward shadow 鈫?neutral 鈫?windward boost
+        // 雨影发散图例：背风雨影 - 中性 - 迎风增强。
         vizLegend.innerHTML = `<div class="legend-gradient" style="background:linear-gradient(to right,rgb(230,51,33) 0%,rgb(140,140,148) 50%,rgb(38,102,243) 100%)"></div>` +
-            `<div class="legend-labels"><span>Rain Shadow</span><span>Neutral</span><span>Windward</span></div>`;
+            `<div class="legend-labels"><span>雨影</span><span>中性</span><span>迎风</span></div>`;
     } else if (layer === 'landheightmap') {
         vizLegend.innerHTML = `<div class="legend-gradient" style="background:linear-gradient(to right,#000 0%,#fff 100%)"></div>` +
-            `<div class="legend-labels"><span>Ocean / Sea Level</span><span>Peak</span></div>`;
+            `<div class="legend-labels"><span>海洋 / 海平面</span><span>高峰</span></div>`;
     } else {
         vizLegend.innerHTML = '';
     }
 }
 
-// Build overlay 鈥?unified loading / generation overlay
+// 构建遮罩：统一加载 / 生成遮罩。
 const buildOverlay  = document.getElementById('buildOverlay');
 const buildBarFill  = document.getElementById('buildBarFill');
 const buildBarLabel = document.getElementById('buildBarLabel');
@@ -456,25 +456,25 @@ function hideBuildOverlay() {
         overlayActive = false;
         if (buildOverlay) {
             buildOverlay.classList.add('hidden');
-            // After first generation, switch from opaque to semi-transparent
+            // 首次生成后，从不透明切换为半透明。
             buildOverlay.classList.remove('initial');
         }
     }, 500);
 }
 
-// Generate button
+// 生成按钮
 const genBtn = document.getElementById('generate');
 genBtn.addEventListener('click', () => {
     clearReapplyPending();
     buildWindArrows(null); // dispose previous wind arrows
     buildOceanCurrentArrows(null); // dispose previous ocean arrows
     showBuildOverlay();
-    // Collapse bottom sheet on mobile so user can see the planet build
+    // 移动端收起底部抽屉，让用户看到行星构建过程。
     const ui = document.getElementById('ui');
     if (window.innerWidth <= 768 && ui) ui.classList.add('collapsed');
     // Rebuild: reuse seed + plate edits so only resolution/params change.
     // If plate-affecting sliders (Plates, Continents, Continent Size Variety, Land Coverage) changed,
-    // force a fresh generation 鈥?the coarse plate grid is fully determined by seed + P + Cn + Csv + Lc.
+    // 强制重新生成：粗板块网格完全由 seed + P + Cn + Csv + Lc 决定。
     const plateChanged = PLATE_SLIDERS.some(id => document.getElementById(id).value !== lastGenValues[id]);
     const isRebuild = genBtn.classList.contains('stale') && state.curData && !plateChanged;
     const seed = isRebuild ? state.curData.seed : undefined;
@@ -496,7 +496,7 @@ genBtn.addEventListener('generate-done', () => {
 const seedInput = document.getElementById('seedCode');
 const copyBtn   = document.getElementById('copyBtn');
 const loadBtn   = document.getElementById('loadBtn');
-let currentCode = ''; // the code for the currently loaded planet
+let currentCode = ''; // 当前已加载行星的行星码。
 
 function updateLoadBtn() {
     const val = seedInput.value.trim().toLowerCase();
@@ -519,7 +519,7 @@ function getToggledIndices() {
     return indices;
 }
 
-/** Encode current planet state and update the seed input + URL hash. */
+/** 编码当前行星状态，并更新种子输入框与 URL hash。 */
 function updatePlanetCode(flash) {
     const d = state.curData;
     if (!d) return;
@@ -647,13 +647,13 @@ function renderSnapshotList() {
         if (items.length === 0) {
             const option = document.createElement('option');
             option.value = '';
-            option.textContent = 'No snapshots';
+            option.textContent = '暂无快照';
             evolutionEls.select.appendChild(option);
         } else {
             for (const item of items) {
                 const option = document.createElement('option');
                 option.value = item.id;
-                option.textContent = `${item.label} - ${item.source}${item.climate ? ' + climate' : ''}`;
+                option.textContent = `${item.label} - ${snapshotSourceLabel(item.source)}${item.climate ? ' + 气候' : ''}`;
                 evolutionEls.select.appendChild(option);
             }
             evolutionEls.select.value = snapshotCache.currentId || items[items.length - 1].id;
@@ -669,6 +669,14 @@ function renderSnapshotList() {
     if (evolutionEls.play) evolutionEls.play.disabled = !hasWorld;
     if (evolutionEls.apply) evolutionEls.apply.disabled = !hasSnapshots;
     if (evolutionEls.delete) evolutionEls.delete.disabled = !hasSnapshots;
+}
+
+function snapshotSourceLabel(source) {
+    return {
+        manual: '手动',
+        generate: '生成',
+        'evolution-step': '演化步进',
+    }[source] || source || '未知';
 }
 
 function resetTransientSnapshotState() {
@@ -703,14 +711,14 @@ function applySnapshotCompareOverlay(snapshotId) {
     const base = snapshotCache.previousOf(snapshotId);
     if (!base) {
         clearSnapshotDeltaLayer();
-        return 'Compare needs an earlier snapshot.';
+        return '对比需要一张更早的快照。';
     }
 
     const currentElevation = state.curData.r_elevation;
     const baseElevation = base.payload?.curData?.r_elevation;
     if (!currentElevation || !baseElevation || currentElevation.length !== baseElevation.length) {
         clearSnapshotDeltaLayer();
-        return 'Compare snapshots must share the same mesh resolution.';
+        return '对比快照必须使用相同的网格分辨率。';
     }
 
     const delta = new Float32Array(currentElevation.length);
@@ -773,7 +781,7 @@ function rebuildWorldAfterSnapshotApply(snapshotId) {
     updatePlanetCode(false);
     renderSnapshotList();
     renderCivilizationPanel();
-    invalidateHistorySummary('Snapshot restored. Build a fresh history summary.', { resetArchive: true });
+    invalidateHistorySummary('快照已恢复。请重新生成历史摘要。', { resetArchive: true });
     return compareWarning;
 }
 
@@ -785,16 +793,16 @@ function applySnapshotById(id) {
         snapshotCache.apply(id);
         syncEvolutionTerrainViaWorker(state.curData);
         const warning = rebuildWorldAfterSnapshotApply(id);
-        setEvolutionStatus(warning || `Restored ${snapshot.label}.`, warning ? 'warn' : 'ok');
+        setEvolutionStatus(warning || `已恢复 ${snapshot.label}。`, warning ? 'warn' : 'ok');
     } catch (err) {
-        console.error('[Evolution] Snapshot restore failed:', err);
-        setEvolutionStatus(err.message || 'Snapshot restore failed.', 'warn');
+        console.error('[Evolution] 快照恢复失败：', err);
+        setEvolutionStatus(err.message || '快照恢复失败。', 'warn');
     }
 }
 
 function captureSnapshotFromCurrent(source = 'manual', label = '') {
     if (!state.curData) {
-        setEvolutionStatus('Generate a world before capturing snapshots.', 'warn');
+        setEvolutionStatus('请先生成世界，再捕获快照。', 'warn');
         return null;
     }
     ensureEvolutionState(state.curData, { climateComputed: state.climateComputed, source });
@@ -805,7 +813,7 @@ function captureSnapshotFromCurrent(source = 'manual', label = '') {
         evolutionState: state.curData.evolutionState,
     });
     renderSnapshotList();
-    setEvolutionStatus(`Captured ${snapshot.label}.`, 'ok');
+    setEvolutionStatus(`已捕获 ${snapshot.label}。`, 'ok');
     return snapshot;
 }
 
@@ -815,15 +823,15 @@ function captureGeneratedSnapshot() {
         if (evolutionEls.compare) evolutionEls.compare.checked = false;
         captureSnapshotFromCurrent('generate', '0 Myr');
     } catch (err) {
-        console.error('[Evolution] Auto snapshot failed:', err);
-        setEvolutionStatus(err.message || 'Auto snapshot failed.', 'warn');
+        console.error('[Evolution] 自动快照失败：', err);
+        setEvolutionStatus(err.message || '自动快照失败。', 'warn');
     }
 }
 
 function stepEvolutionOnce() {
     if (!state.curData) {
         setEvolutionPlaying(false);
-        setEvolutionStatus('Generate a world before stepping the timeline.', 'warn');
+        setEvolutionStatus('请先生成世界，再推进时间轴。', 'warn');
         return;
     }
     const dtMyr = Math.max(0.1, +(evolutionEls.stepMyr?.value || 1));
@@ -856,20 +864,20 @@ function stepEvolutionOnce() {
         applySnapshotById(snapshot.id);
         if (terrainStep?.changedCells > 0) {
             setEvolutionStatus(
-                `Advanced ${formatEvolutionLabel(nextState)}; terrain delta max ${terrainStep.maxAbsDelta.toFixed(4)}.`,
+                `已推进至 ${formatEvolutionLabel(nextState)}；地形最大增量 ${terrainStep.maxAbsDelta.toFixed(4)}。`,
                 'ok'
             );
         }
     } catch (err) {
-        console.error('[Evolution] Timeline step failed:', err);
+        console.error('[Evolution] 时间轴步进失败：', err);
         setEvolutionPlaying(false);
-        setEvolutionStatus(err.message || 'Timeline step failed.', 'warn');
+        setEvolutionStatus(err.message || '时间轴步进失败。', 'warn');
     }
 }
 
 function setEvolutionPlaying(wantPlaying) {
     if (wantPlaying && !state.curData) {
-        setEvolutionStatus('Generate a world before playing the timeline.', 'warn');
+        setEvolutionStatus('请先生成世界，再播放时间轴。', 'warn');
         return;
     }
     if (evolutionPlayTimer) {
@@ -877,17 +885,17 @@ function setEvolutionPlaying(wantPlaying) {
         evolutionPlayTimer = null;
     }
     state.evolution.playback.isPlaying = !!wantPlaying;
-    if (evolutionEls.play) evolutionEls.play.textContent = wantPlaying ? 'Pause' : 'Play';
+    if (evolutionEls.play) evolutionEls.play.textContent = wantPlaying ? '暂停' : '播放';
     if (wantPlaying) {
         evolutionPlayTimer = setInterval(stepEvolutionOnce, state.evolution.playback.intervalMs);
-        setEvolutionStatus('Timeline playback running.', 'ok');
+        setEvolutionStatus('时间轴正在播放。', 'ok');
     }
 }
 
 function initEvolutionTimeline() {
     evolutionEls.capture?.addEventListener('click', () => {
         try { captureSnapshotFromCurrent('manual'); }
-        catch (err) { setEvolutionStatus(err.message || 'Snapshot capture failed.', 'warn'); }
+        catch (err) { setEvolutionStatus(err.message || '快照捕获失败。', 'warn'); }
     });
     evolutionEls.apply?.addEventListener('click', () => {
         if (evolutionEls.select?.value) applySnapshotById(evolutionEls.select.value);
@@ -899,7 +907,7 @@ function initEvolutionTimeline() {
         snapshotCache.delete(id);
         if (wasCurrent && snapshotCache.currentId) applySnapshotById(snapshotCache.currentId);
         else renderSnapshotList();
-        setEvolutionStatus('Snapshot deleted.', 'ok');
+        setEvolutionStatus('快照已删除。', 'ok');
     });
     evolutionEls.step?.addEventListener('click', stepEvolutionOnce);
     evolutionEls.play?.addEventListener('click', () => setEvolutionPlaying(!state.evolution.playback.isPlaying));
@@ -940,21 +948,21 @@ function renderCivilizationPanel() {
     if (civilizationEls.year) civilizationEls.year.textContent = civ ? civ.timeYear.toLocaleString() : '0';
     if (!civilizationEls.metrics) return;
     if (!hasWorld) {
-        civilizationEls.metrics.textContent = 'Generate a world, then seed civilization.';
+        civilizationEls.metrics.textContent = '请先生成世界，再播种文明。';
         return;
     }
     if (!civ) {
-        civilizationEls.metrics.textContent = 'No civilization state yet.';
+        civilizationEls.metrics.textContent = '暂无文明状态。';
         return;
     }
     const m = civ.metrics || {};
     civilizationEls.metrics.textContent = [
-        `Groups ${m.livingGroups ?? civ.populationGroups?.length ?? 0}`,
-        `Population ${(m.population || 0).toLocaleString()}`,
-        `Settlements ${m.settlements || 0}`,
-        `Cultures ${m.cultures || 0}`,
-        `Languages ${m.languages || 0}`,
-        `Polities ${m.polities || 0}`,
+        `群体 ${m.livingGroups ?? civ.populationGroups?.length ?? 0}`,
+        `人口 ${(m.population || 0).toLocaleString()}`,
+        `聚落 ${m.settlements || 0}`,
+        `文化 ${m.cultures || 0}`,
+        `语言 ${m.languages || 0}`,
+        `政体 ${m.polities || 0}`,
     ].join(' · ');
 }
 
@@ -970,7 +978,7 @@ function showCivilizationLayer(layer = 'civilizationActivity') {
 
 function seedCivilization() {
     if (!state.curData) {
-        setCivilizationStatus('Generate a world before seeding civilization.', 'warn');
+        setCivilizationStatus('请先生成世界，再播种文明。', 'warn');
         return;
     }
     refreshEnvironmentInputs(state.curData);
@@ -978,13 +986,13 @@ function seedCivilization() {
     renderCivilizationPanel();
     showCivilizationLayer('populationDensity');
     const point = recordHistoryPoint('civilization-seed');
-    invalidateHistorySummary(`Recorded ${point?.label || 'civilization seed'}. Build summary or timeline when ready.`);
-    setCivilizationStatus(`Seeded ${civ.populationGroups.length} population groups.`, 'ok');
+    invalidateHistorySummary(`已记录 ${point?.label || '文明播种'}。准备好后可生成摘要或时间线。`);
+    setCivilizationStatus(`已播种 ${civ.populationGroups.length} 个族群。`, 'ok');
 }
 
 function stepCivilizationOnce() {
     if (!state.curData) {
-        setCivilizationStatus('Generate a world before stepping civilization.', 'warn');
+        setCivilizationStatus('请先生成世界，再推进文明。', 'warn');
         return;
     }
     refreshEnvironmentInputs(state.curData);
@@ -993,8 +1001,8 @@ function stepCivilizationOnce() {
     renderCivilizationPanel();
     showCivilizationLayer('civilizationActivity');
     const point = recordHistoryPoint('civilization-step');
-    invalidateHistorySummary(`Recorded ${point?.label || 'civilization step'}. Rebuild summary or timeline.`);
-    setCivilizationStatus(`Advanced civilization to Year ${civ.timeYear.toLocaleString()}.`, 'ok');
+    invalidateHistorySummary(`已记录 ${point?.label || '文明步进'}。请重新生成摘要或时间线。`);
+    setCivilizationStatus(`文明已推进至第 ${civ.timeYear.toLocaleString()} 年。`, 'ok');
 }
 
 function initCivilizationPanel() {
@@ -1043,14 +1051,14 @@ function renderHistoryPanel() {
         if (!historyArchive.length) {
             const option = document.createElement('option');
             option.value = '';
-            option.textContent = 'No history points';
+            option.textContent = '暂无历史点';
             historyEls.point.appendChild(option);
             historyEls.point.disabled = true;
         } else {
             for (const entry of historyArchive) {
                 const option = document.createElement('option');
                 option.value = entry.key;
-                option.textContent = `${entry.point.label} · pop ${(entry.point.metrics.population || 0).toLocaleString()}`;
+                option.textContent = `${entry.point.label} · 人口 ${(entry.point.metrics.population || 0).toLocaleString()}`;
                 historyEls.point.appendChild(option);
             }
             historyEls.point.disabled = false;
@@ -1061,7 +1069,7 @@ function renderHistoryPanel() {
     }
 }
 
-function invalidateHistorySummary(message = 'Build a fresh history summary.', { resetArchive = false } = {}) {
+function invalidateHistorySummary(message = '请生成新的历史摘要。', { resetArchive = false } = {}) {
     lastHistoryArtifact = null;
     if (resetArchive) historyArchive = [];
     if (historyEls.preview) historyEls.preview.value = '';
@@ -1077,7 +1085,7 @@ function recordHistoryPoint(source = 'manual') {
         const point = createHistoryPoint(summary, {
             source,
             snapshotId: state.curData.evolutionState?.snapshot?.id || state.evolution.currentId || null,
-            label: `Year ${summary.civilization.year.toLocaleString()}`,
+            label: `第 ${summary.civilization.year.toLocaleString()} 年`,
         });
         const key = `${point.snapshotId || 'runtime'}:${point.year}:${summary.civilization.stepIndex}`;
         const civilizationState = JSON.parse(JSON.stringify(state.curData.civilizationState));
@@ -1089,14 +1097,14 @@ function recordHistoryPoint(source = 'manual') {
         ));
         return point;
     } catch (err) {
-        console.warn('[HistoryExport] record failed:', err);
+        console.warn('[HistoryExport] 记录失败：', err);
         return null;
     }
 }
 
 function buildHistorySummaryForUi() {
     if (!state.curData) {
-        setHistoryStatus('Generate a world before building history summary.', 'warn');
+        setHistoryStatus('请先生成世界，再生成历史摘要。', 'warn');
         return null;
     }
     refreshEnvironmentInputs(state.curData);
@@ -1109,18 +1117,18 @@ function buildHistorySummaryForUi() {
         lastHistoryArtifact = { type: 'summary', data: summary };
         recordHistoryPoint('summary-build');
         if (historyEls.preview) historyEls.preview.value = formatHistorySummaryMarkdown(summary);
-        setHistoryStatus(`Built history summary for Year ${summary.civilization.year.toLocaleString()}.`, 'ok');
+        setHistoryStatus(`已生成第 ${summary.civilization.year.toLocaleString()} 年的历史摘要。`, 'ok');
         renderHistoryPanel();
         return summary;
     } catch (err) {
-        setHistoryStatus(err?.message || 'History summary failed.', 'warn');
+        setHistoryStatus(err?.message || '历史摘要生成失败。', 'warn');
         return null;
     }
 }
 
 function buildHistoryTimelineForUi() {
     if (!state.curData) {
-        setHistoryStatus('Generate a world before building history timeline.', 'warn');
+        setHistoryStatus('请先生成世界，再生成历史时间线。', 'warn');
         return null;
     }
     if (!historyArchive.length && !state.curData.civilizationState) {
@@ -1132,24 +1140,24 @@ function buildHistoryTimelineForUi() {
         const timeline = buildHistoryTimeline(historyArchive.map(entry => entry.point));
         lastHistoryArtifact = { type: 'timeline', data: timeline };
         if (historyEls.preview) historyEls.preview.value = formatHistoryTimelineMarkdown(timeline);
-        setHistoryStatus(`Built ${timeline.world.pointCount}-point history timeline.`, 'ok');
+        setHistoryStatus(`已生成包含 ${timeline.world.pointCount} 个历史点的时间线。`, 'ok');
         renderHistoryPanel();
         return timeline;
     } catch (err) {
-        setHistoryStatus(err?.message || 'History timeline failed.', 'warn');
+        setHistoryStatus(err?.message || '历史时间线生成失败。', 'warn');
         return null;
     }
 }
 
 function viewHistoryPoint() {
     if (!state.curData) {
-        setHistoryStatus('Generate a world before viewing history points.', 'warn');
+        setHistoryStatus('请先生成世界，再查看历史点。', 'warn');
         return;
     }
     const key = historyEls.point?.value;
     const entry = historyArchive.find(item => item.key === key);
     if (!entry) {
-        setHistoryStatus('Select a recorded history point first.', 'warn');
+        setHistoryStatus('请先选择已记录的历史点。', 'warn');
         return;
     }
     state.curData.civilizationState = JSON.parse(JSON.stringify(entry.civilizationState));
@@ -1158,7 +1166,7 @@ function viewHistoryPoint() {
     showCivilizationLayer('civilizationActivity');
     lastHistoryArtifact = { type: 'summary', data: entry.point.summary };
     if (historyEls.preview) historyEls.preview.value = formatHistorySummaryMarkdown(entry.point.summary);
-    setHistoryStatus(`Viewing ${entry.point.label} on civilization layers.`, 'ok');
+    setHistoryStatus(`正在文明图层中查看 ${entry.point.label}。`, 'ok');
     renderHistoryPanel();
 }
 
@@ -1168,7 +1176,7 @@ function exportHistoryArtifact(format) {
     const filename = artifact.type === 'timeline'
         ? downloadHistoryTimeline(artifact.data, format)
         : downloadHistorySummary(artifact.data, format);
-    setHistoryStatus(`Downloaded ${filename}.`, 'ok');
+    setHistoryStatus(`已下载 ${filename}。`, 'ok');
 }
 
 function initHistoryPanel() {
@@ -1183,7 +1191,7 @@ function initHistoryPanel() {
 initHistoryPanel();
 genBtn.addEventListener('generate-done', captureGeneratedSnapshot);
 genBtn.addEventListener('generate-done', () => {
-    // If climate not computed and current view is a climate layer, switch to Terrain
+    // 如果尚未计算气候且当前视图是气候图层，则切回地形。
     if (!state.climateComputed && CLIMATE_LAYERS.has(state.debugLayer)) {
         state.debugLayer = '';
         if (debugLayerEl) debugLayerEl.value = '';
@@ -1206,11 +1214,11 @@ genBtn.addEventListener('generate-done', () => {
     }
 });
 genBtn.addEventListener('generate-done', renderCivilizationPanel);
-genBtn.addEventListener('generate-done', () => invalidateHistorySummary('World generated. Seed or step civilization, then build history summary.', { resetArchive: true }));
+genBtn.addEventListener('generate-done', () => invalidateHistorySummary('世界已生成。请播种或推进文明，再生成历史摘要。', { resetArchive: true }));
 
 document.addEventListener('plates-edited', () => {
     updatePlanetCode(true);
-    // If climate was invalidated and we're viewing a climate layer, switch to Terrain
+    // 如果气候已失效且当前正在查看气候图层，则切回地形。
     if (!state.climateComputed && CLIMATE_LAYERS.has(state.debugLayer)) {
         state.debugLayer = '';
         if (debugLayerEl) debugLayerEl.value = '';
@@ -1346,8 +1354,8 @@ document.getElementById('viewMode').addEventListener('change', (e) => {
         if (state.arrowGroup) state.arrowGroup.visible = false;
         if (!state.mapMesh) {
             showBuildOverlay();
-            onProgress(0, 'Building map mesh\u2026');
-            // Yield to let the overlay paint, then build the mesh
+            onProgress(0, '正在构建地图网格…');
+            // 先让遮罩完成绘制，再构建网格。
             setTimeout(() => {
                 buildMapMesh();
                 if (state.mapMesh) state.mapMesh.visible = true;
@@ -1357,7 +1365,7 @@ document.getElementById('viewMode').addEventListener('change', (e) => {
         if (state.mapMesh) state.mapMesh.visible = true;
         if (state.mapGridMesh) state.mapGridMesh.visible = state.gridEnabled;
         if (state.globeGridMesh) state.globeGridMesh.visible = false;
-        // Toggle wind arrow sub-groups for map mode
+        // 地图模式下切换风场箭头子组。
         if (state.windArrowGroup) {
             state.windArrowGroup.traverse(c => {
                 if (c.name === 'windGlobe') c.visible = false;
@@ -1388,7 +1396,7 @@ document.getElementById('viewMode').addEventListener('change', (e) => {
         if (state.mapMesh) state.mapMesh.visible = false;
         if (state.mapGridMesh) state.mapGridMesh.visible = false;
         if (state.globeGridMesh) state.globeGridMesh.visible = state.gridEnabled;
-        // Toggle wind arrow sub-groups for globe mode
+        // 球体模式下切换风场箭头子组。
         if (state.windArrowGroup) {
             state.windArrowGroup.traverse(c => {
                 if (c.name === 'windGlobe') c.visible = true;
@@ -1410,7 +1418,7 @@ document.getElementById('viewMode').addEventListener('change', (e) => {
     }
 });
 
-// Debug layer dropdown
+// 检查图层下拉框。
 if (debugLayerEl) {
     debugLayerEl.addEventListener('change', (e) => {
         const layer = e.target.value;
@@ -1419,7 +1427,7 @@ if (debugLayerEl) {
     });
 }
 
-// Export modal
+// 导出弹窗。
 (function initExport() {
     const overlay   = document.getElementById('exportOverlay');
     const closeBtn  = document.getElementById('exportClose');
@@ -1438,7 +1446,7 @@ if (debugLayerEl) {
     function openModal() {
         overlay.classList.remove('hidden');
         updateDims();
-        // Disable climate-dependent export types when climate isn't computed
+        // 气候尚未计算时，禁用依赖气候的导出类型。
         for (const opt of typeEl.options) {
             if (opt.value === 'biome' || opt.value === 'koppen') {
                 opt.disabled = !state.climateComputed;
@@ -1462,18 +1470,18 @@ if (debugLayerEl) {
         const w = +widthEl.value;
         closeModal();
         showBuildOverlay();
-        onProgress(0, 'Preparing export...');
+        onProgress(0, '正在准备导出…');
         await exportMap(type, w, onProgress);
         hideBuildOverlay();
     });
 
-    // Export All 鈥?downloads Satellite, Climate, Heightmap, and Land Mask
+    // 全部导出：下载卫星图、气候图、高度图和陆地掩膜。
     const exportAllBtn = document.getElementById('exportAllGo');
     const EXPORT_ALL_TYPES = [
-        { type: 'biome',          label: 'Satellite' },
-        { type: 'koppen',         label: 'Climate' },
-        { type: 'landheightmap',  label: 'Heightmap' },
-        { type: 'landmask',       label: 'Land Mask' },
+        { type: 'biome',          label: '卫星图' },
+        { type: 'koppen',         label: '气候图' },
+        { type: 'landheightmap',  label: '高度图' },
+        { type: 'landmask',       label: '陆地掩膜' },
     ];
 
     exportAllBtn.addEventListener('click', async () => {
@@ -1481,9 +1489,9 @@ if (debugLayerEl) {
         closeModal();
         showBuildOverlay();
 
-        // Compute climate first if needed (Satellite & Climate require it)
+        // 如有需要先计算气候（卫星图和气候图依赖气候数据）。
         if (!state.climateComputed) {
-            onProgress(0, 'Computing climate...');
+            onProgress(0, '正在计算气候…');
             await new Promise(resolve => computeClimateViaWorker(onProgress, resolve));
         }
 
@@ -1492,10 +1500,10 @@ if (debugLayerEl) {
     });
 })();
 
-// Edit mode setup (pointer events, sub-mode buttons)
+// 编辑模式设置（指针事件和子模式按钮）。
 setupEditMode();
 
-// Rebuild FAB 鈥?batch-apply pending plate toggles
+// 重建悬浮按钮：批量应用待处理板块切换。
 (function initRebuildFab() {
     const rebuildBtn = document.getElementById('rebuildFab');
     const rebuildLabel = rebuildBtn.querySelector('span');
@@ -1509,23 +1517,23 @@ setupEditMode();
         updateMapPendingHighlight();
     }
 
-    // Show/hide rebuild button when pending set changes
+    // 待处理集合变化时显示 / 隐藏重建按钮。
     document.addEventListener('pending-edits-changed', () => {
         const count = state.pendingToggles.size;
         if (count > 0) {
-            rebuildLabel.textContent = `Rebuild (${count})`;
+            rebuildLabel.textContent = `重建（${count}）`;
             rebuildBtn.style.display = '';
         } else {
             rebuildBtn.style.display = 'none';
         }
     });
 
-    // Click: apply all pending toggles, then recompute once
+    // 点击后应用所有待处理切换，并只重算一次。
     rebuildBtn.addEventListener('click', () => {
         if (state.pendingToggles.size === 0) return;
         const { plateIsOcean, plateDensity, plateDensityLand, plateDensityOcean } = state.curData;
 
-        // Apply all pending toggles
+        // 应用所有待处理切换。
         for (const pid of state.pendingToggles) {
             if (plateIsOcean.has(pid)) {
                 plateIsOcean.delete(pid);
@@ -1538,38 +1546,38 @@ setupEditMode();
 
         clearPending();
 
-        // Show building state
+        // 显示构建状态。
         const btn = document.getElementById('generate');
         btn.disabled = true;
-        btn.textContent = 'Building\u2026';
+        btn.textContent = '正在构建…';
         btn.classList.add('generating');
 
         const hoverEl = document.getElementById('hoverInfo');
-        hoverEl.innerHTML = '\u23F3 Rebuilding\u2026';
+        hoverEl.innerHTML = '\u23F3 正在重建…';
         hoverEl.style.display = 'block';
 
         const skipClimate = shouldSkipClimate();
         editRecomputeViaWorker(() => {
             btn.disabled = false;
-            btn.textContent = 'Build New World';
+            btn.textContent = '生成新世界';
             btn.classList.remove('generating');
             hoverEl.style.display = 'none';
             document.dispatchEvent(new CustomEvent('plates-edited'));
         }, skipClimate);
     });
 
-    // Escape clears all pending edits
+    // Escape 清除所有待处理编辑。
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && state.pendingToggles.size > 0) {
             clearPending();
         }
     });
 
-    // Clear pending on new generation
+    // 新生成时清除待处理编辑。
     genBtn.addEventListener('generate-done', clearPending);
 })();
 
-// Sidebar toggle (desktop) + bottom sheet (mobile)
+// 侧栏切换（桌面端）+ 底部面板（移动端）。
 const sidebarToggle = document.getElementById('sidebarToggle');
 const uiPanel = document.getElementById('ui');
 const isMobileLayout = () => window.innerWidth <= 768;
@@ -1578,14 +1586,14 @@ if (isMobileLayout()) {
     uiPanel.classList.add('collapsed');
 }
 
-// Desktop sidebar toggle
+// 桌面端侧栏切换。
 sidebarToggle.addEventListener('click', () => {
     const collapsed = uiPanel.classList.toggle('collapsed');
     sidebarToggle.innerHTML = collapsed ? '\u00BB' : '\u00AB';
-    sidebarToggle.title = collapsed ? 'Show panel' : 'Collapse panel';
+    sidebarToggle.title = collapsed ? '显示面板' : '折叠面板';
 });
 
-// Bottom-sheet drag behavior (Pointer Events + setPointerCapture)
+// 底部面板拖动行为（Pointer Events + setPointerCapture）。
 (function initBottomSheet() {
     const handle = document.getElementById('sheetHandle');
     if (!handle) return;
@@ -1646,7 +1654,7 @@ sidebarToggle.addEventListener('click', () => {
         const y = e.clientY;
         const now = performance.now();
         const dt = now - lastTime;
-        if (dt > 0) velocity = (y - lastY) / dt; // px/ms, positive = downward
+        if (dt > 0) velocity = (y - lastY) / dt; // px/ms，正值表示向下。
         lastY = y;
         lastTime = now;
         const dy = y - startY;
@@ -1679,7 +1687,7 @@ sidebarToggle.addEventListener('click', () => {
         uiPanel.style.transform = '';
     });
 
-    // Tap on handle toggles collapsed state (suppressed if a drag just happened)
+    // 点击把手切换折叠状态（刚拖动过则忽略点击）。
     handle.addEventListener('click', () => {
         if (!isMobileLayout()) return;
         if (didDrag) { didDrag = false; return; }
@@ -1687,7 +1695,7 @@ sidebarToggle.addEventListener('click', () => {
     });
 })();
 
-// Edit-mode toggle wiring
+// 编辑模式切换绑定。
 (function initEditToggle() {
     const editBtn = document.getElementById('editToggle');
     if (!editBtn) return;
@@ -1697,7 +1705,7 @@ sidebarToggle.addEventListener('click', () => {
     });
 })();
 
-// Mobile refresh FAB 鈥?two-tap to regenerate (blue 鈫?green 鈫?generate)
+// 移动端刷新悬浮按钮：双击确认后重新生成。
 (function initRefreshFab() {
     const btn = document.getElementById('refreshFab');
     if (!btn) return;
@@ -1717,7 +1725,7 @@ sidebarToggle.addEventListener('click', () => {
             timer = setTimeout(disarm, 3000);
         } else {
             disarm();
-            // Collapse sheet so user sees the planet build
+            // 折叠面板，让用户看到行星构建过程。
             if (isMobileLayout()) uiPanel.classList.add('collapsed');
             clearReapplyPending();
             showBuildOverlay();
@@ -1726,26 +1734,26 @@ sidebarToggle.addEventListener('click', () => {
     });
 })();
 
-// Mobile info text
+// 移动端提示文案。
 if (state.isTouchDevice) {
     const infoEl = document.getElementById('info');
-    if (infoEl) infoEl.textContent = 'Drag to rotate \u00b7 Pinch to zoom \u00b7 Use edit button to reshape';
+    if (infoEl) infoEl.textContent = '拖拽旋转 · 双指缩放 · 使用编辑按钮重塑';
 }
 
-// Disable export widths > 8192 on touch devices
+// 触控设备禁用大于 8192 的导出宽度。
 if (state.isTouchDevice) {
     const exportWidth = document.getElementById('exportWidth');
     if (exportWidth) {
         for (const opt of exportWidth.options) {
             if (+opt.value > 8192) {
                 opt.disabled = true;
-                opt.textContent = opt.value + ' (too large for mobile)';
+                opt.textContent = opt.value + '（移动端过大）';
             }
         }
     }
 }
 
-// Orientation change handler
+// 方向变化处理。
 window.addEventListener('orientationchange', () => {
     setTimeout(() => {
         camera.aspect = innerWidth / innerHeight;
@@ -1755,7 +1763,7 @@ window.addEventListener('orientationchange', () => {
     }, 100);
 });
 
-// Animation loop
+// 动画循环。
 function animate() {
     requestAnimationFrame(animate);
     if (state.mapMode) { tickMapZoom(); mapCtrl.update(); } else { tickZoom(); ctrl.update(); }
@@ -1771,7 +1779,7 @@ function animate() {
     renderer.render(scene, state.mapMode ? mapCamera : camera);
 }
 
-// Resize handler
+// 尺寸变化处理。
 window.addEventListener('resize', () => {
     camera.aspect = innerWidth/innerHeight;
     camera.updateProjectionMatrix();
@@ -1779,7 +1787,7 @@ window.addEventListener('resize', () => {
     renderer.setSize(innerWidth, innerHeight);
 });
 
-// Tutorial modal
+// 教程弹窗。
 (function initTutorial() {
     const overlay  = document.getElementById('tutorialOverlay');
     const card     = document.getElementById('tutorialCard');
@@ -1798,7 +1806,7 @@ window.addEventListener('resize', () => {
         steps.forEach((s, idx) => s.classList.toggle('active', idx === i));
         dots.forEach((d, idx) => d.classList.toggle('active', idx === i));
         backBtn.disabled = i === 0;
-        nextBtn.textContent = i === TOTAL - 1 ? 'Get Started' : 'Next';
+        nextBtn.textContent = i === TOTAL - 1 ? '开始使用' : '下一步';
     }
 
     function openModal() {
@@ -1833,16 +1841,16 @@ window.addEventListener('resize', () => {
 
     helpBtn.addEventListener('click', openModal);
 
-    // Update tutorial step 2 for touch devices
+    // 为触控设备更新教程第 2 步。
     if (state.isTouchDevice) {
         const step2 = card.querySelector('.tutorial-step[data-step="2"]');
         if (step2) {
             const p = step2.querySelector('p');
-            if (p) p.innerHTML = '<strong>Drag</strong> to rotate the globe. <strong>Pinch</strong> to zoom in and out. Tap the <strong>edit button</strong> (pencil icon) then <strong>tap</strong> plates to mark them for reshaping &mdash; select multiple, then hit <strong>Rebuild</strong> to apply all at once. Tap again to undo a pending selection.';
+            if (p) p.innerHTML = '<strong>拖拽</strong> 可旋转球体。<strong>双指</strong> 可缩放。点击<strong>编辑按钮</strong>（铅笔图标）后，再<strong>点按</strong>板块即可标记为待重塑；可选择多个板块，再点击<strong>重建</strong>一次性应用。再次点按可撤销待处理选择。';
         }
     }
 
-    // Auto-show on first visit 鈥?wait until the build overlay has faded out
+    // 首次访问自动显示：等待构建遮罩淡出。
     overlay.classList.add('hidden');
     if (!localStorage.getItem(LS_KEY)) {
         genBtn.addEventListener('generate-done', () => {
@@ -1855,7 +1863,7 @@ window.addEventListener('resize', () => {
     }
 })();
 
-// What's New modal 鈥?shown once per version for returning users
+// 更新内容弹窗：每个版本对回访用户显示一次。
 (function initWhatsNew() {
     const VERSION    = '2';
     const LS_KEY     = 'wo-whatsnew-seen';
@@ -1877,7 +1885,7 @@ window.addEventListener('resize', () => {
         steps.forEach((s, idx) => s.classList.toggle('active', idx === i));
         dots.forEach((d, idx) => d.classList.toggle('active', idx === i));
         backBtn.disabled = i === 0;
-        nextBtn.textContent = i === TOTAL - 1 ? 'Got It' : 'Next';
+        nextBtn.textContent = i === TOTAL - 1 ? '知道了' : '下一步';
     }
 
     function closeModal() {
@@ -1898,7 +1906,7 @@ window.addEventListener('resize', () => {
         if (e.key === 'Escape' && !overlay.classList.contains('hidden')) closeModal();
     });
 
-    // Only show for returning users (tutorial already seen) who haven't seen this version
+    // 仅对已看过教程但尚未看过本版本更新的回访用户显示。
     overlay.classList.add('hidden');
     const seenVersion = localStorage.getItem(LS_KEY);
     const isReturningUser = localStorage.getItem(LS_TUTORIAL);
@@ -1910,14 +1918,14 @@ window.addEventListener('resize', () => {
     }
 })();
 
-// Power-user survey 鈥?triggers after 3+ distinct hours across 2+ distinct days
+// 深度用户问卷：跨 2 天且累计 3 个不同时段后触发。
 (function initSurveyTracker() {
     const LS = 'wo-usage';
     const LS_DISMISSED = 'wo-survey-dismissed';
 
     if (localStorage.getItem(LS_DISMISSED)) return;
 
-    // Simple hash so we don't store raw timestamps
+    // 简单哈希，避免存储原始时间戳。
     function hash(str) {
         let h = 5381;
         for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
@@ -1952,7 +1960,7 @@ window.addEventListener('resize', () => {
             localStorage.setItem(LS_DISMISSED, '1');
         }
 
-        // Show after the first generation completes
+        // 首次生成完成后显示。
         genBtn.addEventListener('generate-done', () => {
             setTimeout(() => overlay.classList.remove('hidden'), 1000);
         }, { once: true });
@@ -1967,8 +1975,8 @@ window.addEventListener('resize', () => {
     }
 })();
 
-// Screenshot helper 鈥?call window.takePreview() from the browser console
-// Hides UI, renders at 1200脳630 from the current camera angle, downloads preview.png
+// 截图辅助：可在浏览器控制台调用 window.takePreview()。
+// 隐藏 UI，以当前相机角度渲染 1200×630，并下载 preview.png。
 window.takePreview = function(width = 1200, height = 630) {
     // Save current state
     const savedW = renderer.domElement.width;
@@ -1988,11 +1996,11 @@ window.takePreview = function(width = 1200, height = 630) {
         }
     }
 
-    // Keep the current camera angle, just adjust aspect ratio for the output size
+    // 保持当前相机角度，只为输出尺寸调整宽高比。
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
 
-    // Render at exact target size
+    // 按目标尺寸精确渲染。
     renderer.setPixelRatio(1);
     renderer.setSize(width, height);
     renderer.render(scene, camera);
@@ -2010,10 +2018,10 @@ window.takePreview = function(width = 1200, height = 630) {
     camera.updateProjectionMatrix();
     for (const { el, prev } of hiddenEls) el.style.display = prev;
     renderer.render(scene, state.mapMode ? mapCamera : camera);
-    console.log('preview.png downloaded!');
+    console.log('preview.png 已下载！');
 };
 
-// Go! Check URL hash for a planet code, otherwise random generation.
+// 启动：先检查 URL hash 中的行星码，否则随机生成。
 const hashCode = location.hash.replace(/^#/, '').trim();
 const hashParams = hashCode ? decodePlanetCode(hashCode) : null;
 if (hashParams) {

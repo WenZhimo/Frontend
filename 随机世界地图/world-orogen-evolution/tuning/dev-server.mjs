@@ -1,8 +1,8 @@
 /**
- * Minimal static dev server that mimics the production host's clean URLs
- * (so `/import` resolves to `import.html`, matching orogen.studio).
+ * 最小静态开发服务器，模拟生产主机的简洁 URL
+ * （因此 `/import` 会解析到 `import.html`，与 orogen.studio 一致）。
  *
- * Usage:  node tuning/dev-server.mjs [port]
+ * 用法：node tuning/dev-server.mjs [端口]
  */
 import http from 'node:http';
 import fs from 'node:fs';
@@ -38,4 +38,4 @@ http.createServer((req, res) => {
     if (!fp) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('404 Not Found'); return; }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(fp).toLowerCase()] || 'application/octet-stream' });
     fs.createReadStream(fp).pipe(res);
-}).listen(PORT, () => console.log(`World Orogen dev server → http://localhost:${PORT}  (clean URLs, /import works)`));
+}).listen(PORT, () => console.log(`World Orogen 开发服务器 → http://localhost:${PORT}  （简洁 URL 可用，/import 可访问）`));

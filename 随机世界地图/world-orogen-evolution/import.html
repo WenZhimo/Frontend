@@ -1,29 +1,29 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>World Orogen — Import Heightmap</title>
-    <meta name="description" content="Import your own equirectangular heightmap onto a 3D globe with automatic climate simulation — wind, precipitation, temperature, and K&ouml;ppen classification. Free, in your browser.">
-    <meta name="keywords" content="heightmap import, equirectangular projection, climate simulation, world generator, terrain viewer, planet builder, Three.js, worldbuilding tool">
+    <title>世界造山（World Orogen）——导入高度图</title>
+    <meta name="description" content="把自己的等距圆柱高度图导入 3D 球体，并在浏览器中自动计算风、降水、温度和柯本气候。">
+    <meta name="keywords" content="高度图导入, 等距圆柱投影, 气候模拟, 世界生成器, 地形查看器, 行星构建器, Three.js, 世界构建工具">
     <meta name="author" content="World Orogen">
     <meta name="theme-color" content="#0a0e17">
     <link rel="canonical" href="https://orogen.studio/import">
 
-    <!-- Open Graph -->
+    <!-- 开放图谱 -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://orogen.studio/import">
-    <meta property="og:title" content="World Orogen — Import Heightmap">
-    <meta property="og:description" content="Import your own equirectangular heightmap onto a 3D globe with automatic climate simulation. Free, in your browser.">
+    <meta property="og:title" content="世界造山（World Orogen）——导入高度图">
+    <meta property="og:description" content="把自己的等距圆柱高度图导入 3D 球体，并在浏览器中自动运行气候模拟。免费、本地运行。">
     <meta property="og:image" content="https://orogen.studio/preview.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:site_name" content="World Orogen">
 
-    <!-- Twitter Card -->
+    <!-- Twitter 卡片 -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="World Orogen — Import Heightmap">
-    <meta name="twitter:description" content="Import your own equirectangular heightmap onto a 3D globe with automatic climate simulation. Free, in your browser.">
+    <meta name="twitter:title" content="世界造山（World Orogen）——导入高度图">
+    <meta name="twitter:description" content="把自己的等距圆柱高度图导入 3D 球体，并在浏览器中自动运行气候模拟。免费、本地运行。">
     <meta name="twitter:image" content="https://orogen.studio/preview.png">
 
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -34,13 +34,13 @@
 </head>
 <body>
     <nav id="topNav">
-        <a href="/" class="nav-tab">Generate</a>
-        <a href="/import" class="nav-tab active">Import Heightmap</a>
+        <a href="/" class="nav-tab">生成</a>
+        <a href="/import" class="nav-tab active">导入高度图</a>
     </nav>
     <div id="buildOverlay" class="build-overlay hidden">
         <div class="build-overlay-inner">
             <div class="build-overlay-spinner"></div>
-            <div class="build-overlay-title">Importing heightmap</div>
+            <div class="build-overlay-title">正在导入高度图</div>
             <div class="progress-bar-container">
                 <div class="progress-bar-fill" id="buildBarFill"></div>
             </div>
@@ -53,148 +53,148 @@
         <div id="sidebarHeader">
             <div>
                 <h2>World Orogen</h2>
-                <div class="sub">Import your own heightmap</div>
+                <div class="sub">导入你自己的高度图</div>
             </div>
-            <button id="sidebarToggle" title="Collapse panel">&#x00AB;</button>
+            <button id="sidebarToggle" title="折叠面板">&#x00AB;</button>
         </div>
         <div id="sidebarContent">
         <details class="section" open>
-            <summary>Import Your Heightmap</summary>
+            <summary>导入你的高度图</summary>
             <div class="section-body">
                 <div class="import-upload-area">
                     <label class="import-file-label" for="heightmapFile">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        Choose Image
+                        选择图片
                     </label>
                     <input type="file" id="heightmapFile" accept="image/png,image/jpeg,image/webp" style="display:none">
                     <div id="importFileName" class="import-file-name"></div>
                 </div>
                 <canvas id="importPreview" class="import-preview" style="display:none"></canvas>
                 <div id="importDims" class="import-dims" style="display:none"></div>
-                <div class="import-hint">Black (0) = ocean. Brighter = higher elevation. Use a 2:1 equirectangular image.</div>
-                <div id="importExpect" class="import-expect" style="display:none">Your heightmap will be projected onto a 3D sphere with full climate simulation — wind patterns, precipitation, temperature, and biome classification — computed automatically.</div>
+                <div class="import-hint">黑色（0）代表海洋，越亮代表高程越高。请使用 2:1 等距圆柱图片。</div>
+                <div id="importExpect" class="import-expect" style="display:none">高度图会投影到 3D 球体，并自动计算风场、降水、温度和生物群系分类。</div>
                 <div class="cg">
-                    <label>Detail <span class="tip" data-tip="Resolution of the sphere mesh — more detail means finer coastlines but takes longer to process">?</span> <span class="v" id="vN">204,000</span></label>
+                    <label>细节 <span class="tip" data-tip="球面网格分辨率；细节越高，海岸线越精细，但处理时间越长">?</span> <span class="v" id="vN">204,000</span></label>
                     <input type="range" id="sN" min="0" max="1000" step="1" value="600">
-                    <div class="slider-hint"><span>Coarse</span><span>Fine</span></div>
+                    <div class="slider-hint"><span>粗略</span><span>精细</span></div>
                     <div class="detail-warn" id="detailWarn"></div>
                 </div>
-                <button id="importBtn" class="import-btn" disabled>Import</button>
-                <div class="import-hint" style="margin-top:8px">Your image stays on your device — nothing is uploaded. Imported worlds can't be shared via planet codes.</div>
+                <button id="importBtn" class="import-btn" disabled>导入</button>
+                <div class="import-hint" style="margin-top:8px">图片只保留在你的设备上，不会上传。导入的世界不能通过行星码分享。</div>
             </div>
         </details>
         <details class="section">
-            <summary>Terrain Sculpting <span class="tip" data-tip="Post-processing passes to refine the imported terrain. All default to 0 (no effect). Adjust sliders and click Reapply.">?</span></summary>
+            <summary>地形雕刻 <span class="tip" data-tip="用于细化导入地形的后处理步骤；默认均为 0（无效果）。调整滑块后点击重新应用。">?</span></summary>
             <div class="section-body">
                 <div class="cg">
-                    <label>Terrain Warp <span class="tip" data-tip="Deforms the elevation field using noise for more organic coastlines and mountain ridges">?</span> <span class="v" id="vTw">0.00</span></label>
+                    <label>地形扭曲 <span class="tip" data-tip="用噪声形变高程场，让海岸线和山脊更自然">?</span> <span class="v" id="vTw">0.00</span></label>
                     <input type="range" id="sTw" min="0" max="1" value="0" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Heavy</span></div>
+                    <div class="slider-hint"><span>无</span><span>强</span></div>
                 </div>
                 <div class="cg">
-                    <label>Smoothing <span class="tip" data-tip="Blends harsh terrain edges and pixelation from the source image">?</span> <span class="v" id="vS">0.00</span></label>
+                    <label>平滑 <span class="tip" data-tip="柔化源图带来的生硬地形边缘和像素化痕迹">?</span> <span class="v" id="vS">0.00</span></label>
                     <input type="range" id="sS" min="0" max="1" value="0" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Heavy</span></div>
+                    <div class="slider-hint"><span>无</span><span>强</span></div>
                 </div>
                 <div class="cg">
-                    <label>Glacial Erosion <span class="tip" data-tip="Ice-age sculpting — carves fjords, U-shaped valleys, and lake basins at high latitudes and altitudes">?</span> <span class="v" id="vGl">0.00</span></label>
+                    <label>冰川侵蚀 <span class="tip" data-tip="冰期雕刻效果；在高纬和高海拔区域刻蚀峡湾、U 形谷与湖盆">?</span> <span class="v" id="vGl">0.00</span></label>
                     <input type="range" id="sGl" min="0" max="1" value="0" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Ice Age</span></div>
+                    <div class="slider-hint"><span>无</span><span>冰期</span></div>
                 </div>
                 <div class="cg">
-                    <label>Hydraulic Erosion <span class="tip" data-tip="Iterative stream-power erosion — carves river valleys and dendritic drainage networks">?</span> <span class="v" id="vHEr">0.00</span></label>
+                    <label>水力侵蚀 <span class="tip" data-tip="迭代式水流侵蚀；刻蚀河谷和树枝状排水网络">?</span> <span class="v" id="vHEr">0.00</span></label>
                     <input type="range" id="sHEr" min="0" max="1" value="0" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Deep</span></div>
+                    <div class="slider-hint"><span>无</span><span>深</span></div>
                 </div>
                 <div class="cg">
-                    <label>Thermal Erosion <span class="tip" data-tip="Slope-driven material transport — softens ridges and creates natural talus slopes">?</span> <span class="v" id="vTEr">0.00</span></label>
+                    <label>热侵蚀 <span class="tip" data-tip="由坡度驱动的物质搬运；柔化山脊并形成自然崖锥坡">?</span> <span class="v" id="vTEr">0.00</span></label>
                     <input type="range" id="sTEr" min="0" max="1" value="0" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Heavy</span></div>
+                    <div class="slider-hint"><span>无</span><span>强</span></div>
                 </div>
                 <div class="cg">
-                    <label>Ridge Sharpening <span class="tip" data-tip="Accentuates mountain ridgelines — pushes peaks further above their surroundings">?</span> <span class="v" id="vRs">0.00</span></label>
+                    <label>山脊锐化 <span class="tip" data-tip="强化山脊线；让山峰相对周边地形更加突出">?</span> <span class="v" id="vRs">0.00</span></label>
                     <input type="range" id="sRs" min="0" max="1" value="0" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Jagged</span></div>
+                    <div class="slider-hint"><span>无</span><span>嶙峋</span></div>
                 </div>
-                <button id="reapplyBtn" title="Reapply terrain sculpting" disabled><span class="reapply-icon">&#x21bb;</span> Reapply</button>
+                <button id="reapplyBtn" title="重新应用地形雕刻" disabled><span class="reapply-icon">&#x21bb;</span> 重新应用</button>
             </div>
         </details>
         <details class="section">
-            <summary>Climate <span class="tip" data-tip="Global temperature and precipitation offsets — changes apply on slider release, recomputing only precipitation, temperature, and climate zones">?</span></summary>
+            <summary>气候 <span class="tip" data-tip="全局温度和降水偏移；松开滑块后应用，只重算降水、温度和气候区">?</span></summary>
             <div class="section-body">
-                <div class="climate-hint">Changes apply on release — only climate zones are recomputed.</div>
+                <div class="climate-hint">松开滑块后应用更改，只重算气候区。</div>
                 <div class="cg">
-                    <label>Temperature <span class="tip" data-tip="Shift global temperature — positive makes the planet warmer, negative makes it colder. Climate zones shift accordingly.">?</span> <span class="v" id="vTmp">&plusmn;0&deg;C</span></label>
+                    <label>温度 <span class="tip" data-tip="移动全局温度；正值让行星更暖，负值让行星更冷，气候区会随之移动">?</span> <span class="v" id="vTmp">&plusmn;0&deg;C</span></label>
                     <input type="range" id="sTmp" min="-15" max="15" value="0" step="1">
-                    <div class="slider-hint"><span>Colder</span><span>Warmer</span></div>
+                    <div class="slider-hint"><span>更冷</span><span>更暖</span></div>
                 </div>
                 <div class="cg">
-                    <label>Precipitation <span class="tip" data-tip="Scale global precipitation — positive makes the planet wetter, negative drier. Affects desert and rainforest distribution.">?</span> <span class="v" id="vPrc">&plusmn;0%</span></label>
+                    <label>降水 <span class="tip" data-tip="缩放全局降水；正值更湿，负值更干，会影响沙漠和雨林分布">?</span> <span class="v" id="vPrc">&plusmn;0%</span></label>
                     <input type="range" id="sPrc" min="-1" max="1" value="0" step="0.1">
-                    <div class="slider-hint"><span>Drier</span><span>Wetter</span></div>
+                    <div class="slider-hint"><span>更干</span><span>更湿</span></div>
                 </div>
             </div>
         </details>
         <details class="section" open>
-            <summary>Visual Options</summary>
+            <summary>可视化选项</summary>
             <div class="section-body">
                 <div class="cg">
-                    <label>View</label>
+                    <label>查看</label>
                     <select id="viewMode">
-                        <option value="globe">Globe</option>
-                        <option value="map">Map</option>
+                        <option value="globe">球体</option>
+                        <option value="map">地图</option>
                     </select>
                 </div>
                 <div class="cg" id="mapCenterLonGroup" style="display:none">
-                    <label>Center Longitude <span class="v" id="vMapCenterLon">0&deg;</span></label>
+                    <label>中心经度 <span class="v" id="vMapCenterLon">0&deg;</span></label>
                     <input type="range" id="sMapCenterLon" min="-180" max="180" value="0" step="5">
                 </div>
                 <div class="map-tabs" id="mapTabs">
-                    <button class="map-tab active" data-layer="">Terrain</button>
-                    <button class="map-tab" data-layer="biome">Satellite</button>
-                    <button class="map-tab" data-layer="koppen">Climate</button>
-                    <button class="map-tab" data-layer="landheightmap">Heightmap</button>
+                    <button class="map-tab active" data-layer="">地形</button>
+                    <button class="map-tab" data-layer="biome">卫星图</button>
+                    <button class="map-tab" data-layer="koppen">气候</button>
+                    <button class="map-tab" data-layer="landheightmap">高度图</button>
                 </div>
                 <div class="cg">
-                    <label>Inspect</label>
+                    <label>检查图层</label>
                     <select id="debugLayer">
-                        <option value="">Terrain</option>
-                        <option value="biome">Satellite</option>
-                        <option value="koppen">K&ouml;ppen Climate</option>
-                        <option value="landheightmap">Land Heightmap</option>
-                        <optgroup label="Atmosphere">
-                            <option value="pressureSummer">Pressure (Summer)</option>
-                            <option value="pressureWinter">Pressure (Winter)</option>
-                            <option value="windSpeedSummer">Wind Speed (Summer)</option>
-                            <option value="windSpeedWinter">Wind Speed (Winter)</option>
+                        <option value="">地形</option>
+                        <option value="biome">卫星图</option>
+                        <option value="koppen">K&ouml;ppen 气候</option>
+                        <option value="landheightmap">陆地高度图</option>
+                        <optgroup label="大气">
+                            <option value="pressureSummer">气压（夏季）</option>
+                            <option value="pressureWinter">气压（冬季）</option>
+                            <option value="windSpeedSummer">风速（夏季）</option>
+                            <option value="windSpeedWinter">风速（冬季）</option>
                         </optgroup>
-                        <optgroup label="Ocean">
-                            <option value="oceanCurrentSummer">Currents (Summer)</option>
-                            <option value="oceanCurrentWinter">Currents (Winter)</option>
+                        <optgroup label="海洋">
+                            <option value="oceanCurrentSummer">洋流（夏季）</option>
+                            <option value="oceanCurrentWinter">洋流（冬季）</option>
                         </optgroup>
-                        <optgroup label="Climate">
-                            <option value="precipSummer">Precipitation (Summer)</option>
-                            <option value="precipWinter">Precipitation (Winter)</option>
-                            <option value="rainShadowSummer">Rain Shadow (Summer)</option>
-                            <option value="rainShadowWinter">Rain Shadow (Winter)</option>
-                            <option value="tempSummer">Temperature (Summer)</option>
-                            <option value="tempWinter">Temperature (Winter)</option>
-                            <option value="continentality">Continentality</option>
+                        <optgroup label="气候">
+                            <option value="precipSummer">降水（夏季）</option>
+                            <option value="precipWinter">降水（冬季）</option>
+                            <option value="rainShadowSummer">雨影（夏季）</option>
+                            <option value="rainShadowWinter">雨影（冬季）</option>
+                            <option value="tempSummer">温度（夏季）</option>
+                            <option value="tempWinter">温度（冬季）</option>
+                            <option value="continentality">大陆性</option>
                         </optgroup>
-                        <optgroup label="Elevation">
-                            <option value="heightmap">Full Heightmap</option>
-                            <option value="erosionDelta">Erosion Delta</option>
+                        <optgroup label="高程">
+                            <option value="heightmap">完整高度图</option>
+                            <option value="erosionDelta">侵蚀增量</option>
                         </optgroup>
                     </select>
                 </div>
                 <div id="vizLegend" class="viz-legend"></div>
                 <div class="tg">
-                    <label class="toggle-label"><input type="checkbox" id="chkWire"><span class="toggle-track"><span class="toggle-thumb"></span></span>Wireframe</label>
-                    <label class="toggle-label"><input type="checkbox" id="chkRotate"><span class="toggle-track"><span class="toggle-thumb"></span></span>Auto-Rotate</label>
-                    <label class="toggle-label"><input type="checkbox" id="chkGrid" checked><span class="toggle-track"><span class="toggle-thumb"></span></span>Grid Lines</label>
+                    <label class="toggle-label"><input type="checkbox" id="chkWire"><span class="toggle-track"><span class="toggle-thumb"></span></span>线框</label>
+                    <label class="toggle-label"><input type="checkbox" id="chkRotate"><span class="toggle-track"><span class="toggle-thumb"></span></span>自动旋转</label>
+                    <label class="toggle-label"><input type="checkbox" id="chkGrid" checked><span class="toggle-track"><span class="toggle-thumb"></span></span>经纬网</label>
                 </div>
                 <div class="cg" id="gridSpacingGroup">
-                    <label>Grid Spacing</label>
+                    <label>经纬网间距</label>
                     <select id="gridSpacing">
                         <option value="30">30&deg;</option>
                         <option value="15" selected>15&deg;</option>
@@ -204,12 +204,12 @@
                     </select>
                 </div>
                 <details id="statsDetails" class="stats-toggle">
-                    <summary>Stats</summary>
+                    <summary>统计</summary>
                     <div id="stats"></div>
                 </details>
             </div>
         </details>
-        <button id="exportBtn" class="export-btn">Export Map</button>
+        <button id="exportBtn" class="export-btn">导出地图</button>
         <a id="repoLink" href="https://github.com/raguilar011095/planet_heightmap_generation" target="_blank" rel="noopener">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.64 7.64 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
             GitHub
@@ -217,29 +217,29 @@
         </div>
     </div>
     <select id="mobileViewSwitch" class="mobile-view-switch">
-        <option value="">Terrain</option>
-        <option value="biome">Satellite</option>
-        <option value="koppen">Climate</option>
-        <option value="landheightmap">Heightmap</option>
+        <option value="">地形</option>
+        <option value="biome">卫星图</option>
+        <option value="koppen">气候</option>
+        <option value="landheightmap">高度图</option>
     </select>
 
     <div id="exportOverlay" class="hidden">
         <div id="exportCard">
             <button id="exportClose">&times;</button>
-            <h3>Export Map</h3>
+            <h3>导出地图</h3>
             <div class="cg">
-                <label>Type</label>
+                <label>类型</label>
                 <select id="exportType">
-                    <option value="color">Color Map</option>
-                    <option value="biome">Satellite</option>
-                    <option value="koppen">Climate (K&ouml;ppen)</option>
-                    <option value="heightmap">Heightmap (B&amp;W)</option>
-                    <option value="landheightmap">Land Heightmap (B&amp;W)</option>
-                    <option value="landmask">Land Mask (B&amp;W)</option>
+                    <option value="color">彩色地图</option>
+                    <option value="biome">卫星图</option>
+                    <option value="koppen">气候 (K&ouml;ppen)</option>
+                    <option value="heightmap">高度图（黑白）</option>
+                    <option value="landheightmap">陆地高度图（黑白）</option>
+                    <option value="landmask">陆地掩膜（黑白）</option>
                 </select>
             </div>
             <div class="cg">
-                <label>Width <span class="v" id="exportDims">4096 &times; 2048</span></label>
+                <label>宽度 <span class="v" id="exportDims">4096 &times; 2048</span></label>
                 <select id="exportWidth">
                     <option value="1024">1024</option>
                     <option value="2048">2048</option>
@@ -251,19 +251,19 @@
                 </select>
             </div>
             <div class="export-actions">
-                <button id="exportCancel" class="btn-ghost">Cancel</button>
-                <button id="exportGo" class="btn-primary">Export</button>
-                <button id="exportAllGo" class="btn-primary">Export All</button>
+                <button id="exportCancel" class="btn-ghost">取消</button>
+                <button id="exportGo" class="btn-primary">导出</button>
+                <button id="exportAllGo" class="btn-primary">全部导出</button>
             </div>
         </div>
     </div>
 
-    <!-- Hidden elements for generate.js compatibility (reads these by ID) -->
+    <!-- generate.js 兼容用隐藏元素（按 ID 读取） -->
     <input type="checkbox" id="chkPlates" style="display:none">
     <input type="hidden" id="sLc" value="0.3">
-    <div id="topInfo">Import an equirectangular heightmap to visualize it on a globe</div>
+    <div id="topInfo">导入等距圆柱高度图，在球体上查看</div>
     <div id="hoverInfo"></div>
-    <div id="info">Import an equirectangular B&amp;W heightmap to get started</div>
+    <div id="info">导入一张等距圆柱黑白高度图开始</div>
 
     <script type="importmap">
     {

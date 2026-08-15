@@ -1,57 +1,57 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>World Orogen — Procedural Planet Generator</title>
-    <meta name="description" content="Generate realistic procedural planets with tectonic plates, erosion, climate simulation, and volcanic islands — free, in your browser. Export heightmaps for worldbuilding, games, and tabletop RPGs.">
-    <meta name="keywords" content="procedural planet generator, world generator, heightmap generator, tectonic simulation, worldbuilding tool, fantasy map maker, terrain generator, planet builder, procedural generation, Three.js, tabletop RPG map, D&D world map, game dev heightmap">
+    <title>世界造山（World Orogen）——程序化行星生成器</title>
+    <meta name="description" content="在浏览器中免费生成由构造板块、侵蚀、气候和火山岛塑造的可信程序化行星，并为世界构建、游戏和桌游导出高度图。">
+    <meta name="keywords" content="程序化行星生成器, 世界生成器, 高度图生成器, 构造模拟, 世界构建工具, 奇幻地图, 地形生成器, 行星构建器, 程序化生成, Three.js, 桌游地图, D&D 世界地图, 游戏开发高度图">
     <meta name="author" content="World Orogen">
     <meta name="theme-color" content="#0a0e17">
     <link rel="canonical" href="https://orogen.studio/">
 
-    <!-- Open Graph -->
+    <!-- 开放图谱 -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://orogen.studio/">
-    <meta property="og:title" content="World Orogen — Procedural Planet Generator">
-    <meta property="og:description" content="Generate realistic procedural planets with tectonic plates, erosion, climate simulation, and volcanic islands — free, in your browser. Export heightmaps for worldbuilding, games, and tabletop RPGs.">
+    <meta property="og:title" content="世界造山（World Orogen）——程序化行星生成器">
+    <meta property="og:description" content="在浏览器中免费生成由构造板块、侵蚀、气候和火山岛塑造的可信程序化行星，并为世界构建、游戏和桌游导出高度图。">
     <meta property="og:image" content="https://orogen.studio/preview.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:site_name" content="World Orogen">
 
-    <!-- Twitter Card -->
+    <!-- Twitter 卡片 -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="World Orogen — Procedural Planet Generator">
-    <meta name="twitter:description" content="Generate realistic procedural planets with tectonic plates, erosion, climate simulation, and volcanic islands — free, in your browser.">
+    <meta name="twitter:title" content="世界造山（World Orogen）——程序化行星生成器">
+    <meta name="twitter:description" content="在浏览器中免费生成由构造板块、侵蚀、气候模拟和火山岛塑造的可信程序化行星。">
     <meta name="twitter:image" content="https://orogen.studio/preview.png">
 
-    <!-- Structured Data -->
+    <!-- 结构化数据 -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "WebApplication",
         "name": "World Orogen",
         "url": "https://orogen.studio/",
-        "description": "A browser-based procedural planet generator that creates realistic terrestrial planets with tectonic plate simulation, erosion, climate modeling, and interactive editing. Export heightmaps, satellite views, and climate maps for worldbuilding, game development, and tabletop RPGs.",
+        "description": "浏览器端程序化行星生成器，可创建包含构造板块模拟、侵蚀、气候建模和交互编辑的可信类地行星，并为世界构建、游戏开发和桌游导出高度图、卫星图与气候图。",
         "applicationCategory": "DesignApplication",
-        "operatingSystem": "Any (browser-based)",
-        "browserRequirements": "Requires a modern browser with WebGL support",
+        "operatingSystem": "任意（浏览器端）",
+        "browserRequirements": "需要支持 WebGL 的现代浏览器",
         "offers": {
             "@type": "Offer",
             "price": "0",
             "priceCurrency": "USD"
         },
         "featureList": [
-            "Tectonic plate simulation with collision detection",
-            "Glacial, hydraulic, and thermal erosion",
-            "Climate simulation with wind, precipitation, and ocean currents",
-            "Hotspot volcanism with island chains",
-            "Interactive plate editing",
-            "Equirectangular heightmap import with automatic climate simulation",
-            "Equirectangular map export up to 65536px",
-            "Multiple visualization modes (terrain, satellite, climate, heightmap)",
-            "Shareable planet codes"
+            "带碰撞检测的构造板块模拟",
+            "冰川、水力和热侵蚀",
+            "包含风场、降水和洋流的气候模拟",
+            "形成岛链的热点火山作用",
+            "交互式板块编辑",
+            "支持等距圆柱高度图导入并自动运行气候模拟",
+            "最高 65536px 宽的等距圆柱地图导出",
+            "多种可视化模式：地形、卫星图、气候、高度图",
+            "可分享的行星码"
         ],
         "screenshot": "https://orogen.studio/preview.png",
         "softwareVersion": "1.0",
@@ -62,7 +62,7 @@
     }
     </script>
 
-    <!-- FAQ Structured Data -->
+    <!-- FAQ 结构化数据 -->
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
@@ -70,34 +70,34 @@
         "mainEntity": [
             {
                 "@type": "Question",
-                "name": "What is World Orogen?",
+                "name": "什么是世界造山（World Orogen）？",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "World Orogen is a free, browser-based procedural planet generator. It creates realistic terrestrial planets with tectonic plate simulation, multiple erosion types, climate modeling, and volcanic features. No download or account required — it runs entirely in your browser."
+                    "text": "世界造山（World Orogen）是免费的浏览器端程序化行星生成器。它可以创建包含构造板块模拟、多类型侵蚀、气候建模和火山特征的可信类地行星。无需下载或账号，完全在浏览器中运行。"
                 }
             },
             {
                 "@type": "Question",
-                "name": "Can I use the exported maps in my own projects?",
+                "name": "我可以在自己的项目中使用导出的地图吗？",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Yes. World Orogen exports high-resolution equirectangular maps (up to 65,536px wide) in multiple formats: color terrain, satellite biome, Köppen climate, heightmap, and land mask. These can be used in game engines like Unity or Unreal, tabletop RPG campaigns, worldbuilding projects, or any creative work."
+                    "text": "可以。世界造山可导出多种格式的高分辨率等距圆柱地图（最高 65,536px 宽）：彩色地形、卫星生物群系、柯本气候、高度图和陆地掩膜。这些素材可用于 Unity、Unreal 等游戏引擎，桌游跑团、世界构建项目或其他创作。"
                 }
             },
             {
                 "@type": "Question",
-                "name": "What browsers does World Orogen support?",
+                "name": "世界造山支持哪些浏览器？",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "World Orogen works in any modern browser with WebGL support, including Chrome, Firefox, Safari, and Edge. It works on both desktop and mobile devices."
+                    "text": "世界造山可在任何支持 WebGL 的现代浏览器中运行，包括 Chrome、Firefox、Safari 和 Edge，并同时支持桌面和移动设备。"
                 }
             },
             {
                 "@type": "Question",
-                "name": "How do I share a planet with someone?",
+                "name": "如何与他人分享一颗行星？",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Every generated planet has a unique planet code shown below the Build button. Copy the code or share the URL directly — anyone can paste the code or open the link to recreate your exact planet, including any plates you've edited."
+                    "text": "每颗生成的行星都有一个唯一行星码，显示在生成按钮下方。复制行星码或直接分享 URL，其他人即可粘贴代码或打开链接，复现同一颗行星，包括你手动编辑过的板块。"
                 }
             }
         ]
@@ -112,32 +112,32 @@
 </head>
 <body>
     <nav id="topNav">
-        <a href="/" class="nav-tab active">Generate</a>
-        <a href="/import" class="nav-tab">Import Heightmap</a>
+        <a href="/" class="nav-tab active">生成</a>
+        <a href="/import" class="nav-tab">导入高度图</a>
     </nav>
-    <!-- Semantic content for search engines and AI crawlers (visually hidden) -->
+    <!-- 面向搜索引擎和 AI 爬虫的语义内容（视觉隐藏） -->
     <main aria-hidden="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">
-        <h1>World Orogen — Procedural Planet Generator</h1>
-        <p>World Orogen is a free, browser-based procedural planet generator. Build realistic terrestrial planets shaped by tectonic plates, erosion, and volcanism — no download or account required.</p>
-        <h2>How It Works</h2>
-        <p>Start by adjusting sliders for detail level, number of tectonic plates, continents, and terrain roughness. Click "Build New World" to generate a unique planet with realistic continental shapes, mountain ranges, ocean trenches, volcanic island chains, and hotspot volcanism. Every planet is procedurally generated and completely unique.</p>
-        <h2>Key Features</h2>
+        <h1>世界造山（World Orogen）——程序化行星生成器</h1>
+        <p>世界造山是免费的浏览器端程序化行星生成器，可生成由构造板块、侵蚀和火山作用塑造的可信类地行星，无需下载或账号。</p>
+        <h2>工作原理</h2>
+        <p>先调整细节等级、构造板块数量、大陆数量和地形起伏等滑块，再点击“生成新世界”，即可生成一颗拥有可信大陆轮廓、山脉、海沟、火山岛链和热点火山作用的独特行星。每颗行星都由程序生成，彼此不同。</p>
+        <h2>关键功能</h2>
         <ul>
-            <li>Tectonic plate simulation with convergent, divergent, and transform boundaries</li>
-            <li>Multiple erosion types: glacial (fjords, U-shaped valleys), hydraulic (river valleys), and thermal (talus slopes)</li>
-            <li>Climate simulation with seasonal wind patterns, ocean currents, precipitation, and K&ouml;ppen climate classification</li>
-            <li>Hotspot volcanism with drift-trail island chains (like Hawaii)</li>
-            <li>Interactive plate editing — select multiple plates for batch land/ocean toggling with visual preview before rebuild</li>
-            <li>Heightmap import — bring your own equirectangular B&amp;W heightmap (Earth, Mars, hand-drawn) and run full climate simulation on it</li>
-            <li>Multiple visualization modes: terrain, satellite biome, climate, and heightmap</li>
-            <li>40+ detailed inspection layers for geology, plate motion, geology memory, atmosphere, ocean, and climate</li>
-            <li>High-resolution equirectangular map export up to 65,536px wide</li>
-            <li>Shareable planet codes — copy a code to share your exact planet with others</li>
+            <li>包含汇聚、离散和转换边界的构造板块模拟</li>
+            <li>多种侵蚀类型：冰川侵蚀（峡湾、U 形谷）、水力侵蚀（河谷）和热侵蚀（崖锥坡）</li>
+            <li>包含季节性风场、洋流、降水和柯本气候分类的气候模拟</li>
+            <li>可形成漂移岛链（类似夏威夷）的热点火山作用</li>
+            <li>交互式板块编辑：可选择多个板块，重建前预览批量海陆切换结果</li>
+            <li>高度图导入：导入自己的等距圆柱黑白高度图（地球、火星或手绘图），并在其上运行完整气候模拟</li>
+            <li>多种可视化模式：地形、卫星生物群系、气候和高度图</li>
+            <li>40+ 个详细检查图层，覆盖地质、板块运动、地质记忆、大气、海洋和气候</li>
+            <li>可导出最高 65,536px 宽的高分辨率等距圆柱地图</li>
+            <li>可分享的行星码：复制代码即可向他人分享同一颗行星</li>
         </ul>
-        <h2>Use Cases</h2>
-        <p>World Orogen is used by worldbuilders, game developers, tabletop RPG players, fantasy authors, and anyone who needs realistic terrain. Export heightmaps for use in game engines like Unity or Unreal, or download satellite-style maps for your D&amp;D campaign setting. The climate simulation produces realistic biome distributions for believable fantasy worlds.</p>
-        <h2>Share Your World</h2>
-        <p>Every planet has a unique planet code. Share the URL (e.g. orogen.studio/#CODE) to let anyone recreate your exact world — including any tectonic plates you've edited by hand.</p>
+        <h2>使用场景</h2>
+        <p>世界造山适用于世界构建者、游戏开发者、桌游玩家、奇幻作者，以及任何需要可信地形的人。你可以导出高度图并用于 Unity 或 Unreal 等游戏引擎，也可以下载卫星风格地图作为 D&amp;D 跑团设定。气候模拟会生成可信的生物群系分布，让幻想世界更有说服力。</p>
+        <h2>分享你的世界</h2>
+        <p>每颗行星都有一个唯一行星码。分享 URL（例如 orogen.studio/#CODE），其他人就能复现同一颗世界，包括你手动编辑过的构造板块。</p>
     </main>
     <div id="buildOverlay" class="build-overlay initial">
         <div class="build-overlay-inner">
@@ -155,318 +155,318 @@
         <div id="sidebarHeader">
             <div>
                 <h2>World Orogen</h2>
-                <div class="sub">Build worlds shaped by tectonic forces</div>
+                <div class="sub">生成由构造力量塑造的世界</div>
             </div>
-            <button id="sidebarToggle" title="Collapse panel">&#x00AB;</button>
+            <button id="sidebarToggle" title="折叠面板">&#x00AB;</button>
         </div>
         <div id="sidebarContent">
         <details class="section" open>
-            <summary>Shape Your World</summary>
+            <summary>塑造世界</summary>
             <div class="section-body">
                 <div class="cg">
-                    <label>Detail <span class="tip" data-tip="Resolution of the sphere — more detail means finer coastlines and terrain, but takes longer to generate">?</span> <span class="v" id="vN">204,000</span></label>
+                    <label>细节 <span class="tip" data-tip="球体分辨率；细节越高，海岸线和地形越精细，但生成时间越长">?</span> <span class="v" id="vN">204,000</span></label>
                     <input type="range" id="sN" min="0" max="1000" step="1" value="600">
-                    <div class="slider-hint"><span>Coarse</span><span>Fine</span></div>
+                    <div class="slider-hint"><span>粗略</span><span>精细</span></div>
                     <div class="detail-warn" id="detailWarn"></div>
                 </div>
                 <div class="cg">
-                    <label>Irregularity <span class="tip" data-tip="How randomly the cell points are scattered — 0 gives a uniform grid, 1 gives fully organic, irregular shapes">?</span> <span class="v" id="vJ">0.75</span></label>
+                    <label>不规则度 <span class="tip" data-tip="控制网格点随机分散程度；0 为均匀网格，1 为完全自然的不规则形状">?</span> <span class="v" id="vJ">0.75</span></label>
                     <input type="range" id="sJ" min="0" max="1" value="0.75" step="0.05">
-                    <div class="slider-hint"><span>Uniform</span><span>Scattered</span></div>
+                    <div class="slider-hint"><span>均匀</span><span>分散</span></div>
                 </div>
                 <div class="cg">
-                    <label>Plates <span class="tip" data-tip="Number of tectonic plates — more plates means more boundaries where mountains, trenches, and coastlines form">?</span> <span class="v" id="vP">80</span></label>
+                    <label>板块 <span class="tip" data-tip="构造板块数量；板块越多，形成山脉、海沟和海岸线的边界越多">?</span> <span class="v" id="vP">80</span></label>
                     <input type="range" id="sP" min="4" max="120" value="80" step="1">
-                    <div class="slider-hint"><span>Few</span><span>Many</span></div>
+                    <div class="slider-hint"><span>较少</span><span>较多</span></div>
                 </div>
                 <div class="cg">
-                    <label>Continents <span class="tip" data-tip="Target number of landmasses — 1 creates a supercontinent, higher values scatter land into multiple continents and archipelagos">?</span> <span class="v" id="vCn">4</span></label>
+                    <label>大陆 <span class="tip" data-tip="目标陆块数量；1 会生成超级大陆，数值越高，陆地越分散为多个大陆和群岛">?</span> <span class="v" id="vCn">4</span></label>
                     <input type="range" id="sCn" min="1" max="10" value="4" step="1">
-                    <div class="slider-hint"><span>Supercontinent</span><span>Archipelago</span></div>
+                    <div class="slider-hint"><span>超级大陆</span><span>群岛</span></div>
                 </div>
                 <div class="cg">
-                    <label>Roughness <span class="tip" data-tip="Terrain roughness — higher values add more fractal detail to mountains and coastlines">?</span> <span class="v" id="vNs">0.40</span></label>
+                    <label>起伏 <span class="tip" data-tip="地形粗糙度；数值越高，山脉和海岸线的分形细节越多">?</span> <span class="v" id="vNs">0.40</span></label>
                     <input type="range" id="sNs" min="0" max="0.5" value="0.40" step="0.01">
-                    <div class="slider-hint"><span>Smooth</span><span>Rugged</span></div>
+                    <div class="slider-hint"><span>平缓</span><span>崎岖</span></div>
                 </div>
                 <div class="cg">
-                    <label>Continent Size Variety <span class="tip" data-tip="How much continent sizes vary — at 0 all continents are similar in size, at 1 you get a mix of large and small landmasses">?</span> <span class="v" id="vCsv">0.35</span></label>
+                    <label>大陆大小差异 <span class="tip" data-tip="控制大陆大小差异；0 表示大陆大小接近，1 表示大、小陆块混合出现">?</span> <span class="v" id="vCsv">0.35</span></label>
                     <input type="range" id="sCsv" min="0" max="1" value="0.35" step="0.05">
-                    <div class="slider-hint"><span>Equal</span><span>Varied</span></div>
+                    <div class="slider-hint"><span>均等</span><span>多样</span></div>
                 </div>
                 <div class="cg">
-                    <label>Land Coverage <span class="tip" data-tip="Percentage of the planet covered by land — low values create ocean worlds, high values create desert worlds with reduced precipitation">?</span> <span class="v" id="vLc">30%</span></label>
+                    <label>陆地覆盖率 <span class="tip" data-tip="行星表面被陆地覆盖的比例；低值生成海洋世界，高值生成降水更少的干旱世界">?</span> <span class="v" id="vLc">30%</span></label>
                     <input type="range" id="sLc" min="0" max="1" value="0.3" step="0.01">
-                    <div class="slider-hint"><span>Ocean World</span><span>Desert World</span></div>
+                    <div class="slider-hint"><span>海洋世界</span><span>干旱世界</span></div>
                 </div>
             </div>
         </details>
-        <button id="generate">Build New World</button>
+        <button id="generate">生成新世界</button>
         <div id="seedRow">
-            <input type="text" id="seedCode" placeholder="Planet code">
-            <button id="copyBtn" title="Copy code">&#x2398;</button>
-            <button id="loadBtn" title="Load planet from code">Load</button>
+            <input type="text" id="seedCode" placeholder="行星码">
+            <button id="copyBtn" title="复制代码">&#x2398;</button>
+            <button id="loadBtn" title="从代码加载行星">加载</button>
         </div>
-        <div id="seedError">Invalid planet code</div>
+        <div id="seedError">行星码无效</div>
         <details class="section evolution-section" open>
-            <summary>Evolution Timeline</summary>
+            <summary>演化时间轴</summary>
             <div class="section-body">
                 <div class="evolution-readout">
-                    <span>Time</span>
+                    <span>时间</span>
                     <strong id="evolutionTime">0 Myr</strong>
                 </div>
                 <div class="evolution-controls">
-                    <button id="evolutionPlay" title="Play or pause timeline">Play</button>
-                    <button id="evolutionStep" title="Advance one timeline step">Step</button>
-                    <button id="evolutionCapture" title="Capture current world snapshot">Capture</button>
+                    <button id="evolutionPlay" title="播放或暂停时间轴">播放</button>
+                    <button id="evolutionStep" title="前进一个时间步">步进</button>
+                    <button id="evolutionCapture" title="捕获当前世界快照">捕获</button>
                 </div>
                 <div class="cg">
-                    <label>Step Size <span class="v">Myr</span></label>
+                    <label>步长 <span class="v">Myr</span></label>
                     <input type="number" id="evolutionStepMyr" min="0.1" max="100" value="1" step="0.1">
                 </div>
                 <label class="toggle-label evolution-terrain">
                     <input type="checkbox" id="evolutionTerrain" checked>
                     <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                    Terrain influence
+                    影响地形
                 </label>
                 <div class="cg">
-                    <label>Snapshots</label>
+                    <label>快照</label>
                     <select id="evolutionSnapshotSelect"></select>
                 </div>
                 <div class="evolution-controls">
-                    <button id="evolutionApply" title="Restore selected snapshot">Restore</button>
-                    <button id="evolutionDelete" title="Delete selected snapshot">Delete</button>
+                    <button id="evolutionApply" title="恢复所选快照">恢复</button>
+                    <button id="evolutionDelete" title="删除所选快照">删除</button>
                 </div>
                 <label class="toggle-label evolution-compare">
                     <input type="checkbox" id="evolutionCompare">
                     <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                    Compare to previous
+                    与上一快照对比
                 </label>
-                <div id="evolutionStatus" class="evolution-status">Generate a world to capture the first snapshot.</div>
+                <div id="evolutionStatus" class="evolution-status">先生成一个世界，再捕获第一张快照。</div>
             </div>
         </details>
         <details class="section civilization-section" open>
-            <summary>Civilization MVP</summary>
+            <summary>文明 MVP</summary>
             <div class="section-body">
                 <div class="evolution-readout">
-                    <span>Year</span>
+                    <span>年份</span>
                     <strong id="civilizationYear">0</strong>
                 </div>
                 <div class="evolution-controls">
-                    <button id="civilizationSeed" title="Seed population groups from environment inputs">Seed</button>
-                    <button id="civilizationStep" title="Advance civilization simulation">Step</button>
+                    <button id="civilizationSeed" title="根据环境输入播种人口群体">播种</button>
+                    <button id="civilizationStep" title="推进文明模拟">步进</button>
                 </div>
                 <div class="cg">
-                    <label>Step Size <span class="v">years</span></label>
+                    <label>步长 <span class="v">年</span></label>
                     <input type="number" id="civilizationStepYears" min="10" max="1000" value="100" step="10">
                 </div>
-                <div id="civilizationMetrics" class="evolution-status">Generate a world, then seed civilization.</div>
-                <div id="civilizationStatus" class="evolution-status">Civilization layer is inactive.</div>
+                <div id="civilizationMetrics" class="evolution-status">先生成一个世界，再播种文明。</div>
+                <div id="civilizationStatus" class="evolution-status">文明层未激活。</div>
             </div>
         </details>
         <details class="section history-section" open>
-            <summary>History Export</summary>
+            <summary>历史导出</summary>
             <div class="section-body">
                 <div class="evolution-controls history-controls">
-                    <button id="historyBuild" title="Build a history summary from the current civilization state">Build</button>
-                    <button id="historyBuildTimeline" title="Build a timeline from recorded civilization history points">Timeline</button>
-                    <button id="historyViewPoint" title="View the selected recorded civilization year on the map">View</button>
-                    <button id="historyExportJson" title="Download the current history summary as JSON">JSON</button>
-                    <button id="historyExportMarkdown" title="Download the current history summary as Markdown">Markdown</button>
+                    <button id="historyBuild" title="从当前文明状态生成历史摘要">生成</button>
+                    <button id="historyBuildTimeline" title="从已记录的文明历史点生成时间线">时间线</button>
+                    <button id="historyViewPoint" title="在地图上查看所选文明年份">查看</button>
+                    <button id="historyExportJson" title="将当前历史摘要下载为 JSON">JSON</button>
+                    <button id="historyExportMarkdown" title="将当前历史摘要下载为 Markdown">Markdown</button>
                 </div>
                 <div class="cg">
-                    <label>History Point</label>
+                    <label>历史点</label>
                     <select id="historyPointSelect"></select>
                 </div>
-                <textarea id="historyPreview" class="history-preview" readonly placeholder="Seed or step civilization, then build a history summary."></textarea>
-                <div id="historyStatus" class="evolution-status">History export is inactive.</div>
+                <textarea id="historyPreview" class="history-preview" readonly placeholder="播种或推进文明后，再生成历史摘要。"></textarea>
+                <div id="historyStatus" class="evolution-status">历史导出未激活。</div>
             </div>
         </details>
         <details class="section">
-            <summary>Terrain Sculpting <span class="tip" data-tip="Erosion and smoothing passes that refine the raw terrain. Adjust sliders and click Reapply — no full rebuild needed.">?</span></summary>
+            <summary>地形雕刻 <span class="tip" data-tip="用于细化原始地形的侵蚀和平滑步骤。调整滑块后点击重新应用，无需完整重建。">?</span></summary>
             <div class="section-body">
                 <div class="cg">
-                    <label>Terrain Warp <span class="tip" data-tip="Deforms the elevation field on the sphere using noise, producing more organic, squiggly coastlines and mountain ridges">?</span> <span class="v" id="vTw">0.75</span></label>
+                    <label>地形扭曲 <span class="tip" data-tip="用噪声形变球面高程场，生成更自然、更蜿蜒的海岸线和山脊">?</span> <span class="v" id="vTw">0.75</span></label>
                     <input type="range" id="sTw" min="0" max="1" value="0.75" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Heavy</span></div>
+                    <div class="slider-hint"><span>无</span><span>强</span></div>
                 </div>
                 <div class="cg">
-                    <label>Smoothing <span class="tip" data-tip="Blends harsh terrain boundaries from tectonic generation — smooths banded ridges and abrupt transitions">?</span> <span class="v" id="vS">0.10</span></label>
+                    <label>平滑 <span class="tip" data-tip="柔化构造生成造成的生硬地形边界，平滑带状山脊和突兀过渡">?</span> <span class="v" id="vS">0.10</span></label>
                     <input type="range" id="sS" min="0" max="1" value="0.10" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Heavy</span></div>
+                    <div class="slider-hint"><span>无</span><span>强</span></div>
                 </div>
                 <div class="cg">
-                    <label>Glacial Erosion <span class="tip" data-tip="Ice-age sculpting — carves fjords, U-shaped valleys, and lake basins at high latitudes and altitudes">?</span> <span class="v" id="vGl">0.50</span></label>
+                    <label>冰川侵蚀 <span class="tip" data-tip="冰期雕刻效果；在高纬和高海拔区域刻蚀峡湾、U 形谷与湖盆">?</span> <span class="v" id="vGl">0.50</span></label>
                     <input type="range" id="sGl" min="0" max="1" value="0.50" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Ice Age</span></div>
+                    <div class="slider-hint"><span>无</span><span>冰期</span></div>
                 </div>
                 <div class="cg">
-                    <label>Hydraulic Erosion <span class="tip" data-tip="Iterative stream-power erosion — carves river valleys and dendritic drainage networks">?</span> <span class="v" id="vHEr">0.50</span></label>
+                    <label>水力侵蚀 <span class="tip" data-tip="迭代式水流侵蚀；刻蚀河谷和树枝状排水网络">?</span> <span class="v" id="vHEr">0.50</span></label>
                     <input type="range" id="sHEr" min="0" max="1" value="0.50" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Deep</span></div>
+                    <div class="slider-hint"><span>无</span><span>深</span></div>
                 </div>
                 <div class="cg">
-                    <label>Thermal Erosion <span class="tip" data-tip="Slope-driven material transport — softens ridges and creates natural talus slopes">?</span> <span class="v" id="vTEr">0.10</span></label>
+                    <label>热侵蚀 <span class="tip" data-tip="由坡度驱动的物质搬运；柔化山脊并形成自然崖锥坡">?</span> <span class="v" id="vTEr">0.10</span></label>
                     <input type="range" id="sTEr" min="0" max="1" value="0.10" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Heavy</span></div>
+                    <div class="slider-hint"><span>无</span><span>强</span></div>
                 </div>
                 <div class="cg">
-                    <label>Ridge Sharpening <span class="tip" data-tip="Accentuates mountain ridgelines — pushes peaks further above their surroundings for more dramatic terrain">?</span> <span class="v" id="vRs">0.50</span></label>
+                    <label>山脊锐化 <span class="tip" data-tip="强化山脊线；让山峰相对周边更突出，地形更具戏剧性">?</span> <span class="v" id="vRs">0.50</span></label>
                     <input type="range" id="sRs" min="0" max="1" value="0.50" step="0.05">
-                    <div class="slider-hint"><span>None</span><span>Jagged</span></div>
+                    <div class="slider-hint"><span>无</span><span>嶙峋</span></div>
                 </div>
-                <button id="reapplyBtn" title="Reapply terrain sculpting" disabled><span class="reapply-icon">&#x21bb;</span> Reapply</button>
+                <button id="reapplyBtn" title="重新应用地形雕刻" disabled><span class="reapply-icon">&#x21bb;</span> 重新应用</button>
             </div>
         </details>
         <details class="section">
-            <summary>Climate <span class="tip" data-tip="Global temperature and precipitation offsets — changes apply on slider release, recomputing only precipitation, temperature, and climate zones">?</span></summary>
+            <summary>气候 <span class="tip" data-tip="全局温度和降水偏移；松开滑块后应用，只重算降水、温度和气候区">?</span></summary>
             <div class="section-body">
-                <div class="climate-hint">Changes apply on release — only climate zones are recomputed.</div>
+                <div class="climate-hint">松开滑块后应用更改，只重算气候区。</div>
                 <div class="cg">
-                    <label>Temperature <span class="tip" data-tip="Shift global temperature — positive makes the planet warmer, negative makes it colder. Climate zones shift accordingly.">?</span> <span class="v" id="vTmp">±0°C</span></label>
+                    <label>温度 <span class="tip" data-tip="移动全局温度；正值让行星更暖，负值让行星更冷，气候区会随之移动">?</span> <span class="v" id="vTmp">±0°C</span></label>
                     <input type="range" id="sTmp" min="-15" max="15" value="0" step="1">
-                    <div class="slider-hint"><span>Colder</span><span>Warmer</span></div>
+                    <div class="slider-hint"><span>更冷</span><span>更暖</span></div>
                 </div>
                 <div class="cg">
-                    <label>Precipitation <span class="tip" data-tip="Scale global precipitation — positive makes the planet wetter, negative drier. Affects desert and rainforest distribution.">?</span> <span class="v" id="vPrc">±0%</span></label>
+                    <label>降水 <span class="tip" data-tip="缩放全局降水；正值更湿，负值更干，会影响沙漠和雨林分布">?</span> <span class="v" id="vPrc">±0%</span></label>
                     <input type="range" id="sPrc" min="-1" max="1" value="0" step="0.1">
-                    <div class="slider-hint"><span>Drier</span><span>Wetter</span></div>
+                    <div class="slider-hint"><span>更干</span><span>更湿</span></div>
                 </div>
             </div>
         </details>
         <details class="section" open>
-            <summary>Visual Options</summary>
+            <summary>可视化选项</summary>
             <div class="section-body">
                 <div class="cg">
-                    <label>View</label>
+                    <label>查看</label>
                     <select id="viewMode">
-                        <option value="globe">Globe</option>
-                        <option value="map">Map</option>
+                        <option value="globe">球体</option>
+                        <option value="map">地图</option>
                     </select>
                 </div>
                 <div class="cg" id="mapCenterLonGroup" style="display:none">
-                    <label>Center Longitude <span class="v" id="vMapCenterLon">0°</span></label>
+                    <label>中心经度 <span class="v" id="vMapCenterLon">0°</span></label>
                     <input type="range" id="sMapCenterLon" min="-180" max="180" value="0" step="5">
                 </div>
                 <div class="map-tabs" id="mapTabs">
-                    <button class="map-tab active" data-layer="">Terrain</button>
-                    <button class="map-tab" data-layer="biome">Satellite</button>
-                    <button class="map-tab" data-layer="koppen">Climate</button>
-                    <button class="map-tab" data-layer="landheightmap">Heightmap</button>
+                    <button class="map-tab active" data-layer="">地形</button>
+                    <button class="map-tab" data-layer="biome">卫星图</button>
+                    <button class="map-tab" data-layer="koppen">气候</button>
+                    <button class="map-tab" data-layer="landheightmap">高度图</button>
                 </div>
                 <div class="cg">
-                    <label>Inspect</label>
+                    <label>检查图层</label>
                     <select id="debugLayer">
-                        <option value="">Terrain</option>
-                        <option value="biome">Satellite</option>
-                        <option value="koppen">K&ouml;ppen Climate</option>
-                        <option value="landheightmap">Land Heightmap</option>
-                        <optgroup label="Evolution">
-                            <option value="snapshotElevationDelta">Snapshot Elevation Delta</option>
-                            <option value="geologyTerrainDelta">Geology Terrain Delta</option>
-                            <option value="geologyTerrainCumulative">Geology Terrain Cumulative</option>
+                        <option value="">地形</option>
+                        <option value="biome">卫星图</option>
+                        <option value="koppen">K&ouml;ppen 气候</option>
+                        <option value="landheightmap">陆地高度图</option>
+                        <optgroup label="演化">
+                            <option value="snapshotElevationDelta">快照高程差</option>
+                            <option value="geologyTerrainDelta">地质地形差</option>
+                            <option value="geologyTerrainCumulative">地质地形累计差</option>
                         </optgroup>
-                        <optgroup label="Plate Motion">
-                            <option value="plateVelocity">Plate Velocity</option>
-                            <option value="boundaryKind">Boundary Kind</option>
-                            <option value="boundaryNormalSpeed">Boundary Normal Speed</option>
-                            <option value="boundaryShearSpeed">Boundary Shear Speed</option>
-                            <option value="boundaryRelativeSpeed">Boundary Relative Speed</option>
-                            <option value="boundaryConfidence">Boundary Confidence</option>
+                        <optgroup label="板块运动">
+                            <option value="plateVelocity">板块速度</option>
+                            <option value="boundaryKind">边界类型</option>
+                            <option value="boundaryNormalSpeed">边界法向速度</option>
+                            <option value="boundaryShearSpeed">边界剪切速度</option>
+                            <option value="boundaryRelativeSpeed">边界相对速度</option>
+                            <option value="boundaryConfidence">边界置信度</option>
                         </optgroup>
-                        <optgroup label="Geology Memory">
-                            <option value="crustAge">Crust Age</option>
-                            <option value="riftStage">Rift Stage</option>
-                            <option value="oldOrogeny">Old Orogeny</option>
-                            <option value="transformMemory">Transform Memory</option>
-                            <option value="fractureZoneMemory">Fracture Zone Memory</option>
-                            <option value="sedimentMemory">Sediment Memory</option>
-                            <option value="oceanConnectivity">Ocean Connectivity</option>
+                        <optgroup label="地质记忆">
+                            <option value="crustAge">地壳年龄</option>
+                            <option value="riftStage">裂谷阶段</option>
+                            <option value="oldOrogeny">旧造山</option>
+                            <option value="transformMemory">转换记忆</option>
+                            <option value="fractureZoneMemory">断裂带记忆</option>
+                            <option value="sedimentMemory">沉积记忆</option>
+                            <option value="oceanConnectivity">海洋连通性</option>
                         </optgroup>
-                        <optgroup label="Environment Inputs">
-                            <option value="habitability">Habitability</option>
-                            <option value="freshwaterAccess">Freshwater Access</option>
-                            <option value="agriculturePotential">Agriculture Potential</option>
-                            <option value="mobilityCost">Mobility Cost</option>
-                            <option value="seaTravel">Sea Travel</option>
-                            <option value="riverTravel">River Travel</option>
-                            <option value="naturalBarrier">Natural Barrier</option>
-                            <option value="resourceAttraction">Resource Attraction</option>
+                        <optgroup label="环境输入">
+                            <option value="habitability">宜居性</option>
+                            <option value="freshwaterAccess">淡水可达性</option>
+                            <option value="agriculturePotential">农业潜力</option>
+                            <option value="mobilityCost">通行成本</option>
+                            <option value="seaTravel">海路通行</option>
+                            <option value="riverTravel">河流通行</option>
+                            <option value="naturalBarrier">自然屏障</option>
+                            <option value="resourceAttraction">资源吸引力</option>
                         </optgroup>
-                        <optgroup label="Civilization">
-                            <option value="populationDensity">Population Density</option>
-                            <option value="migrationPressure">Migration Pressure</option>
-                            <option value="settlementRank">Settlement Rank</option>
-                            <option value="cultureId">Culture ID</option>
-                            <option value="languageId">Language ID</option>
-                            <option value="polityId">Polity ID</option>
-                            <option value="subsistenceMode">Subsistence Mode</option>
-                            <option value="civilizationActivity">Civilization Activity</option>
+                        <optgroup label="文明">
+                            <option value="populationDensity">人口密度</option>
+                            <option value="migrationPressure">迁徙压力</option>
+                            <option value="settlementRank">聚落等级</option>
+                            <option value="cultureId">文化 ID</option>
+                            <option value="languageId">语言 ID</option>
+                            <option value="polityId">政体 ID</option>
+                            <option value="subsistenceMode">生计模式</option>
+                            <option value="civilizationActivity">文明活跃度</option>
                         </optgroup>
-                        <optgroup label="Geology">
-                            <option value="base">Base</option>
-                            <option value="skeleton">Skeleton (pre-noise)</option>
-                            <option value="tectonic">Tectonic</option>
-                            <option value="noise">Noise</option>
-                            <option value="noiseAmp">Noise Amplitude</option>
-                            <option value="foldBeltWeight">Fold Belt Weight</option>
-                            <option value="cratonWeight">Craton Weight</option>
-                            <option value="basinWeight">Basin Weight</option>
-                            <option value="interior">Interior</option>
-                            <option value="coastal">Coastal</option>
-                            <option value="ocean">Ocean Floor</option>
-                            <option value="hotspot">Hotspot</option>
-                            <option value="tecActivity">Tectonic Activity</option>
-                            <option value="margins">Margins</option>
-                            <option value="backArc">Back-Arc</option>
-                            <option value="phasorRidge">Phasor Ridges</option>
-                            <option value="orogenicPower">Orogenic Power</option>
-                            <option value="lip">Flood Basalt (LIP)</option>
-                            <option value="uniformNoise">Uniform Land Noise</option>
-                            <option value="dynamicTopo">Dynamic Topography</option>
-                            <option value="erosionDelta">Erosion Delta</option>
+                        <optgroup label="地质">
+                            <option value="base">基础</option>
+                            <option value="skeleton">骨架（噪声前）</option>
+                            <option value="tectonic">构造</option>
+                            <option value="noise">噪声</option>
+                            <option value="noiseAmp">噪声幅度</option>
+                            <option value="foldBeltWeight">褶皱带权重</option>
+                            <option value="cratonWeight">克拉通权重</option>
+                            <option value="basinWeight">盆地权重</option>
+                            <option value="interior">内陆</option>
+                            <option value="coastal">海岸</option>
+                            <option value="ocean">海底</option>
+                            <option value="hotspot">热点</option>
+                            <option value="tecActivity">构造活跃度</option>
+                            <option value="margins">陆缘</option>
+                            <option value="backArc">弧后</option>
+                            <option value="phasorRidge">相位山脊</option>
+                            <option value="orogenicPower">造山强度</option>
+                            <option value="lip">洪流玄武岩（LIP）</option>
+                            <option value="uniformNoise">均匀陆地噪声</option>
+                            <option value="dynamicTopo">动态地形</option>
+                            <option value="erosionDelta">侵蚀增量</option>
                         </optgroup>
-                        <optgroup label="Plate Physics">
-                            <option value="continentalDrag">Continental Drag</option>
-                            <option value="sizeVelocity">Size-Velocity</option>
-                            <option value="plateSpeed">Plate Speed</option>
-                            <option value="velChange">Velocity Change</option>
-                            <option value="mantleFlow">Mantle Flow</option>
+                        <optgroup label="板块物理">
+                            <option value="continentalDrag">大陆拖曳</option>
+                            <option value="sizeVelocity">大小-速度</option>
+                            <option value="plateSpeed">板块速度</option>
+                            <option value="velChange">速度变化</option>
+                            <option value="mantleFlow">地幔流</option>
                         </optgroup>
-                        <optgroup label="Atmosphere">
-                            <option value="pressureSummer">Pressure (Summer)</option>
-                            <option value="pressureWinter">Pressure (Winter)</option>
-                            <option value="windSpeedSummer">Wind Speed (Summer)</option>
-                            <option value="windSpeedWinter">Wind Speed (Winter)</option>
+                        <optgroup label="大气">
+                            <option value="pressureSummer">气压（夏季）</option>
+                            <option value="pressureWinter">气压（冬季）</option>
+                            <option value="windSpeedSummer">风速（夏季）</option>
+                            <option value="windSpeedWinter">风速（冬季）</option>
                         </optgroup>
-                        <optgroup label="Ocean">
-                            <option value="oceanCurrentSummer">Currents (Summer)</option>
-                            <option value="oceanCurrentWinter">Currents (Winter)</option>
+                        <optgroup label="海洋">
+                            <option value="oceanCurrentSummer">洋流（夏季）</option>
+                            <option value="oceanCurrentWinter">洋流（冬季）</option>
                         </optgroup>
-                        <optgroup label="Climate">
-                            <option value="precipSummer">Precipitation (Summer)</option>
-                            <option value="precipWinter">Precipitation (Winter)</option>
-                            <option value="rainShadowSummer">Rain Shadow (Summer)</option>
-                            <option value="rainShadowWinter">Rain Shadow (Winter)</option>
-                            <option value="tempSummer">Temperature (Summer)</option>
-                            <option value="tempWinter">Temperature (Winter)</option>
-                            <option value="continentality">Continentality</option>
-                            <option value="tempContinentality">Temp Continentality</option>
+                        <optgroup label="气候">
+                            <option value="precipSummer">降水（夏季）</option>
+                            <option value="precipWinter">降水（冬季）</option>
+                            <option value="rainShadowSummer">雨影（夏季）</option>
+                            <option value="rainShadowWinter">雨影（冬季）</option>
+                            <option value="tempSummer">温度（夏季）</option>
+                            <option value="tempWinter">温度（冬季）</option>
+                            <option value="continentality">大陆性</option>
+                            <option value="tempContinental">温度-大陆性</option>
                         </optgroup>
-                        <optgroup label="Elevation">
-                            <option value="heightmap">Full Heightmap</option>
+                        <optgroup label="高程">
+                            <option value="heightmap">完整高度图</option>
                         </optgroup>
                     </select>
                 </div>
                 <div id="vizLegend" class="viz-legend"></div>
                 <div class="tg">
-                    <label class="toggle-label"><input type="checkbox" id="chkWire"><span class="toggle-track"><span class="toggle-thumb"></span></span>Wireframe</label>
-                    <label class="toggle-label"><input type="checkbox" id="chkPlates"><span class="toggle-track"><span class="toggle-thumb"></span></span>Show Plates</label>
-                    <label class="toggle-label"><input type="checkbox" id="chkRotate"><span class="toggle-track"><span class="toggle-thumb"></span></span>Auto-Rotate</label>
-                    <label class="toggle-label"><input type="checkbox" id="chkGrid" checked><span class="toggle-track"><span class="toggle-thumb"></span></span>Grid Lines</label>
+                    <label class="toggle-label"><input type="checkbox" id="chkWire"><span class="toggle-track"><span class="toggle-thumb"></span></span>线框</label>
+                    <label class="toggle-label"><input type="checkbox" id="chkPlates"><span class="toggle-track"><span class="toggle-thumb"></span></span>显示板块</label>
+                    <label class="toggle-label"><input type="checkbox" id="chkRotate"><span class="toggle-track"><span class="toggle-thumb"></span></span>自动旋转</label>
+                    <label class="toggle-label"><input type="checkbox" id="chkGrid" checked><span class="toggle-track"><span class="toggle-thumb"></span></span>经纬网</label>
                 </div>
                 <div class="cg" id="gridSpacingGroup">
-                    <label>Grid Spacing</label>
+                    <label>经纬网间距</label>
                     <select id="gridSpacing">
                         <option value="30">30°</option>
                         <option value="15" selected>15°</option>
@@ -476,12 +476,12 @@
                     </select>
                 </div>
                 <details id="statsDetails" class="stats-toggle">
-                    <summary>Stats</summary>
+                    <summary>统计</summary>
                     <div id="stats"></div>
                 </details>
             </div>
         </details>
-        <button id="exportBtn" class="export-btn">Export Map</button>
+        <button id="exportBtn" class="export-btn">导出地图</button>
         <a id="repoLink" href="https://github.com/raguilar011095/planet_heightmap_generation" target="_blank" rel="noopener">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.64 7.64 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
             GitHub
@@ -489,38 +489,38 @@
         </div>
     </div>
     <select id="mobileViewSwitch" class="mobile-view-switch">
-        <option value="">Terrain</option>
-        <option value="biome">Satellite</option>
-        <option value="koppen">Climate</option>
-        <option value="landheightmap">Heightmap</option>
+        <option value="">地形</option>
+        <option value="biome">卫星图</option>
+        <option value="koppen">气候</option>
+        <option value="landheightmap">高度图</option>
     </select>
-    <button id="helpBtn" title="Tutorial">?</button>
+    <button id="helpBtn" title="教程">?</button>
 
     <div id="tutorialOverlay" class="hidden">
         <div id="tutorialCard">
             <button id="tutorialClose">&times;</button>
             <div class="tutorial-step" data-step="0">
-                <h3>Welcome to World Orogen</h3>
-                <p>Procedural planets inspired by real tectonics, erosion, and climate.</p>
-                <p>Every world is one of a kind — with believable continents, mountains, ocean trenches, and volcanic islands. Build one in seconds, tweak it until it's yours.</p>
+                <h3>欢迎使用世界造山</h3>
+                <p>受真实构造、侵蚀和气候启发的程序化行星。</p>
+                <p>每个世界都独一无二，拥有可信的大陆、山脉、海沟和火山岛。数秒生成，再按你的想法微调。</p>
             </div>
             <div class="tutorial-step" data-step="1">
-                <h3>Shape Your World</h3>
-                <p>Use the <strong>Shape Your World</strong> sliders to control detail, plates, continents, and roughness, then hit <strong>Build New World</strong>. The <strong>Detail</strong> slider only changes rendering resolution &mdash; continent shapes stay the same, so you can iterate quickly at low detail and crank it up when the planet looks good. Expand <strong>Terrain Sculpting</strong> to fine-tune erosion and smoothing &mdash; these can be reapplied instantly with the <strong>&#x21bb;</strong> button.</p>
+                <h3>塑造世界</h3>
+                <p>使用 <strong>塑造世界</strong> 滑块控制细节、板块、大陆和起伏，然后点击 <strong>生成新世界</strong>。<strong>细节</strong> 滑块只改变渲染分辨率；大陆形状会保持一致，所以你可以先用低细节快速迭代，等行星外观满意后再提高细节。展开 <strong>地形雕刻</strong> 可以微调侵蚀和平滑，并用 <strong>&#x21bb;</strong> 按钮即时重新应用。</p>
             </div>
             <div class="tutorial-step" data-step="2">
-                <h3>Explore &amp; Edit</h3>
-                <p><strong>Drag</strong> to rotate the globe. <strong>Scroll</strong> to zoom in and out. <strong>Ctrl-click</strong> plates to mark them for reshaping &mdash; select multiple, then hit <strong>Rebuild</strong> to apply all at once. Ctrl-click again to undo a pending selection. <strong>Hover</strong> any region to see elevation, coordinates, temperature, precipitation, and climate classification.</p>
+                <h3>探索与编辑</h3>
+                <p><strong>拖拽</strong> 可旋转球体。<strong>滚轮</strong> 可缩放。<strong>Ctrl+点击</strong> 板块可将其标记为待重塑；选择多个板块后点击 <strong>重建</strong> 一次性应用。再次 Ctrl+点击可撤销待处理选择。<strong>悬停</strong> 任意区域可查看高程、坐标、温度、降水和气候分类。</p>
             </div>
             <div class="tutorial-step" data-step="3">
-                <h3>Visualize Your World</h3>
-                <p>Switch between <strong>Terrain</strong>, <strong>Satellite</strong>, <strong>Climate</strong>, and <strong>Heightmap</strong> views using the tabs under Visual Options. Use the <strong>Inspect</strong> dropdown for detailed layers like pressure, wind, and precipitation.</p>
-                <p>At high detail, climate is skipped automatically for faster generation &mdash; it computes on demand when you switch to a climate view.</p>
+                <h3>可视化你的世界</h3>
+                <p>在可视化选项下方的标签中切换 <strong>地形</strong>、<strong>卫星图</strong>、<strong>气候</strong> 和 <strong>高度图</strong> 视图。使用 <strong>检查图层</strong> 下拉框查看气压、风场、降水等详细图层。</p>
+                <p>高细节模式下会自动跳过气候以加快生成；当你切换到气候视图时，系统会按需计算。</p>
             </div>
             <div class="tutorial-step" data-step="4">
-                <h3>Save &amp; Share</h3>
-                <p>Every planet gets a unique <strong>planet code</strong> shown below the Build button &mdash; including any plates you've edited. <strong>Copy</strong> it to share with others, or <strong>paste</strong> a code and click <strong>Load</strong> to recreate someone else's world. You can also share the URL directly.</p>
-                <p>Use <strong>Export Map</strong> to download high-resolution equirectangular images &mdash; terrain, satellite, climate, heightmaps, or land masks. <strong>Export All</strong> downloads satellite, climate, heightmap, and land mask in one click.</p>
+                <h3>保存与分享</h3>
+                <p>每颗行星都会获得一个唯一 <strong>行星码</strong>，显示在生成按钮下方，并包含你编辑过的板块。<strong>复制</strong> 它即可分享给他人，或<strong>粘贴</strong>一段代码并点击 <strong>加载</strong> 来复现别人的世界。你也可以直接分享 URL。</p>
+                <p>使用 <strong>导出地图</strong> 下载高分辨率等距圆柱图片，包括地形、卫星图、气候、高度图或陆地掩膜。<strong>全部导出</strong> 可一键下载卫星图、气候图、高度图和陆地掩膜。</p>
             </div>
             <div class="tutorial-dots">
                 <span class="dot active" data-dot="0"></span>
@@ -530,8 +530,8 @@
                 <span class="dot" data-dot="4"></span>
             </div>
             <div class="tutorial-nav">
-                <button id="tutorialBack" class="btn-ghost" disabled>Back</button>
-                <button id="tutorialNext" class="btn-primary">Next</button>
+                <button id="tutorialBack" class="btn-ghost" disabled>上一步</button>
+                <button id="tutorialNext" class="btn-primary">下一步</button>
             </div>
         </div>
     </div>
@@ -539,20 +539,20 @@
     <div id="exportOverlay" class="hidden">
         <div id="exportCard">
             <button id="exportClose">&times;</button>
-            <h3>Export Map</h3>
+            <h3>导出地图</h3>
             <div class="cg">
-                <label>Type</label>
+                <label>类型</label>
                 <select id="exportType">
-                    <option value="color">Color Map</option>
-                    <option value="biome">Satellite</option>
-                    <option value="koppen">Climate (K&ouml;ppen)</option>
-                    <option value="heightmap">Heightmap (B&amp;W)</option>
-                    <option value="landheightmap">Land Heightmap (B&amp;W)</option>
-                    <option value="landmask">Land Mask (B&amp;W)</option>
+                    <option value="color">彩色地图</option>
+                    <option value="biome">卫星图</option>
+                    <option value="koppen">气候 (K&ouml;ppen)</option>
+                    <option value="heightmap">高度图（黑白）</option>
+                    <option value="landheightmap">陆地高度图（黑白）</option>
+                    <option value="landmask">陆地掩膜（黑白）</option>
                 </select>
             </div>
             <div class="cg">
-                <label>Width <span class="v" id="exportDims">4096 &times; 2048</span></label>
+                <label>宽度 <span class="v" id="exportDims">4096 &times; 2048</span></label>
                 <select id="exportWidth">
                     <option value="1024">1024</option>
                     <option value="2048">2048</option>
@@ -564,9 +564,9 @@
                 </select>
             </div>
             <div class="export-actions">
-                <button id="exportCancel" class="btn-ghost">Cancel</button>
-                <button id="exportGo" class="btn-primary">Export</button>
-                <button id="exportAllGo" class="btn-primary">Export All</button>
+                <button id="exportCancel" class="btn-ghost">取消</button>
+                <button id="exportGo" class="btn-primary">导出</button>
+                <button id="exportAllGo" class="btn-primary">全部导出</button>
             </div>
         </div>
     </div>
@@ -574,11 +574,11 @@
     <div id="surveyOverlay" class="hidden">
         <div id="surveyCard">
             <button id="surveyClose">&times;</button>
-            <h3>Thanks for exploring!</h3>
-            <p>You've spent some real time with World Orogen &mdash; that means a lot. If you have a minute, I'd love to hear what you think.</p>
+            <h3>感谢探索！</h3>
+            <p>你已经认真体验了一段时间的世界造山，这对项目很重要。如果方便的话，我很想听听你的想法。</p>
             <div class="survey-actions">
-                <button id="surveyDismiss" class="btn-ghost">Maybe later</button>
-                <a id="surveyLink" href="https://docs.google.com/forms/d/e/1FAIpQLScFSryT8Uom4jMkpb-YQnyjHMSWqZmDDT3bSOSabHovsjKL7A/viewform?usp=dialog" target="_blank" rel="noopener" class="btn-primary">Take the survey</a>
+                <button id="surveyDismiss" class="btn-ghost">稍后再说</button>
+                <a id="surveyLink" href="https://docs.google.com/forms/d/e/1FAIpQLScFSryT8Uom4jMkpb-YQnyjHMSWqZmDDT3bSOSabHovsjKL7A/viewform?usp=dialog" target="_blank" rel="noopener" class="btn-primary">填写问卷</a>
             </div>
         </div>
     </div>
@@ -587,29 +587,29 @@
         <div id="whatsNewCard">
             <button id="whatsNewClose">&times;</button>
             <div class="whatsnew-step" data-step="0">
-                <h3>What's New in World Orogen</h3>
-                <p>A lot has changed since your last visit. This update brings features many of you asked for &mdash; plus major improvements under the hood.</p>
-                <p class="whatsnew-warn"><strong>Heads up:</strong> Saved planet codes will still load, but your worlds may look different. The terrain, erosion, and climate systems have all been reworked, so elevations, coastlines, and biome placement will shift.</p>
+                <h3>世界造山更新内容</h3>
+                <p>自你上次访问以来已有大量更新：加入了许多用户期待的功能，也大幅改进了底层系统。</p>
+                <p class="whatsnew-warn"><strong>注意：</strong> 已保存的行星码仍可加载，但世界外观可能不同。地形、侵蚀和气候系统已经重做，高程、海岸线和生物群系分布会发生变化。</p>
             </div>
             <div class="whatsnew-step" data-step="1">
-                <h3>New Controls</h3>
+                <h3>新控件</h3>
                 <ul class="whatsnew-list">
-                    <li><strong>Land Coverage</strong> &mdash; Control how much of your planet is land vs. ocean. Want a water world with scattered islands? A Pangaea with inland seas? Now you can dial it in.</li>
-                    <li><strong>Continent Size Variety</strong> &mdash; Go from uniform landmasses to a mix of sprawling continents and smaller islands.</li>
-                    <li><strong>Temperature &amp; Precipitation</strong> &mdash; Shift global climate warmer or colder, wetter or drier. No more getting stuck with a generic climate.</li>
+                    <li><strong>陆地覆盖率</strong> &mdash; 控制行星上陆地与海洋的比例。想要散布岛屿的水世界？或拥有内海的盘古大陆？现在都可以调出来。</li>
+                    <li><strong>大陆大小差异</strong> &mdash; 从大小均一的陆块，切换到辽阔大陆与小型岛屿混合的格局。</li>
+                    <li><strong>温度 &amp; 降水</strong> &mdash; 将全球气候调得更暖或更冷、更湿或更干，不再被固定的通用气候限制。</li>
                 </ul>
             </div>
             <div class="whatsnew-step" data-step="2">
-                <h3>Heightmap Import</h3>
-                <p>You can now <strong>bring your own heightmap</strong> &mdash; upload an equirectangular image and Orogen runs the full climate simulation on it. Wind, currents, precipitation, K&ouml;ppen classification, all of it.</p>
-                <p>Use it to see how your hand-drawn world's climate would actually play out, or import Earth and Mars for reference. Find it under the <strong>Import Heightmap</strong> tab.</p>
+                <h3>高度图导入</h3>
+                <p>现在你可以<strong>导入自己的高度图</strong>：上传等距圆柱图片后，世界造山会在其上运行完整气候模拟，包括风场、洋流、降水和柯本分类。</p>
+                <p>你可以用它检查手绘世界的气候会如何展开，也可以导入地球和火星作参考。入口在 <strong>导入高度图</strong> 标签下。</p>
             </div>
             <div class="whatsnew-step" data-step="3">
-                <h3>Plate Editing &amp; Climate Fixes</h3>
+                <h3>板块编辑与气候修复</h3>
                 <ul class="whatsnew-list">
-                    <li><strong>Multi-select plates</strong> &mdash; Mark several plates at once, then reshape them all in a single rebuild. No more click-wait-repeat.</li>
-                    <li><strong>Southern hemisphere climates fixed</strong> &mdash; Mediterranean and continental climates now appear properly in both hemispheres.</li>
-                    <li><strong>Better terrain at every detail level</strong> &mdash; Mountains, erosion, and coastlines now scale consistently whether you're at 5K or 2.5M regions.</li>
+                    <li><strong>多选板块</strong> &mdash; 一次标记多个板块，并在一次重建中全部重塑，不必再反复点击和等待。</li>
+                    <li><strong>南半球气候修复</strong> &mdash; 地中海气候和大陆性气候现在会在两个半球正确出现。</li>
+                    <li><strong>各细节等级地形更稳定</strong> &mdash; 无论是 5K 还是 2.5M 区域，山脉、侵蚀和海岸线都会一致缩放。</li>
                 </ul>
             </div>
             <div class="tutorial-dots">
@@ -619,19 +619,19 @@
                 <span class="dot" data-dot="3"></span>
             </div>
             <div class="tutorial-nav">
-                <button id="whatsNewBack" class="btn-ghost" disabled>Back</button>
-                <button id="whatsNewNext" class="btn-primary">Next</button>
+                <button id="whatsNewBack" class="btn-ghost" disabled>上一步</button>
+                <button id="whatsNewNext" class="btn-primary">下一步</button>
             </div>
         </div>
     </div>
 
-    <div id="topInfo">Drag to rotate &middot; Scroll to zoom &middot; Ctrl-click to reshape continents</div>
-    <button id="editToggle" class="edit-toggle" title="Toggle plate edit mode">
+    <div id="topInfo">拖拽旋转 · 滚轮缩放 · Ctrl+点击重塑大陆</div>
+    <button id="editToggle" class="edit-toggle" title="切换板块编辑模式">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14.5 2.5l3 3L6 17H3v-3L14.5 2.5z"/>
         </svg>
     </button>
-    <button id="refreshFab" class="refresh-fab" title="Generate new planet">
+    <button id="refreshFab" class="refresh-fab" title="生成新行星">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M17 10a7 7 0 1 1-2-5"/>
             <polyline points="15 2 17 5 14 6"/>
@@ -642,9 +642,9 @@
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="2 8 6 12 14 4"/>
         </svg>
-        <span>Rebuild (0)</span>
+        <span>重建（0）</span>
     </button>
-    <div id="info">Drag to rotate &middot; Scroll to zoom &middot; Ctrl-click to reshape continents</div>
+    <div id="info">拖拽旋转 · 滚轮缩放 · Ctrl+点击重塑大陆</div>
 
     <script type="importmap">
     {

@@ -1,4 +1,4 @@
-/** Does the east-coast aridity discount fix S.China/Florida while sparing Sahara? */
+/** 东海岸干旱折扣能否修正华南/佛罗里达，同时不影响撒哈拉？ */
 import { buildEarthContext } from './lib/earth-context.mjs';
 import { runClimate } from './lib/score.mjs';
 import { majorGroupOf } from './lib/koppen-distance.mjs';
@@ -17,8 +17,8 @@ function aridFrac(ov, box) {
 }
 const R = { 'S.China(want 0)': [22, 31, 105, 120], 'Florida(want 0)': [27, 35, -88, -80],
     'Sahara(want 100)': [19, 28, -4, 28], 'N.India(hard)': [22, 31, 74, 88] };
-console.log('arid fraction vs KOPPEN_EAST_COAST_WET (selective east-coast discount)');
-console.log('region             wet0     wet1.5    wet2.5');
+console.log('干旱占比 vs KOPPEN_EAST_COAST_WET（选择性东海岸折减）');
+console.log('区域               wet0     wet1.5    wet2.5');
 for (const [nm, box] of Object.entries(R)) {
     const a = aridFrac({}, box), b = aridFrac({ KOPPEN_EAST_COAST_WET: 1.5 }, box), c = aridFrac({ KOPPEN_EAST_COAST_WET: 2.5 }, box);
     console.log(`${nm.padEnd(18)} ${(a * 100).toFixed(0).padStart(4)}%   ${(b * 100).toFixed(0).padStart(5)}%   ${(c * 100).toFixed(0).padStart(5)}%`);

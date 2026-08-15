@@ -46,8 +46,8 @@ const cases = [
     ['elev depletion 0.2', { PRECIP_ELEV_DEPLETION_PER_KM: 0.2 }],
 ];
 
-console.log('North India box — mean normalized precip & onshore summer wind\n');
-console.log('case                          n    P.summer  P.winter  meanPoleward  poleward%');
+console.log('北印度框：平均归一化降水与夏季向岸风\n');
+console.log('情形                          n    夏季降水  冬季降水  平均向极风    向极%');
 for (const [name, ov] of cases) {
     const s = boxStats(ov);
     console.log(

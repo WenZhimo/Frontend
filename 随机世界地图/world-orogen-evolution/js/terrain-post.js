@@ -348,7 +348,7 @@ export function smoothElevation(mesh, r_elevation, r_isOcean, iterations, streng
     const locked = new Uint8Array(N);
     for (let r = 0; r < N; r++) {
         if (r_isOcean[r]) {
-            // Ocean island — lock so smoothing doesn't drag it underwater.
+            // 海洋 island — lock so smoothing doesn't drag it underwater.
             if (r_elevation[r] > 0) locked[r] = 1;
             continue;
         }

@@ -1,17 +1,17 @@
-// Elevation pipeline — 12 explicit stages.
+// 高程管线：12 个显式阶段。
 //
-// Stage 1: Tectonic state              (computeTectonicState)
-// Stage 2: Spatial fields              (computeSpatialFields)
-// Stage 3: Terrain classification      (classifyTerrain)
-// Stage 4: Skeleton                    (buildSkeleton)        [first renderable intermediate]
-// Stage 5: Tectonic-band noise         (applyTectonicBandNoise)
-// Stage 6: Elevation-gated detail      (applyDetailTexture)
-// Stage 7: Coastal detail              (applyCoastalDetail)
-// Stage 8: Discrete edifices           (applyEdifices)
-// Stage 9: Uniform background noise    (applyUniformLandNoise)
-// Stage 10: Dynamic topography         (applyDynamicTopography)
-// Stage 11: Final shaping              (applyFinalShaping)
-// Stage 12: Topology fixup             (fixupTopology)
+// 阶段 1：构造状态              (computeTectonicState)
+// 阶段 2：空间场                (computeSpatialFields)
+// 阶段 3：地形分类              (classifyTerrain)
+// 阶段 4：地形骨架              (buildSkeleton)        [首个可渲染中间态]
+// 阶段 5：构造带噪声            (applyTectonicBandNoise)
+// 阶段 6：高程门控细节          (applyDetailTexture)
+// 阶段 7：海岸细节              (applyCoastalDetail)
+// 阶段 8：离散火山体            (applyEdifices)
+// 阶段 9：均匀背景噪声          (applyUniformLandNoise)
+// 阶段 10：动态地形             (applyDynamicTopography)
+// 阶段 11：最终塑形             (applyFinalShaping)
+// 阶段 12：拓扑修正             (fixupTopology)
 
 import { makeRandInt, makeRng } from './rng.js';
 import { SimplexNoise } from './simplex-noise.js';
@@ -381,7 +381,7 @@ export function expandRegions(mesh, regions, steps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 1: Tectonic state
+//  阶段 1：构造状态
 //  Collisions × (small + super), blending, stress propagation, mantle
 //  modulation, plate-interior seeding, percentile normalization.
 // ─────────────────────────────────────────────────────────────────────────
@@ -416,14 +416,14 @@ function computeTectonicState(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plat
     if (!hasSuperPlates) {
         ({ mountain_r, coastline_r, ocean_r, r_stress, r_stressDir, r_subductFactor, r_boundaryType, r_bothOcean, r_hasOcean } = smallCol);
     } else {
-        // Super plates dictate the base shape. Distance-field seed sets and
-        // boundary topology come from super plates only — small plates do
+        // 超级板块决定基础形态。距离场种子集合和
+        // 边界拓扑只来自超级板块；小板块
         // not introduce extra mountain/coastline/ocean seeds, and their
         // boundary types do not trigger rifts/ridges/fracture-zones inside
         // a coherent super-plate block.
         //
         // Stress, stress direction, and subduction factor are still blended
-        // (95% super + 5% small) so the small-plate signal contributes a
+        // （95% 超级板块 + 5% 小板块），因此小板块信号贡献
         // subtle texture/intensity modulation, but only WITHIN zones already
         // defined by super plates.
         mountain_r  = new Set(superCol.mountain_r);
@@ -438,7 +438,7 @@ function computeTectonicState(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plat
         r_hasOcean     = new Uint8Array(superCol.r_hasOcean);
 
         // Plain weighted sum — no proximity ramp. Both small and super
-        // contribute according to the PLATE_BLEND_T-derived weights at
+        // 根据 PLATE_BLEND_T 派生权重参与贡献，位置在
         // every cell, so mountain ranges stay consistently visible
         // regardless of which layer drives them.
         r_stress = new Float32Array(numRegions);
@@ -559,16 +559,16 @@ function computeTectonicState(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plat
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 2: Spatial fields
-//  All distance fields and BFS bands. Read-only output for stages 3+.
+//  阶段 2：空间场
+//  所有距离场与 BFS 带。供阶段 3+ 只读使用。
 // ─────────────────────────────────────────────────────────────────────────
 function computeSpatialFields(mesh, r_xyz, r_plate, plateIsOcean, tect, seed, superPlateData) {
     const { numRegions, adjOffset, adjList } = mesh;
     const { stress_mountain_r, coastline_r, ocean_r, r_boundaryType, r_bothOcean, r_hasOcean, r_subductFactor, r_stress, maxStress, scaleFactor } = tect;
     // Rift BFS uses super-plate IDs when available so expansion doesn't
-    // stop at internal small-plate boundaries inside the same super plate.
-    // r_boundaryType comes from super plates, so the seeds and the
-    // expansion membership must agree on the same partition.
+    // 在同一超级板块内部的小板块边界处停止。
+    // r_boundaryType 来自超级板块，因此种子和
+    // 扩张成员关系必须使用同一分区。
     const r_riftPlate = superPlateData ? superPlateData.r_superPlate : r_plate;
 
     const r_isOcean = new Uint8Array(numRegions);
@@ -783,10 +783,10 @@ function computeSpatialFields(mesh, r_xyz, r_plate, plateIsOcean, tect, seed, su
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 3: Terrain classification
+//  阶段 3：地形分类
 //  Single-source-of-truth archetype weights and per-cell noise amplitude.
-//  Replaces the inline isFoldBelt/isCraton/isBasin/isPlateauZone math
-//  scattered across the original main loop.
+//  替代原先散落的 isFoldBelt/isCraton/isBasin/isPlateauZone 内联计算。
+//  原逻辑分散在主循环中。
 // ─────────────────────────────────────────────────────────────────────────
 function classifyTerrain(mesh, r_xyz, tect, sf, seed) {
     const { numRegions } = mesh;
@@ -849,7 +849,7 @@ function classifyTerrain(mesh, r_xyz, tect, sf, seed) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 4: Skeleton
+//  阶段 4：地形骨架
 //  Geological feature shapes. Includes feature-bound structural noise
 //  (stress heightVar, ridge along-strike, fold ridges, MOR ridged uplift,
 //  rift volcanic, abyss mottling, interior mod) but NO uniform surface
@@ -941,7 +941,7 @@ function buildSkeleton(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plateSeeds,
                 r_elevation[r] *= 1 - suppression * SUBDUCTING_SUPPRESSION;
             }
 
-            // Stress uplift / depression with along-strike heightVar (structural)
+            // 应力抬升/凹陷，并沿走向加入结构性 heightVar。
             if (stressNorm > 0.01) {
                 const stressMag = stressNorm * stressNorm * STRESS_MAG_SCALE * orogenicPower;
                 const uplift  = stressMag * (1 - sf_r);
@@ -977,23 +977,23 @@ function buildSkeleton(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plateSeeds,
             {
                 const rd = riftDist[r];
                 if (rd !== Infinity) {
-                    // Width modulation along rift length — same noise for both
-                    // walls so the band as a whole pinches/bulges together.
+                    // 沿裂谷长度调制宽度：两侧使用同一噪声，
+                    // 让整条带共同收缩或鼓胀。
                     const widthRaw = riftNoise.fbm(
                         x * RIFT_WIDTH_VAR_FREQ + 91.3,
                         y * RIFT_WIDTH_VAR_FREQ + 17.6,
                         z * RIFT_WIDTH_VAR_FREQ + 64.2, 2);
                     const widthNorm = Math.max(0, Math.min(1, 0.5 + widthRaw));
                     // Floor biases toward narrow: widthNorm² makes most
-                    // cells sample low values, so the typical valley is
-                    // axis-only with occasional wider sections.
+                    // 单元采样到低值，因此典型谷地
+                    // 主要贴近轴线，只偶尔出现更宽段。
                     const floorScale = RIFT_FLOOR_VAR_MIN + (1 - RIFT_FLOOR_VAR_MIN) * widthNorm * widthNorm;
                     const shoulderScale = RIFT_SHOULDER_VAR_MIN + (1 - RIFT_SHOULDER_VAR_MIN) * widthNorm;
 
                     // Per-side width asymmetry — sample noise offset by plate
-                    // ID so cells on opposite walls of the rift get
+                    // ID，使裂谷两侧壁上的单元获得
                     // independent width factors. Within one plate, neighbors
-                    // sample similar values so the asymmetry varies smoothly
+                    // 采样相似数值，从而让不对称性平滑变化。
                     // along rift length.
                     const plateOffset = (r_plate[r] * 0.6180339887) % 1 * 100;
                     const asymRaw = riftNoise.fbm(
@@ -1004,9 +1004,9 @@ function buildSkeleton(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plateSeeds,
                     const widthAsym = RIFT_WIDTH_ASYM_MIN + (1 - RIFT_WIDTH_ASYM_MIN) * asymNorm;
 
                     // Floor zone: rd in [0, floorEnd]. Shoulders extend BEYOND
-                    // the valley edge — inner/outer offsets stack on top of
-                    // floorEnd so shoulder extent is from the valley wall,
-                    // not from rift center.
+                    // 谷缘；内/外偏移叠加在
+                    // floorEnd 之上，因此肩部范围从谷壁起算，
+                    // 而不是从裂谷中心起算。
                     const floorEnd = RIFT_FLOOR_MULT * scaleFactor * floorScale * widthAsym;
                     const shoulderEnd = floorEnd + RIFT_SHOULDER_INNER_MULT * scaleFactor * shoulderScale * widthAsym;
                     const localHalfWidth = floorEnd + RIFT_SHOULDER_OUTER_MULT * scaleFactor * shoulderScale * widthAsym;
@@ -1059,7 +1059,7 @@ function buildSkeleton(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plateSeeds,
                 }
             }
 
-            // Convergent ridgeline (with structural width + along-strike noise)
+            // 汇聚山脊线（带结构宽度与沿走向噪声）。
             {
                 const dMtnRidge = dist_mountain[r];
                 if (dMtnRidge !== Infinity && dMtnRidge < ridgeExtent && stressNorm > 0.01) {
@@ -1133,12 +1133,12 @@ function buildSkeleton(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plateSeeds,
                 }
             }
 
-            // Soft interior floor — skipped inside the rift graben (axis +
-            // floor) so the valley depression survives. Shoulders and the
-            // fadeout band remain subject to the floor since they're meant
-            // to sit above plateau level anyway. Uses the BASE floor extent
+            // 柔和内陆基底：在裂谷地堑内部跳过（轴线 +
+            // 谷底），以保留谷地凹陷。肩部和
+            // 渐隐带仍受基底影响，因为它们本来就应
+            // 位于台地高度之上。使用 BASE 基底范围，
             // (not width-modulated) so even pinched sections still expose
-            // their depression — width modulation only narrows the shoulders.
+            // 它们的凹陷；宽度调制只会缩窄肩部。
             {
                 const rd = riftDist[r];
                 const inRiftFloor = rd !== Infinity &&
@@ -1178,7 +1178,7 @@ function buildSkeleton(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plateSeeds,
 
             const elevBeforeOcTec = r_elevation[r];
 
-            // Mid-ocean ridge with ridged uplift
+            // 带山脊状抬升的洋中脊。
             const rd = ridgeDist[r];
             if (rd !== Infinity && rd <= ridgeHalfWidth) {
                 const t = rd / ridgeHalfWidth;
@@ -1224,7 +1224,7 @@ function buildSkeleton(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plateSeeds,
 
             dl_tectonic[r] = r_elevation[r] - elevBeforeOcTec;
 
-            // Ocean clamp (will be re-clamped after stage 5)
+            // 海洋 clamp (will be re-clamped after stage 5)
             if (r_elevation[r] > OCEAN_FLOOR_CLAMP) r_elevation[r] = OCEAN_FLOOR_CLAMP;
         }
     }
@@ -1233,10 +1233,10 @@ function buildSkeleton(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plateSeeds,
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 5: Tectonic-band noise
-//  Single consolidated pass replacing the scattered main+detail+fine+
-//  ridged+ocean noise sites in the original. One per-cell amplitude
-//  (r_noiseAmp from classifier), three frequency bands plus ridged blend
+//  阶段 5：构造带噪声
+//  单一整合通道，替代原本分散的 main+detail+fine+
+//  ridged+ocean 噪声位置。每个单元一个振幅，
+//  （来自分类器的 r_noiseAmp），三段频带加山脊混合。
 //  on land, single fbm on ocean.
 // ─────────────────────────────────────────────────────────────────────────
 function applyTectonicBandNoise(mesh, r_xyz, r_elevation, sf, tt, noise, noiseMag, debugLayers) {
@@ -1262,7 +1262,7 @@ function applyTectonicBandNoise(mesh, r_xyz, r_elevation, sf, tt, noise, noiseMa
             // Re-clamp ocean cells back below sea level, BUT preserve real
             // islands. Island arcs / volcanoes / hotspots ran in stage 6 and
             // may have pushed ocean cells well above sea level. Cells above
-            // ISLAND_PEAK_FLOOR are intentional islands; only clamp the tiny
+            // ISLAND_PEAK_FLOOR 表示有意生成的岛屿；只钳制微小
             // noise-driven blips below that threshold.
             if (r_elevation[r] > OCEAN_FLOOR_CLAMP && r_elevation[r] < ISLAND_PEAK_FLOOR) {
                 r_elevation[r] = OCEAN_FLOOR_CLAMP;
@@ -1300,9 +1300,9 @@ function applyTectonicBandNoise(mesh, r_xyz, r_elevation, sf, tt, noise, noiseMa
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 6: Elevation-gated detail
-//  Mountain dissection + summit peaks. Replaces the dissection/summit
-//  blocks inside the original main loop.
+//  阶段 6：高程门控细节
+//  山地切割 + 峰顶。替代原先的切割/峰顶
+//  主循环内部块。
 // ─────────────────────────────────────────────────────────────────────────
 function applyDetailTexture(mesh, r_xyz, r_elevation, tect, sf, noise, noiseMag, debugLayers) {
     const { numRegions } = mesh;
@@ -1350,8 +1350,8 @@ function applyDetailTexture(mesh, r_xyz, r_elevation, tect, sf, noise, noiseMag,
 //  Stage: Phasor ridges (shaped, directional)
 //
 //  Sums Gabor-like wavelet kernels (envelope × complex exponential) seeded
-//  in stressed land regions. Each kernel inherits the local stress
-//  direction (with bounded random jitter); the wavelet's phase advances
+//  位于受应力影响的陆地区域。每个核继承局部应力
+//  方向（带有限随机扰动）；小波相位推进
 //  along that direction, which puts ridges *perpendicular* to it —
 //  parallel to orogen strike.
 //
@@ -1360,12 +1360,12 @@ function applyDetailTexture(mesh, r_xyz, r_elevation, tect, sf, noise, noiseMag,
 //  (e.g. transition zones), so we don't get noise where no clear
 //  direction dominates.
 //
-//  Geological intuition: replaces the v1 sin-based "fold ridges." Real
+//  地质直觉：替代 v1 基于正弦的“褶皱山脊”。真实
 //  fold-and-thrust belts run perpendicular to compression; phasor noise
-//  driven by the propagated stress field gives that for free, with
-//  organic curvature from kernel jitter and orientation interference.
+//  由传播后的应力场驱动即可自然得到，并带有
+//  核扰动和方向干涉产生的自然弯曲。
 //
-//  Wavelength and bandwidth are in km; kernel count is global, so the
+//  波长和带宽以 km 计；核数量是全局量，因此
 //  result is scale-invariant in physical units (independent of mesh
 //  resolution per CLAUDE.md guidance).
 // ─────────────────────────────────────────────────────────────────────────
@@ -1376,10 +1376,10 @@ function applyPhasorRidges(mesh, r_xyz, r_elevation, tect, sf, tt, noiseMag, see
     const { r_t_foldBelt } = tt;
     const dl_phasor = debugLayers.phasorRidge;
     // Orogenic power was computed in stage 4 (skeleton) and stored centered
-    // on 0 in debugLayers.orogenicPower (range [-0.5, +0.5] for diverging
-    // colormap). Add 0.5 to recover the [0, 1] orogenic-power factor used
-    // by the stress uplift formula — phasor uses the same factor so it
-    // varies in concert with the existing orogeny pattern.
+    // 以 0 为中心存入 debugLayers.orogenicPower（发散色标范围 [-0.5, +0.5]），
+    // 加 0.5 可恢复应力抬升公式使用的 [0, 1] 造山强度因子，
+    // 相量山脊使用同一因子，因此它
+    // 会与既有造山格局同步变化。
     const dl_oroPower = debugLayers.orogenicPower;
 
     // Convert physical km to unit-sphere angular units (R = 6371 km)
@@ -1387,17 +1387,17 @@ function applyPhasorRidges(mesh, r_xyz, r_elevation, tect, sf, tt, noiseMag, see
     const bandwidthRad = PHASOR_BANDWIDTH_KM / 6371;
     const frequency = 1 / wavelengthRad;
     const invBw2 = -0.5 / (bandwidthRad * bandwidthRad);
-    // 3-sigma cutoff in chord-length squared (≈ angle² for small angles)
+    // 弦长平方上的 3σ 截断（小角度时约等于角度平方）。
     const envelopeCutoffSq = 9 * bandwidthRad * bandwidthRad;
     // exp(-0.5 * envelopeCutoffSq / bandwidthRad²) ≈ exp(-4.5) ≈ 0.011
 
     const rng = makeRng(seed + 1313);
 
-    // ── Pre-smooth stress direction over the active stressed region ──
-    // Smoothing pass count is derived from a target physical radius
-    // (PHASOR_DIRECTION_SMOOTHING_KM) divided by avg edge length, so the
-    // smoothing covers the same physical distance regardless of detail.
-    // Without this, the same constant pass count produced very different
+    // ── 在活动应力区内预平滑应力方向 ──
+    // 平滑轮数由目标物理半径推导，
+    // 即 PHASOR_DIRECTION_SMOOTHING_KM 除以平均边长，因此
+    // 无论细节等级如何，平滑覆盖相同物理距离。
+    // 如果不这样，同一个固定轮数会在不同分辨率下产生很不同的
     // physical radii at different mesh resolutions, making mountains
     // visibly less coherent at high detail.
     const avgEdgeKm = (Math.PI * 6371) / Math.sqrt(numRegions);
@@ -1436,9 +1436,9 @@ function applyPhasorRidges(mesh, r_xyz, r_elevation, tect, sf, tt, noiseMag, see
     }
     const r_stressDirSmoothed = curDir;
 
-    // Collect candidate land cells with sufficient stress, a clear stress
-    // direction, AND on the overriding side (sf below threshold). Real
-    // fold-and-thrust belts form on the overriding plate, not the subducting
+    // 收集具备足够应力和明确应力
+    // 方向，且位于上覆侧（sf 低于阈值）的陆地候选单元。真实
+    // 褶皱冲断带形成在上覆板块，而不是俯冲
     // one — biasing kernel placement to (1 - sf) reflects that.
     const candidates = [];
     const stressFloor = PHASOR_STRESS_THRESHOLD;
@@ -1478,17 +1478,17 @@ function applyPhasorRidges(mesh, r_xyz, r_elevation, tect, sf, tt, noiseMag, see
         dx /= dLen; dy /= dLen; dz /= dLen;
 
         // Optionally rotate 90° in tangent plane: d' = position × d.
-        // The stress direction points from the boundary toward the plate
+        // 应力方向从边界指向板块
         // interior. In phasor noise, ridges form perpendicular to d_k —
-        // mathematically they should be parallel to the boundary using
+        // 数学上应通过
         // raw stressDir, but observed visual is 90° off, so this flag
-        // rotates so stripes line up parallel to the orogen strike.
+        // 旋转，使条带与造山带走向平行。
         if (PHASOR_DIRECTION_PERP) {
             const rx = py * dz - pz * dy;
             const ry = pz * dx - px * dz;
             const rz = px * dy - py * dx;
             dx = rx; dy = ry; dz = rz;
-            // already unit (cross of two unit vectors with 90° between them)
+            // 已经是单位长度（两个相差 90° 的单位向量叉乘）。
         }
 
         // Orientation jitter (Rodrigues around p; since d ⊥ p, d' = d·cos + (p×d)·sin)
@@ -1508,11 +1508,11 @@ function applyPhasorRidges(mesh, r_xyz, r_elevation, tect, sf, tt, noiseMag, see
             stressNorm: Math.min(1, r_stress[r] / maxStress),
         };
     }
-    // Trim any holes from skipped kernels
+    // 清除跳过核造成的空洞。
     const liveKernels = kernels.filter(k => k);
 
-    // Spatial grid for fast lookup (lat × lon binning, like volcanos).
-    // Bandwidth ~110 km → angular ~0.017 rad → covers ~1° lat. With 36×72
+    // 用于快速查询的空间网格（纬度 × 经度分箱，类似火山）。
+    // 带宽约 110 km → 角度约 0.017 rad → 覆盖约 1° 纬度。使用 36×72
     // bins (5° each), a ±1 cell neighbor search comfortably contains all
     // contributing kernels.
     const PLAT_BINS = 36, PLON_BINS = 72;
@@ -1532,8 +1532,8 @@ function applyPhasorRidges(mesh, r_xyz, r_elevation, tect, sf, tt, noiseMag, see
     const searchBins = Math.max(1, Math.ceil(3 * bandwidthRad / binLatRad));
 
     // Phasor is a structural shaped-noise feature, not surface texture —
-    // amplitude is decoupled from the noiseMag slider so cranking phasor
-    // strength doesn't require also cranking the global noise slider.
+    // 振幅与 noiseMag 滑块解耦，因此调高相量
+    // 强度时不必同时调大全局噪声滑块。
     const baseAmp = PHASOR_AMPLITUDE;
     const warpNoise = new SimplexNoise(seed + 1717);
 
@@ -1546,7 +1546,7 @@ function applyPhasorRidges(mesh, r_xyz, r_elevation, tect, sf, tt, noiseMag, see
 
         // Phase-space domain warp: high-freq multi-octave fbm displacement
         // applied to position before computing dot(p, d_k). All kernels at
-        // this cell see the same warped position, so the level sets of
+        // 该单元看到相同的扭曲位置，因此
         // their summed phase curve consistently — phasor stripes meander
         // organically instead of tracing perfect small-circles.
         const wf = PHASOR_WARP_FREQ;
@@ -1576,7 +1576,7 @@ function applyPhasorRidges(mesh, r_xyz, r_elevation, tect, sf, tt, noiseMag, see
                 if (!cell) continue;
                 for (let ci = 0; ci < cell.length; ci++) {
                     const k = liveKernels[cell[ci]];
-                    // Chord-length² between p and kernel position (≈ angle² for small angles)
+                    // p 与核位置之间的弦长平方（小角度时约为角度平方）。
                     const ddx = px - k.x, ddy = py - k.y, ddz = pz - k.z;
                     const chordSq = ddx*ddx + ddy*ddy + ddz*ddz;
                     if (chordSq > envelopeCutoffSq) continue;
@@ -1599,32 +1599,32 @@ function applyPhasorRidges(mesh, r_xyz, r_elevation, tect, sf, tt, noiseMag, see
         if (envelopeSum < 0.02) continue;
 
         // Sawtooth profile: phase / (2π) gives [-0.5, +0.5] symmetric.
-        // PHASOR_BIAS shifts the range upward so contribution is mostly
+        // PHASOR_BIAS 将范围上移，使贡献大多
         // positive (tall peaks, mild troughs) — looks like asymmetric
         // thrust faulting rather than equal-magnitude up/down ridges.
         const totalPhase = Math.atan2(phasorIm, phasorRe);
         const ridgeCentered = totalPhase / (2 * Math.PI) + PHASOR_BIAS;
 
-        // Elevation gate: ramp from 0 at threshold to 1 over PHASOR_ELEV_RAMP_RANGE
+        // 高程门控：在 PHASOR_ELEV_RAMP_RANGE 内从阈值处的 0 渐变到 1。
         const elevGate = Math.min(1, (elev - PHASOR_ELEV_THRESHOLD) / PHASOR_ELEV_RAMP_RANGE);
 
-        // Fold-belt modulation: contribution scales directly with foldBelt
-        // weight (with a floor so non-fold-belt cells still receive a small
-        // share of the phasor signal). At foldBelt=1 the cell gets the full
+        // 褶皱带调制：贡献直接随 foldBelt
+        // 权重缩放（带下限，因此非褶皱带单元仍获得少量
+        // 相量信号）。foldBelt=1 时该单元获得完整
         // amplitude; at foldBelt=0 it gets PHASOR_FOLDBELT_FLOOR of it.
         const fb = r_t_foldBelt[r] || 0;
         const foldBeltMul = PHASOR_FOLDBELT_FLOOR + (1 - PHASOR_FOLDBELT_FLOOR) * fb;
 
-        // Orogenic-power modulation — squared so the gate is more selective.
+        // 造山强度调制：平方处理使门控更具选择性。
         // High-oroPow cells get full effect, low-oroPow cells get strongly
         // muted (oroPow=0.5 → factor 0.25, oroPow=0.7 → 0.49, oroPow=1.0 → 1.0).
         const oroRaw = (dl_oroPower[r] || 0) + 0.5;
         const oroPow = oroRaw * oroRaw;
 
         // Subduction asymmetry: full strength up to PHASOR_SF_GATE_FULL, then
-        // smoothstep down to zero at PHASOR_SF_GATE_ZERO. With FULL=0.55 and
+        // 在 PHASOR_SF_GATE_ZERO 处通过 smoothstep 降为 0。FULL=0.55 时，
         // ZERO=0.92, both sides of a C-C boundary (sf≈0.5) get full strength,
-        // overriding side of an O-C boundary gets full strength, and the
+        // 海-陆边界的上覆侧获得完整强度，而
         // subducting side fades out.
         let sfGate;
         const sfR = r_subductFactor[r];
@@ -1642,19 +1642,19 @@ function applyPhasorRidges(mesh, r_xyz, r_elevation, tect, sf, tt, noiseMag, see
         dl_phasor[r] = contrib;
     }
 
-    // Diagnostic: confirm phasor is actually doing something.
+    // 诊断：确认相量山脊确实产生了作用。
     let nonzero = 0, sumAbs = 0, maxAbs = 0;
     for (let r = 0; r < numRegions; r++) {
         const v = dl_phasor[r];
         if (v !== 0) { nonzero++; const a = Math.abs(v); sumAbs += a; if (a > maxAbs) maxAbs = a; }
     }
-    console.log(`[phasor] kernels=${liveKernels.length} cells_affected=${nonzero} max=${maxAbs.toFixed(4)} mean=${nonzero>0?(sumAbs/nonzero).toFixed(4):0}`);
+    console.log(`[phasor] 核=${liveKernels.length} 受影响单元=${nonzero} 最大值=${maxAbs.toFixed(4)} 平均值=${nonzero>0?(sumAbs/nonzero).toFixed(4):0}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 7: Coastal detail
+//  阶段 7：海岸细节
 //  Coastal fractal noise, domain-warp delta, island scattering. Lifted
-//  faithfully from original; uses spatial fields struct.
+//  忠实保留原逻辑；使用空间场结构。
 // ─────────────────────────────────────────────────────────────────────────
 function applyCoastalDetail(mesh, r_xyz, r_elevation, tect, sf, noise, noiseMag, seed, debugLayers) {
     const { numRegions } = mesh;
@@ -1735,7 +1735,7 @@ function applyCoastalDetail(mesh, r_xyz, r_elevation, tect, sf, noise, noiseMag,
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 8: Discrete edifices
+//  阶段 8：离散火山体
 //  Island arcs + volcanic arcs + hotspot domes/chains + LIPs.
 //  Each is its own helper; this orchestrator just calls them in order.
 // ─────────────────────────────────────────────────────────────────────────
@@ -1754,7 +1754,7 @@ function applyIslandArcs(mesh, r_xyz, r_elevation, tect, sf, r_plate, seed, debu
     arcDist.fill(maxArcDist + 1);
     const arcStress = new Float32Array(numRegions);
 
-    // Step 1: collect candidates that pass the MACRO gate (low-freq noise +
+    // 步骤 1：收集通过宏观门控的候选点（低频噪声 +
     // stress weighting decides which stretches of OO convergent boundary
     // are eligible to host arcs at all).
     const arcCandidates = [];
@@ -1774,10 +1774,10 @@ function applyIslandArcs(mesh, r_xyz, r_elevation, tect, sf, r_plate, seed, debu
         }
     }
 
-    // Step 2: hard-cap arc origins. Sort candidates by score descending,
+    // 步骤 2：硬性限制弧源数量。按分数降序排列候选点，
     // greedily pick up to ARC_MAX_ORIGINS that are pairwise separated by
     // at least ARC_ORIGIN_MIN_SPACING chord distance. Only these become
-    // BFS seeds — drastically limits the per-planet number of arc systems
+    // BFS 种子：大幅限制每颗行星的弧系数量。
     // regardless of mesh resolution.
     arcCandidates.sort((a, b) => b.score - a.score);
     const minSpacingSq = ARC_ORIGIN_MIN_SPACING * ARC_ORIGIN_MIN_SPACING;
@@ -1833,7 +1833,7 @@ function applyIslandArcs(mesh, r_xyz, r_elevation, tect, sf, r_plate, seed, debu
         if (n > ARC_THRESHOLD) {
             const excess = (n - ARC_THRESHOLD) / (1 - ARC_THRESHOLD);
             // Sharp peak mask: ridgedFbm² produces sparse spikes near 1
-            // with most values near 0.
+            // 且大多数数值接近 0。
             const peakN = arcNoise.ridgedFbm(x * ARC_PEAK_FREQ + 13.7, y * ARC_PEAK_FREQ + 27.1, z * ARC_PEAK_FREQ + 5.3, 3, 2.0, 0.5, 1.0);
             const peakMask = peakN * peakN;
 
@@ -1857,7 +1857,7 @@ function applyIslandArcs(mesh, r_xyz, r_elevation, tect, sf, r_plate, seed, debu
             if (r_elevation[r] > arcMaxFinal) arcMaxFinal = r_elevation[r];
         }
     }
-    console.log(`[islandArcs] macro_accepted=${macroAccepted}/${macroAccepted + macroRejected} origins_kept=${arcOrigins.length}/${ARC_MAX_ORIGINS} cells_bumped=${arcCellsBumped} mean_uplift=${arcCellsBumped>0?(arcUpliftSum/arcCellsBumped).toFixed(3):0} max_final_elev=${arcMaxFinal.toFixed(3)}`);
+    console.log(`[islandArcs] 宏弧接受=${macroAccepted}/${macroAccepted + macroRejected} 保留起点=${arcOrigins.length}/${ARC_MAX_ORIGINS} 抬升单元=${arcCellsBumped} 平均抬升=${arcCellsBumped>0?(arcUpliftSum/arcCellsBumped).toFixed(3):0} 最终最高高程=${arcMaxFinal.toFixed(3)}`);
 }
 
 function applyVolcanicArcs(mesh, r_xyz, r_elevation, tect, seed, debugLayers) {
@@ -2173,7 +2173,7 @@ function applyHotspotsAndLIPs(mesh, r_xyz, r_elevation, tect, sf, plateVec, r_pl
         }
     }
 
-    // Pre-compute per-dome constants
+    // 预计算每个穹丘的常量。
     for (let d = 0; d < domes.length; d++) {
         const dm = domes[d];
         dm.cosThreshPeak = Math.cos(dm.sigma * DOME_PEAK_THRESH_SIGMA);
@@ -2358,7 +2358,7 @@ function applyHotspotsAndLIPs(mesh, r_xyz, r_elevation, tect, sf, plateVec, r_pl
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 9: Uniform background land noise
+//  阶段 9：均匀背景陆地噪声
 // ─────────────────────────────────────────────────────────────────────────
 function applyUniformLandNoise(mesh, r_xyz, r_elevation, sf, tt, noiseMag, seed, debugLayers) {
     const { numRegions, adjOffset, adjList } = mesh;
@@ -2407,7 +2407,7 @@ function applyUniformLandNoise(mesh, r_xyz, r_elevation, sf, tt, noiseMag, seed,
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 10: Dynamic topography
+//  阶段 10：动态地形
 // ─────────────────────────────────────────────────────────────────────────
 function applyDynamicTopography(r_elevation, r_mantleNorm, debugLayers) {
     if (!r_mantleNorm) return;
@@ -2421,9 +2421,9 @@ function applyDynamicTopography(r_elevation, r_mantleNorm, debugLayers) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 11: Final shaping
-//  Peak compression + isostatic + hypsometric remap. The three composed
-//  passes from the original; preserved separately for now since their
+//  阶段 11：最终塑形
+//  峰值压缩 + 均衡补偿 + 高程分布重映射。三道组合
+//  通道来自原实现；由于它们的作用不同，暂时分开保留。
 //  composition was tuned together — collapsing into a single curve
 //  is a follow-up task.
 // ─────────────────────────────────────────────────────────────────────────
@@ -2478,7 +2478,7 @@ function applyFinalShaping(r_elevation) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Stage 12: Topology fixup
+//  阶段 12：拓扑修正
 //  Fill interior seas (BFS connectivity check; raise stranded sub-sea-level
 //  land cells).
 // ─────────────────────────────────────────────────────────────────────────
@@ -2537,15 +2537,15 @@ export function assignElevation(mesh, r_xyz, plateIsOcean, r_plate, plateVec, pl
         dynamicTopo:    new Float32Array(numRegions),
     };
 
-    // Stage 1
+    // 阶段 1
     const tect = computeTectonicState(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plateSeeds, plateDensity, noise, superPlateData, r_mantleField, spread);
-    _timing.push({ stage: '1. Tectonic state', ms: performance.now() - _t0 }); _t0 = performance.now();
+    _timing.push({ stage: '1. 构造状态', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 2
+    // 阶段 2
     const sf = computeSpatialFields(mesh, r_xyz, r_plate, plateIsOcean, tect, seed, superPlateData);
-    _timing.push({ stage: '2. Spatial fields', ms: performance.now() - _t0 }); _t0 = performance.now();
+    _timing.push({ stage: '2. 空间场', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 3
+    // 阶段 3
     const tt = classifyTerrain(mesh, r_xyz, tect, sf, seed);
     debugLayers.basin = tt.r_basinFactor;
     debugLayers.tecActivity = tt.r_tectonicActivity;
@@ -2553,51 +2553,51 @@ export function assignElevation(mesh, r_xyz, plateIsOcean, r_plate, plateVec, pl
     debugLayers.foldBeltWeight = tt.r_t_foldBelt;
     debugLayers.cratonWeight = tt.r_t_craton;
     debugLayers.basinWeight = tt.r_t_basin;
-    _timing.push({ stage: '3. Terrain classification', ms: performance.now() - _t0 }); _t0 = performance.now();
+    _timing.push({ stage: '3. 地形分类', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 4 — skeleton (first renderable intermediate; pure tectonic forms)
+    // 阶段 4：地形骨架（首个可渲染中间态；纯构造形态）
     const r_elevation = buildSkeleton(mesh, r_xyz, plateIsOcean, r_plate, plateVec, plateSeeds, tect, sf, tt, noise, noiseMag, seed, debugLayers);
-    debugLayers.skeleton = new Float32Array(r_elevation);  // snapshot
-    _timing.push({ stage: '4. Skeleton', ms: performance.now() - _t0 }); _t0 = performance.now();
+    debugLayers.skeleton = new Float32Array(r_elevation);  // 快照
+    _timing.push({ stage: '4. 地形骨架', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 5 — phasor ridges (shaped, directional; replaces v1 fold ridges)
+    // 阶段 5：相量山脊（有塑形和方向性；替代 v1 褶皱山脊）
     applyPhasorRidges(mesh, r_xyz, r_elevation, tect, sf, tt, noiseMag, seed, debugLayers);
-    _timing.push({ stage: '5. Phasor ridges', ms: performance.now() - _t0 }); _t0 = performance.now();
+    _timing.push({ stage: '5. 相量山脊', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 6 — discrete edifices (shaped: arcs, stratovolcanoes, hotspots, LIPs).
-    // Runs BEFORE textured noise so edifice shapes get textured by it.
+    // 阶段 6：离散火山体（塑形对象：弧、层状火山、热点、大火成岩省）。
+    // 在纹理噪声之前运行，让火山体形态随后获得纹理。
     applyIslandArcs(mesh, r_xyz, r_elevation, tect, sf, r_plate, seed, debugLayers);
     applyVolcanicArcs(mesh, r_xyz, r_elevation, tect, seed, debugLayers);
     applyHotspotsAndLIPs(mesh, r_xyz, r_elevation, tect, sf, plateVec, r_plate, plateIsOcean, seed, debugLayers);
-    _timing.push({ stage: '6. Edifices', ms: performance.now() - _t0 }); _t0 = performance.now();
+    _timing.push({ stage: '6. 火山体', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 7 — tectonic-band textured noise (was 5)
+    // 阶段 7：构造带纹理噪声（原阶段 5）
     applyTectonicBandNoise(mesh, r_xyz, r_elevation, sf, tt, noise, noiseMag, debugLayers);
-    _timing.push({ stage: '7. Tectonic-band noise', ms: performance.now() - _t0 }); _t0 = performance.now();
+    _timing.push({ stage: '7. 构造带噪声', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 8 — elevation-gated detail (was 6)
+    // 阶段 8：高程门控细节（原阶段 6）
     applyDetailTexture(mesh, r_xyz, r_elevation, tect, sf, noise, noiseMag, debugLayers);
-    _timing.push({ stage: '8. Detail texture', ms: performance.now() - _t0 }); _t0 = performance.now();
+    _timing.push({ stage: '8. 细节纹理', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 9 — coastal detail (was 7)
+    // 阶段 9：海岸细节（原阶段 7）
     applyCoastalDetail(mesh, r_xyz, r_elevation, tect, sf, noise, noiseMag, seed, debugLayers);
-    _timing.push({ stage: '9. Coastal detail', ms: performance.now() - _t0 }); _t0 = performance.now();
+    _timing.push({ stage: '9. 海岸细节', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 10 — uniform background land noise
+    // 阶段 10 — uniform background land noise
     applyUniformLandNoise(mesh, r_xyz, r_elevation, sf, tt, noiseMag, seed, debugLayers);
-    _timing.push({ stage: '10. Uniform land noise', ms: performance.now() - _t0 }); _t0 = performance.now();
+    _timing.push({ stage: '10. 均匀陆地噪声', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 11 — mantle vertical deflection
+    // 阶段 11 — mantle vertical deflection
     applyDynamicTopography(r_elevation, tect.r_mantleNorm, debugLayers);
-    _timing.push({ stage: '11. Dynamic topography', ms: performance.now() - _t0 }); _t0 = performance.now();
+    _timing.push({ stage: '11. 动态地形', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 12 — peak compress + isostatic + hypsometric
+    // 阶段 12 — peak compress + isostatic + hypsometric
     applyFinalShaping(r_elevation);
-    _timing.push({ stage: '12. Final shaping', ms: performance.now() - _t0 }); _t0 = performance.now();
+    _timing.push({ stage: '12. 最终塑形', ms: performance.now() - _t0 }); _t0 = performance.now();
 
-    // Stage 13 — fill interior seas
+    // 阶段 13 — fill interior seas
     fixupTopology(mesh, r_elevation, sf.r_isOcean);
-    _timing.push({ stage: '13. Topology fixup', ms: performance.now() - _t0 });
+    _timing.push({ stage: '13. 拓扑修正', ms: performance.now() - _t0 });
 
     if (superPlateData) {
         debugLayers.superPlates = new Float32Array(superPlateData.r_superPlate);

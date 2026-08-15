@@ -1,5 +1,5 @@
-// Planet generation — dispatches work to a Web Worker, falls back to
-// synchronous main-thread generation if module workers aren't supported.
+// 行星生成：把工作分发给 Web Worker，必要时回退到
+// 同步主线程生成（当模块 Worker 不受支持时）。
 
 import Delaunator from 'delaunator';
 import { setDelaunator, SphereMesh } from './sphere-mesh.js';
@@ -12,10 +12,10 @@ import { computeTemperature } from './temperature.js';
 import { classifyKoppen } from './koppen.js';
 import { attachEnvironmentInputDebugLayers } from './evolution/environment-inputs.js';
 
-// Main thread still needs Delaunator for SphereMesh reconstruction
+// 主线程仍需要 Delaunator 来重建 SphereMesh。
 setDelaunator(Delaunator);
 
-// Read all slider values from the DOM into a params object
+// 从 DOM 读取所有滑块值并组装为参数对象。
 function readSliders() {
     return {
         N: detailFromSlider(+document.getElementById('sN').value),
@@ -36,7 +36,7 @@ function readSliders() {
     };
 }
 
-// Read sliders with optional chaining (for import page where some sliders may not exist)
+// 使用可选链读取滑块（导入页可能没有某些滑块）。
 function readSlidersOptional() {
     return {
         N: detailFromSlider(+document.getElementById('sN').value),
@@ -50,42 +50,42 @@ function readSlidersOptional() {
     };
 }
 
-// --- Worker setup ---
+// --- Worker 设置 ---
 let worker = null;
 let workerSupported = true;
 try {
     worker = new Worker(new URL('./planet-worker.js', import.meta.url), { type: 'module' });
 } catch (e) {
-    console.warn('[World Orogen] Module workers not supported, falling back to main thread:', e);
+    console.warn('[World Orogen] 当前环境不支持模块 Worker，回退到主线程：', e);
     workerSupported = false;
 }
 
-// Active callback state
+// 当前回调状态
 let _onProgress = null;
-let _onDone = null;
+let _on完成 = null;
 let _t0 = 0;
 
 function resetUI() {
     const btn = document.getElementById('generate');
     btn.disabled = false;
-    btn.textContent = 'Build New World';
+    btn.textContent = '生成新世界';
     btn.classList.remove('generating', 'stale');
 }
 
 function fail(err) {
-    console.error('[World Orogen] Generation failed:', err);
+    console.error('[World Orogen] 生成失败：', err);
     resetUI();
     if (_onProgress) _onProgress(0, '');
 }
 
-// Reconstruct SphereMesh from transferred data
+// 根据传输数据重建 SphereMesh。
 function reconstructMesh(triangles, halfedges, numRegions) {
     return new SphereMesh(triangles, halfedges, numRegions);
 }
 
-// Build minimal wind-result-like object for computeOceanCurrents fallback.
-// Derives geographic data (lat, sinLat, isLand, tangent frames) from r_xyz/r_elevation
-// and wraps the wind vectors the worker already sent.
+// 为 computeOceanCurrents 回退路径构建最小风场结果对象。
+// 从 r_xyz/r_elevation 派生地理数据（纬度、纬度正弦、海陆、切平面坐标系），
+// 并包装 Worker 已经发送的风矢量。
 function buildWindResultForOcean(mesh, r_xyz, r_elevation,
     r_wind_east_summer, r_wind_north_summer, r_wind_east_winter, r_wind_north_winter,
     itczLons, itczLatsSummer, itczLatsWinter) {
@@ -104,14 +104,14 @@ function buildWindResultForOcean(mesh, r_xyz, r_elevation,
         r_lon[r] = Math.atan2(x, z);
         r_isLand[r] = r_elevation[r] > 0 ? 1 : 0;
 
-        // East = cross(up, position) normalized
+        // 东向 = cross(up, position) 后归一化。
         let ex = z, ey = 0, ez = -x;
         const elen = Math.sqrt(ex * ex + ez * ez);
         if (elen > 1e-10) { ex /= elen; ez /= elen; }
         else { ex = 1; ez = 0; } // poles
         r_eastX[r] = ex; r_eastY[r] = ey; r_eastZ[r] = ez;
 
-        // North = cross(position, east) normalized
+        // 北向 = cross(position, east) 后归一化。
         let nx = y * ez - z * ey;
         let ny = z * ex - x * ez;
         let nz = x * ey - y * ex;
@@ -119,7 +119,7 @@ function buildWindResultForOcean(mesh, r_xyz, r_elevation,
         r_northX[r] = nx / nlen; r_northY[r] = ny / nlen; r_northZ[r] = nz / nlen;
     }
 
-    // BFS coast distance through land (needed by precipitation fallback)
+    // 穿越陆地的 BFS 海岸距离（降水回退路径需要）。
     const { adjOffset, adjList } = mesh;
     const r_coastDistLand = new Int32Array(n);
     r_coastDistLand.fill(-1);
@@ -149,7 +149,7 @@ function buildWindResultForOcean(mesh, r_xyz, r_elevation,
         }
     }
 
-    // Compute wind speed from components (prevents TypeError if accessed)
+    // 根据分量计算风速（避免访问时触发 TypeError）。
     const r_wind_speed_summer = new Float32Array(n);
     const r_wind_speed_winter = new Float32Array(n);
     for (let r = 0; r < n; r++) {
@@ -159,7 +159,7 @@ function buildWindResultForOcean(mesh, r_xyz, r_elevation,
         r_wind_speed_winter[r] = Math.sqrt(we * we + wn * wn);
     }
 
-    // Zero-filled pressure deviation (neutral: no pressure-driven effects in fallback)
+    // 用零填充气压偏差（中性：回退路径中不引入气压驱动效应）。
     const r_pressure_summer = new Float32Array(n);
     const r_pressure_winter = new Float32Array(n);
 
@@ -246,8 +246,8 @@ if (worker) {
                 if (msg.terrainMetrics) window.__terrainMetrics = msg.terrainMetrics;
                 const tState = performance.now() - tStateStart;
 
-                // Main-thread fallbacks — only run when climate was requested but partially missing
-                // (e.g. older cached worker). Skip entirely when skipClimate was set.
+                // 主线程回退：仅在请求了气候但部分数据缺失时运行。
+                // 例如旧缓存 Worker；设置 skipClimate 时完全跳过。
                 if (!msg.skipClimate) {
                     let tOceanFallback = 0;
                     const d = state.curData;
@@ -260,7 +260,7 @@ if (worker) {
                     }
 
                     if (!d.r_ocean_speed_summer && windResult) {
-                        console.log('[generate.js] Ocean data missing from worker — computing on main thread');
+                        console.log('[generate.js] Worker 缺少海洋数据，正在主线程计算');
                         const t0Ocean = performance.now();
                         const oceanResult = computeOceanCurrents(mesh, d.r_xyz, d.r_elevation, windResult);
                         d.r_ocean_current_east_summer = oceanResult.r_ocean_current_east_summer;
@@ -272,11 +272,11 @@ if (worker) {
                         d.r_ocean_warmth_summer = oceanResult.r_ocean_warmth_summer;
                         d.r_ocean_warmth_winter = oceanResult.r_ocean_warmth_winter;
                         tOceanFallback = performance.now() - t0Ocean;
-                        console.log(`[generate.js] Ocean currents computed on main thread in ${tOceanFallback.toFixed(0)} ms`);
+                        console.log(`[generate.js] 洋流已在主线程计算完成，耗时 ${tOceanFallback.toFixed(0)} ms`);
                     }
 
                     if (!d.r_precip_summer && windResult) {
-                        console.log('[generate.js] Precipitation data missing from worker — computing on main thread');
+                        console.log('[generate.js] Worker 缺少降水数据，正在主线程计算');
                         const t0Precip = performance.now();
                         const precipResult = computePrecipitation(mesh, d.r_xyz, d.r_elevation, windResult, d);
                         d.r_precip_summer = precipResult.r_precip_summer;
@@ -287,11 +287,11 @@ if (worker) {
                             d.debugLayers.rainShadowSummer = precipResult.r_rainshadow_summer;
                             d.debugLayers.rainShadowWinter = precipResult.r_rainshadow_winter;
                         }
-                        console.log(`[generate.js] Precipitation computed on main thread in ${(performance.now() - t0Precip).toFixed(0)} ms`);
+                        console.log(`[generate.js] 降水已在主线程计算完成，耗时 ${(performance.now() - t0Precip).toFixed(0)} ms`);
                     }
 
                     if (!d.r_temperature_summer && windResult) {
-                        console.log('[generate.js] Temperature data missing from worker — computing on main thread');
+                        console.log('[generate.js] Worker 缺少温度数据，正在主线程计算');
                         const t0Temp = performance.now();
                         const tempResult = computeTemperature(mesh, d.r_xyz, d.r_elevation, windResult, d, d);
                         d.r_temperature_summer = tempResult.r_temperature_summer;
@@ -301,7 +301,7 @@ if (worker) {
                             d.debugLayers.tempWinter = tempResult.r_temperature_winter;
                             d.debugLayers.tempContinentality = tempResult.r_tempContinentality;
                         }
-                        console.log(`[generate.js] Temperature computed on main thread in ${(performance.now() - t0Temp).toFixed(0)} ms`);
+                        console.log(`[generate.js] 温度已在主线程计算完成，耗时 ${(performance.now() - t0Temp).toFixed(0)} ms`);
                     }
 
                     if (state.curData.debugLayers && !state.curData.debugLayers.koppen &&
@@ -322,7 +322,7 @@ if (worker) {
                 const tMainTotal = performance.now() - tMainStart;
                 const tTotal = performance.now() - _t0;
 
-                // Diagnostics
+                // 诊断
                 {
                     let landCount = 0, nanCount = 0;
                     const plateIsOcean = state.curData.plateIsOcean;
@@ -333,63 +333,63 @@ if (worker) {
                         if (isNaN(r_elevation[r])) nanCount++;
                     }
                     const landPct = (100 * landCount / mesh.numRegions).toFixed(1);
-                    if (nanCount > 0) console.error(`[World Orogen] WARNING: ${nanCount} NaN elevation values detected!`);
-                    if (landCount / mesh.numRegions < 0.10) console.warn(`[World Orogen] WARNING: Only ${landPct}% land (${landCount} regions). Ocean/land growth may have stalled.`);
+                    if (nanCount > 0) console.error(`[World Orogen] 警告：检测到 ${nanCount} 个 NaN 高程值！`);
+                    if (landCount / mesh.numRegions < 0.10) console.warn(`[World Orogen] 警告：陆地仅占 ${landPct}%（${landCount} 个区域）。海陆扩张可能已停滞。`);
                 }
 
                 const f = v => typeof v === 'number' ? v.toFixed(1) : v;
 
-                console.log(`%c[World Orogen] Generation complete`, 'color:#6cf;font-weight:bold');
+                console.log(`%c[World Orogen] 生成完成`, 'color:#6cf;font-weight:bold');
                 if (msg._params) {
-                    console.log(`  Params: N=${msg._params.N.toLocaleString()} P=${msg._params.P} jitter=${msg._params.jitter} noise=${msg._params.nMag} continents=${msg._params.numContinents} seed=${msg._params.seed}`);
-                    console.log(`  Sculpting: warp=${msg._params.terrainWarp} smooth=${msg._params.smoothing} glacial=${msg._params.glacialErosion} hydraulic=${msg._params.hydraulicErosion} thermal=${msg._params.thermalErosion} ridge=${msg._params.ridgeSharpening}`);
+                    console.log(`  参数：N=${msg._params.N.toLocaleString()} P=${msg._params.P} 抖动=${msg._params.jitter} 噪声=${msg._params.nMag} 大陆=${msg._params.numContinents} 种子=${msg._params.seed}`);
+                    console.log(`  地形雕刻：扭曲=${msg._params.terrainWarp} 平滑=${msg._params.smoothing} 冰川=${msg._params.glacialErosion} 水力=${msg._params.hydraulicErosion} 热侵蚀=${msg._params.thermalErosion} 山脊=${msg._params.ridgeSharpening}`);
                 }
-                console.log(`  Regions: ${mesh.numRegions.toLocaleString()}  Triangles: ${mesh.numTriangles.toLocaleString()}  Sides: ${mesh.numSides.toLocaleString()}`);
+                console.log(`  区域：${mesh.numRegions.toLocaleString()}  三角形：${mesh.numTriangles.toLocaleString()}  边：${mesh.numSides.toLocaleString()}`);
 
-                // Worker pipeline stages
+                // Worker 管线阶段
                 if (msg._pipelineTiming) {
-                    console.groupCollapsed('  %cWorker pipeline stages', 'color:#8cf');
-                    console.table(msg._pipelineTiming.map(r => ({ Stage: r.stage, 'ms': f(r.ms) })));
+                    console.groupCollapsed('  %cWorker 管线阶段', 'color:#8cf');
+                    console.table(msg._pipelineTiming.map(r => ({ 阶段: r.stage, '毫秒': f(r.ms) })));
                     console.groupEnd();
                 }
 
-                // Elevation sub-stages
+                // 高程子阶段
                 if (msg._timing) {
-                    console.groupCollapsed('  %cElevation sub-stages', 'color:#fc8');
-                    console.table(msg._timing.map(r => ({ Stage: r.stage, 'ms': f(r.ms) })));
+                    console.groupCollapsed('  %c高程子阶段', 'color:#fc8');
+                    console.table(msg._timing.map(r => ({ 阶段: r.stage, '毫秒': f(r.ms) })));
                     console.groupEnd();
                 }
 
-                // Post-processing sub-stages
+                // 后处理子阶段
                 if (msg._postTiming && msg._postTiming.length > 0) {
-                    console.groupCollapsed('  %cPost-processing sub-stages', 'color:#8f8');
-                    console.table(msg._postTiming.map(r => ({ Stage: r.stage, 'ms': f(r.ms) })));
+                    console.groupCollapsed('  %c后处理子阶段', 'color:#8f8');
+                    console.table(msg._postTiming.map(r => ({ 阶段: r.stage, '毫秒': f(r.ms) })));
                     console.groupEnd();
                 }
 
-                // Summary
+                // 汇总
                 const tWorker = msg._workerTotal || 0;
                 const tTransfer = tTotal - tWorker - tMainTotal;
                 console.log(
-                    `  %cSummary:%c Worker: ${f(tWorker)} ms | Transfer: ${f(tTransfer)} ms | Main thread: ${f(tMainTotal)} ms (reconstruct=${f(tRecon)}, colors=${f(tColors)}, state=${f(tState)}, buildMesh=${f(tBuild)}) | TOTAL: ${f(tTotal)} ms`,
+                    `  %c汇总：%c Worker：${f(tWorker)} 毫秒 | 传输：${f(tTransfer)} 毫秒 | 主线程：${f(tMainTotal)} 毫秒（重建=${f(tRecon)}，着色=${f(tColors)}，状态=${f(tState)}，构建网格=${f(tBuild)}）| 总计：${f(tTotal)} 毫秒`,
                     'color:#ff6;font-weight:bold', ''
                 );
 
                 const ms = tTotal.toFixed(0);
                 document.getElementById('stats').innerHTML =
-                    `Regions: ${mesh.numRegions.toLocaleString()}<br>` +
-                    `Triangles: ${mesh.numTriangles.toLocaleString()}<br>` +
-                    `Generated in ${ms} ms<br>` +
-                    `<span style="color:#445;font-size:10px">worker ${tWorker.toFixed(0)} · render ${tBuild.toFixed(0)}</span>`;
+                    `区域：${mesh.numRegions.toLocaleString()}<br>` +
+                    `三角形：${mesh.numTriangles.toLocaleString()}<br>` +
+                    `生成耗时：${ms} 毫秒<br>` +
+                    `<span style="color:#445;font-size:10px">worker ${tWorker.toFixed(0)} · 渲染 ${tBuild.toFixed(0)}</span>`;
 
-                if (_onProgress) _onProgress(100, 'Done');
+                if (_onProgress) _onProgress(100, '完成');
                 resetUI();
                 document.getElementById('generate').dispatchEvent(new CustomEvent('generate-done'));
-                if (_onDone) { _onDone(); _onDone = null; }
+                if (_on完成) { _on完成(); _on完成 = null; }
                 break;
             }
 
-            case 'reapplyDone': {
+            case 'reapply完成': {
                 const tMainStart = performance.now();
                 state.climateComputed = !msg.skipClimate;
                 const d = state.curData;
@@ -417,7 +417,7 @@ if (worker) {
                     d.r_ocean_warmth_summer = msg.r_ocean_warmth_summer;
                     d.r_ocean_warmth_winter = msg.r_ocean_warmth_winter;
                 }
-                // Fallback: compute ocean currents on main thread if worker didn't
+                // 回退：若 Worker 未计算洋流，则在主线程计算。
                 if (!d.r_ocean_speed_summer && d.r_wind_east_summer) {
                     const wr = buildWindResultForOcean(d.mesh, d.r_xyz, d.r_elevation,
                         d.r_wind_east_summer, d.r_wind_north_summer,
@@ -437,8 +437,8 @@ if (worker) {
                 if (msg.windDebugLayers) {
                     Object.assign(d.debugLayers, msg.windDebugLayers);
                 }
-                // Fallback: compute precip/temp on main thread if climate was
-                // requested but data is missing (e.g. partial worker result)
+                // 回退：若已请求气候但数据缺失，则在主线程计算降水/温度。
+                // 例如只拿到部分 Worker 结果。
                 if (!msg.skipClimate && d.r_wind_east_summer) {
                     let wr = null;
                     if (!d.r_precip_summer || !d.r_temperature_summer) {
@@ -468,8 +468,8 @@ if (worker) {
                         }
                     }
                 }
-                // Clear stale climate data when climate was skipped so rendering
-                // doesn't show mismatched terrain/climate from a previous run
+                // 跳过气候时清除过期气候数据，避免渲染层
+                // 显示上一次运行遗留的地形/气候错配。
                 if (msg.skipClimate) {
                     d.r_precip_summer = null;
                     d.r_precip_winter = null;
@@ -494,23 +494,23 @@ if (worker) {
 
                 const f = v => typeof v === 'number' ? v.toFixed(1) : v;
                 const rt = msg._reapplyTiming || {};
-                console.log(`%c[World Orogen] Reapply complete`, 'color:#8f8;font-weight:bold');
+                console.log(`%c[World Orogen] 重新应用完成`, 'color:#8f8;font-weight:bold');
                 if (msg._postTiming && msg._postTiming.length > 0) {
-                    console.groupCollapsed('  %cPost-processing sub-stages', 'color:#8f8');
-                    console.table(msg._postTiming.map(r => ({ Stage: r.stage, 'ms': f(r.ms) })));
+                    console.groupCollapsed('  %c后处理子阶段', 'color:#8f8');
+                    console.table(msg._postTiming.map(r => ({ 阶段: r.stage, '毫秒': f(r.ms) })));
                     console.groupEnd();
                 }
                 console.log(
-                    `  %cSummary:%c Worker: ${f(rt.workerTotal || 0)} ms (clone=${f(rt.clone || 0)}, postProcess=${f(rt.postProcessing || 0)}, triElev=${f(rt.triangleElevations || 0)}) | Main: ${f(tMainTotal)} ms (buildMesh=${f(tBuild)})`,
+                    `  %c汇总：%c Worker：${f(rt.workerTotal || 0)} 毫秒（克隆=${f(rt.clone || 0)}，后处理=${f(rt.postProcessing || 0)}，三角高程=${f(rt.triangleElevations || 0)}）| 主线程：${f(tMainTotal)} 毫秒（构建网格=${f(tBuild)}）`,
                     'color:#ff6;font-weight:bold', ''
                 );
 
-                if (_onProgress) _onProgress(100, 'Done');
-                if (_onDone) { _onDone(); _onDone = null; }
+                if (_onProgress) _onProgress(100, '完成');
+                if (_on完成) { _on完成(); _on完成 = null; }
                 break;
             }
 
-            case 'editDone': {
+            case 'edit完成': {
                 const tMainStart = performance.now();
                 state.climateComputed = !msg.skipClimate;
                 const d = state.curData;
@@ -542,7 +542,7 @@ if (worker) {
                     d.r_ocean_warmth_summer = msg.r_ocean_warmth_summer;
                     d.r_ocean_warmth_winter = msg.r_ocean_warmth_winter;
                 }
-                // Fallback: compute ocean currents on main thread if worker didn't
+                // 回退：若 Worker 未计算洋流，则在主线程计算。
                 if (!d.r_ocean_speed_summer && d.r_wind_east_summer) {
                     const wr = buildWindResultForOcean(d.mesh, d.r_xyz, d.r_elevation,
                         d.r_wind_east_summer, d.r_wind_north_summer,
@@ -562,8 +562,8 @@ if (worker) {
                 d.debugLayers = msg.debugLayers;
                 d.plateMotion = msg.plateMotion || d.plateMotion || null;
                 d.geologyMemory = msg.geologyMemory || d.geologyMemory || null;
-                // Fallback: compute precip/temp on main thread if climate was
-                // requested but data is missing (e.g. partial worker result)
+                // 回退：若已请求气候但数据缺失，则在主线程计算降水/温度。
+                // 例如只拿到部分 Worker 结果。
                 if (!msg.skipClimate && d.r_wind_east_summer) {
                     let wr = null;
                     if (!d.r_precip_summer || !d.r_temperature_summer) {
@@ -622,32 +622,32 @@ if (worker) {
 
                 const f = v => typeof v === 'number' ? v.toFixed(1) : v;
                 const et = msg._editTiming || {};
-                console.log(`%c[World Orogen] Edit recompute complete`, 'color:#fc8;font-weight:bold');
+                console.log(`%c[World Orogen] 编辑重算完成`, 'color:#fc8;font-weight:bold');
 
                 if (msg._timing) {
-                    console.groupCollapsed('  %cElevation sub-stages', 'color:#fc8');
-                    console.table(msg._timing.map(r => ({ Stage: r.stage, 'ms': f(r.ms) })));
+                    console.groupCollapsed('  %c高程子阶段', 'color:#fc8');
+                    console.table(msg._timing.map(r => ({ 阶段: r.stage, '毫秒': f(r.ms) })));
                     console.groupEnd();
                 }
                 if (msg._postTiming && msg._postTiming.length > 0) {
-                    console.groupCollapsed('  %cPost-processing sub-stages', 'color:#8f8');
-                    console.table(msg._postTiming.map(r => ({ Stage: r.stage, 'ms': f(r.ms) })));
+                    console.groupCollapsed('  %c后处理子阶段', 'color:#8f8');
+                    console.table(msg._postTiming.map(r => ({ 阶段: r.stage, '毫秒': f(r.ms) })));
                     console.groupEnd();
                 }
                 console.log(
-                    `  %cSummary:%c Worker: ${f(et.workerTotal || 0)} ms (elevation=${f(et.elevation || 0)}, postProcess=${f(et.postProcessing || 0)}, triElev=${f(et.triangleElevations || 0)}, retain=${f(et.retainState || 0)}) | Main: ${f(tMainTotal)} ms (colors=${f(tColors)}, buildMesh=${f(tBuild)})`,
+                    `  %c汇总：%c Worker：${f(et.workerTotal || 0)} 毫秒（高程=${f(et.elevation || 0)}，后处理=${f(et.postProcessing || 0)}，三角高程=${f(et.triangleElevations || 0)}，保留状态=${f(et.retainState || 0)}）| 主线程：${f(tMainTotal)} 毫秒（着色=${f(tColors)}，构建网格=${f(tBuild)}）`,
                     'color:#ff6;font-weight:bold', ''
                 );
 
-                if (_onProgress) _onProgress(100, 'Done');
-                if (_onDone) { _onDone(); _onDone = null; }
+                if (_onProgress) _onProgress(100, '完成');
+                if (_on完成) { _on完成(); _on完成 = null; }
                 break;
             }
 
-            case 'climateDone': {
+            case 'climate完成': {
                 const d = state.curData;
                 if (d) {
-                    // Copy all climate arrays
+                    // 复制所有气候数组
                     d.r_wind_east_summer = msg.r_wind_east_summer;
                     d.r_wind_north_summer = msg.r_wind_north_summer;
                     d.r_wind_east_winter = msg.r_wind_east_winter;
@@ -667,7 +667,7 @@ if (worker) {
                     d.r_precip_winter = msg.r_precip_winter;
                     d.r_temperature_summer = msg.r_temperature_summer;
                     d.r_temperature_winter = msg.r_temperature_winter;
-                    // Merge climate debug layers
+                    // 合并气候检查图层
                     if (msg.climateDebugLayers && d.debugLayers) {
                         Object.assign(d.debugLayers, msg.climateDebugLayers);
                     }
@@ -678,14 +678,14 @@ if (worker) {
 
                 const f = v => typeof v === 'number' ? v.toFixed(1) : v;
                 const ct = msg._climateTiming || {};
-                console.log(`%c[World Orogen] Climate computed on demand`, 'color:#f8a;font-weight:bold');
+                console.log(`%c[World Orogen] 气候已按需计算`, 'color:#f8a;font-weight:bold');
                 console.log(
-                    `  %cSummary:%c Worker: ${f(ct.workerTotal || 0)} ms (wind=${f(ct.wind || 0)}, ocean=${f(ct.ocean || 0)}, precip=${f(ct.precipitation || 0)}, temp=${f(ct.temperature || 0)}, koppen=${f(ct.koppen || 0)})`,
+                    `  %c汇总：%c Worker：${f(ct.workerTotal || 0)} 毫秒（风场=${f(ct.wind || 0)}，海洋=${f(ct.ocean || 0)}，降水=${f(ct.precipitation || 0)}，温度=${f(ct.temperature || 0)}，柯本=${f(ct.koppen || 0)}）`,
                     'color:#ff6;font-weight:bold', ''
                 );
 
-                if (_onProgress) _onProgress(100, 'Done');
-                if (_onDone) { _onDone(); _onDone = null; }
+                if (_onProgress) _onProgress(100, '完成');
+                if (_on完成) { _on完成(); _on完成 = null; }
                 break;
             }
 
@@ -694,14 +694,14 @@ if (worker) {
 
             case 'error':
                 fail(msg.message);
-                if (_onDone) { _onDone(); _onDone = null; }
+                if (_on完成) { _on完成(); _on完成 = null; }
                 break;
         }
     };
 
     worker.onerror = (e) => {
         fail(e.message || 'Worker crashed');
-        if (_onDone) { _onDone(); _onDone = null; }
+        if (_on完成) { _on完成(); _on完成 = null; }
     };
 }
 
@@ -730,7 +730,7 @@ async function loadFallback() {
 }
 
 function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate) {
-    // Dynamic import already resolved — run synchronously via rAF stages
+    // 动态导入已完成，通过 rAF 阶段同步运行。
     const m = _fallbackModules;
     const btn = document.getElementById('generate');
     const { N, P, jitter, nMag, numContinents, terrainWarp, smoothing, hydraulicErosion, thermalErosion, ridgeSharpening, glacialErosion, continentSizeVariety, temperatureOffset, precipitationOffset, landCoverage } = readSliders();
@@ -738,7 +738,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
     const ctx = {};
 
     const stages = [
-        { pct: 0, label: 'Shaping the world\u2026', work() {
+        { pct: 0, label: '正在塑造世界…', work() {
             ctx.seed = overrideSeed ?? Math.floor(Math.random() * 16777216);
             ctx.rng = m.rng.makeRng(ctx.seed);
             const { mesh, r_xyz } = m.sphere.buildSphere(N, jitter, ctx.rng);
@@ -746,7 +746,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
             ctx.t_xyz = m.sphere.generateTriangleCenters(mesh, r_xyz);
             ctx.neighborDist = m.sphere.computeNeighborDist(mesh, r_xyz);
         }},
-        { pct: 10, label: 'Generating coarse plates\u2026', work() {
+        { pct: 10, label: '正在生成粗略板块…', work() {
             const { coarseMesh, coarse_xyz, coarse_r_plate, coarsePlateSeeds, coarsePlateVec, coarsePlateIsOcean } =
                 m.coarsePlates.generateCoarsePlates(ctx.seed, P, numContinents, continentSizeVariety, landCoverage);
             ctx.coarseMesh = coarseMesh; ctx.coarse_xyz = coarse_xyz;
@@ -754,11 +754,11 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
             ctx.plateSeeds = coarsePlateSeeds; ctx.plateVec = coarsePlateVec;
             ctx.coarsePlateIsOcean = coarsePlateIsOcean;
         }},
-        { pct: 18, label: 'Projecting plates\u2026', work() {
+        { pct: 18, label: '正在投影板块…', work() {
             ctx.r_plate = m.coarsePlates.projectCoarsePlates(ctx.mesh, ctx.r_xyz, ctx.coarseMesh, ctx.coarse_xyz, ctx.coarse_r_plate, ctx.seed, P);
             m.plates.smoothAndReconnectPlates(ctx.mesh, ctx.r_plate, ctx.plateSeeds, 3);
         }},
-        { pct: 25, label: 'Carving oceans\u2026', work() {
+        { pct: 25, label: '正在刻画海洋…', work() {
             const plateIsOcean = ctx.coarsePlateIsOcean;
             ctx.originalPlateIsOcean = new Set(plateIsOcean);
             if (toggledIndices.length > 0) {
@@ -783,7 +783,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
             ctx.plateDensityLand = plateDensityLand; ctx.plateDensityOcean = plateDensityOcean;
             ctx.noise = new m.simplex.SimplexNoise(ctx.seed);
         }},
-        { pct: 35, label: 'Raising mountains\u2026', work() {
+        { pct: 35, label: '正在抬升山脉…', work() {
             const { r_elevation, mountain_r, coastline_r, ocean_r, r_stress, debugLayers, _timing } =
                 m.elev.assignElevation(ctx.mesh, ctx.r_xyz, ctx.plateIsOcean, ctx.r_plate, ctx.plateVec, ctx.plateSeeds, ctx.noise, nMag, ctx.seed, 5, ctx.plateDensity);
             ctx.r_elevation = r_elevation; ctx.mountain_r = mountain_r; ctx.coastline_r = coastline_r;
@@ -794,7 +794,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
             for (let r = 0; r < ctx.mesh.numRegions; r++) { if (r_elevation[r] <= 0) r_isOcean[r] = 1; }
             const preErosion = new Float32Array(r_elevation);
             if (smoothing > 0) m.post.smoothElevation(ctx.mesh, r_elevation, r_isOcean, Math.round(1 + smoothing * 4), 0.2 + smoothing * 0.5);
-            // Build craton+basin dampen field so detail noise stays subtle over geologically quiet regions.
+            // 构建克拉通+盆地抑制场，让地质安静区的细节噪声更克制。
             let r_dampen = null;
             if (debugLayers.cratonWeight && debugLayers.basinWeight) {
                 r_dampen = new Float32Array(ctx.mesh.numRegions);
@@ -803,7 +803,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
                     r_dampen[r] = a > b ? a : b;
                 }
             }
-            // Orogenic-power amplitude multiplier — restores [0,1] from the diverging-stored [-0.5, +0.5].
+            // 造山强度振幅乘数：从发散色标存储的 [-0.5, +0.5] 还原到 [0,1]。
             let r_orogenic = null;
             if (debugLayers.orogenicPower) {
                 r_orogenic = new Float32Array(ctx.mesh.numRegions);
@@ -874,7 +874,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
             }
             ctx.t_elevation = t_elevation;
         }},
-        { pct: 85, label: 'Painting the surface\u2026', work() {
+        { pct: 85, label: '正在绘制地表…', work() {
             state.curData = {
                 mesh: ctx.mesh, r_xyz: ctx.r_xyz, t_xyz: ctx.t_xyz,
                 r_plate: ctx.r_plate, plateSeeds: ctx.plateSeeds, plateVec: ctx.plateVec,
@@ -909,7 +909,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
             state.climateComputed = !skipClimate;
             refreshEnvironmentInputs(state.curData);
             buildMesh();
-            progress(100, 'Done');
+            progress(100, '完成');
             resetUI();
             btn.dispatchEvent(new CustomEvent('generate-done'));
         }}
@@ -926,7 +926,7 @@ function generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate)
     setTimeout(() => runStage(0), 0);
 }
 
-// --- Public API ---
+// --- 公共 API ---
 
 export function syncEvolutionTerrainViaWorker(curData) {
     if (!worker || !curData?.r_elevation) return false;
@@ -954,13 +954,13 @@ export function refreshEnvironmentInputs(curData = state.curData) {
         });
         return curData.environmentInputs;
     } catch (err) {
-        console.warn('[EnvironmentInputs] refresh failed:', err);
+        console.warn('[EnvironmentInputs] 刷新失败：', err);
         curData.environmentInputs = {
             schema: 'world-orogen-environment-inputs',
             version: 1,
             layers: [],
             metrics: {},
-            warnings: [err?.message || 'Environment input refresh failed.'],
+            warnings: [err?.message || '环境输入刷新失败。'],
         };
         return curData.environmentInputs;
     }
@@ -969,14 +969,14 @@ export function refreshEnvironmentInputs(curData = state.curData) {
 export function generate(overrideSeed, toggledIndices = [], onProgress, skipClimate = false) {
     const btn = document.getElementById('generate');
     btn.disabled = true;
-    btn.textContent = 'Building\u2026';
+    btn.textContent = '正在构建…';
     btn.classList.add('generating');
 
     _onProgress = onProgress || (() => {});
     _t0 = performance.now();
 
     if (!worker) {
-        // Fallback: load modules then run synchronously
+        // 回退：先加载模块，再同步运行。
         loadFallback().then(() => generateFallback(overrideSeed, toggledIndices, onProgress, skipClimate));
         return;
     }
@@ -992,13 +992,13 @@ export function generate(overrideSeed, toggledIndices = [], onProgress, skipClim
     });
 }
 
-export function reapplyViaWorker(onDone, skipClimate = false) {
+export function reapplyViaWorker(on完成, skipClimate = false) {
     if (!worker || !state.curData) return;
 
     _onProgress = (pct, label) => {
-        // Progress updates during reapply (used by build overlay if shown)
+        // 重新应用期间的进度更新（构建遮罩显示时使用）。
     };
-    _onDone = onDone || null;
+    _on完成 = on完成 || null;
     _t0 = performance.now();
 
     const s = readSlidersOptional();
@@ -1013,12 +1013,12 @@ export function reapplyViaWorker(onDone, skipClimate = false) {
     });
 }
 
-export function editRecomputeViaWorker(onDone, skipClimate = false) {
+export function editRecomputeViaWorker(on完成, skipClimate = false) {
     if (!worker || !state.curData) return;
 
     const d = state.curData;
     _onProgress = () => {};
-    _onDone = onDone || null;
+    _on完成 = on完成 || null;
     _t0 = performance.now();
 
     const { nMag, terrainWarp, smoothing, glacialErosion, hydraulicErosion, thermalErosion, ridgeSharpening, temperatureOffset, precipitationOffset, landCoverage } = readSliders();
@@ -1033,10 +1033,10 @@ export function editRecomputeViaWorker(onDone, skipClimate = false) {
     });
 }
 
-export function computeClimateViaWorker(onProgress, onDone) {
+export function computeClimateViaWorker(onProgress, on完成) {
     if (!worker || !state.curData) return;
     _onProgress = onProgress || (() => {});
-    _onDone = onDone || null;
+    _on完成 = on完成 || null;
     _t0 = performance.now();
     const temperatureOffset = +(document.getElementById('sTmp')?.value ?? 0);
     const precipitationOffset = +(document.getElementById('sPrc')?.value ?? 0);

@@ -1,29 +1,29 @@
 /**
- * Automated climate parameter tuning against real-Earth Köppen zones.
+ * 对照真实地球柯本气候区自动调校气候参数。
  *
- * Strategy (mode auto):
- *   1. Baseline evaluation with current defaults.
- *   2. One coordinate-descent pass over the parameter subset (each param:
- *      try ±step, keep the best).
- *   3. Greedy stochastic hill-climbing for the remaining budget: perturb a
- *      random subset of k parameters with Gaussian noise around the incumbent,
- *      accept only improvements. Step size decays when progress stalls.
+ * 策略（auto 模式）：
+ *   1. 使用当前默认值进行基线评估。
+ *   2. 对参数子集进行一轮坐标下降（每个参数：
+ *      尝试 ±step，保留最佳结果）。
+ *   3. 剩余预算用于贪婪随机爬山：扰动
+ *      当前最优点周围的 k 个随机参数子集，加入高斯噪声，
+ *      只接受提升。停滞时步长衰减。
  *
- * The objective is 0.5·exactAccuracy + 0.5·macroF1 vs the observed
- * Köppen-Geiger grid (see lib/score.mjs).
+ * 目标函数为相对观测
+ * Köppen-Geiger 网格的 0.5·精确准确率 + 0.5·宏平均 F1（见 lib/score.mjs）。
  *
- * Usage:
- *   node tuning/climate/optimize.mjs                          # high-impact subset, 150 evals
+ * 用法：
+ *   node tuning/climate/optimize.mjs                          # 高影响参数子集，150 次评估
  *   node tuning/climate/optimize.mjs --iters 400 --subset all
  *   node tuning/climate/optimize.mjs --subset TEMP_PEAK_C,PRECIP_MODEL_BLEND
  *   node tuning/climate/optimize.mjs --n 80000 --label run2 --rng 7
  *   node tuning/climate/optimize.mjs --resume tuning/results/climate/run1-best.json
  *
- * Output:
- *   tuning/results/climate/<label>.jsonl       one line per evaluation
- *   tuning/results/climate/<label>-best.json   incumbent params + metrics
+ * 输出：
+ *   tuning/results/climate/<label>.jsonl       每次评估一行
+ *   tuning/results/climate/<label>-best.json   当前最优参数 + 指标
  *
- * Apply the winner to the app with: node tuning/climate/apply-params.mjs <best.json>
+ * 用此命令把胜出参数应用到应用：node tuning/climate/apply-params.mjs <best.json>
  */
 
 import fs from 'node:fs';
@@ -38,7 +38,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RESULTS_DIR = path.join(__dirname, '..', 'results', 'climate');
 fs.mkdirSync(RESULTS_DIR, { recursive: true });
 
-// Deterministic RNG for reproducible optimization runs
+// 确定性随机数生成器，用于可复现的优化运行
 function mulberry32(seed) {
     let a = seed >>> 0;
     return function () {
@@ -69,7 +69,7 @@ function parseArgs(argv) {
         else if (a === '--k') args.k = +argv[++i];
         else if (a === '--resume') args.resume = argv[++i];
         else if (a === '--mode') args.mode = argv[++i];
-        else throw new Error(`Unknown arg: ${a}`);
+        else throw new Error(`未知参数：${a}`);
     }
     return args;
 }
@@ -79,7 +79,7 @@ function resolveSubset(spec) {
     if (spec === 'all') return Object.keys(PARAM_SPACE);
     const keys = spec.split(',').map(s => s.trim()).filter(Boolean);
     for (const k of keys) {
-        if (!(k in PARAM_SPACE)) throw new Error(`Unknown param in --subset: ${k}`);
+        if (!(k in PARAM_SPACE)) throw new Error(`--subset 中存在未知参数：${k}`);
     }
     return keys;
 }
@@ -92,10 +92,10 @@ async function main() {
     const bestPath = path.join(RESULTS_DIR, `${label}-best.json`);
     const rand = mulberry32(args.rng);
 
-    console.log(`Optimizing ${keys.length} params, budget ${args.iters} evals, mode=${args.mode}`);
-    console.log(`Building Earth context (N=${args.n}, seed=${args.seed})…`);
+    console.log(`正在优化 ${keys.length} 个参数，预算 ${args.iters} 次评估，模式=${args.mode}`);
+    console.log(`正在构建地球上下文（N=${args.n}，种子=${args.seed}）…`);
     const ctx = buildEarthContext({ N: args.n, seed: args.seed });
-    console.log(`  built in ${(ctx.buildMs / 1000).toFixed(1)}s — ${ctx.mesh.numRegions} regions`);
+    console.log(`  构建耗时 ${(ctx.buildMs / 1000).toFixed(1)} 秒，共 ${ctx.mesh.numRegions} 个区域`);
 
     let evals = 0;
     const log = (entry) => fs.appendFileSync(logPath, JSON.stringify(entry) + '\n');
@@ -108,15 +108,15 @@ async function main() {
         return metrics;
     }
 
-    // ── Incumbent ──
+    // ── 当前最优 ──
     let best = args.resume
         ? { ...JSON.parse(fs.readFileSync(args.resume, 'utf8')).params }
         : {};
     repairParams(best);
     let bestMetrics = evaluate(best, 'baseline');
-    const fmt = (m) => `graded ${(m.gradedAcc * 100).toFixed(1)}%, exact ${(m.exactAcc * 100).toFixed(1)}%, ` +
-                       `bal ${m.groupBalance.toFixed(3)}, watch ${m.watchlistF1.toFixed(3)}`;
-    console.log(`  baseline objective ${bestMetrics.objective.toFixed(4)} (${fmt(bestMetrics)}, ${bestMetrics.evalMs}ms/eval)`);
+    const fmt = (m) => `分级 ${(m.gradedAcc * 100).toFixed(1)}%，精确 ${(m.exactAcc * 100).toFixed(1)}%，` +
+                       `平衡 ${m.groupBalance.toFixed(3)}，关注 ${m.watchlistF1.toFixed(3)}`;
+    console.log(`  基线目标分 ${bestMetrics.objective.toFixed(4)}（${fmt(bestMetrics)}，${bestMetrics.evalMs} 毫秒/评估）`);
 
     const saveBest = () => fs.writeFileSync(bestPath, JSON.stringify({
         label, n: args.n, seed: args.seed, evals,
@@ -136,15 +136,15 @@ async function main() {
             best = cand;
             bestMetrics = m;
             saveBest();
-            console.log(`  ↑ ${evals}: ${m.objective.toFixed(4)} (${fmt(m)}) via ${tag}`);
+            console.log(`  ↑ ${evals}: ${m.objective.toFixed(4)} (${fmt(m)}) 来自 ${tag}`);
             return true;
         }
         return false;
     }
 
-    // ── Phase 1: coordinate pass ──
+    // ── 阶段 1：坐标遍历 ──
     if (args.mode === 'auto' || args.mode === 'coord') {
-        console.log('\nPhase 1: coordinate descent pass');
+        console.log('\n阶段 1：坐标下降遍历');
         for (const k of keys) {
             if (evals + 2 > args.iters) break;
             const step = 0.15 * range(k);
@@ -155,9 +155,9 @@ async function main() {
         }
     }
 
-    // ── Phase 2: stochastic hill-climb ──
+    // ── 阶段 2：随机爬山 ──
     if (args.mode === 'auto' || args.mode === 'explore') {
-        console.log('\nPhase 2: stochastic hill-climbing');
+        console.log('\n阶段 2：随机爬山');
         let sigma = args.sigma;
         let sinceImprove = 0;
         while (evals < args.iters) {
@@ -177,26 +177,26 @@ async function main() {
         }
     }
 
-    console.log(`\nDone. ${evals} evaluations.`);
-    console.log(`Best objective: ${bestMetrics.objective.toFixed(4)} (${fmt(bestMetrics)})`);
+    console.log(`\n完成。共 ${evals} 次评估。`);
+    console.log(`最佳目标分：${bestMetrics.objective.toFixed(4)}（${fmt(bestMetrics)}）`);
     if (bestMetrics.groupFractions) {
         const gf = bestMetrics.groupFractions;
-        console.log(`  arid(B) ${(gf.B.sim * 100).toFixed(1)}% vs ${(gf.B.truth * 100).toFixed(1)}% · ` +
-                    `temperate(C) ${(gf.C.sim * 100).toFixed(1)}% vs ${(gf.C.truth * 100).toFixed(1)}% · ` +
-                    `polar(E) ${(gf.E.sim * 100).toFixed(1)}% vs ${(gf.E.truth * 100).toFixed(1)}%`);
+        console.log(`  干旱(B) ${(gf.B.sim * 100).toFixed(1)}% 对 ${(gf.B.truth * 100).toFixed(1)}% · ` +
+                    `温带(C) ${(gf.C.sim * 100).toFixed(1)}% 对 ${(gf.C.truth * 100).toFixed(1)}% · ` +
+                    `极地(E) ${(gf.E.sim * 100).toFixed(1)}% 对 ${(gf.E.truth * 100).toFixed(1)}%`);
     }
     const changed = Object.entries(best).filter(([k, v]) => v !== CLIMATE_DEFAULTS[k]);
     if (changed.length) {
-        console.log('\nChanged params (vs defaults):');
+        console.log('\n已变更参数（相对默认值）：');
         for (const [k, v] of changed) {
             console.log(`  ${k}: ${CLIMATE_DEFAULTS[k]} → ${+v.toFixed(4)}`);
         }
     } else {
-        console.log('\nNo parameter change beat the current defaults.');
+        console.log('\n没有参数变更优于当前默认值。');
     }
-    console.log(`\nBest params: ${bestPath}`);
-    console.log(`Validate at higher resolution:  node tuning/climate/evaluate.mjs --params ${bestPath} --n 160000 --maps`);
-    console.log(`Apply to the app:               node tuning/climate/apply-params.mjs ${bestPath}`);
+    console.log(`\n最佳参数：${bestPath}`);
+    console.log(`高分辨率验证：node tuning/climate/evaluate.mjs --params ${bestPath} --n 160000 --maps`);
+    console.log(`应用到程序：  node tuning/climate/apply-params.mjs ${bestPath}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

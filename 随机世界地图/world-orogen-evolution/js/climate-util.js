@@ -24,7 +24,7 @@ export function smoothField(mesh, field, passes) {
     if (src !== field) field.set(src);
 }
 
-// ── ITCZ latitude lookup (linear interpolation with wrapping) ────────────────
+// ── ITCZ 纬度查询（带环绕的线性插值） ────────────────
 
 export function makeItczLookup(itczLons, itczLats) {
     const n = itczLons.length;

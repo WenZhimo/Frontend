@@ -297,7 +297,7 @@ function emptyHistoricalTraces() {
         settlementSites: [],
         migrationCorridors: [],
         stressSignals: [],
-        traceSignals: ['No strong historical trace signal has emerged yet.'],
+        traceSignals: ['尚未出现显著历史痕迹信号。'],
     };
 }
 
@@ -308,11 +308,11 @@ function summarizeHistoricalTraces(civ) {
     const migrationCorridors = summarizeTraceCorridors(civ.populationGroups || []);
     const stressSignals = summarizeStressSignals(civ.populationGroups || []);
     const traceSignals = [];
-    if (ruins.length) traceSignals.push(`${ruins.length} collapsed polity ruin${ruins.length === 1 ? '' : 's'} mark former centers of power.`);
-    if (settlementSites.length) traceSignals.push(`${settlementSites.length} settlement site${settlementSites.length === 1 ? '' : 's'} preserve durable habitation anchors.`);
-    if (migrationCorridors.length) traceSignals.push(`${migrationCorridors.length} migration corridor${migrationCorridors.length === 1 ? '' : 's'} preserve remembered movement paths.`);
-    if (stressSignals.length) traceSignals.push(`${stressSignals.length} high-stress population signal${stressSignals.length === 1 ? '' : 's'} indicate possible famine, conflict, displacement, or collapse pressure.`);
-    if (!traceSignals.length) traceSignals.push('No strong historical trace signal has emerged yet.');
+    if (ruins.length) traceSignals.push(`${ruins.length} 处已崩溃政体遗址标记了昔日权力中心。`);
+    if (settlementSites.length) traceSignals.push(`${settlementSites.length} 处聚落遗址保留了长期居住锚点。`);
+    if (migrationCorridors.length) traceSignals.push(`${migrationCorridors.length} 条迁徙走廊保留了族群移动路径记忆。`);
+    if (stressSignals.length) traceSignals.push(`${stressSignals.length} 个高压力人口信号指向潜在饥荒、冲突、迁移或崩溃压力。`);
+    if (!traceSignals.length) traceSignals.push('尚未出现显著历史痕迹信号。');
     return {
         ruins,
         settlementSites,
@@ -328,38 +328,38 @@ function historySignals(summary) {
     const lineages = summary.civilization.lineages;
     const traces = summary.civilization.historicalTraces;
     const signals = [];
-    signals.push(`Population reached ${metrics.population.toLocaleString()} across ${metrics.livingGroups} living groups.`);
-    signals.push(`${metrics.settlements} settlements emerged from habitability, freshwater, agriculture, and mobility inputs.`);
+    signals.push(`人口达到 ${metrics.population.toLocaleString()}，分布在 ${metrics.livingGroups} 个存续群体中。`);
+    signals.push(`${metrics.settlements} 个聚落由宜居性、淡水、农业潜力和通行条件共同催生。`);
     if ((events['culture-split'] || 0) || (events['language-split'] || 0)) {
-        signals.push(`Isolation produced ${events['culture-split'] || 0} culture splits and ${events['language-split'] || 0} language splits.`);
+        signals.push(`隔离造成 ${events['culture-split'] || 0} 次文化分裂和 ${events['language-split'] || 0} 次语言分裂。`);
     } else {
-        signals.push('No identity split has occurred yet; advance civilization time to expose longer historical divergence.');
+        signals.push('尚未发生身份分裂；继续推进文明时间可暴露更长时程的历史分化。');
     }
     if (metrics.polities > 0) {
-        signals.push(`${metrics.polities} active polities formed where settlement population, trade, technology, and agriculture aligned.`);
+        signals.push(`${metrics.polities} 个活跃政体在聚落人口、贸易、技术与农业条件同时成熟处形成。`);
     } else {
-        signals.push('No polity has formed yet; current settlements remain below the organization threshold.');
+        signals.push('尚未形成政体；当前聚落仍低于组织化阈值。');
     }
     if (lineages?.cultureFamilies?.length || lineages?.languageFamilies?.length) {
         const topCulture = lineages.cultureFamilies?.[0];
         const topLanguage = lineages.languageFamilies?.[0];
-        signals.push(`Dominant lineage roots are culture ${topCulture?.rootId ?? 'none'} and language ${topLanguage?.rootId ?? 'none'}, with ${lineages.cultures?.length || 0} tracked culture branches and ${lineages.languages?.length || 0} tracked language branches.`);
+        signals.push(`主导谱系根源为文化 ${topCulture?.rootId ?? '无'} 与语言 ${topLanguage?.rootId ?? '无'}，已追踪 ${lineages.cultures?.length || 0} 条文化分支和 ${lineages.languages?.length || 0} 条语言分支。`);
     }
     if (traces?.traceSignals?.length) {
         signals.push(traces.traceSignals[0]);
     }
     if (summary.environment.climateEnhanced) {
-        signals.push('Climate-enhanced environment inputs are present, so agriculture and habitability include computed temperature and precipitation.');
+        signals.push('已存在气候增强环境输入，因此农业潜力与宜居性包含计算得到的温度和降水。');
     } else {
-        signals.push('Environment inputs are terrain-derived only; compute a climate layer for richer civilization inputs.');
+        signals.push('环境输入目前仅由地形推导；计算气候图层可获得更丰富的文明输入。');
     }
     return signals;
 }
 
 export function buildHistorySummary(curData) {
-    if (!curData) throw new Error('Generate a world before building history summary.');
+    if (!curData) throw new Error('请先生成世界，再生成历史摘要。');
     const civ = curData.civilizationState;
-    if (!civ) throw new Error('Seed civilization before building history summary.');
+    if (!civ) throw new Error('请先播种文明，再生成历史摘要。');
 
     const summary = {
         schema: HISTORY_SUMMARY_SCHEMA,
@@ -422,59 +422,59 @@ export function formatHistorySummaryMarkdown(summary) {
     const events = summary.civilization.eventCounts;
     const traces = summary.civilization.historicalTraces || emptyHistoricalTraces();
     const lines = [
-        '# World Orogen History Summary',
+        '# 世界造山历史摘要',
         '',
-        `- Seed: ${summary.world.seed}`,
-        `- Regions: ${summary.world.regions.toLocaleString()}`,
-        `- Geology time: ${round(summary.world.geologyTimeMyr, 2)} Myr`,
-        `- Civilization year: ${summary.civilization.year.toLocaleString()}`,
-        `- Population: ${metrics.population.toLocaleString()}`,
-        `- Groups / settlements / polities: ${metrics.livingGroups} / ${metrics.settlements} / ${metrics.polities}`,
-        `- Cultures / languages: ${metrics.cultures} / ${metrics.languages}`,
+        `- 种子：${summary.world.seed}`,
+        `- 区域数：${summary.world.regions.toLocaleString()}`,
+        `- 地质时间：${round(summary.world.geologyTimeMyr, 2)} Myr`,
+        `- 文明年份：${summary.civilization.year.toLocaleString()}`,
+        `- 人口：${metrics.population.toLocaleString()}`,
+        `- 群体 / 聚落 / 政体：${metrics.livingGroups} / ${metrics.settlements} / ${metrics.polities}`,
+        `- 文化 / 语言：${metrics.cultures} / ${metrics.languages}`,
         '',
-        '## Narrative Signals',
+        '## 叙事信号',
         ...summary.narrativeSignals.map(item => `- ${item}`),
         '',
-        '## Event Counts',
+        '## 事件计数',
         ...Object.entries(events).sort((a, b) => a[0].localeCompare(b[0])).map(([type, count]) => `- ${type}: ${count}`),
         '',
-        '## Leading Settlements',
+        '## 主要聚落',
         ...(summary.civilization.settlements.length
-            ? summary.civilization.settlements.map(s => `- Settlement ${s.id}: cell ${s.cell}, pop ${s.population.toLocaleString()}, rank ${s.rank}, culture ${s.cultureId}, language ${s.languageId}, polity ${s.polityId ?? 'none'}`)
-            : ['- None yet.']),
+            ? summary.civilization.settlements.map(s => `- 聚落 ${s.id}：单元 ${s.cell}，人口 ${s.population.toLocaleString()}，等级 ${s.rank}，文化 ${s.cultureId}，语言 ${s.languageId}，政体 ${s.polityId ?? '无'}`)
+            : ['- 暂无。']),
         '',
-        '## Active Or Remembered Polities',
+        '## 活跃或被记忆的政体',
         ...(summary.civilization.polities.length
-            ? summary.civilization.polities.map(p => `- Polity ${p.id}: ${p.status}, capital cell ${p.capitalCell}, pop ${p.population.toLocaleString()}, stability ${p.stability}`)
-            : ['- None yet.']),
+            ? summary.civilization.polities.map(p => `- 政体 ${p.id}：${p.status}，首都单元 ${p.capitalCell}，人口 ${p.population.toLocaleString()}，稳定度 ${p.stability}`)
+            : ['- 暂无。']),
         '',
-        '## Migration Routes',
+        '## 迁徙路线',
         ...(summary.civilization.migrationRoutes.length
-            ? summary.civilization.migrationRoutes.map(route => `- Group ${route.groupId}: ${route.originCell} -> ${route.currentCell}, path length ${route.pathLength}, pressure ${route.migrationPressure}`)
-            : ['- No multi-cell migration route recorded yet.']),
+            ? summary.civilization.migrationRoutes.map(route => `- 群体 ${route.groupId}：${route.originCell} -> ${route.currentCell}，路径长度 ${route.pathLength}，压力 ${route.migrationPressure}`)
+            : ['- 尚未记录跨单元迁徙路线。']),
         '',
-        '## Culture And Language Lineages',
+        '## 文化与语言谱系',
         ...(summary.civilization.lineages?.cultureFamilies?.length
-            ? summary.civilization.lineages.cultureFamilies.map(family => `- Culture root ${family.rootId}: pop ${family.population.toLocaleString()}, branches ${family.branchCount}, max depth ${family.maxDepth}, origin cell ${family.originCell ?? 'unknown'}`)
-            : ['- No culture lineage recorded yet.']),
+            ? summary.civilization.lineages.cultureFamilies.map(family => `- 文化根 ${family.rootId}：人口 ${family.population.toLocaleString()}，分支 ${family.branchCount}，最大深度 ${family.maxDepth}，起源单元 ${family.originCell ?? '未知'}`)
+            : ['- 尚未记录文化谱系。']),
         ...(summary.civilization.lineages?.languageFamilies?.length
-            ? summary.civilization.lineages.languageFamilies.map(family => `- Language root ${family.rootId}: pop ${family.population.toLocaleString()}, branches ${family.branchCount}, max depth ${family.maxDepth}, origin cell ${family.originCell ?? 'unknown'}`)
-            : ['- No language lineage recorded yet.']),
+            ? summary.civilization.lineages.languageFamilies.map(family => `- 语言根 ${family.rootId}：人口 ${family.population.toLocaleString()}，分支 ${family.branchCount}，最大深度 ${family.maxDepth}，起源单元 ${family.originCell ?? '未知'}`)
+            : ['- 尚未记录语言谱系。']),
         '',
-        '## Historical Traces And Stress',
+        '## 历史痕迹与压力',
         ...traces.traceSignals.map(signal => `- ${signal}`),
         ...(traces.ruins.length
-            ? traces.ruins.map(ruin => `- Ruin polity ${ruin.polityId}: cell ${ruin.cell}, formed ${ruin.formedYear}, collapsed ${ruin.collapsedYear ?? 'unknown'}, pop memory ${ruin.population.toLocaleString()}`)
-            : ['- No collapsed polity ruins recorded yet.']),
+            ? traces.ruins.map(ruin => `- 政体遗址 ${ruin.polityId}：单元 ${ruin.cell}，形成于 ${ruin.formedYear}，崩溃于 ${ruin.collapsedYear ?? '未知'}，人口记忆 ${ruin.population.toLocaleString()}`)
+            : ['- 尚未记录已崩溃政体遗址。']),
         ...(traces.settlementSites.length
-            ? traces.settlementSites.slice(0, 5).map(site => `- Settlement site ${site.settlementId}: cell ${site.cell}, age ${site.ageYears.toLocaleString()} years, rank ${site.rank}, pop ${site.population.toLocaleString()}`)
-            : ['- No settlement sites recorded yet.']),
+            ? traces.settlementSites.slice(0, 5).map(site => `- 聚落遗址 ${site.settlementId}：单元 ${site.cell}，年龄 ${site.ageYears.toLocaleString()} 年，等级 ${site.rank}，人口 ${site.population.toLocaleString()}`)
+            : ['- 尚未记录聚落遗址。']),
         ...(traces.migrationCorridors.length
-            ? traces.migrationCorridors.slice(0, 5).map(route => `- Corridor group ${route.groupId}: ${route.originCell} -> ${route.currentCell}, path length ${route.pathLength}, pressure ${route.migrationPressure}`)
-            : ['- No migration corridor traces recorded yet.']),
+            ? traces.migrationCorridors.slice(0, 5).map(route => `- 走廊群体 ${route.groupId}：${route.originCell} -> ${route.currentCell}，路径长度 ${route.pathLength}，压力 ${route.migrationPressure}`)
+            : ['- 尚未记录迁徙走廊痕迹。']),
         ...(traces.stressSignals.length
-            ? traces.stressSignals.slice(0, 5).map(signal => `- Stress group ${signal.groupId}: cell ${signal.cell}, severity ${signal.severity}, conflict ${signal.conflictPressure}, collapse ${signal.collapseRisk}`)
-            : ['- No high-stress population signals recorded yet.']),
+            ? traces.stressSignals.slice(0, 5).map(signal => `- 压力群体 ${signal.groupId}：单元 ${signal.cell}，严重度 ${signal.severity}，冲突 ${signal.conflictPressure}，崩溃 ${signal.collapseRisk}`)
+            : ['- 尚未记录高压力人口信号。']),
     ];
     return lines.join('\n');
 }
@@ -493,7 +493,7 @@ export function createHistoryPoint(summary, {
         id: `${safeSummary.world.seed || 'world'}:${safeSummary.civilization.year}:${source}:${safeSummary.civilization.stepIndex}`,
         source,
         snapshotId,
-        label: label || `Year ${safeSummary.civilization.year}`,
+        label: label || `第 ${safeSummary.civilization.year} 年`,
         capturedAt: new Date().toISOString(),
         year: safeSummary.civilization.year,
         geologyTimeMyr: safeSummary.world.geologyTimeMyr,
@@ -565,19 +565,19 @@ function hasEventCounts(events) {
 
 function eraHighlights(delta, events, endSummary) {
     const highlights = [];
-    if (delta.populationChange > 0) highlights.push(`population +${Math.round(delta.populationChange).toLocaleString()}`);
-    if (delta.settlementChange > 0) highlights.push(`${delta.settlementChange} new settlement${delta.settlementChange === 1 ? '' : 's'}`);
+    if (delta.populationChange > 0) highlights.push(`人口 +${Math.round(delta.populationChange).toLocaleString()}`);
+    if (delta.settlementChange > 0) highlights.push(`新增聚落 ${delta.settlementChange}`);
     if (delta.cultureChange > 0 || delta.languageChange > 0) {
-        highlights.push(`${Math.max(0, delta.cultureChange)} culture and ${Math.max(0, delta.languageChange)} language splits`);
+        highlights.push(`文化分裂 ${Math.max(0, delta.cultureChange)} 次，语言分裂 ${Math.max(0, delta.languageChange)} 次`);
     }
     if (delta.polityChange > 0 || events['polity-formed']) {
         const count = delta.polityChange > 0 ? delta.polityChange : events['polity-formed'];
-        highlights.push(`${count} polity formation signal${count === 1 ? '' : 's'}`);
+        highlights.push(`政体形成信号 ${count} 个`);
     }
-    if (events['polity-collapsed']) highlights.push(`${events['polity-collapsed']} polity collapse signal${events['polity-collapsed'] === 1 ? '' : 's'}`);
+    if (events['polity-collapsed']) highlights.push(`政体崩溃信号 ${events['polity-collapsed']} 个`);
     const route = endSummary.civilization.migrationRoutes?.[0];
-    if (route?.pathLength > 1) highlights.push(`longest migration route spans ${route.pathLength} cells`);
-    if (!highlights.length) highlights.push('slow consolidation with limited recorded structural change');
+    if (route?.pathLength > 1) highlights.push(`最长迁徙路线跨越 ${route.pathLength} 个单元`);
+    if (!highlights.length) highlights.push('缓慢整合，记录到的结构变化有限');
     return highlights;
 }
 
@@ -586,24 +586,24 @@ function eraExplanation(delta, events, endSummary) {
     const env = endSummary.environment;
     const metrics = endSummary.civilization.metrics;
     if (delta.settlementChange > 0) {
-        lines.push('Habitability, freshwater access, agriculture potential, and mobility inputs supported new settlements.');
+        lines.push('宜居性、淡水可达性、农业潜力和通行条件支撑了新聚落。');
     }
     if (delta.cultureChange > 0 || delta.languageChange > 0 || events['culture-split'] || events['language-split']) {
-        lines.push('Isolation pressure from barriers and mobility costs produced culture or language divergence.');
+        lines.push('屏障和通行成本造成的隔离压力引发文化或语言分化。');
     }
     if (delta.polityChange > 0 || events['polity-formed']) {
-        lines.push('Dense settlements with trade reach, technology, agriculture, and resources crossed the polity threshold.');
+        lines.push('高密度聚落在贸易范围、技术、农业和资源条件支持下跨过政体阈值。');
     }
     if (events['polity-collapsed']) {
-        lines.push('Low stability, crowding, conflict pressure, or poor local habitability created collapse risk.');
+        lines.push('低稳定性、拥挤、冲突压力或局部宜居性不足造成崩溃风险。');
     }
     if (delta.populationChange > 0 && metrics.settlements === 0) {
-        lines.push('Population expanded before durable settlement institutions emerged.');
+        lines.push('人口先于稳定聚落制度扩张。');
     }
     if (env.climateEnhanced) {
-        lines.push('Climate-enhanced environment inputs shaped habitability and agriculture in this era.');
+        lines.push('气候增强环境输入塑造了本时代的宜居性与农业条件。');
     } else {
-        lines.push('Terrain-derived environment inputs shaped this era; climate computation would add stronger causal detail.');
+        lines.push('本时代主要由地形推导环境输入塑造；计算气候会提供更强的因果细节。');
     }
     return lines.slice(0, 5);
 }
@@ -614,14 +614,14 @@ function buildEraSummaries(points, deltas) {
         const point = points[0];
         return [{
             index: 1,
-            label: 'Founding snapshot',
+            label: '奠基快照',
             fromYear: point.year,
             toYear: point.year,
             durationYears: 0,
             metrics: point.metrics,
             eventCounts: point.eventCounts || {},
             leadingEvents: leadingEventTypes(point.eventCounts || {}),
-            highlights: point.narrativeSignals?.slice(0, 3) || ['Initial civilization snapshot recorded.'],
+            highlights: point.narrativeSignals?.slice(0, 3) || ['已记录初始文明快照。'],
             explanationChain: point.narrativeSignals?.slice(0, 5) || [],
             leadingSettlements: point.summary.civilization.settlements?.slice(0, 5) || [],
             leadingPolities: point.summary.civilization.polities?.slice(0, 5) || [],
@@ -645,7 +645,7 @@ function buildEraSummaries(points, deltas) {
             : eventCountDeltas(start.eventCounts || {}, end.eventCounts || {});
         return {
             index: i + 1,
-            label: `Era ${i + 1}: Year ${start.year} to ${end.year}`,
+            label: `时代 ${i + 1}：第 ${start.year} 年至第 ${end.year} 年`,
             fromYear: start.year,
             toYear: end.year,
             durationYears: end.year - start.year,
@@ -671,17 +671,17 @@ function buildEraSummaries(points, deltas) {
 }
 
 function lineageFamilyLine(kind, family) {
-    if (!family) return `${kind} none`;
-    return `${kind} root ${family.rootId} pop ${family.population.toLocaleString()} branches ${family.branchCount}`;
+    if (!family) return `${kind === 'culture' ? '文化' : '语言'}：无`;
+    return `${kind === 'culture' ? '文化' : '语言'}根 ${family.rootId}，人口 ${family.population.toLocaleString()}，分支 ${family.branchCount}`;
 }
 
 function traceLine(traces = {}) {
     const parts = [];
-    if (traces.ruins?.length) parts.push(`${traces.ruins.length} ruin${traces.ruins.length === 1 ? '' : 's'}`);
-    if (traces.settlementSites?.length) parts.push(`${traces.settlementSites.length} settlement site${traces.settlementSites.length === 1 ? '' : 's'}`);
-    if (traces.migrationCorridors?.length) parts.push(`${traces.migrationCorridors.length} corridor${traces.migrationCorridors.length === 1 ? '' : 's'}`);
-    if (traces.stressSignals?.length) parts.push(`${traces.stressSignals.length} stress signal${traces.stressSignals.length === 1 ? '' : 's'}`);
-    return parts.length ? parts.join(', ') : 'no strong traces';
+    if (traces.ruins?.length) parts.push(`${traces.ruins.length} 处遗址`);
+    if (traces.settlementSites?.length) parts.push(`${traces.settlementSites.length} 处聚落遗址`);
+    if (traces.migrationCorridors?.length) parts.push(`${traces.migrationCorridors.length} 条走廊`);
+    if (traces.stressSignals?.length) parts.push(`${traces.stressSignals.length} 个压力信号`);
+    return parts.length ? parts.join('，') : '无显著痕迹';
 }
 
 function dedupePoints(points) {
@@ -701,7 +701,7 @@ export function buildHistoryTimeline(points, { currentSummary = null } = {}) {
     const rawPoints = points.slice();
     if (currentSummary) rawPoints.push(createHistoryPoint(currentSummary, { source: 'current' }));
     const ordered = dedupePoints(rawPoints).map(clonePlain);
-    if (!ordered.length) throw new Error('Build or record at least one history summary before building a timeline.');
+    if (!ordered.length) throw new Error('请先生成或记录至少一个历史摘要，再生成时间线。');
     const latest = ordered[ordered.length - 1];
     const deltas = timelineDeltas(ordered);
     return {
@@ -730,63 +730,63 @@ export function formatHistoryTimelineMarkdown(timeline) {
     const latest = timeline.latestSummary;
     const latestTraces = latest.civilization.historicalTraces || emptyHistoricalTraces();
     const lines = [
-        '# World Orogen History Timeline',
+        '# 世界造山历史时间线',
         '',
-        `- Seed: ${timeline.world.seed}`,
-        `- Regions: ${timeline.world.regions.toLocaleString()}`,
-        `- Time range: Year ${timeline.range.startYear.toLocaleString()} -> Year ${timeline.range.endYear.toLocaleString()}`,
-        `- History points: ${timeline.world.pointCount}`,
+        `- 种子：${timeline.world.seed}`,
+        `- 区域数：${timeline.world.regions.toLocaleString()}`,
+        `- 时间范围：第 ${timeline.range.startYear.toLocaleString()} 年 -> 第 ${timeline.range.endYear.toLocaleString()} 年`,
+        `- 历史点：${timeline.world.pointCount}`,
         '',
-        '## Era Summaries',
+        '## 时代摘要',
         ...(timeline.eras?.length
             ? timeline.eras.flatMap(era => [
-                `- ${era.label}: pop ${era.metrics.population.toLocaleString()}, settlements ${era.metrics.settlements}, cultures ${era.metrics.cultures}, languages ${era.metrics.languages}, polities ${era.metrics.polities}`,
-                `  - Highlights: ${era.highlights.join('; ')}`,
-                `  - Why: ${era.explanationChain.join(' ') || 'No causal signal recorded yet.'}`,
-                `  - Lineages: ${lineageFamilyLine('culture', era.cultureFamilies?.[0])}; ${lineageFamilyLine('language', era.languageFamilies?.[0])}`,
-                `  - Traces: ${traceLine(era.historicalTraces)}`,
+                `- ${era.label}：人口 ${era.metrics.population.toLocaleString()}，聚落 ${era.metrics.settlements}，文化 ${era.metrics.cultures}，语言 ${era.metrics.languages}，政体 ${era.metrics.polities}`,
+                `  - 亮点：${era.highlights.join('；')}`,
+                `  - 原因：${era.explanationChain.join(' ') || '尚未记录因果信号。'}`,
+                `  - 谱系：${lineageFamilyLine('culture', era.cultureFamilies?.[0])}；${lineageFamilyLine('language', era.languageFamilies?.[0])}`,
+                `  - 痕迹：${traceLine(era.historicalTraces)}`,
             ])
-            : ['- No era summaries available.']),
+            : ['- 暂无时代摘要。']),
         '',
-        '## Timeline Points',
+        '## 时间线点',
         ...timeline.points.map(point => {
             const m = point.metrics;
-            return `- Year ${point.year.toLocaleString()}: pop ${m.population.toLocaleString()}, groups ${m.livingGroups}, settlements ${m.settlements}, cultures ${m.cultures}, languages ${m.languages}, polities ${m.polities}`;
+            return `- 第 ${point.year.toLocaleString()} 年：人口 ${m.population.toLocaleString()}，群体 ${m.livingGroups}，聚落 ${m.settlements}，文化 ${m.cultures}，语言 ${m.languages}，政体 ${m.polities}`;
         }),
         '',
-        '## Change Chain',
+        '## 变化链',
         ...(timeline.deltas.length
-            ? timeline.deltas.map(delta => `- Year ${delta.fromYear.toLocaleString()} -> ${delta.toYear.toLocaleString()}: population ${delta.populationChange >= 0 ? '+' : ''}${delta.populationChange.toLocaleString()}, settlements ${delta.settlementChange >= 0 ? '+' : ''}${delta.settlementChange}, cultures ${delta.cultureChange >= 0 ? '+' : ''}${delta.cultureChange}, languages ${delta.languageChange >= 0 ? '+' : ''}${delta.languageChange}, polities ${delta.polityChange >= 0 ? '+' : ''}${delta.polityChange}`)
-            : ['- Only one history point is recorded so far.']),
+            ? timeline.deltas.map(delta => `- 第 ${delta.fromYear.toLocaleString()} 年 -> 第 ${delta.toYear.toLocaleString()} 年：人口 ${delta.populationChange >= 0 ? '+' : ''}${delta.populationChange.toLocaleString()}，聚落 ${delta.settlementChange >= 0 ? '+' : ''}${delta.settlementChange}，文化 ${delta.cultureChange >= 0 ? '+' : ''}${delta.cultureChange}，语言 ${delta.languageChange >= 0 ? '+' : ''}${delta.languageChange}，政体 ${delta.polityChange >= 0 ? '+' : ''}${delta.polityChange}`)
+            : ['- 目前只记录了一个历史点。']),
         '',
-        '## Event Totals',
+        '## 事件总计',
         ...Object.entries(timeline.eventTotals).sort((a, b) => a[0].localeCompare(b[0])).map(([type, count]) => `- ${type}: ${count}`),
         '',
-        '## Latest Narrative Signals',
+        '## 最新叙事信号',
         ...latest.narrativeSignals.map(signal => `- ${signal}`),
         '',
-        '## Latest Culture And Language Lineages',
+        '## 最新文化与语言谱系',
         ...(latest.civilization.lineages?.cultureFamilies?.length
-            ? latest.civilization.lineages.cultureFamilies.map(family => `- Culture root ${family.rootId}: pop ${family.population.toLocaleString()}, branches ${family.branchCount}, max depth ${family.maxDepth}`)
-            : ['- No culture lineage recorded yet.']),
+            ? latest.civilization.lineages.cultureFamilies.map(family => `- 文化根 ${family.rootId}：人口 ${family.population.toLocaleString()}，分支 ${family.branchCount}，最大深度 ${family.maxDepth}`)
+            : ['- 尚未记录文化谱系。']),
         ...(latest.civilization.lineages?.languageFamilies?.length
-            ? latest.civilization.lineages.languageFamilies.map(family => `- Language root ${family.rootId}: pop ${family.population.toLocaleString()}, branches ${family.branchCount}, max depth ${family.maxDepth}`)
-            : ['- No language lineage recorded yet.']),
+            ? latest.civilization.lineages.languageFamilies.map(family => `- 语言根 ${family.rootId}：人口 ${family.population.toLocaleString()}，分支 ${family.branchCount}，最大深度 ${family.maxDepth}`)
+            : ['- 尚未记录语言谱系。']),
         '',
-        '## Latest Historical Traces And Stress',
+        '## 最新历史痕迹与压力',
         ...latestTraces.traceSignals.map(signal => `- ${signal}`),
         ...(latestTraces.ruins.length
-            ? latestTraces.ruins.map(ruin => `- Ruin polity ${ruin.polityId}: cell ${ruin.cell}, collapsed ${ruin.collapsedYear ?? 'unknown'}`)
-            : ['- No collapsed polity ruins recorded yet.']),
+            ? latestTraces.ruins.map(ruin => `- 政体遗址 ${ruin.polityId}：单元 ${ruin.cell}，崩溃于 ${ruin.collapsedYear ?? '未知'}`)
+            : ['- 尚未记录已崩溃政体遗址。']),
         ...(latestTraces.settlementSites.length
-            ? latestTraces.settlementSites.slice(0, 5).map(site => `- Settlement site ${site.settlementId}: cell ${site.cell}, age ${site.ageYears.toLocaleString()} years, rank ${site.rank}`)
-            : ['- No settlement sites recorded yet.']),
+            ? latestTraces.settlementSites.slice(0, 5).map(site => `- 聚落遗址 ${site.settlementId}：单元 ${site.cell}，年龄 ${site.ageYears.toLocaleString()} 年，等级 ${site.rank}`)
+            : ['- 尚未记录聚落遗址。']),
         ...(latestTraces.migrationCorridors.length
-            ? latestTraces.migrationCorridors.slice(0, 5).map(route => `- Corridor group ${route.groupId}: ${route.originCell} -> ${route.currentCell}, path length ${route.pathLength}`)
-            : ['- No migration corridor traces recorded yet.']),
+            ? latestTraces.migrationCorridors.slice(0, 5).map(route => `- 走廊群体 ${route.groupId}：${route.originCell} -> ${route.currentCell}，路径长度 ${route.pathLength}`)
+            : ['- 尚未记录迁徙走廊痕迹。']),
         ...(latestTraces.stressSignals.length
-            ? latestTraces.stressSignals.slice(0, 5).map(signal => `- Stress group ${signal.groupId}: cell ${signal.cell}, severity ${signal.severity}`)
-            : ['- No high-stress population signals recorded yet.']),
+            ? latestTraces.stressSignals.slice(0, 5).map(signal => `- 压力群体 ${signal.groupId}：单元 ${signal.cell}，严重度 ${signal.severity}`)
+            : ['- 尚未记录高压力人口信号。']),
     ];
     return lines.join('\n');
 }

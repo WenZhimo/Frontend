@@ -103,11 +103,11 @@ export function createPlateMotionModelFromPlateVec({
         omegaByPlateId[plateId] = rotation.omega;
         if (!rotation.valid) {
             invalidRotationCount++;
-            if (warnings.length < 5) warnings.push(`Plate ${plateId} has no usable Euler rotation; velocity set to zero.`);
+            if (warnings.length < 5) warnings.push(`板块 ${plateId} 没有可用欧拉旋转；速度已设为零。`);
         }
     }
     if (invalidRotationCount > warnings.length) {
-        warnings.push(`${invalidRotationCount - warnings.length} additional plates had no usable Euler rotation.`);
+        warnings.push(`另有 ${invalidRotationCount - warnings.length} 个板块没有可用欧拉旋转。`);
     }
 
     const resolvedAnchor = anchorPlateId ?? plateIds[0] ?? null;

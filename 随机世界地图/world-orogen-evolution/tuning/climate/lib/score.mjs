@@ -16,20 +16,20 @@ import { similarity, majorGroupOf, MAJOR_GROUPS } from './koppen-distance.mjs';
 
 const NUM_CLASSES = KOPPEN_CLASSES.length;
 
-// Rare seasonal / Mediterranean climates that vanish easily and that the user
+// 容易消失、且用户特别关心的稀有季节性/地中海型气候，
 // specifically wants preserved. Their mean F1 is a dedicated objective term so
-// the optimizer is penalized for losing them.
+// 若优化器把它们消掉就会受到惩罚。
 const WATCHLIST = ['Csa', 'Csb', 'Csc', 'Cwa', 'Cwb', 'Dsa', 'Dsb', 'Dsc', 'Dwa', 'Dwb', 'Dwc'];
 const WATCHLIST_IDS = new Set(
     WATCHLIST.map(code => KOPPEN_CLASSES.findIndex(c => c.code === code)).filter(i => i > 0)
 );
 
 // Objective weights (sum to 1). Graded accuracy dominates; group balance fights
-// the over-desert / over-temperate bias; the watchlist protects Mediterranean.
+// 沙漠/温带过量偏差；观察清单用于保护地中海型。
 const W_GRADED = 0.60;      // dominant: distance-weighted correctness (convex, so big errors hurt most)
 const W_MACRO_F1 = 0.12;
 const W_GROUP_BALANCE = 0.15;
-const W_WATCHLIST = 0.13;   // trimmed from 0.20 to rein in the Mediterranean over-pull
+const W_WATCHLIST = 0.13;   // 从 0.20 下调，以抑制对地中海型的过度拉动。
 
 /** Major Köppen group per class ID: A, B, C, D, E (ocean → ''). */
 export const majorGroup = majorGroupOf;
@@ -73,7 +73,7 @@ export function scoreKoppen(ctx, r_koppen) {
     const confusion = Array.from({ length: NUM_CLASSES }, () => new Uint32Array(NUM_CLASSES));
     let scored = 0, exact = 0, major = 0, gradedSum = 0;
 
-    // Major-group area fractions (sim vs truth) over the same scored cells
+    // 同一评分单元上的大类面积占比（模拟 vs 真实）。
     const gi = Object.fromEntries(MAJOR_GROUPS.map((g, i) => [g, i]));
     const truthGroup = new Float64Array(MAJOR_GROUPS.length);
     const simGroup = new Float64Array(MAJOR_GROUPS.length);
@@ -105,7 +105,7 @@ export function scoreKoppen(ctx, r_koppen) {
             if (t !== c) fp += confusion[t][c];
         }
         const support = tp + fn;
-        if (support === 0) continue;          // class absent from truth
+        if (support === 0) continue;          // 真实答案中不存在该类。
         const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
         const recall = tp / support;
         const f1 = precision + recall > 0 ? 2 * precision * recall / (precision + recall) : 0;
@@ -131,7 +131,7 @@ export function scoreKoppen(ctx, r_koppen) {
     const groupBalance = 1 - 0.5 * tv;
 
     // Watchlist F1 (present-in-truth watchlist classes only; absent → count as 0
-    // so the optimizer is pushed to make them appear where truth says they should)
+    // 从而推动优化器在真实答案应出现的位置生成这些类别。
     let wlSum = 0, wlCount = 0;
     for (const c of WATCHLIST_IDS) {
         const code = KOPPEN_CLASSES[c].code;
@@ -174,7 +174,7 @@ export function evaluateParams(ctx, paramOverrides = {}) {
     return { metrics, r_koppen };
 }
 
-/** Top-N confusion pairs (truth ≠ sim) for diagnostics. */
+/** 用于诊断的前 N 个混淆对（真实 ≠ 模拟）。 */
 export function topConfusions(confusion, topN = 12) {
     const pairs = [];
     for (let t = 1; t < NUM_CLASSES; t++) {

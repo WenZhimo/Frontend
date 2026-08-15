@@ -105,7 +105,7 @@ export class SphereMesh {
             if (this._r_s[r] === -1) this._r_s[r] = s;
         }
 
-        // Pre-compute flat adjacency lists for r_circulate_r and r_circulate_t.
+        // 为 r_circulate_r 和 r_circulate_t 预计算扁平邻接表。
         // Replaces per-call half-edge traversal with cache-friendly array reads.
         const adjCount = new Int32Array(numRegions);
         for (let r = 0; r < numRegions; r++) {
@@ -170,7 +170,7 @@ export class SphereMesh {
     }
 }
 
-// Build sphere — Fibonacci points → Delaunay → close pole.
+// 构建球面：Fibonacci 点 → Delaunay → 封闭极点。
 export function buildSphere(N, jitter, rng) {
     const r_xyz = generateFibonacciSphere(N, jitter, rng);
     const flat = stereographicProjection(r_xyz, N);
@@ -185,7 +185,7 @@ export function buildSphere(N, jitter, rng) {
     return { mesh, r_xyz: poleXYZ };
 }
 
-// Pre-compute Euclidean distance between each region and its neighbors.
+// 预计算每个区域与邻居之间的欧氏距离。
 // Indexed by the same adjacency slot as adjList: neighborDist[i] is the
 // distance from region r to adjList[i] where adjOffset[r] <= i < adjOffset[r+1].
 export function computeNeighborDist(mesh, r_xyz) {

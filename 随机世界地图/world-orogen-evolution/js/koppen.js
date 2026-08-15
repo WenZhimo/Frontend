@@ -1,15 +1,15 @@
-// Köppen climate classification using the "worldbuilding pasta" band-based
-// methodology.  Two-season (summer/winter) data is used as a proxy for
+// 基于 “worldbuilding pasta” 分带方法的柯本气候分类。
+// 使用两季（夏/冬）数据作为
 // warmest/coldest month values.
 //
 // Approach:
-//   Step 1 – Temperature bands  (tropical → temperate → continental → tundra → ice cap)
-//   Step 2 – Arid zones (B)     dry in both seasons → desert core + steppe fringe
-//   Step 3 – Precipitation subtypes within each band (A / C / D details)
+//   步骤 1：温度带（热带 → 温带 → 大陆性 → 苔原 → 冰盖）
+//   步骤 2：干旱区（B）：两季皆干 → 沙漠核心 + 草原边缘
+//   步骤 3：各温度带内的降水子型（A / C / D 细节）
 //
-// IMPORTANT: The simulation labels "summer" and "winter" are NH-centric
-// (NH summer = June-Aug, NH winter = Dec-Feb).  For each cell we determine
-// the LOCAL warm/cold season from temperature and use that to assign the
+// 重要：模拟中的 “summer” 和 “winter” 标签以北半球为中心，
+// （北半球夏季 = 6–8 月，北半球冬季 = 12–2 月）。每个单元都会判断
+// 本地暖季/冷季，并据此分配
 // correct precipitation pattern (s/w/f).  Without this, Mediterranean (Cs)
 // and monsoon (Cw/Dw) climates are hemisphere-flipped.
 
@@ -20,37 +20,37 @@ import { smoothstep } from './wind.js';
  * Köppen class definitions: ID → { code, name, color [r,g,b] 0-1 }.
  */
 export const KOPPEN_CLASSES = [
-    { code: 'Ocean',  name: 'Ocean',                              color: [0.29, 0.44, 0.65] },  // #4a6fa5
-    { code: 'Af',     name: 'Tropical rainforest',                color: [0.00, 0.00, 1.00] },  // #0000FF
-    { code: 'Am',     name: 'Tropical monsoon',                   color: [0.00, 0.47, 1.00] },  // #0077FF
-    { code: 'Aw',     name: 'Tropical savanna',                   color: [0.27, 0.67, 0.98] },  // #46AAFA
-    { code: 'BWh',    name: 'Hot desert',                         color: [1.00, 0.00, 0.00] },  // #FF0000
-    { code: 'BWk',    name: 'Cold desert',                        color: [1.00, 0.59, 0.59] },  // #FF9696
-    { code: 'BSh',    name: 'Hot steppe',                         color: [0.96, 0.65, 0.00] },  // #F5A500
-    { code: 'BSk',    name: 'Cold steppe',                        color: [1.00, 0.86, 0.39] },  // #FFDB63
-    { code: 'Cfa',    name: 'Humid subtropical',                  color: [0.78, 1.00, 0.31] },  // #C8FF50
-    { code: 'Cfb',    name: 'Oceanic',                            color: [0.39, 1.00, 0.31] },  // #64FF50
-    { code: 'Cfc',    name: 'Subpolar oceanic',                   color: [0.20, 0.78, 0.00] },  // #32C800
-    { code: 'Csa',    name: 'Hot-summer Mediterranean',           color: [1.00, 1.00, 0.00] },  // #FFFF00
-    { code: 'Csb',    name: 'Warm-summer Mediterranean',          color: [0.78, 0.78, 0.00] },  // #C8C800
-    { code: 'Csc',    name: 'Cold-summer Mediterranean',          color: [0.59, 0.59, 0.00] },  // #969600
-    { code: 'Cwa',    name: 'Humid subtropical (monsoon)',         color: [0.59, 1.00, 0.59] },  // #96FF96
-    { code: 'Cwb',    name: 'Subtropical highland',               color: [0.39, 0.78, 0.39] },  // #63C764
-    { code: 'Cwc',    name: 'Cold subtropical highland',          color: [0.20, 0.59, 0.20] },  // #329633
-    { code: 'Dfa',    name: 'Hot-summer continental',             color: [0.00, 1.00, 1.00] },  // #00FFFF
-    { code: 'Dfb',    name: 'Warm-summer continental',            color: [0.22, 0.78, 1.00] },  // #37C8FF
-    { code: 'Dfc',    name: 'Subarctic',                          color: [0.00, 0.49, 0.49] },  // #007D7D
-    { code: 'Dfd',    name: 'Extremely cold subarctic',           color: [0.00, 0.27, 0.37] },  // #00465F
-    { code: 'Dsa',    name: 'Hot-summer continental (dry summer)', color: [0.90, 0.50, 1.00] },  // #E680FF
-    { code: 'Dsb',    name: 'Warm-summer continental (dry summer)', color: [0.70, 0.35, 0.85] },  // #B359D9
-    { code: 'Dsc',    name: 'Subarctic (dry summer)',              color: [0.50, 0.20, 0.65] },  // #8033A6
-    { code: 'Dsd',    name: 'Extremely cold subarctic (dry summer)', color: [0.35, 0.10, 0.45] },  // #591A73
-    { code: 'Dwa',    name: 'Hot-summer continental (monsoon)',    color: [0.67, 0.69, 1.00] },  // #ABB1FF
-    { code: 'Dwb',    name: 'Warm-summer continental (monsoon)',   color: [0.43, 0.47, 0.78] },  // #6E77C8
-    { code: 'Dwc',    name: 'Subarctic (monsoon)',                color: [0.29, 0.31, 0.78] },  // #4A50C8
-    { code: 'Dwd',    name: 'Extremely cold subarctic (monsoon)', color: [0.20, 0.00, 0.53] },  // #320087
-    { code: 'ET',     name: 'Tundra',                             color: [0.70, 0.70, 0.70] },  // #B2B2B2
-    { code: 'EF',     name: 'Ice cap',                            color: [0.41, 0.41, 0.41] },  // #686868
+    { code: 'Ocean',  name: '海洋',                              color: [0.29, 0.44, 0.65] },  // #4a6fa5
+    { code: 'Af',     name: '热带雨林',                color: [0.00, 0.00, 1.00] },  // #0000FF
+    { code: 'Am',     name: '热带季风',                   color: [0.00, 0.47, 1.00] },  // #0077FF
+    { code: 'Aw',     name: '热带稀树草原',                   color: [0.27, 0.67, 0.98] },  // #46AAFA
+    { code: 'BWh',    name: '热带沙漠',                         color: [1.00, 0.00, 0.00] },  // #FF0000
+    { code: 'BWk',    name: '寒带沙漠',                        color: [1.00, 0.59, 0.59] },  // #FF9696
+    { code: 'BSh',    name: '热带草原',                         color: [0.96, 0.65, 0.00] },  // #F5A500
+    { code: 'BSk',    name: '寒带草原',                        color: [1.00, 0.86, 0.39] },  // #FFDB63
+    { code: 'Cfa',    name: '湿润亚热带',                  color: [0.78, 1.00, 0.31] },  // #C8FF50
+    { code: 'Cfb',    name: '海洋性气候',                            color: [0.39, 1.00, 0.31] },  // #64FF50
+    { code: 'Cfc',    name: '副极地海洋性',                   color: [0.20, 0.78, 0.00] },  // #32C800
+    { code: 'Csa',    name: '炎夏地中海',           color: [1.00, 1.00, 0.00] },  // #FFFF00
+    { code: 'Csb',    name: '暖夏地中海',          color: [0.78, 0.78, 0.00] },  // #C8C800
+    { code: 'Csc',    name: '冷夏地中海',          color: [0.59, 0.59, 0.00] },  // #969600
+    { code: 'Cwa',    name: '季风湿润亚热带',         color: [0.59, 1.00, 0.59] },  // #96FF96
+    { code: 'Cwb',    name: '亚热带高原',               color: [0.39, 0.78, 0.39] },  // #63C764
+    { code: 'Cwc',    name: '寒冷亚热带高原',          color: [0.20, 0.59, 0.20] },  // #329633
+    { code: 'Dfa',    name: '炎夏大陆性',             color: [0.00, 1.00, 1.00] },  // #00FFFF
+    { code: 'Dfb',    name: '暖夏大陆性',            color: [0.22, 0.78, 1.00] },  // #37C8FF
+    { code: 'Dfc',    name: '亚寒带',                          color: [0.00, 0.49, 0.49] },  // #007D7D
+    { code: 'Dfd',    name: '极寒亚寒带',           color: [0.00, 0.27, 0.37] },  // #00465F
+    { code: 'Dsa',    name: '夏干炎夏大陆性', color: [0.90, 0.50, 1.00] },  // #E680FF
+    { code: 'Dsb',    name: '夏干暖夏大陆性', color: [0.70, 0.35, 0.85] },  // #B359D9
+    { code: 'Dsc',    name: '夏干亚寒带',              color: [0.50, 0.20, 0.65] },  // #8033A6
+    { code: 'Dsd',    name: '夏干极寒亚寒带', color: [0.35, 0.10, 0.45] },  // #591A73
+    { code: 'Dwa',    name: '季风炎夏大陆性',    color: [0.67, 0.69, 1.00] },  // #ABB1FF
+    { code: 'Dwb',    name: '季风暖夏大陆性',   color: [0.43, 0.47, 0.78] },  // #6E77C8
+    { code: 'Dwc',    name: '季风亚寒带',                color: [0.29, 0.31, 0.78] },  // #4A50C8
+    { code: 'Dwd',    name: '季风极寒亚寒带', color: [0.20, 0.00, 0.53] },  // #320087
+    { code: 'ET',     name: '苔原',                             color: [0.70, 0.70, 0.70] },  // #B2B2B2
+    { code: 'EF',     name: '冰原',                            color: [0.41, 0.41, 0.41] },  // #686868
 ];
 
 // Lookup table: KOPPEN_CLASSES code → ID (built once at import time)
@@ -92,12 +92,12 @@ export function classifyKoppen(mesh, r_elevation, tempResult, precipResult) {
         const Tcold = Math.min(Ts, Tw);    // coldest month proxy (°C)
         const Tann  = (Ts + Tw) / 2;
 
-        // "Shoulder-month" temperature: approximate the temp 2 months before
-        // peak summer.  With only 2 seasons we interpolate partway from peak
-        // toward cold.  The fraction 1.5/6 (vs the old 2/6) prevents extreme
-        // continental winters from dragging shoulder temps too low — in reality
-        // shoulder months track closer to the summer peak than to the annual
-        // mean when the swing is very asymmetric in duration.
+        // “过渡月”温度：近似估计峰值夏季前 2 个月的温度。
+        // 由于只有两季数据，我们从峰值向冷季方向插值一段距离。
+        // 1.5/6 的比例（旧值为 2/6）可避免极端
+        // 大陆性冬季把过渡月温度拉得过低；现实中
+        // 过渡月通常更接近夏季峰值，而不是年
+        // 平均值，尤其当温度摆幅在时长上很不对称时。
         const Tshoulder = Thot - (Thot - Tcold) * (CLIMATE.KOPPEN_SHOULDER_FRAC / 6);
 
         // ── Hemisphere-aware local seasons ──
@@ -106,7 +106,7 @@ export function classifyKoppen(mesh, r_elevation, tempResult, precipResult) {
         const localSummerIsSim = Ts >= Tw;
 
         // Precipitation: each season value ∈ [0,1] represents ~6 months.
-        // Scale to approximate mm for that half-year.
+        // 缩放为该半年的近似毫米降水量。
         const Ps = Math.max(0, pSummer[r]) * CLIMATE.KOPPEN_PRECIP_SCALE_MM;   // NH summer half-year mm
         const Pw = Math.max(0, pWinter[r]) * CLIMATE.KOPPEN_PRECIP_SCALE_MM;    // NH winter half-year mm
         const Pann = Ps + Pw;                          // annual mm
@@ -117,11 +117,11 @@ export function classifyKoppen(mesh, r_elevation, tempResult, precipResult) {
         const PsMonthLocal = PsummerLocal / 6;   // avg monthly precip in local summer
         const PwMonthLocal = PwinterLocal / 6;    // avg monthly precip in local winter
 
-        // Estimate driest individual month from the 6-month average.
-        // A 6-month dry-season average of 40mm might contain months ranging from
-        // 10mm to 70mm. The stronger the seasonal contrast (wet vs dry half-year),
-        // the more peaked the distribution within each half-year, so the driest
-        // month is further below the half-year average.
+        // 从 6 个月平均值估计最干单月。
+        // 6 个月干季平均 40 mm 时，内部月份可能从
+        // 10 mm 到 70 mm 不等。季节对比（湿半年 vs 干半年）越强，
+        // 每个半年的内部分布越尖锐，因此最干
+        // 月会明显低于半年平均值。
         // Factor: at equal seasons (ratio=1) → driest ≈ 0.7× average
         //         at strong monsoon (ratio=5+) → driest ≈ 0.35× average
         const seasonRatio = Math.max(PsMonthLocal, PwMonthLocal) / (Math.min(PsMonthLocal, PwMonthLocal) || 1);
@@ -134,11 +134,11 @@ export function classifyKoppen(mesh, r_elevation, tempResult, precipResult) {
         // ================================================================
         // Band codes: 'A' tropical, 'C' temperate, 'D' continental,
         //             'ET' tundra, 'EF' ice cap
-        // Sub-bands for temperate: 'hotSummer' (>=22°C) vs 'coolSummer'
-        // Sub-bands for continental: 'humidCont' (Tshoulder>=10) vs 'subarctic'
+        // 温带子带：hotSummer（>=22°C）与 coolSummer。
+        // 大陆性子带：humidCont（Tshoulder>=10）与 subarctic。
 
         let band;
-        let tempSubBand = '';    // 'hotSummer'|'coolSummer' for C; 'humidCont'|'subarctic' for D
+        let tempSubBand = '';    // C 类使用 hotSummer/coolSummer；D 类使用 humidCont/subarctic
 
         if (Thot < 0) {
             // Ice cap: warmest month < 0°C
@@ -166,10 +166,10 @@ export function classifyKoppen(mesh, r_elevation, tempResult, precipResult) {
         // ================================================================
         //  STEP 2 – ARID ZONES (B)
         // ================================================================
-        // The blog approach: areas "dry in both seasons" become desert by
-        // default, with steppe as a transition on the edges.
+        // 博文方法：两季皆干的区域默认成为沙漠，
+        // 草原作为边缘过渡带。
         //
-        // We use the standard Köppen aridity threshold (which encodes the
+        // 使用标准柯本干旱阈值（其中编码了
         // idea of evapotranspiration exceeding precipitation) to decide B,
         // then split desert vs steppe.
         //
@@ -178,8 +178,8 @@ export function classifyKoppen(mesh, r_elevation, tempResult, precipResult) {
         //   Tann <  18°C → cold (k)
         //
         // summerFrac uses LOCAL warm-season precipitation (hemisphere-corrected)
-        // because the threshold encodes evapotranspiration which peaks in
-        // the warm season regardless of hemisphere.
+        // 因为阈值编码了蒸散，其峰值出现在
+        // 暖季，与半球无关。
 
         let Pthresh;
         const summerFrac = Pann > 0 ? PsummerLocal / Pann : 0.5;
@@ -192,14 +192,14 @@ export function classifyKoppen(mesh, r_elevation, tempResult, precipResult) {
         }
         Pthresh = Math.max(0, Pthresh);
 
-        // Aridity uses a DECOUPLED precip scale: the single KOPPEN_PRECIP_SCALE_MM
-        // has to serve the aridity threshold, the s/w monthly ratios, and the
+        // 干旱判据使用解耦的降水尺度：单一 KOPPEN_PRECIP_SCALE_MM
+        // 同时服务干旱阈值、夏/冬月度比例，以及
         // Af/Am cutoffs at once, which over-constrains it. KOPPEN_ARIDITY_SCALE
-        // (default 1) lets the desert extent be calibrated independently of the
+        // （默认 1）允许独立校准沙漠范围，而不影响
         // seasonal-subtype thresholds. >1 → wetter aridity test → fewer deserts.
         //
         // East-coast aridity discount: humid-subtropical east coasts (S. China,
-        // Florida, SE US) have real rainfall but sit just under the threshold, so
+        // 佛罗里达、美国东南部）真实有降雨，但略低于阈值，因此
         // they misclassify as steppe/desert. Boosting their EFFECTIVE aridity
         // precip by KOPPEN_EAST_COAST_WET rescues them WITHOUT wetting true west-
         // coast/interior deserts (Sahara), which read eastness ≈ 0. Default 0.
@@ -222,14 +222,14 @@ export function classifyKoppen(mesh, r_elevation, tempResult, precipResult) {
         // ================================================================
 
         // ── Determine s / w / f precipitation pattern ──
-        // All comparisons use LOCAL summer/winter so the pattern is correct
+        // 所有比较都使用本地夏/冬季，因此南北半球格局都正确。
         // in both hemispheres.
         // Our "monthly" values are 6-month averages, not individual months —
-        // this smooths the driest/wettest month contrast, so thresholds are
+        // 这会平滑最干/月最湿月对比，因此阈值
         // relaxed vs. standard Köppen (which uses actual monthly extremes).
         // s  = dry local summer:  summer month < 50mm AND < 1/2 winter month
         // w  = dry local winter:  winter month < 1/4 summer month
-        //      (relaxed from standard 1/10 because 6-month averages compress contrast)
+        //      （由标准 1/10 放宽，因为 6 个月平均会压缩对比）
         // f  = no dry season
         let precipPattern;
         const localSummerDrier = PsummerLocal < PwinterLocal;
@@ -246,7 +246,7 @@ export function classifyKoppen(mesh, r_elevation, tempResult, precipResult) {
         // a: warmest month >= 22°C
         // b: warmest < 22°C but 4+ months >= 10°C  (proxy: Tshoulder >= 10°C)
         // c: fewer than 4 months >= 10°C, coldest >= −38°C
-        // d: coldest < −38°C  (extreme continental, only for D)
+        // d：最冷月 < -38°C（极端大陆性，仅 D 类）。
         let tempLetter;
         if (Thot >= 22) {
             tempLetter = 'a';
@@ -265,7 +265,7 @@ export function classifyKoppen(mesh, r_elevation, tempResult, precipResult) {
             //   wet both seasons             → Am (tropical monsoon)
             //   wet one season, dry other    → Aw (tropical savanna)
             //
-            // Translated with thresholds:
+            // 按阈值转写如下：
             //   Af: driest month >= 60 mm
             //   Am: Pann >= 25*(100 - Pdry)  (i.e. enough total rain to sustain forest
             //       despite a short dry spell)
@@ -303,7 +303,7 @@ export function classifyKoppen(mesh, r_elevation, tempResult, precipResult) {
             //   subarctic (Tshoulder < 10°C) = Dfc/Dfd/Dsc/Dsd/Dwc/Dwd
             //
             // Ds zones appear near Mediterranean regions; Dw zones appear
-            // near regions with strong monsoon effect (far ITCZ excursion).
+            // 靠近强季风效应区域（ITCZ 偏移较远）。
             const code = 'D' + precipPattern + tempLetter;
             const id = CODE_TO_ID[code];
             if (id !== undefined) {

@@ -48,8 +48,8 @@ const cases = [
     ['PRECIP_WARM_CURRENT_BOOST 0.8', { PRECIP_WARM_CURRENT_BOOST: 0.8 }],
 ];
 
-console.log('lever                              desertB_3045  contD_4560N  medCells');
-console.log('(truth)                                  39.7%        76.0%       446');
+console.log('杠杆                              desertB_3045  contD_4560N  medCells');
+console.log('（真实）                                  39.7%        76.0%       446');
 for (const [name, ov] of cases) {
     const m = metrics(ov);
     console.log(`${name.padEnd(34)} ${(m.desertB3045 * 100).toFixed(1).padStart(7)}%    ${(m.contD4560 * 100).toFixed(1).padStart(6)}%    ${String(m.medCells).padStart(6)}`);

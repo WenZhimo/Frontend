@@ -1,6 +1,6 @@
-// Non-linear detail slider mapping (power curve, p=5).
-// Slider position 0–1000 maps to detail 2,000–2,560,000.
-// Gives generous control in the normal range; the old max (640K) sits at ~76%.
+// 非线性细节滑块映射（幂曲线，p=5）。
+// 滑块位置 0–1000 映射到细节 2,000–2,560,000。
+// 在常用范围提供更宽控制；旧最大值（640K）约位于 76%。
 
 const MIN = 5000, MAX = 2560000, RANGE = MAX - MIN, STEPS = 1000, P = 5;
 

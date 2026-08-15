@@ -87,21 +87,21 @@ const EXPERIMENTS = [
 ];
 
 async function main() {
-    console.log(`Building Earth context (N=${N})…`);
+    console.log(`正在构建地球上下文（N=${N}）…`);
     CTX = buildEarthContext({ N });
 
-    // Baseline (current applied defaults)
+    // 基线（当前已应用的默认值）。
     const base = runClimate(CTX, {});
-    console.log(`\nBaseline metrics (current defaults) vs truth:`);
+    console.log(`\n基线指标（当前默认值）vs 真实：`);
     for (const m of ['medCells', 'monsoonCells', 'contD_4560N', 'desertB_3045', 'nIndiaDesertFrac', 'tempC_4560N']) {
         const sim = METRICS[m](CTX, base.r_koppen);
         const tru = truthMetric(m);
         const fmt = (v) => (v > 1 ? v.toFixed(0) : (v * 100).toFixed(1) + '%');
-        console.log(`  ${m.padEnd(18)} sim ${String(fmt(sim)).padStart(7)}   truth ${String(fmt(tru)).padStart(7)}`);
+        console.log(`  ${m.padEnd(18)} 模拟 ${String(fmt(sim)).padStart(7)}   真实 ${String(fmt(tru)).padStart(7)}`);
     }
 
-    console.log(`\n=== Sensitivity: swing each lever low→high, measure target metric ===`);
-    console.log(`param                         metric            default   low → high            verdict`);
+    console.log(`\n=== 敏感性：将每个杠杆从低到高摆动，测量目标指标 ===`);
+    console.log(`参数                          指标              默认值    低 → 高              结论`);
     for (const [param, lo, hi, metric, expect] of EXPERIMENTS) {
         const def = CLIMATE_DEFAULTS[param];
         const kLo = runClimate(CTX, { [param]: lo }).r_koppen;
