@@ -1306,7 +1306,11 @@
   function drawPieces(now) {
     const moving = active?.moving || null;
     pieces.forEach((p) => {
-      if (p !== moving) drawPieceAt(p, boardPos(p.file, p.rank), now, 1);
+      if (p !== moving) {
+        const pos = boardPos(p.file, p.rank);
+        if (selectedSquare?.file === p.file && selectedSquare?.rank === p.rank) drawSelectedPieceHalo(pos, p.side, now);
+        drawPieceAt(p, pos, now, 1);
+      }
     });
     if (active) {
       const t = clamp((now - active.start) / active.duration, 0, 1);
@@ -1314,6 +1318,23 @@
         drawPieceAt(active.target, boardPos(active.to.file, active.to.rank), now, 1 - clamp((t - 0.22) / 0.48, 0, 1));
       }
       drawPieceAt(active.moving, activeCharPosition(smooth(t)), now, 0.78 + Math.sin(t * Math.PI) * 0.22);
+    }
+  }
+
+  function drawSelectedPieceHalo(pos, side, now) {
+    const cx = Math.round(pos.x * DOT_W);
+    const cy = Math.round(pos.y * DOT_H);
+    const fg = side === "red" ? color.redSideAlt : color.redFx;
+    const pulse = reducedMotion ? 0.78 : 0.7 + Math.sin(now / 150) * 0.16;
+    const rx = 8.9;
+    const ry = 10.4;
+    for (let y = -Math.ceil(ry); y <= Math.ceil(ry); y += 1) {
+      for (let x = -Math.ceil(rx); x <= Math.ceil(rx); x += 1) {
+        const d = Math.sqrt((x / rx) ** 2 + (y / ry) ** 2);
+        if (d < 0.88 || d > 1.06) continue;
+        if (Math.abs(x * 3 + y * 5) % 2) continue;
+        setSubPx(cx + x, cy + y, fg, pulse);
+      }
     }
   }
 
@@ -1570,10 +1591,16 @@
           ctx.save();
           ctx.textAlign = "center";
           ctx.font = `900 ${Math.min(ch * 1.34, cw * 2.28)}px ${CJK_FONT}`;
-          ctx.lineWidth = Math.max(1, Math.min(cw, ch) * 0.055);
-          ctx.strokeStyle = screen.bg[i] || color.ink;
-          ctx.strokeText(c, x * cw + cw * 0.5, y * ch + ch * 0.54);
-          ctx.fillText(c, x * cw + cw * 0.5, y * ch + ch * 0.55);
+          const labelX = x * cw + cw * 0.5;
+          const labelY = y * ch + ch * 0.55;
+          const shadow = Math.max(0.55, Math.min(cw, ch) * 0.055);
+          ctx.fillStyle = screen.bg[i] || color.ink;
+          ctx.fillText(c, labelX - shadow, labelY);
+          ctx.fillText(c, labelX + shadow, labelY);
+          ctx.fillText(c, labelX, labelY - shadow);
+          ctx.fillText(c, labelX, labelY + shadow);
+          ctx.fillStyle = screen.fg[i] || color.muted;
+          ctx.fillText(c, labelX, labelY);
           ctx.restore();
         } else {
           ctx.fillText(c, x * cw + cw * 0.02, y * ch + ch * 0.55);

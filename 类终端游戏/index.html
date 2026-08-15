@@ -150,6 +150,10 @@
         gap: 10px;
       }
 
+      .section-block + .section-block {
+        margin-top: clamp(14px, 2vw, 22px);
+      }
+
       .section-title {
         display: flex;
         align-items: center;
@@ -281,7 +285,7 @@
     <main class="terminal" aria-label="类终端游戏总入口">
       <header class="terminal-head">
         <div class="terminal-title">TERMINAL-GAME-HUB :: 本地静态服务</div>
-        <div class="terminal-state">ONLINE / 棋类 9 个游戏 / 无联网对战</div>
+        <div class="terminal-state">ONLINE / 棋类 9 个游戏 / 街机 23 个游戏 / 策略模拟 5 个游戏 / 益智关卡 6 个游戏 / 终端原生 4 个游戏 / 纯本地</div>
       </header>
 
       <section class="screen">
@@ -294,8 +298,8 @@
    ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██║  ██║███████╗
    ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝
           </pre>
-          <p class="line"><span class="command">root@terminal-games</span>:~$ ./选择游戏 --section 棋类 --mode 本地类终端</p>
-          <p class="line cursor">当前板块：棋类；输入 1-9 或点击列表启动；进入游戏后点击 HOME 返回这里</p>
+          <p class="line"><span class="command">root@terminal-games</span>:~$ ./选择游戏 --section 全部 --mode 本地类终端</p>
+          <p class="line cursor">当前板块：棋类 + 街机 + 策略模拟 + 益智关卡 + 终端原生；输入快捷键或点击列表启动；进入游戏后点击 HOME 返回这里</p>
         </div>
 
         <section class="section-block" aria-labelledby="board-section-title">
@@ -381,13 +385,359 @@
           </nav>
         </section>
 
+        <section class="section-block" aria-labelledby="arcade-section-title">
+          <h2 class="section-title" id="arcade-section-title">
+            街机
+            <span class="section-count">23 ENTRIES</span>
+          </h2>
+          <nav aria-label="街机游戏列表">
+            <ol class="menu">
+              <li>
+                <a class="menu-link" href="贪吃蛇终端/index.html" data-key="0">
+                  <span class="index">[00]</span>
+                  <span class="name-cn">贪吃蛇</span>
+                  <span class="name-en">Snake / AI Autopilot</span>
+                  <span class="tag">SNAKE_AI PC / 字符爆裂</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="打砖块终端/index.html" data-key="b">
+                  <span class="index">[0B]</span>
+                  <span class="name-cn">打砖块</span>
+                  <span class="name-en">Breakout / Impact Terminal</span>
+                  <span class="tag">挡板反弹 / 砖块爆裂</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="乒乓终端/index.html" data-key="p">
+                  <span class="index">[0P]</span>
+                  <span class="name-cn">乒乓</span>
+                  <span class="name-en">Pong / Dual Paddle</span>
+                  <span class="tag">AI 对打 / 反弹火花</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="吃豆人终端/index.html" data-key="c">
+                  <span class="index">[0C]</span>
+                  <span class="name-cn">吃豆人</span>
+                  <span class="name-en">Pac Maze / Seeded Labyrinth</span>
+                  <span class="tag">随机迷宫 / 幽灵追逐</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="俄罗斯方块终端/index.html" data-key="t">
+                  <span class="index">[0T]</span>
+                  <span class="name-cn">俄罗斯方块</span>
+                  <span class="name-en">Tetris / Seeded 7-Bag</span>
+                  <span class="tag">Hold / Ghost / 消行爆裂</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="桌上冰球终端/index.html" data-key="a">
+                  <span class="index">[0A]</span>
+                  <span class="name-cn">桌上冰球</span>
+                  <span class="name-en">Air Hockey / Puck Collider</span>
+                  <span class="tag">双 AI 对冲 / 进球爆裂</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="太空侵略者终端/index.html" data-key="i">
+                  <span class="index">[0I]</span>
+                  <span class="name-cn">太空侵略者</span>
+                  <span class="name-en">Space Invaders / Glyph Fleet</span>
+                  <span class="tag">敌阵推进 / 字符弹幕</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="小行星终端/index.html" data-key="x">
+                  <span class="index">[0X]</span>
+                  <span class="name-cn">小行星</span>
+                  <span class="name-en">Asteroids / Vector Debris</span>
+                  <span class="tag">飞船旋转 / 碎裂爆发</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="炸弹人终端/index.html" data-key="m">
+                  <span class="index">[0M]</span>
+                  <span class="name-cn">炸弹人</span>
+                  <span class="name-en">Bomberman / Chain Blast</span>
+                  <span class="tag">十字爆炸 / 连锁引爆</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="坦克大战终端/index.html" data-key="k">
+                  <span class="index">[0K]</span>
+                  <span class="name-cn">坦克大战</span>
+                  <span class="name-en">Battle City / Base Defense</span>
+                  <span class="tag">子弹反弹 / 砖墙破碎</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="导弹指挥官终端/index.html" data-key="d">
+                  <span class="index">[0D]</span>
+                  <span class="name-cn">导弹指挥官</span>
+                  <span class="name-en">Missile Command / City Shield</span>
+                  <span class="tag">空中拦截 / 爆裂光团</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="光轮终端/index.html" data-key="l">
+                  <span class="index">[0L]</span>
+                  <span class="name-cn">光轮</span>
+                  <span class="name-en">Light Cycle / Neon Trails</span>
+                  <span class="tag">持续轨迹 / 撞线爆裂</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="扫雷终端/index.html" data-key="n">
+                  <span class="index">[0N]</span>
+                  <span class="name-cn">扫雷</span>
+                  <span class="name-en">Minesweeper / Logic Grid</span>
+                  <span class="tag">推理候选 / 爆雷高亮</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="推箱子终端/index.html" data-key="s">
+                  <span class="index">[0S]</span>
+                  <span class="name-cn">推箱子</span>
+                  <span class="name-en">Sokoban / Solver Warehouse</span>
+                  <span class="tag">BFS 路线 / 推箱火花</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="Roguelike地牢终端/index.html" data-key="g">
+                  <span class="index">[0G]</span>
+                  <span class="name-cn">Roguelike 地牢</span>
+                  <span class="name-en">Roguelike / Fog Dungeon</span>
+                  <span class="tag">房间迷雾 / 战斗日志</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="弹珠台终端/index.html" data-key="e">
+                  <span class="index">[0E]</span>
+                  <span class="name-cn">弹珠台</span>
+                  <span class="name-en">Pinball / Glyph Physics</span>
+                  <span class="tag">挡板碰撞 / 加分爆闪</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="青蛙过河终端/index.html" data-key="f">
+                  <span class="index">[0F]</span>
+                  <span class="name-cn">青蛙过河</span>
+                  <span class="name-en">Frogger / Traffic Stream</span>
+                  <span class="tag">车流河流 / 木板载动</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="月球登陆器终端/index.html" data-key="y">
+                  <span class="index">[0Y]</span>
+                  <span class="name-cn">月球登陆器</span>
+                  <span class="name-en">Lunar Lander / Gravity Vector</span>
+                  <span class="tag">推力喷流 / 着陆尘埃</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="洞穴飞行终端/index.html" data-key="v">
+                  <span class="index">[0V]</span>
+                  <span class="name-cn">洞穴飞行</span>
+                  <span class="name-en">Thrust / Gravitar Cave</span>
+                  <span class="tag">惯性飞船 / 牵引核心</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="打飞机终端/index.html" data-key="j">
+                  <span class="index">[0J]</span>
+                  <span class="name-cn">打飞机</span>
+                  <span class="name-en">1942 Strike / Vertical Shooter</span>
+                  <span class="tag">僚机弹幕 / Boss 爆裂</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="百足虫终端/index.html" data-key="h">
+                  <span class="index">[0H]</span>
+                  <span class="name-cn">百足虫</span>
+                  <span class="name-en">Centipede / Mushroom Grid</span>
+                  <span class="tag">分节虫潮 / 蘑菇障碍</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="Qix终端/index.html" data-key="q">
+                  <span class="index">[0Q]</span>
+                  <span class="name-cn">Qix 画线占地</span>
+                  <span class="name-en">Qix / Territory Cut</span>
+                  <span class="tag">连通填充 / 电弧追线</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="泡泡龙终端/index.html" data-key="u">
+                  <span class="index">[0U]</span>
+                  <span class="name-cn">泡泡龙</span>
+                  <span class="name-en">Puzzle Bobble / Bubble Chain</span>
+                  <span class="tag">弹射吸附 / 连锁消除</span>
+                </a>
+              </li>
+            </ol>
+          </nav>
+        </section>
+
+        <section class="section-block" aria-labelledby="strategy-section-title">
+          <h2 class="section-title" id="strategy-section-title">
+            策略 / 模拟
+            <span class="section-count">5 ENTRIES</span>
+          </h2>
+          <nav aria-label="策略模拟游戏列表">
+            <ol class="menu">
+              <li>
+                <a class="menu-link" href="生命游戏终端/index.html" data-key="z">
+                  <span class="index">[1Z]</span>
+                  <span class="name-cn">生命游戏</span>
+                  <span class="name-en">Conway's Game of Life / Cellular Lab</span>
+                  <span class="tag">B3/S23 / 可编辑实验台</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="细胞战争终端/index.html" data-key="w">
+                  <span class="index">[1W]</span>
+                  <span class="name-cn">细胞战争</span>
+                  <span class="name-en">Ants / Swarm Resource War</span>
+                  <span class="tag">信息素轨迹 / 群体争夺</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="塔防终端/index.html" data-key="o">
+                  <span class="index">[1O]</span>
+                  <span class="name-cn">塔防终端</span>
+                  <span class="name-en">Tower Defense / Wave Grid</span>
+                  <span class="tag">路径炮塔 / 伤害爆裂</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="自动战斗棋盘终端/index.html" data-key="r">
+                  <span class="index">[1R]</span>
+                  <span class="name-cn">自动战斗棋盘</span>
+                  <span class="name-en">Auto Battler Lite / Squad Arena</span>
+                  <span class="tag">自动寻敌 / 技能战报</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="城市防御终端/index.html" data-key="[">
+                  <span class="index">[1[]</span>
+                  <span class="name-cn">城市防御</span>
+                  <span class="name-en">Rampart / City Defense</span>
+                  <span class="tag">修墙放炮 / 舰队炮击</span>
+                </a>
+              </li>
+            </ol>
+          </nav>
+        </section>
+
+        <section class="section-block" aria-labelledby="puzzle-section-title">
+          <h2 class="section-title" id="puzzle-section-title">
+            益智 / 关卡
+            <span class="section-count">6 ENTRIES</span>
+          </h2>
+          <nav aria-label="益智关卡游戏列表">
+            <ol class="menu">
+              <li>
+                <a class="menu-link" href="2048终端/index.html" data-key="]">
+                  <span class="index">[2]]</span>
+                  <span class="name-cn">2048 终端版</span>
+                  <span class="name-en">2048 / Merge Grid</span>
+                  <span class="tag">滑动合并 / 数字爆光</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="落球迷宫终端/index.html" data-key=";">
+                  <span class="index">[2;]</span>
+                  <span class="name-cn">落球迷宫</span>
+                  <span class="name-en">Pachinko / Peggle Lite</span>
+                  <span class="tag">物理弹跳 / 倍率爆点</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="连连看终端/index.html" data-key=".">
+                  <span class="index">[2.]</span>
+                  <span class="name-cn">连连看</span>
+                  <span class="name-en">Match-3 / Cascade Grid</span>
+                  <span class="tag">交换连锁 / 清屏爆闪</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="华容道终端/index.html" data-key="/">
+                  <span class="index">[2/]</span>
+                  <span class="name-cn">华容道</span>
+                  <span class="name-en">Sliding Block / Huarong Dao</span>
+                  <span class="tag">滑块 AI / 出口爆闪</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="数独终端/index.html" data-key="-">
+                  <span class="index">[2-]</span>
+                  <span class="name-cn">数独终端</span>
+                  <span class="name-en">Sudoku / Candidate Solver</span>
+                  <span class="tag">候选数 / 冲突高亮</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="激光推箱子终端/index.html" data-key="=">
+                  <span class="index">[2=]</span>
+                  <span class="name-cn">激光推箱子</span>
+                  <span class="name-en">Laser Sokoban / Beam Circuit</span>
+                  <span class="tag">箱子机关 / 光束接收器</span>
+                </a>
+              </li>
+            </ol>
+          </nav>
+        </section>
+        <section class="section-block" aria-labelledby="native-section-title">
+          <h2 class="section-title" id="native-section-title">
+            终端原生
+            <span class="section-count">4 ENTRIES</span>
+          </h2>
+          <nav aria-label="终端原生游戏列表">
+            <ol class="menu">
+              <li>
+                <a class="menu-link" href="NetHack终端/index.html" data-key="'">
+                  <span class="index">[3']</span>
+                  <span class="name-cn">NetHack 终端</span>
+                  <span class="name-en">NetHack Lite / Fog Dungeon</span>
+                  <span class="tag">房间迷雾 / 战斗日志</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="DwarfFortress终端/index.html" data-key=",">
+                  <span class="index">[3,]</span>
+                  <span class="name-cn">Dwarf Fortress</span>
+                  <span class="name-en">Dwarf Fortress Lite / Colony Sim</span>
+                  <span class="tag">殖民模拟 / 资源事件流</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="黑客入侵终端/index.html" data-key="`">
+                  <span class="index">[3`]</span>
+                  <span class="name-cn">黑客入侵</span>
+                  <span class="name-en">Intrusion / Port Trace</span>
+                  <span class="tag">节点扫描 / 追踪倒计时</span>
+                </a>
+              </li>
+              <li>
+                <a class="menu-link" href="病毒扩散终端/index.html" data-key="?">
+                  <span class="index">[3?]</span>
+                  <span class="name-cn">病毒扩散</span>
+                  <span class="name-en">Pandemic Board Lite / AI Dispatch</span>
+                  <span class="tag">感染扩散 / AI 调度</span>
+                </a>
+              </li>
+            </ol>
+          </nav>
+        </section>
         <aside class="hint-panel" aria-label="操作提示">
-          <strong>操作：</strong>数字键 1-9 启动棋类板块游戏；Tab 切换项目；Enter 打开。总入口由 start.bat 在 localhost:8040 启动，所有游戏仍是纯本地静态文件。
+          <strong>操作：</strong>数字键 1-9 启动棋类板块游戏；0 启动贪吃蛇；B 启动打砖块；P 启动乒乓；C 启动吃豆人；T 启动俄罗斯方块；A 启动桌上冰球；I 启动太空侵略者；X 启动小行星；M 启动炸弹人；K 启动坦克大战；D 启动导弹指挥官；L 启动光轮；N 启动扫雷；S 启动推箱子；G 启动 Roguelike 地牢；E 启动弹珠台；F 启动青蛙过河；Y 启动月球登陆器；V 启动洞穴飞行；J 启动打飞机；H 启动百足虫；Q 启动 Qix；U 启动泡泡龙；Z 启动生命游戏；W 启动细胞战争；O 启动塔防终端；R 启动自动战斗棋盘；[ 启动城市防御；] 启动 2048；; 启动落球迷宫；. 启动连连看；/ 启动华容道；- 启动数独；= 启动激光推箱子；' 启动 NetHack；, 启动 Dwarf Fortress；` 启动黑客入侵；? 启动病毒扩散；Tab 切换项目；Enter 打开。总入口由 start.bat 在 localhost:8040 启动，所有游戏仍是纯本地静态文件。
         </aside>
       </section>
 
       <footer class="terminal-foot">
-        <span>状态：等待选择 / 棋类 / AI VS AI / HUMAN VS AI / LOCAL 2P</span>
+        <span>状态：等待选择 / 棋类 / 街机 / 策略模拟 / 益智关卡 / 终端原生 / AI AUTOPILOT / HUMAN PILOT</span>
         <span>路径：D:\盒子\HTML\类终端游戏</span>
       </footer>
     </main>
@@ -405,8 +755,9 @@
       });
 
       window.addEventListener("keydown", (event) => {
-        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-        const link = links.find((item) => item.dataset.key === event.key);
+        if (event.altKey || event.ctrlKey || event.metaKey) return;
+        const key = event.key.toLowerCase();
+        const link = links.find((item) => item.dataset.key === key);
         if (!link) return;
         event.preventDefault();
         activateLink(link);

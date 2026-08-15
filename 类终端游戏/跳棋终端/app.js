@@ -714,11 +714,31 @@
       if (id === movingFrom) continue;
       const h = holeById.get(id);
       const fresh = state.lastMove?.to === id ? clamp((now - state.lastMove.at) / 220, 0, 1) : 1;
-      drawPieceAt({ x: h.x, y: h.y }, side, lerp(0.84, 1, fresh));
+      const selected = id === state.selected;
+      const pos = { x: h.x, y: h.y };
+      if (selected) drawSelectedPieceHalo(pos, side, now);
+      drawPieceAt(pos, side, selected ? 1.1 : lerp(0.84, 1, fresh));
     }
     if (state.active) {
       const pos = activePosition(clamp((now - state.active.start) / state.active.duration, 0, 1));
       drawPieceAt(pos, state.active.side, 0.98 + Math.sin((now - state.active.start) / 80) * 0.06);
+    }
+  }
+
+  function drawSelectedPieceHalo(pos, side, now) {
+    const sx = Math.round(pos.x * DOT_W);
+    const sy = Math.round(pos.y * DOT_H);
+    const fg = sideEffectColor(side);
+    const pulse = reducedMotion ? 0.76 : 0.68 + Math.sin(now / 150) * 0.14;
+    const rx = 6.4;
+    const ry = 7.4;
+    for (let y = -Math.ceil(ry); y <= Math.ceil(ry); y += 1) {
+      for (let x = -Math.ceil(rx); x <= Math.ceil(rx); x += 1) {
+        const d = Math.sqrt((x / rx) ** 2 + (y / ry) ** 2);
+        if (d < 0.9 || d > 1.08) continue;
+        if (Math.abs(x * 3 + y * 5) % 2) continue;
+        putEffectDot(sx + x, sy + y, fg, pulse);
+      }
     }
   }
 

@@ -1016,12 +1016,32 @@
         const piece = state.board[y][x];
         if (!piece) continue;
         if (movingFrom && movingFrom.x === x && movingFrom.y === y) continue;
-        drawAnimalBadge(boardCellCenter(x, y), piece, { scale: 1, fade: 1 });
+        const selected = samePoint(state.selected, { x, y });
+        const pos = boardCellCenter(x, y);
+        if (selected) drawSelectedPieceHalo(pos, piece.side, now);
+        drawAnimalBadge(pos, piece, { scale: selected ? 1.08 : 1, fade: 1 });
       }
     }
     if (state.active) {
       const t = clamp((now - state.active.start) / state.active.duration, 0, 1);
       drawAnimalBadge(activePosition(t), state.active.move.piece, { scale: 0.86 + Math.sin(t * Math.PI) * 0.18, fade: 1 });
+    }
+  }
+
+  function drawSelectedPieceHalo(pos, side, now) {
+    const sx = Math.round(pos.x * DOT_W);
+    const sy = Math.round(pos.y * DOT_H);
+    const fg = sideEffectColor(side);
+    const pulse = reducedMotion ? 0.8 : 0.72 + Math.sin(now / 150) * 0.16;
+    const rx = 10.6;
+    const ry = 9.4;
+    for (let y = -Math.ceil(ry); y <= Math.ceil(ry); y += 1) {
+      for (let x = -Math.ceil(rx); x <= Math.ceil(rx); x += 1) {
+        const d = Math.sqrt((x / rx) ** 2 + (y / ry) ** 2);
+        if (d < 0.9 || d > 1.07) continue;
+        if (Math.abs(x * 3 + y * 5) % 2) continue;
+        putEffectDot(sx + x, sy + y, fg, pulse);
+      }
     }
   }
 

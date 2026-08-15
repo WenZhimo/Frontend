@@ -1681,7 +1681,11 @@
   function drawPieces(now) {
     const moving = active?.moving || null;
     pieces.forEach((p) => {
-      if (p !== moving) drawPieceAt(p, boardPos(p.file, p.rank), now, 1);
+      if (p !== moving) {
+        const pos = boardPos(p.file, p.rank);
+        if (selectedSquare === squareName(p.file, p.rank).toLowerCase()) drawSelectedPieceHalo(pos, p.side, now);
+        drawPieceAt(p, pos, now, 1);
+      }
     });
     if (active) {
       const t = clamp((now - active.start) / active.duration, 0, 1);
@@ -1689,6 +1693,23 @@
         drawPieceAt(active.target, boardPos(active.to.file, active.to.rank), now, 1 - clamp((t - 0.22) / 0.48, 0, 1));
       }
       drawPieceAt(active.moving, activeCharPosition(smooth(t)), now, 0.78 + Math.sin(t * Math.PI) * 0.22);
+    }
+  }
+
+  function drawSelectedPieceHalo(pos, side, now) {
+    const cx = Math.round(pos.x * DOT_W);
+    const cy = Math.round(pos.y * DOT_H);
+    const fg = side === "white" ? color.whiteSideAlt : color.red;
+    const pulse = reducedMotion ? 0.74 : 0.68 + Math.sin(now / 150) * 0.14;
+    const rx = 8.9;
+    const ry = 7.4;
+    for (let y = -Math.ceil(ry); y <= Math.ceil(ry); y += 1) {
+      for (let x = -Math.ceil(rx); x <= Math.ceil(rx); x += 1) {
+        const d = Math.sqrt((x / rx) ** 2 + (y / ry) ** 2);
+        if (d < 0.9 || d > 1.08) continue;
+        if (Math.abs(x * 3 + y * 5) % 2) continue;
+        setSubPx(cx + x, cy + y, fg, pulse);
+      }
     }
   }
 

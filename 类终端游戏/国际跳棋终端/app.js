@@ -793,13 +793,33 @@
         if (!piece) continue;
         if (movingFrom && movingFrom.x === x && movingFrom.y === y) continue;
         const captured = latestCapturedMark(x, y, now);
-        drawPiece(centerOfCell(x, y), piece, { fade: captured ? 1 - captured * 0.85 : 1, scale: captured ? 1 - captured * 0.12 : 1 });
+        const selected = samePoint(state.selected, { x, y });
+        const pos = centerOfCell(x, y);
+        if (selected) drawSelectedPieceHalo(pos, piece.side, now);
+        drawPiece(pos, piece, { fade: captured ? 1 - captured * 0.85 : 1, scale: selected ? 1.1 : captured ? 1 - captured * 0.12 : 1 });
       }
     }
     if (state.active) {
       const t = clamp((now - state.active.start) / state.active.duration, 0, 1);
       const pos = activePosition(t);
       drawPiece(pos, state.active.move.piece, { scale: 0.9 + Math.sin(t * Math.PI) * 0.16 });
+    }
+  }
+
+  function drawSelectedPieceHalo(pos, side, now) {
+    const sx = Math.round(pos.x * DOT_W);
+    const sy = Math.round(pos.y * DOT_H);
+    const fg = sideEffectColor(side);
+    const pulse = reducedMotion ? 0.76 : 0.68 + Math.sin(now / 150) * 0.14;
+    const rx = 6.9;
+    const ry = 7.8;
+    for (let y = -Math.ceil(ry); y <= Math.ceil(ry); y += 1) {
+      for (let x = -Math.ceil(rx); x <= Math.ceil(rx); x += 1) {
+        const d = Math.sqrt((x / rx) ** 2 + (y / ry) ** 2);
+        if (d < 0.9 || d > 1.08) continue;
+        if (Math.abs(x * 3 + y * 5) % 2) continue;
+        putEffectDot(sx + x, sy + y, fg, pulse);
+      }
     }
   }
 

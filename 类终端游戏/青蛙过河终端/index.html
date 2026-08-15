@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Terminal Frogger</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell" aria-label="Terminal Frogger">
+      <form class="seed-bar" autocomplete="off">
+        <a class="home-link" href="../index.html" aria-label="Back to terminal games hub">HOME</a>
+        <label for="seed-input">SEED</label>
+        <input
+          id="seed-input"
+          maxlength="100"
+          spellcheck="false"
+          inputmode="text"
+          placeholder="blank = random 100-char ASCII seed"
+          aria-label="100 character ASCII seed"
+        />
+        <select id="play-mode" aria-label="Play mode">
+          <option value="demo">AI DEMO</option>
+          <option value="human">HUMAN</option>
+        </select>
+        <select id="difficulty" aria-label="Difficulty">
+          <option value="normal">NORMAL</option>
+          <option value="fast">FAST</option>
+          <option value="chaos">CHAOS</option>
+        </select>
+        <button id="seed-random" type="button">RANDOM</button>
+        <button id="seed-copy" type="button">COPY</button>
+        <button type="submit">START</button>
+        <output id="seed-status">READY</output>
+      </form>
+      <section class="terminal-shell" aria-label="Frogger terminal output">
+        <canvas id="terminal"></canvas>
+      </section>
+      <p class="sr-only">
+        Terminal Frogger rendered through a fixed character buffer. Traffic, river flow,
+        logs, turtles, impact bursts, and goal flashes are all terminal glyphs.
+      </p>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
