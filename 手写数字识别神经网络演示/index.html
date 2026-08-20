@@ -141,9 +141,21 @@
 
     .layout {
       display: grid;
-      grid-template-columns: minmax(330px, 0.95fr) minmax(520px, 1.55fr);
+      grid-template-columns: minmax(620px, 1.58fr) minmax(320px, 0.82fr);
       gap: 20px;
       align-items: start;
+    }
+
+    .demo-panel {
+      order: 1;
+      min-width: 0;
+    }
+
+    .input-panel {
+      order: 2;
+      position: sticky;
+      top: 18px;
+      min-width: 0;
     }
 
     .panel {
@@ -328,9 +340,9 @@
 
     .visual-grid {
       display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
+      grid-template-columns: minmax(0, 1.42fr) minmax(280px, 0.78fr);
       gap: 0;
-      min-height: 656px;
+      min-height: 724px;
     }
 
     .network-area {
@@ -340,7 +352,7 @@
 
     .network-shell {
       position: relative;
-      height: 478px;
+      height: 560px;
       border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: var(--radius);
       background: #050505;
@@ -383,7 +395,7 @@
     .side-metrics {
       padding: 16px 18px 18px;
       display: grid;
-      grid-template-rows: auto auto 1fr;
+      grid-template-rows: auto auto auto 1fr;
       gap: 16px;
     }
 
@@ -467,6 +479,79 @@
       gap: 8px;
     }
 
+    .node-probe {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #fbfdfc;
+    }
+
+    .probe-controls {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 9px;
+    }
+
+    .probe-controls label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .probe-controls select,
+    .probe-controls input {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px 8px;
+      background: #fff;
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .probe-controls input:disabled {
+      color: #a7b1ac;
+      background: #f1f5f3;
+    }
+
+    .probe-readout {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 7px;
+      background: #14211d;
+      color: #fff;
+    }
+
+    .probe-readout span,
+    .probe-readout small {
+      display: block;
+      color: rgba(255, 255, 255, 0.66);
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .probe-readout strong {
+      display: block;
+      margin: 5px 0;
+      font-family: var(--mono);
+      font-size: 22px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .probe-button {
+      width: 100%;
+      justify-content: center;
+      margin-top: 10px;
+      min-height: 36px;
+      font-size: 13px;
+    }
+
     .feature {
       padding: 10px;
       border: 1px solid var(--line);
@@ -517,13 +602,17 @@
         grid-template-columns: 1fr;
       }
 
+      .input-panel {
+        position: static;
+      }
+
       .network-area {
         border-right: 0;
         border-bottom: 1px solid var(--soft-line);
       }
 
       .network-shell {
-        height: 430px;
+        height: 500px;
       }
     }
 
@@ -561,6 +650,10 @@
       .layer-tags,
       .features {
         grid-template-columns: 1fr;
+      }
+
+      .probe-controls {
+        grid-template-columns: 1fr 1fr;
       }
 
       .network-shell {
@@ -607,7 +700,7 @@
     </header>
 
     <section class="layout">
-      <div class="panel">
+      <aside class="panel input-panel">
         <div class="panel-header">
           <div>
             <h2 class="panel-title">输入区</h2>
@@ -644,9 +737,9 @@
             <div class="stage"><span>集成平均</span><div class="stage-track"><i class="stage-fill" id="stage3"></i></div><span id="stage3v">0%</span></div>
           </div>
         </div>
-      </div>
+      </aside>
 
-      <div class="panel">
+      <section class="panel demo-panel">
         <div class="panel-header">
           <div>
             <h2 class="panel-title">CNN Ensemble 推理链路</h2>
@@ -676,16 +769,45 @@
               <div class="bars-title"><h3>输出概率</h3><span id="topPair">--</span></div>
               <div class="bars" id="bars"></div>
             </div>
+            <div class="node-probe">
+              <div class="mini-grid-title"><h3>节点探针</h3><span id="probeShape">--</span></div>
+              <div class="probe-controls">
+                <label>
+                  层 / ONNX 输出
+                  <select id="probeLayer" aria-label="选择要检查的 ONNX 输出节点"></select>
+                </label>
+                <label>
+                  <span id="probeChannelLabel">通道</span>
+                  <input id="probeChannel" type="number" min="0" step="1" value="0" aria-label="节点通道或索引" />
+                </label>
+                <label>
+                  行
+                  <input id="probeRow" type="number" min="0" step="1" value="0" aria-label="节点所在行" />
+                </label>
+                <label>
+                  列
+                  <input id="probeCol" type="number" min="0" step="1" value="0" aria-label="节点所在列" />
+                </label>
+              </div>
+              <div class="probe-readout" aria-live="polite">
+                <span id="probeNodeName">等待 ONNX 输出</span>
+                <strong id="probeValue">--</strong>
+                <small id="probeIndex">选择层与坐标后显示该节点的真实 float32 激活值。</small>
+              </div>
+              <button class="button probe-button" id="probeMaxBtn" type="button">
+                定位当前层最大激活
+              </button>
+            </div>
             <div>
               <div class="features-title"><h3>学术细节</h3><span>CNN probes</span></div>
               <div class="features" id="features"></div>
             </div>
           </aside>
         </div>
-      </div>
+      </section>
     </section>
 
-    <p class="footnote">说明：第二版使用从 Hugging Face <code>onnxmodelzoo/mnist-12</code> 获取的 MNIST CNN，并额外保存一个只增加中间输出的 debug ONNX，用于绘制真实卷积/池化激活。演示区只绘制当前模型实际产生的张量、成员概率和集成结果；请在本目录运行 <code>python -m http.server</code> 后访问页面。</p>
+    <p class="footnote">说明：第二版使用从 Hugging Face <code>onnxmodelzoo/mnist-12</code> 获取的 MNIST CNN，并额外保存一个只增加中间输出的 debug ONNX，用于绘制真实卷积/池化激活。演示区只绘制当前模型实际产生的张量、成员概率、集成结果和节点探针值；双击本目录的 <code>一键启动.bat</code> 即可启动本地页面。</p>
   </main>
 
   <script src="vendor/ort.min.js"></script>
@@ -704,6 +826,16 @@
     const featuresEl = document.getElementById("features");
     const topPairEl = document.getElementById("topPair");
     const inkCountEl = document.getElementById("inkCount");
+    const probeLayerEl = document.getElementById("probeLayer");
+    const probeChannelEl = document.getElementById("probeChannel");
+    const probeRowEl = document.getElementById("probeRow");
+    const probeColEl = document.getElementById("probeCol");
+    const probeChannelLabelEl = document.getElementById("probeChannelLabel");
+    const probeShapeEl = document.getElementById("probeShape");
+    const probeNodeNameEl = document.getElementById("probeNodeName");
+    const probeValueEl = document.getElementById("probeValue");
+    const probeIndexEl = document.getElementById("probeIndex");
+    const probeMaxBtn = document.getElementById("probeMaxBtn");
 
     const probeLabels = [
       "墨量", "Top-1 概率", "Top-1/2 间隔", "成员一致率", "低熵置信",
@@ -734,6 +866,16 @@
       { key: "logits", name: "Plus214_Output_0", label: "logits", shape: "1x10" }
     ];
 
+    const probeDefinitions = [
+      { key: "input", label: "Input3 输入张量", output: "Input3", fallbackDims: [1, 1, 28, 28] },
+      { key: "relu1", label: "Conv/ReLU 1", output: "ReLU32_Output_0", fallbackDims: [1, 8, 28, 28] },
+      { key: "pool1", label: "MaxPool 1", output: "Pooling66_Output_0", fallbackDims: [1, 8, 14, 14] },
+      { key: "relu2", label: "Conv/ReLU 2", output: "ReLU114_Output_0", fallbackDims: [1, 16, 14, 14] },
+      { key: "pool2", label: "MaxPool 2", output: "Pooling160_Output_0", fallbackDims: [1, 16, 4, 4] },
+      { key: "flatten", label: "Flatten 256", output: "Pooling160_Output_0_reshape0", fallbackDims: [1, 256] },
+      { key: "logits", label: "logits 10", output: "Plus214_Output_0", fallbackDims: [1, 10] }
+    ];
+
     let isDrawing = false;
     let lastPoint = null;
     let hasInk = false;
@@ -748,6 +890,7 @@
     let modelReady = false;
     let modelStatus = "正在加载 ONNX MNIST CNN";
     let classifyToken = 0;
+    let selectedProbe = { layer: "relu1", channel: 0, row: 14, col: 14 };
 
     function setupCanvas() {
       drawCtx.fillStyle = "#ffffff";
@@ -822,6 +965,7 @@
         members: [],
         activations: null,
         embedding: new Array(256).fill(0),
+        nodeTensors: buildNodeTensors({ pixels: new Float32Array(784) }),
         entropy: 1,
         margin: 0,
         modelStatus
@@ -834,8 +978,30 @@
         pixels,
         ink,
         probs: new Array(10).fill(0),
+        nodeTensors: buildNodeTensors({ pixels }),
         prediction: "…",
         modelStatus
+      };
+    }
+
+    function buildNodeTensors({ pixels, relu1, pool1, relu2, pool2, flat, logits }) {
+      return {
+        input: tensorPacket("Input3", [1, 1, 28, 28], pixels || new Float32Array(784)),
+        relu1: tensorPacket("ReLU32_Output_0", relu1?.dims, relu1?.data),
+        pool1: tensorPacket("Pooling66_Output_0", pool1?.dims, pool1?.data),
+        relu2: tensorPacket("ReLU114_Output_0", relu2?.dims, relu2?.data),
+        pool2: tensorPacket("Pooling160_Output_0", pool2?.dims, pool2?.data),
+        flatten: tensorPacket("Pooling160_Output_0_reshape0", flat?.dims || [1, 256], flat?.data),
+        logits: tensorPacket("Plus214_Output_0", [1, 10], logits)
+      };
+    }
+
+    function tensorPacket(name, dims, data) {
+      if (!dims || !data) return null;
+      return {
+        name,
+        dims: Array.from(dims),
+        data: Array.from(data)
       };
     }
 
@@ -1181,6 +1347,7 @@
         members,
         activations: canonical?.activations || null,
         embedding: canonical?.embedding || new Array(256).fill(0),
+        nodeTensors: canonical?.nodeTensors || buildNodeTensors({ pixels, logits: avg }),
         entropy,
         margin,
         modelStatus
@@ -1215,6 +1382,7 @@
         probs,
         embedding: flat ? Array.from(flat.data) : new Array(256).fill(0),
         activations,
+        nodeTensors: buildNodeTensors({ pixels, relu1, pool1, relu2, pool2, flat, logits }),
         summaries
       };
     }
@@ -1355,6 +1523,7 @@
       renderHeatmap();
       renderBars();
       renderFeatures();
+      renderProbe();
       renderPrediction();
       renderNetwork();
     }
@@ -1432,6 +1601,155 @@
       });
     }
 
+    function buildProbeLayerOptions() {
+      probeLayerEl.innerHTML = "";
+      probeDefinitions.forEach((definition) => {
+        const option = document.createElement("option");
+        option.value = definition.key;
+        option.textContent = definition.label;
+        probeLayerEl.appendChild(option);
+      });
+      probeLayerEl.value = selectedProbe.layer;
+    }
+
+    function renderProbe() {
+      if (!probeLayerEl.options.length) buildProbeLayerOptions();
+      const reading = getProbeReading(lastResult || emptyResult());
+      probeLayerEl.value = selectedProbe.layer;
+      probeShapeEl.textContent = reading.dims.join("x");
+      probeChannelLabelEl.textContent = reading.isSpatial ? "通道" : "索引";
+      probeChannelEl.max = reading.channelMax;
+      probeChannelEl.value = reading.channel;
+      probeChannelEl.disabled = reading.channelMax === 0 && reading.isSpatial;
+      probeRowEl.max = reading.rowMax;
+      probeRowEl.value = reading.row;
+      probeRowEl.disabled = !reading.isSpatial;
+      probeColEl.max = reading.colMax;
+      probeColEl.value = reading.col;
+      probeColEl.disabled = !reading.isSpatial;
+
+      probeNodeNameEl.textContent = `${reading.output}${reading.coord}`;
+      if (!reading.available) {
+        probeValueEl.textContent = "--";
+        probeIndexEl.textContent = "当前模型未暴露这个 ONNX 中间输出；请使用本地 debug ONNX。";
+        return;
+      }
+      probeValueEl.textContent = formatFloat(reading.value);
+      probeIndexEl.textContent = `flat index=${reading.index} / raw float32 / ${reading.isSpatial ? "NCHW 坐标" : "一维向量索引"}`;
+    }
+
+    function getProbeReading(result) {
+      const definition = probeDefinitions.find((item) => item.key === selectedProbe.layer) || probeDefinitions[1];
+      const tensor = result.nodeTensors?.[definition.key] || null;
+      const dims = tensor?.dims || definition.fallbackDims;
+      const isSpatial = dims.length === 4;
+      const channelMax = Math.max(0, (isSpatial ? dims[1] : dims[dims.length - 1]) - 1);
+      const rowMax = isSpatial ? Math.max(0, dims[2] - 1) : 0;
+      const colMax = isSpatial ? Math.max(0, dims[3] - 1) : 0;
+      const channel = clampInt(selectedProbe.channel, 0, channelMax);
+      const row = isSpatial ? clampInt(selectedProbe.row, 0, rowMax) : 0;
+      const col = isSpatial ? clampInt(selectedProbe.col, 0, colMax) : 0;
+      selectedProbe = { ...selectedProbe, channel, row, col };
+
+      const index = isSpatial
+        ? ((channel * dims[2] + row) * dims[3]) + col
+        : channel;
+      const value = tensor?.data?.[index] ?? 0;
+      const coord = isSpatial
+        ? `[0, ${channel}, ${row}, ${col}]`
+        : `[0, ${channel}]`;
+      return {
+        available: Boolean(tensor?.data),
+        output: definition.output,
+        dims,
+        isSpatial,
+        channelMax,
+        rowMax,
+        colMax,
+        channel,
+        row,
+        col,
+        index,
+        value,
+        coord
+      };
+    }
+
+    function handleProbeChange() {
+      selectedProbe = {
+        ...selectedProbe,
+        layer: probeLayerEl.value,
+        channel: Number.parseInt(probeChannelEl.value, 10) || 0,
+        row: Number.parseInt(probeRowEl.value, 10) || 0,
+        col: Number.parseInt(probeColEl.value, 10) || 0
+      };
+      renderAll();
+    }
+
+    function handleProbeLayerChange() {
+      const definition = probeDefinitions.find((item) => item.key === probeLayerEl.value) || probeDefinitions[1];
+      const tensor = (lastResult || emptyResult()).nodeTensors?.[definition.key];
+      const dims = tensor?.dims || definition.fallbackDims;
+      selectedProbe.layer = definition.key;
+      selectedProbe.channel = 0;
+      selectedProbe.row = dims.length === 4 ? Math.floor((dims[2] - 1) / 2) : 0;
+      selectedProbe.col = dims.length === 4 ? Math.floor((dims[3] - 1) / 2) : 0;
+      renderAll();
+    }
+
+    function selectInputProbeFromHeatmap(event) {
+      const rect = heatmapCanvas.getBoundingClientRect();
+      const x = clampInt(Math.floor((event.clientX - rect.left) / rect.width * 28), 0, 27);
+      const y = clampInt(Math.floor((event.clientY - rect.top) / rect.height * 28), 0, 27);
+      selectedProbe = { layer: "input", channel: 0, row: y, col: x };
+      renderAll();
+    }
+
+    function selectProbeMax() {
+      const result = lastResult || emptyResult();
+      const definition = probeDefinitions.find((item) => item.key === selectedProbe.layer) || probeDefinitions[1];
+      const tensor = result.nodeTensors?.[definition.key];
+      if (!tensor?.data?.length) {
+        renderProbe();
+        return;
+      }
+      let bestIndex = 0;
+      let bestValue = -Infinity;
+      tensor.data.forEach((value, index) => {
+        if (value > bestValue) {
+          bestValue = value;
+          bestIndex = index;
+        }
+      });
+
+      if (tensor.dims.length === 4) {
+        const [, , h, w] = tensor.dims;
+        const channelSize = h * w;
+        selectedProbe.channel = Math.floor(bestIndex / channelSize);
+        const withinChannel = bestIndex % channelSize;
+        selectedProbe.row = Math.floor(withinChannel / w);
+        selectedProbe.col = withinChannel % w;
+      } else {
+        selectedProbe.channel = bestIndex;
+        selectedProbe.row = 0;
+        selectedProbe.col = 0;
+      }
+      renderAll();
+    }
+
+    function clampInt(value, min, max) {
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed)) return min;
+      return Math.max(min, Math.min(max, parsed));
+    }
+
+    function formatFloat(value) {
+      if (!Number.isFinite(value)) return "--";
+      const abs = Math.abs(value);
+      if (abs >= 1000 || (abs > 0 && abs < 0.001)) return value.toExponential(4);
+      return value.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+    }
+
     function renderNetwork() {
       const result = lastResult || emptyResult();
       const canvas = networkCanvas;
@@ -1477,6 +1795,7 @@
         : (result.modelStatus || modelStatus || "waiting for input");
       ctx.fillText(status, pad, compact ? 42 : 52);
       ctx.restore();
+      drawProbeBadge(ctx, result, w, pad, mono, compact);
 
       const topY = compact ? 60 : 72;
       const fullW = w - pad * 2;
@@ -1668,6 +1987,30 @@
       gradient.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, w, h);
+    }
+
+    function drawProbeBadge(ctx, result, w, pad, mono, compact) {
+      const reading = getProbeReading(result);
+      if (!reading.available || compact) return;
+      const badgeW = Math.min(320, Math.max(230, w * 0.34));
+      const x = w - pad - badgeW;
+      const y = 16;
+      ctx.save();
+      ctx.fillStyle = "rgba(5, 5, 5, 0.76)";
+      ctx.strokeStyle = "rgba(248, 211, 74, 0.28)";
+      ctx.lineWidth = 1;
+      roundRect(ctx, x, y, badgeW, 50, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "rgba(248,248,248,0.62)";
+      ctx.font = `700 10px ${mono}`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${reading.output}${reading.coord}`, x + 12, y + 16);
+      ctx.fillStyle = "#f8d34a";
+      ctx.font = `800 17px ${mono}`;
+      ctx.fillText(formatFloat(reading.value), x + 12, y + 36);
+      ctx.restore();
     }
 
     function drawDenseVector(ctx, x, y, w, h, values, options) {
@@ -1863,6 +2206,10 @@
     document.getElementById("runBtn").addEventListener("click", () => predict(false));
     document.getElementById("animateBtn").addEventListener("click", playStages);
     document.getElementById("randomBtn").addEventListener("click", () => drawDigitSample(Math.floor(Math.random() * 10)));
+    probeLayerEl.addEventListener("change", handleProbeLayerChange);
+    [probeChannelEl, probeRowEl, probeColEl].forEach((input) => input.addEventListener("input", handleProbeChange));
+    probeMaxBtn.addEventListener("click", selectProbeMax);
+    heatmapCanvas.addEventListener("click", selectInputProbeFromHeatmap);
     window.addEventListener("resize", () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(renderNetwork, 120);
@@ -1871,6 +2218,7 @@
     buildTemplates();
     setupCanvas();
     buildDigitBank();
+    buildProbeLayerOptions();
     lastResult = emptyResult();
     renderAll();
     initCnnModel();
