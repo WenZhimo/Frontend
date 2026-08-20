@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>手写数字识别神经网络演示</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f8f6;
+      --ink: #17201c;
+      --muted: #67746e;
+      --surface: #ffffff;
+      --line: #dfe7e2;
+      --soft-line: #edf2ef;
+      --cyan: #11a8a0;
+      --coral: #ff6b5a;
+      --amber: #f2ad3d;
+      --leaf: #74b843;
+      --violet: #7357d6;
+      --shadow: 0 18px 48px rgba(31, 47, 41, 0.12);
+      --radius: 8px;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --sans: Inter, "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 14% 12%, rgba(17, 168, 160, 0.13), transparent 30%),
+        radial-gradient(circle at 88% 8%, rgba(255, 107, 90, 0.12), transparent 28%),
+        linear-gradient(135deg, #f8fbfa 0%, var(--bg) 58%, #eef5f1 100%);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+
+    button, input {
+      font: inherit;
+    }
+
+    .app {
+      width: min(1440px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 24px 0 32px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 14px 0 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border: 1px solid rgba(23, 32, 28, 0.12);
+      border-radius: var(--radius);
+      background: conic-gradient(from 190deg, var(--cyan), var(--leaf), var(--amber), var(--coral), var(--cyan));
+      box-shadow: 0 12px 28px rgba(17, 168, 160, 0.18);
+    }
+
+    .brand-mark svg {
+      width: 28px;
+      height: 28px;
+      color: #fff;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 46px);
+      line-height: 1.04;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 7px 0 0;
+      color: var(--muted);
+      max-width: 740px;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .button {
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0 14px;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+      white-space: nowrap;
+    }
+
+    .button svg {
+      width: 18px;
+      height: 18px;
+      stroke-width: 2;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 22px rgba(29, 44, 38, 0.1);
+      border-color: rgba(17, 168, 160, 0.38);
+    }
+
+    .button.primary {
+      background: #13241f;
+      border-color: #13241f;
+      color: #fff;
+      box-shadow: 0 14px 30px rgba(19, 36, 31, 0.22);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(330px, 0.95fr) minmax(520px, 1.55fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(223, 231, 226, 0.92);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--soft-line);
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    .panel-note {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .draw-wrap {
+      padding: 18px;
+    }
+
+    .canvas-shell {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(23, 32, 28, 0.035) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(23, 32, 28, 0.035) 1px, transparent 1px),
+        #fff;
+      background-size: 24px 24px;
+      border: 1px solid #d8e2dd;
+      box-shadow: inset 0 0 0 6px rgba(248, 251, 250, 0.92);
+      touch-action: none;
+    }
+
+    #drawCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    .canvas-hint {
+      position: absolute;
+      left: 14px;
+      bottom: 12px;
+      padding: 6px 9px;
+      color: rgba(23, 32, 28, 0.56);
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(223, 231, 226, 0.9);
+      border-radius: 7px;
+      font-size: 12px;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+
+    .canvas-hint.is-hidden {
+      opacity: 0;
+    }
+
+    .tool-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .digit-bank {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 6px;
+      margin-top: 16px;
+    }
+
+    .digit-btn {
+      aspect-ratio: 1;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fbfdfc;
+      color: #202823;
+      cursor: pointer;
+      font-weight: 800;
+      font-size: 18px;
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+    }
+
+    .digit-btn:hover {
+      transform: translateY(-1px);
+      border-color: var(--cyan);
+      background: #f0fbfa;
+    }
+
+    .readout {
+      display: grid;
+      grid-template-columns: 132px 1fr;
+      gap: 14px;
+      padding: 0 18px 18px;
+      align-items: stretch;
+    }
+
+    .prediction {
+      border-radius: var(--radius);
+      background: #14211d;
+      color: #fff;
+      padding: 16px 14px;
+      display: grid;
+      align-content: center;
+      min-height: 132px;
+    }
+
+    .prediction-label {
+      color: rgba(255, 255, 255, 0.68);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .prediction-number {
+      font-family: var(--mono);
+      font-size: 72px;
+      line-height: 0.96;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .confidence {
+      color: rgba(255, 255, 255, 0.78);
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    .stage-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-columns: 72px 1fr 50px;
+      gap: 10px;
+      align-items: center;
+      min-height: 28px;
+    }
+
+    .stage span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .stage-track {
+      height: 8px;
+      border-radius: 99px;
+      background: #e8efeb;
+      overflow: hidden;
+    }
+
+    .stage-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cyan), var(--leaf));
+      transition: width 280ms ease;
+    }
+
+    .visual-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 0;
+      min-height: 656px;
+    }
+
+    .network-area {
+      padding: 16px 18px 18px;
+      border-right: 1px solid var(--soft-line);
+    }
+
+    .network-shell {
+      position: relative;
+      height: 478px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: var(--radius);
+      background: #050505;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 18px 44px rgba(0, 0, 0, 0.18);
+      overflow: hidden;
+    }
+
+    #networkCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .layer-tags {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .tag {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 9px 10px;
+      background: #fff;
+    }
+
+    .tag strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .tag span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .side-metrics {
+      padding: 16px 18px 18px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 16px;
+    }
+
+    .mini-grid-title, .bars-title, .features-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 9px;
+    }
+
+    .mini-grid-title h3, .bars-title h3, .features-title h3 {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .mini-grid-title span, .bars-title span, .features-title span {
+      color: var(--muted);
+      font-size: 12px;
+      font-family: var(--mono);
+    }
+
+    .heatmap-shell {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 8px;
+      background: #fbfdfc;
+    }
+
+    #heatmapCanvas {
+      width: 100%;
+      aspect-ratio: 1;
+      display: block;
+      image-rendering: pixelated;
+      border-radius: 5px;
+      background: #fff;
+    }
+
+    .bars {
+      display: grid;
+      gap: 7px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 22px 1fr 46px;
+      gap: 8px;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .bar-track {
+      height: 12px;
+      border-radius: 99px;
+      background: #edf2ef;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cyan), var(--leaf));
+      transition: width 260ms ease, background 260ms ease;
+    }
+
+    .bar-row.is-top {
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    .bar-row.is-top .bar-fill {
+      background: linear-gradient(90deg, var(--coral), var(--amber));
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .feature {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      min-height: 64px;
+    }
+
+    .feature-name {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .feature-meter {
+      height: 7px;
+      border-radius: 99px;
+      background: #edf2ef;
+      overflow: hidden;
+    }
+
+    .feature-meter i {
+      display: block;
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: var(--violet);
+      transition: width 260ms ease;
+    }
+
+    .footnote {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 1080px) {
+      .layout,
+      .visual-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .network-area {
+        border-right: 0;
+        border-bottom: 1px solid var(--soft-line);
+      }
+
+      .network-shell {
+        height: 430px;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .app {
+        width: min(100% - 20px, 540px);
+        padding-top: 14px;
+      }
+
+      .topbar,
+      .panel-header,
+      .readout {
+        grid-template-columns: 1fr;
+        display: grid;
+      }
+
+      .top-actions,
+      .tool-row {
+        grid-template-columns: 1fr;
+        justify-content: stretch;
+      }
+
+      .button {
+        justify-content: center;
+      }
+
+      .digit-bank {
+        grid-template-columns: repeat(5, 1fr);
+      }
+
+      .stage {
+        grid-template-columns: 64px 1fr 46px;
+      }
+
+      .layer-tags,
+      .features {
+        grid-template-columns: 1fr;
+      }
+
+      .network-shell {
+        height: 360px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12 3v18M3 12h18" stroke="currentColor" stroke-linecap="round"/>
+            <circle cx="12" cy="12" r="8" stroke="currentColor"/>
+            <circle cx="12" cy="12" r="2.5" fill="currentColor"/>
+          </svg>
+        </div>
+        <div>
+          <h1>手写数字识别神经网络</h1>
+          <p class="subtitle">在画布中写下 0-9，页面会把笔迹压缩成 28x28 输入，并按当前实际推理链路展示特征、相似度、logits 与输出概率。</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="button primary" id="runBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 5v14l11-7-11-7Z" stroke="currentColor" stroke-linejoin="round"/></svg>
+          运行推理
+        </button>
+        <button class="button" id="clearBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7l1-3h4l1 3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          清空
+        </button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">输入区</h2>
+            <p class="panel-note">鼠标或触控笔都可以。样例按钮会画出带抖动的手写风格，方便观察网络变化。</p>
+          </div>
+        </div>
+        <div class="draw-wrap">
+          <div class="canvas-shell">
+            <canvas id="drawCanvas" width="512" height="512" aria-label="手写数字画布"></canvas>
+            <div class="canvas-hint" id="canvasHint">在这里写一个数字</div>
+          </div>
+          <div class="tool-row">
+            <button class="button" id="randomBtn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              随机样例
+            </button>
+            <button class="button" id="animateBtn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12a7 7 0 0 1 12-5M19 12a7 7 0 0 1-12 5M17 3v4h-4M7 21v-4h4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              重播传播
+            </button>
+          </div>
+          <div class="digit-bank" id="digitBank" aria-label="数字样例"></div>
+        </div>
+        <div class="readout">
+          <div class="prediction">
+            <span class="prediction-label">预测结果</span>
+            <div class="prediction-number" id="prediction">?</div>
+            <div class="confidence" id="confidence">等待输入</div>
+          </div>
+          <div class="stage-list" aria-label="识别流程">
+            <div class="stage"><span>采样</span><div class="stage-track"><i class="stage-fill" id="stage0"></i></div><span id="stage0v">0%</span></div>
+            <div class="stage"><span>归一化</span><div class="stage-track"><i class="stage-fill" id="stage1"></i></div><span id="stage1v">0%</span></div>
+            <div class="stage"><span>特征/相似度</span><div class="stage-track"><i class="stage-fill" id="stage2"></i></div><span id="stage2v">0%</span></div>
+            <div class="stage"><span>Softmax</span><div class="stage-track"><i class="stage-fill" id="stage3"></i></div><span id="stage3v">0%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">实际推理链路可视化</h2>
+            <p class="panel-note">按当前模型真实结构展示：784 维像素向量、12 维特征、10 类相似度、logits 和 Softmax。</p>
+          </div>
+        </div>
+        <div class="visual-grid">
+          <div class="network-area">
+            <div class="network-shell">
+              <canvas id="networkCanvas" width="920" height="560" aria-label="实际一维推理链路可视化"></canvas>
+            </div>
+            <div class="layer-tags">
+              <div class="tag"><strong>输入向量</strong><span>28x28 像素被展平成 784 维向量。</span></div>
+              <div class="tag"><strong>特征向量</strong><span>笔画密度、重心、边缘与环形等 12 个特征。</span></div>
+              <div class="tag"><strong>模板相似度</strong><span>当前笔迹与 10 个数字原型逐类比较。</span></div>
+              <div class="tag"><strong>Softmax 输出</strong><span>10 个 logits 被转换为最终概率。</span></div>
+            </div>
+          </div>
+          <aside class="side-metrics">
+            <div>
+              <div class="mini-grid-title"><h3>28x28 输入</h3><span id="inkCount">0 px</span></div>
+              <div class="heatmap-shell">
+                <canvas id="heatmapCanvas" width="280" height="280" aria-label="28x28 像素热力图"></canvas>
+              </div>
+            </div>
+            <div>
+              <div class="bars-title"><h3>输出概率</h3><span id="topPair">--</span></div>
+              <div class="bars" id="bars"></div>
+            </div>
+            <div>
+              <div class="features-title"><h3>特征探针</h3><span>特征向量</span></div>
+              <div class="features" id="features"></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <p class="footnote">说明：这是一个浏览器内教学演示。当前模型实际使用 784 维像素输入、12 维笔画特征、10 类模板相似度与 softmax 输出；演示区按这个真实链路动态绘制，而不是套用固定卷积示意图。</p>
+  </main>
+
+  <script>
+    const drawCanvas = document.getElementById("drawCanvas");
+    const drawCtx = drawCanvas.getContext("2d", { willReadFrequently: true });
+    const heatmapCanvas = document.getElementById("heatmapCanvas");
+    const heatCtx = heatmapCanvas.getContext("2d");
+    const networkCanvas = document.getElementById("networkCanvas");
+    const networkCtx = networkCanvas.getContext("2d");
+    const predictionEl = document.getElementById("prediction");
+    const confidenceEl = document.getElementById("confidence");
+    const canvasHint = document.getElementById("canvasHint");
+    const digitBank = document.getElementById("digitBank");
+    const barsEl = document.getElementById("bars");
+    const featuresEl = document.getElementById("features");
+    const topPairEl = document.getElementById("topPair");
+    const inkCountEl = document.getElementById("inkCount");
+
+    const featureLabels = [
+      "总墨量", "上半区", "下半区", "左半区", "右半区", "中心密度",
+      "竖笔画", "横笔画", "左斜线", "右斜线", "顶部环", "底部环"
+    ];
+
+    let isDrawing = false;
+    let lastPoint = null;
+    let hasInk = false;
+    let animationPhase = 1;
+    let lastResult = null;
+    let templates = [];
+    let sampleTemplates = [];
+    let resizeTimer = 0;
+
+    function setupCanvas() {
+      drawCtx.fillStyle = "#ffffff";
+      drawCtx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+      drawCtx.lineCap = "round";
+      drawCtx.lineJoin = "round";
+      drawCtx.strokeStyle = "#121816";
+      drawCtx.lineWidth = 34;
+    }
+
+    function pointerPos(event) {
+      const rect = drawCanvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left) * drawCanvas.width / rect.width;
+      const y = (event.clientY - rect.top) * drawCanvas.height / rect.height;
+      return { x, y };
+    }
+
+    function beginDraw(event) {
+      event.preventDefault();
+      isDrawing = true;
+      lastPoint = pointerPos(event);
+      hasInk = true;
+      canvasHint.classList.add("is-hidden");
+      drawCtx.beginPath();
+      drawCtx.arc(lastPoint.x, lastPoint.y, drawCtx.lineWidth / 2.8, 0, Math.PI * 2);
+      drawCtx.fillStyle = "#121816";
+      drawCtx.fill();
+      predict(true);
+    }
+
+    function moveDraw(event) {
+      if (!isDrawing) return;
+      event.preventDefault();
+      const point = pointerPos(event);
+      drawCtx.beginPath();
+      drawCtx.moveTo(lastPoint.x, lastPoint.y);
+      const midX = (lastPoint.x + point.x) / 2;
+      const midY = (lastPoint.y + point.y) / 2;
+      drawCtx.quadraticCurveTo(lastPoint.x, lastPoint.y, midX, midY);
+      drawCtx.stroke();
+      lastPoint = point;
+      predict(true);
+    }
+
+    function endDraw() {
+      if (!isDrawing) return;
+      isDrawing = false;
+      lastPoint = null;
+      predict(false);
+      playStages();
+    }
+
+    function clearDrawing() {
+      setupCanvas();
+      hasInk = false;
+      canvasHint.classList.remove("is-hidden");
+      lastResult = emptyResult();
+      renderAll();
+      setStages([0, 0, 0, 0]);
+    }
+
+    function emptyResult() {
+      return {
+        pixels: new Float32Array(784),
+        features: new Array(featureLabels.length).fill(0),
+        similarities: new Array(10).fill(0),
+        logits: new Array(10).fill(0),
+        probs: new Array(10).fill(0.1),
+        prediction: "?",
+        confidence: 0,
+        ink: 0
+      };
+    }
+
+    function preprocessCanvas() {
+      return preprocessBitmap(drawCanvas, drawCtx);
+    }
+
+    function preprocessBitmap(canvas, ctx) {
+      const w = canvas.width;
+      const h = canvas.height;
+      const data = ctx.getImageData(0, 0, w, h).data;
+      let minX = w, minY = h, maxX = -1, maxY = -1;
+      let ink = 0;
+
+      for (let y = 0; y < h; y += 2) {
+        for (let x = 0; x < w; x += 2) {
+          const i = (y * w + x) * 4;
+          const darkness = 1 - (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114) / 255;
+          if (darkness > 0.08) {
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+            ink += darkness;
+          }
+        }
+      }
+
+      if (maxX < 0 || ink < 2) {
+        return { pixels: new Float32Array(784), ink: 0 };
+      }
+
+      const side = Math.max(maxX - minX, maxY - minY) * 1.18;
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const sx = Math.max(0, Math.round(cx - side / 2));
+      const sy = Math.max(0, Math.round(cy - side / 2));
+      const sw = Math.min(w - sx, Math.round(side));
+      const sh = Math.min(h - sy, Math.round(side));
+
+      const off = document.createElement("canvas");
+      off.width = 28;
+      off.height = 28;
+      const octx = off.getContext("2d", { willReadFrequently: true });
+      octx.fillStyle = "#fff";
+      octx.fillRect(0, 0, 28, 28);
+      octx.imageSmoothingEnabled = true;
+      octx.drawImage(canvas, sx, sy, sw, sh, 2, 2, 24, 24);
+      return pixelsFromCanvas(off);
+    }
+
+    function pixelsFromCanvas(canvas) {
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      const data = ctx.getImageData(0, 0, 28, 28).data;
+      const pixels = new Float32Array(784);
+      let ink = 0;
+      for (let i = 0; i < 784; i++) {
+        const p = i * 4;
+        const darkness = Math.max(0, Math.min(1, 1 - (data[p] * 0.299 + data[p + 1] * 0.587 + data[p + 2] * 0.114) / 255));
+        const v = darkness < 0.05 ? 0 : Math.pow(darkness, 0.82);
+        pixels[i] = v;
+        ink += v;
+      }
+      return { pixels, ink };
+    }
+
+    function makeTemplate(digit, variant = 0) {
+      const c = document.createElement("canvas");
+      c.width = 28;
+      c.height = 28;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, 28, 28);
+      ctx.strokeStyle = "#111";
+      ctx.lineWidth = variant === 2 ? 3.1 : 3.8;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.translate(14, 14);
+      ctx.rotate((variant - 1) * 0.055);
+      ctx.translate(-14, -14);
+
+      const p = (points) => {
+        ctx.beginPath();
+        ctx.moveTo(points[0][0], points[0][1]);
+        for (let i = 1; i < points.length; i++) {
+          const [x, y] = points[i];
+          const [px, py] = points[i - 1];
+          ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
+        }
+        ctx.stroke();
+      };
+
+      const arc = (x, y, rx, ry, start, end) => {
+        ctx.beginPath();
+        ctx.ellipse(x, y, rx, ry, 0, start, end);
+        ctx.stroke();
+      };
+
+      switch (digit) {
+        case 0:
+          arc(14, 14, 7.2, 10.2, 0, Math.PI * 2);
+          break;
+        case 1:
+          p([[15, 5], [14, 10], [14, 16], [14, 23]]);
+          p([[11, 8], [15, 5], [18, 5]]);
+          break;
+        case 2:
+          arc(13.4, 10.2, 6.3, 5.2, Math.PI * 1.05, Math.PI * 2.06);
+          p([[20, 11], [17, 15], [12, 18], [8, 22], [20, 22]]);
+          break;
+        case 3:
+          arc(12.8, 9.6, 6.2, 4.7, Math.PI * 1.08, Math.PI * 2.02);
+          arc(12.6, 17.7, 6.6, 5.3, Math.PI * 1.85, Math.PI * 0.93);
+          p([[12, 14], [17, 14]]);
+          break;
+        case 4:
+          p([[19, 22], [19, 5], [7, 16], [21, 16]]);
+          break;
+        case 5:
+          p([[20, 6], [9, 6], [8, 13], [14, 13]]);
+          arc(13.8, 17.5, 6.4, 5.3, Math.PI * 1.35, Math.PI * 0.85);
+          break;
+        case 6:
+          p([[18, 6], [12, 8], [8, 14], [9, 20], [14, 23], [20, 19], [18, 14], [12, 14], [8, 17]]);
+          break;
+        case 7:
+          p([[7, 6], [21, 6], [15, 14], [11, 22]]);
+          break;
+        case 8:
+          arc(14, 9.5, 5.8, 4.9, 0, Math.PI * 2);
+          arc(14, 18.1, 6.7, 5.7, 0, Math.PI * 2);
+          break;
+        case 9:
+          p([[19, 15], [15, 14], [10, 12], [9, 8], [13, 5], [19, 8], [19, 15], [17, 21], [11, 23]]);
+          break;
+      }
+
+      return pixelsFromCanvas(c).pixels;
+    }
+
+    function pixelsToCanvas(pixels) {
+      const temp = document.createElement("canvas");
+      temp.width = 28;
+      temp.height = 28;
+      const tctx = temp.getContext("2d");
+      const img = tctx.createImageData(28, 28);
+      for (let i = 0; i < 784; i++) {
+        const v = 255 - Math.round(pixels[i] * 255);
+        img.data[i * 4] = v;
+        img.data[i * 4 + 1] = v;
+        img.data[i * 4 + 2] = v;
+        img.data[i * 4 + 3] = 255;
+      }
+      tctx.putImageData(img, 0, 0);
+      return temp;
+    }
+
+    function makeNormalizedTemplate(basePixels, dx = 0, dy = 0, rotate = 0) {
+      const off = document.createElement("canvas");
+      off.width = 520;
+      off.height = 520;
+      const octx = off.getContext("2d", { willReadFrequently: true });
+      octx.fillStyle = "#fff";
+      octx.fillRect(0, 0, off.width, off.height);
+      octx.save();
+      octx.translate(dx, dy);
+      octx.rotate(rotate);
+      octx.imageSmoothingEnabled = true;
+      octx.drawImage(pixelsToCanvas(basePixels), 0, 0, 28, 28, 86, 68, 344, 360);
+      octx.restore();
+      return preprocessBitmap(off, octx).pixels;
+    }
+
+    function buildTemplates() {
+      templates = Array.from({ length: 10 }, (_, digit) => {
+        const direct = [
+          makeTemplate(digit, 0),
+          makeTemplate(digit, 1),
+          makeTemplate(digit, 2)
+        ];
+        sampleTemplates[digit] = direct;
+        const normalized = direct.flatMap((tpl) => [
+          makeNormalizedTemplate(tpl, 0, 0, 0),
+          makeNormalizedTemplate(tpl, -7, 4, -0.035),
+          makeNormalizedTemplate(tpl, 7, -4, 0.035)
+        ]);
+        return [...direct, ...normalized];
+      });
+    }
+
+    function cosine(a, b) {
+      let dot = 0;
+      let an = 0;
+      let bn = 0;
+      for (let i = 0; i < a.length; i++) {
+        dot += a[i] * b[i];
+        an += a[i] * a[i];
+        bn += b[i] * b[i];
+      }
+      return dot / (Math.sqrt(an) * Math.sqrt(bn) + 1e-6);
+    }
+
+    function featuresFromPixels(pixels) {
+      let ink = 0, top = 0, bottom = 0, left = 0, right = 0, center = 0;
+      let vertical = 0, horizontal = 0, diagA = 0, diagB = 0, ringTop = 0, ringBottom = 0;
+      for (let y = 0; y < 28; y++) {
+        for (let x = 0; x < 28; x++) {
+          const v = pixels[y * 28 + x];
+          ink += v;
+          if (y < 14) top += v; else bottom += v;
+          if (x < 14) left += v; else right += v;
+          if (x > 8 && x < 20 && y > 8 && y < 20) center += v;
+          if (x > 12 && x < 16) vertical += v;
+          if (y > 12 && y < 16) horizontal += v;
+          if (Math.abs(x - y) < 2.3) diagA += v;
+          if (Math.abs((27 - x) - y) < 2.3) diagB += v;
+          const dx = x - 14;
+          const topDy = y - 9.5;
+          const botDy = y - 18.5;
+          if (Math.abs(Math.hypot(dx / 6, topDy / 5) - 1) < 0.28) ringTop += v;
+          if (Math.abs(Math.hypot(dx / 7, botDy / 5.5) - 1) < 0.28) ringBottom += v;
+        }
+      }
+      const norm = Math.max(ink, 1);
+      return [
+        clamp(ink / 130), top / norm, bottom / norm, left / norm, right / norm,
+        clamp(center / 34), clamp(vertical / 20), clamp(horizontal / 20),
+        clamp(diagA / 18), clamp(diagB / 18), clamp(ringTop / 18), clamp(ringBottom / 20)
+      ];
+    }
+
+    function clamp(value) {
+      return Math.max(0, Math.min(1, value));
+    }
+
+    function classify(pixels, ink) {
+      if (ink < 1) return emptyResult();
+      const features = featuresFromPixels(pixels);
+      const scores = [];
+      const similarities = [];
+      for (let digit = 0; digit < 10; digit++) {
+        const sim = Math.max(...templates[digit].map((tpl) => cosine(pixels, tpl)));
+        similarities[digit] = sim;
+        scores[digit] = (sim * 11.5) - 6.5;
+      }
+
+      const [mass, top, bottom, left, right, center, vertical, horizontal, diagA, diagB, ringTop, ringBottom] = features;
+      scores[0] += (ringTop + ringBottom) * 0.28 - center * 0.08;
+      scores[1] += vertical * 0.36 - horizontal * 0.12 - ringBottom * 0.1;
+      scores[2] += diagB * 0.18 + horizontal * 0.1;
+      scores[3] += right * 0.14 + ringTop * 0.08;
+      scores[4] += vertical * 0.18 + horizontal * 0.16 + diagB * 0.1;
+      scores[5] += left * 0.14 + horizontal * 0.2 + ringBottom * 0.08;
+      scores[6] += ringBottom * 0.22 + bottom * 0.12 - top * 0.04;
+      scores[7] += diagB * 0.22 + top * 0.1 - ringBottom * 0.16;
+      scores[8] += (ringTop + ringBottom) * 0.24 + center * 0.04;
+      scores[9] += ringTop * 0.24 + top * 0.1 - bottom * 0.04;
+
+      const rankedSims = similarities.map((sim, digit) => ({ sim, digit })).sort((a, b) => b.sim - a.sim);
+      if (rankedSims[0].sim - rankedSims[1].sim > 0.015) {
+        scores[rankedSims[0].digit] += 1.4;
+      }
+
+      const probs = softmax(scores);
+      let best = 0;
+      for (let i = 1; i < probs.length; i++) {
+        if (probs[i] > probs[best]) best = i;
+      }
+      return {
+        pixels,
+        features,
+        similarities,
+        logits: scores.slice(),
+        probs,
+        prediction: best,
+        confidence: probs[best],
+        ink
+      };
+    }
+
+    function softmax(scores) {
+      const max = Math.max(...scores);
+      const exps = scores.map((s) => Math.exp((s - max) * 1.9));
+      const sum = exps.reduce((a, b) => a + b, 0);
+      return exps.map((e) => e / sum);
+    }
+
+    function predict(live = false) {
+      const { pixels, ink } = preprocessCanvas();
+      lastResult = classify(pixels, ink);
+      renderAll();
+      if (!live) playStages();
+    }
+
+    function playStages() {
+      setStages([0, 0, 0, 0]);
+      const steps = [
+        [100, 0, 0, 0],
+        [100, 100, 0, 0],
+        [100, 100, 100, 0],
+        [100, 100, 100, 100]
+      ];
+      steps.forEach((values, i) => setTimeout(() => setStages(values), 90 + i * 150));
+      const start = performance.now();
+      const tick = (now) => {
+        animationPhase = Math.min(1, (now - start) / 780);
+        renderNetwork();
+        if (animationPhase < 1) requestAnimationFrame(tick);
+      };
+      animationPhase = 0;
+      requestAnimationFrame(tick);
+    }
+
+    function setStages(values) {
+      values.forEach((v, i) => {
+        document.getElementById(`stage${i}`).style.width = `${v}%`;
+        document.getElementById(`stage${i}v`).textContent = `${v}%`;
+      });
+    }
+
+    function renderAll() {
+      renderHeatmap();
+      renderBars();
+      renderFeatures();
+      renderPrediction();
+      renderNetwork();
+    }
+
+    function renderPrediction() {
+      if (!lastResult || lastResult.prediction === "?") {
+        predictionEl.textContent = "?";
+        confidenceEl.textContent = "等待输入";
+        return;
+      }
+      predictionEl.textContent = lastResult.prediction;
+      confidenceEl.textContent = `置信度 ${(lastResult.confidence * 100).toFixed(1)}%`;
+    }
+
+    function renderHeatmap() {
+      const result = lastResult || emptyResult();
+      heatCtx.clearRect(0, 0, 280, 280);
+      heatCtx.fillStyle = "#fff";
+      heatCtx.fillRect(0, 0, 280, 280);
+      const cell = 10;
+      for (let y = 0; y < 28; y++) {
+        for (let x = 0; x < 28; x++) {
+          const v = result.pixels[y * 28 + x];
+          const alpha = clamp(v);
+          heatCtx.fillStyle = `rgba(19, 36, 31, ${alpha})`;
+          heatCtx.fillRect(x * cell, y * cell, cell, cell);
+        }
+      }
+      heatCtx.strokeStyle = "rgba(17, 168, 160, 0.18)";
+      heatCtx.lineWidth = 1;
+      for (let i = 0; i <= 28; i += 4) {
+        heatCtx.beginPath();
+        heatCtx.moveTo(i * cell, 0);
+        heatCtx.lineTo(i * cell, 280);
+        heatCtx.moveTo(0, i * cell);
+        heatCtx.lineTo(280, i * cell);
+        heatCtx.stroke();
+      }
+      inkCountEl.textContent = `${Math.round(result.ink)} px`;
+    }
+
+    function renderBars() {
+      if (!lastResult) return;
+      const ranked = lastResult.probs.map((p, d) => ({ d, p })).sort((a, b) => b.p - a.p);
+      topPairEl.textContent = ranked[0] ? `${ranked[0].d} / ${(ranked[0].p * 100).toFixed(1)}%` : "--";
+      barsEl.innerHTML = "";
+      lastResult.probs.forEach((p, d) => {
+        const row = document.createElement("div");
+        row.className = `bar-row ${d === ranked[0].d ? "is-top" : ""}`;
+        row.innerHTML = `
+          <span>${d}</span>
+          <div class="bar-track"><i class="bar-fill" style="width:${(p * 100).toFixed(2)}%"></i></div>
+          <span>${(p * 100).toFixed(1)}%</span>
+        `;
+        barsEl.appendChild(row);
+      });
+    }
+
+    function renderFeatures() {
+      if (!lastResult) return;
+      featuresEl.innerHTML = "";
+      lastResult.features.forEach((v, i) => {
+        const item = document.createElement("div");
+        item.className = "feature";
+        item.innerHTML = `
+          <div class="feature-name"><span>${featureLabels[i]}</span><strong>${Math.round(v * 100)}</strong></div>
+          <div class="feature-meter"><i style="width:${Math.round(v * 100)}%"></i></div>
+        `;
+        featuresEl.appendChild(item);
+      });
+    }
+
+    function renderNetwork() {
+      const result = lastResult || emptyResult();
+      const canvas = networkCanvas;
+      const ctx = networkCtx;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const width = Math.max(600, Math.floor(rect.width * dpr));
+      const height = Math.max(360, Math.floor(rect.height * dpr));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const w = rect.width;
+      const h = rect.height;
+      drawActualModelBoard(ctx, result, w, h);
+    }
+
+    function drawActualModelBoard(ctx, result, w, h) {
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "#050505";
+      ctx.fillRect(0, 0, w, h);
+
+      const compact = w < 560 || h < 410;
+      const pad = compact ? 16 : 24;
+      const gap = compact ? 14 : 20;
+      const sans = getComputedStyle(document.body).fontFamily;
+      const mono = getComputedStyle(document.documentElement).getPropertyValue("--mono");
+      const pass = clamp(animationPhase);
+      const prediction = result.prediction === "?" ? -1 : result.prediction;
+
+      drawBoardGlow(ctx, w, h);
+      ctx.save();
+      ctx.fillStyle = "#f8f8f8";
+      ctx.font = `800 ${compact ? 15 : Math.min(20, Math.max(15, w / 34))}px ${sans}`;
+      ctx.textBaseline = "middle";
+      ctx.fillText("Actual model flow: 784 → 12 → 10 → 10", pad, compact ? 22 : 30);
+      ctx.fillStyle = "rgba(248,248,248,0.58)";
+      ctx.font = `600 ${compact ? 10 : 12}px ${mono}`;
+      const status = prediction >= 0
+        ? `top=${prediction}  p=${(result.confidence * 100).toFixed(1)}%  ink=${Math.round(result.ink)}`
+        : "waiting for input";
+      ctx.fillText(status, pad, compact ? 42 : 52);
+      ctx.restore();
+
+      const inputY = compact ? 58 : 74;
+      const inputH = compact ? 42 : 58;
+      const midY = inputY + inputH + gap + 8;
+      const midH = compact ? 78 : 96;
+      const lowerY = midY + midH + gap + 4;
+      const lowerH = compact ? 58 : 72;
+      const probY = lowerY + lowerH + gap + 4;
+      const probH = Math.max(compact ? 42 : 56, h - probY - pad);
+      const fullW = w - pad * 2;
+      const halfW = (fullW - gap) / 2;
+
+      drawDenseVector(ctx, pad, inputY, fullW, inputH, result.pixels, {
+        label: "输入向量 x",
+        dim: "R^784",
+        reveal: 1,
+        color: [17, 168, 160],
+        mono
+      });
+
+      drawFlowArrow(ctx, pad + fullW * 0.28, inputY + inputH + 5, pad + halfW * 0.5, midY - 6, clamp((pass - 0.06) / 0.2), "统计笔画");
+      drawFlowArrow(ctx, pad + fullW * 0.72, inputY + inputH + 5, pad + halfW + gap + halfW * 0.5, midY - 6, clamp((pass - 0.18) / 0.2), "比较模板");
+
+      drawBarVector(ctx, pad, midY, halfW, midH, result.features, {
+        label: "特征向量 f",
+        dim: "12",
+        labels: featureLabels,
+        reveal: clamp((pass - 0.12) / 0.28),
+        color: [242, 173, 61],
+        mono,
+        compact
+      });
+
+      drawBarVector(ctx, pad + halfW + gap, midY, halfW, midH, result.similarities, {
+        label: "模板相似度 cosine(x,t)",
+        dim: "10",
+        labels: Array.from({ length: 10 }, (_, i) => String(i)),
+        reveal: clamp((pass - 0.25) / 0.28),
+        color: [116, 184, 67],
+        topIndex: bestIndex(result.similarities),
+        mono,
+        compact
+      });
+
+      drawFlowArrow(ctx, pad + halfW * 0.5, midY + midH + 5, pad + fullW * 0.42, lowerY - 6, clamp((pass - 0.42) / 0.18), "feature bonus");
+      drawFlowArrow(ctx, pad + halfW + gap + halfW * 0.5, midY + midH + 5, pad + fullW * 0.58, lowerY - 6, clamp((pass - 0.42) / 0.18), "11.5×sim-6.5");
+
+      drawBarVector(ctx, pad, lowerY, fullW, lowerH, result.logits, {
+        label: "logits",
+        dim: "10",
+        labels: Array.from({ length: 10 }, (_, i) => String(i)),
+        reveal: clamp((pass - 0.52) / 0.22),
+        color: [115, 87, 214],
+        signed: true,
+        topIndex: prediction,
+        mono,
+        compact
+      });
+
+      drawFlowArrow(ctx, pad + fullW * 0.5, lowerY + lowerH + 5, pad + fullW * 0.5, probY - 6, clamp((pass - 0.72) / 0.2), "softmax");
+
+      drawBarVector(ctx, pad, probY, fullW, probH, result.probs, {
+        label: "输出概率 p(y|x)",
+        dim: "10",
+        labels: Array.from({ length: 10 }, (_, i) => String(i)),
+        reveal: clamp((pass - 0.78) / 0.22),
+        color: [255, 107, 90],
+        topIndex: prediction,
+        percent: true,
+        mono,
+        compact
+      });
+    }
+
+    function drawBoardGlow(ctx, w, h) {
+      const gradient = ctx.createRadialGradient(w * 0.5, h * 0.48, 30, w * 0.5, h * 0.48, Math.max(w, h) * 0.72);
+      gradient.addColorStop(0, "rgba(255,255,255,0.07)");
+      gradient.addColorStop(0.54, "rgba(255,255,255,0.018)");
+      gradient.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    function drawDenseVector(ctx, x, y, w, h, values, options) {
+      const reveal = options.reveal ?? 1;
+      drawVectorFrame(ctx, x, y, w, h, options.label, options.dim, options.mono);
+      const arr = Array.from(values || []);
+      const n = Math.max(arr.length, 1);
+      const [r, g, b] = options.color;
+      const plotTop = y + 24;
+      const plotH = h - 32;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x + 10, plotTop, w - 20, plotH);
+      ctx.clip();
+      for (let i = 0; i < n; i++) {
+        const v = clamp((arr[i] || 0) * reveal);
+        const px = x + 10 + i * (w - 20) / n;
+        const barH = Math.max(0.4, v * plotH);
+        ctx.strokeStyle = `rgba(${r},${g},${b},${0.12 + v * 0.86})`;
+        ctx.lineWidth = Math.max(0.35, (w - 20) / n);
+        ctx.beginPath();
+        ctx.moveTo(px, plotTop + plotH);
+        ctx.lineTo(px, plotTop + plotH - barH);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawBarVector(ctx, x, y, w, h, values, options) {
+      const arr = Array.from(values || []);
+      const reveal = options.reveal ?? 1;
+      const labels = options.labels || arr.map((_, i) => String(i));
+      const [r, g, b] = options.color;
+      drawVectorFrame(ctx, x, y, w, h, options.label, options.dim, options.mono);
+
+      const plotX = x + 12;
+      const plotY = y + 27;
+      const plotW = w - 24;
+      const plotH = h - 40;
+      const maxAbs = Math.max(0.001, ...arr.map((v) => Math.abs(v || 0)));
+      const slot = plotW / Math.max(arr.length, 1);
+      const baseY = options.signed ? plotY + plotH * 0.52 : plotY + plotH;
+
+      ctx.save();
+      if (options.signed) {
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(plotX, baseY);
+        ctx.lineTo(plotX + plotW, baseY);
+        ctx.stroke();
+      }
+
+      arr.forEach((raw, i) => {
+        const value = (raw || 0) * reveal;
+        const normalized = options.signed ? Math.abs(value) / maxAbs : clamp(value);
+        const barW = Math.max(3, slot * 0.58);
+        const bx = plotX + i * slot + (slot - barW) / 2;
+        const barH = Math.max(1, normalized * (options.signed ? plotH * 0.45 : plotH));
+        const by = options.signed
+          ? (value >= 0 ? baseY - barH : baseY)
+          : baseY - barH;
+        const active = i === options.topIndex;
+        ctx.fillStyle = active
+          ? "rgba(248, 211, 74, 0.92)"
+          : `rgba(${r},${g},${b},${0.18 + normalized * 0.72})`;
+        roundRect(ctx, bx, by, barW, barH, 3);
+        ctx.fill();
+
+        ctx.fillStyle = active ? "#f8d34a" : "rgba(255,255,255,0.68)";
+        ctx.font = `${options.compact ? 8 : 10}px ${options.mono}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        const label = options.compact && labels[i] && labels[i].length > 2 ? String(i) : labels[i];
+        ctx.fillText(label, bx + barW / 2, y + h - 13);
+      });
+      ctx.restore();
+    }
+
+    function drawVectorFrame(ctx, x, y, w, h, label, dim, mono) {
+      ctx.save();
+      ctx.fillStyle = "rgba(255,255,255,0.045)";
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 1;
+      roundRect(ctx, x, y, w, h, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#f6f6f6";
+      ctx.font = `700 12px ${mono}`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, x + 12, y + 15);
+      ctx.fillStyle = "rgba(248,248,248,0.58)";
+      ctx.textAlign = "right";
+      ctx.fillText(dim, x + w - 12, y + 15);
+      ctx.restore();
+    }
+
+    function drawFlowArrow(ctx, x1, y1, x2, y2, progress, label) {
+      ctx.save();
+      ctx.setLineDash([7, 6]);
+      ctx.strokeStyle = "rgba(211,218,0,0.26)";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      const p = clamp(progress);
+      if (p > 0) {
+        ctx.setLineDash([]);
+        ctx.strokeStyle = "rgba(211,218,0,0.9)";
+        ctx.shadowColor = "rgba(211,218,0,0.42)";
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 + (x2 - x1) * p, y1 + (y2 - y1) * p);
+        ctx.stroke();
+      }
+
+      if (label && p > 0.55) {
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(248,248,248,0.62)";
+        ctx.font = `600 10px ${getComputedStyle(document.documentElement).getPropertyValue("--mono")}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(label, (x1 + x2) / 2, (y1 + y2) / 2 - 4);
+      }
+      ctx.restore();
+    }
+
+    function bestIndex(values) {
+      let best = 0;
+      for (let i = 1; i < values.length; i++) {
+        if ((values[i] || 0) > (values[best] || 0)) best = i;
+      }
+      return best;
+    }
+
+    function roundRect(ctx, x, y, w, h, radius) {
+      const r = Math.min(radius, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+    }
+
+    function drawDigitSample(digit) {
+      setupCanvas();
+      hasInk = true;
+      canvasHint.classList.add("is-hidden");
+      const tpl = sampleTemplates[digit][Math.floor(Math.random() * sampleTemplates[digit].length)];
+      const temp = pixelsToCanvas(tpl);
+
+      const jitter = 14;
+      drawCtx.save();
+      drawCtx.translate((Math.random() - 0.5) * jitter, (Math.random() - 0.5) * jitter);
+      drawCtx.rotate((Math.random() - 0.5) * 0.08);
+      drawCtx.imageSmoothingEnabled = true;
+      drawCtx.drawImage(temp, 0, 0, 28, 28, 86, 68, 344, 360);
+      drawCtx.restore();
+      predict(false);
+    }
+
+    function buildDigitBank() {
+      for (let digit = 0; digit < 10; digit++) {
+        const button = document.createElement("button");
+        button.className = "digit-btn";
+        button.type = "button";
+        button.textContent = digit;
+        button.title = `载入数字 ${digit} 样例`;
+        button.addEventListener("click", () => drawDigitSample(digit));
+        digitBank.appendChild(button);
+      }
+    }
+
+    function seedInitialDigit() {
+      drawDigitSample(5);
+      setStages([100, 100, 100, 100]);
+    }
+
+    drawCanvas.addEventListener("pointerdown", beginDraw);
+    drawCanvas.addEventListener("pointermove", moveDraw);
+    window.addEventListener("pointerup", endDraw);
+    window.addEventListener("pointercancel", endDraw);
+    document.getElementById("clearBtn").addEventListener("click", clearDrawing);
+    document.getElementById("runBtn").addEventListener("click", () => predict(false));
+    document.getElementById("animateBtn").addEventListener("click", playStages);
+    document.getElementById("randomBtn").addEventListener("click", () => drawDigitSample(Math.floor(Math.random() * 10)));
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(renderNetwork, 120);
+    });
+
+    buildTemplates();
+    setupCanvas();
+    buildDigitBank();
+    lastResult = emptyResult();
+    renderAll();
+    seedInitialDigit();
+  </script>
+</body>
+</html>
