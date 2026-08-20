@@ -366,6 +366,54 @@
       display: block;
     }
 
+    .node-detail-panel {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .node-detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--soft-line);
+    }
+
+    .node-detail-header h3 {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .node-detail-header span,
+    .node-detail-help {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .node-detail-shell {
+      height: 430px;
+      overflow: auto;
+      background: #060706;
+    }
+
+    #nodeDetailCanvas {
+      display: block;
+      background: #060706;
+    }
+
+    .node-detail-help {
+      margin: 0;
+      padding: 9px 12px 11px;
+      border-top: 1px solid var(--soft-line);
+      background: #fbfdfc;
+    }
+
     .layer-tags {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -614,6 +662,10 @@
       .network-shell {
         height: 500px;
       }
+
+      .node-detail-shell {
+        height: 390px;
+      }
     }
 
     @media (max-width: 720px) {
@@ -658,6 +710,10 @@
 
       .network-shell {
         height: 360px;
+      }
+
+      .node-detail-shell {
+        height: 330px;
       }
     }
 
@@ -751,6 +807,16 @@
             <div class="network-shell">
               <canvas id="networkCanvas" width="920" height="560" aria-label="CNN 集成推理链路可视化"></canvas>
             </div>
+            <div class="node-detail-panel">
+              <div class="node-detail-header">
+                <h3>节点详图</h3>
+                <span id="nodeDetailMeta">等待 ONNX 输出</span>
+              </div>
+              <div class="node-detail-shell">
+                <canvas id="nodeDetailCanvas" width="980" height="560" aria-label="实际网络节点详图"></canvas>
+              </div>
+              <p class="node-detail-help">空间层按当前通道分页显示该层所有节点；一维层按向量节点显示。圆点中的数字来自当前推理的实际 ONNX tensor。</p>
+            </div>
             <div class="layer-tags">
               <div class="tag"><strong>输入张量</strong><span>28x28 灰度笔迹以 NCHW: 1x1x28x28 格式送入 ONNX。</span></div>
               <div class="tag"><strong>卷积激活</strong><span>debug 版 ONNX 暴露 ReLU/Pool 中间张量并实时绘制。</span></div>
@@ -818,6 +884,9 @@
     const heatCtx = heatmapCanvas.getContext("2d");
     const networkCanvas = document.getElementById("networkCanvas");
     const networkCtx = networkCanvas.getContext("2d");
+    const nodeDetailCanvas = document.getElementById("nodeDetailCanvas");
+    const nodeDetailCtx = nodeDetailCanvas.getContext("2d");
+    const nodeDetailMetaEl = document.getElementById("nodeDetailMeta");
     const predictionEl = document.getElementById("prediction");
     const confidenceEl = document.getElementById("confidence");
     const canvasHint = document.getElementById("canvasHint");
@@ -867,13 +936,13 @@
     ];
 
     const probeDefinitions = [
-      { key: "input", label: "Input3 输入张量", output: "Input3", fallbackDims: [1, 1, 28, 28] },
-      { key: "relu1", label: "Conv/ReLU 1", output: "ReLU32_Output_0", fallbackDims: [1, 8, 28, 28] },
-      { key: "pool1", label: "MaxPool 1", output: "Pooling66_Output_0", fallbackDims: [1, 8, 14, 14] },
-      { key: "relu2", label: "Conv/ReLU 2", output: "ReLU114_Output_0", fallbackDims: [1, 16, 14, 14] },
-      { key: "pool2", label: "MaxPool 2", output: "Pooling160_Output_0", fallbackDims: [1, 16, 4, 4] },
-      { key: "flatten", label: "Flatten 256", output: "Pooling160_Output_0_reshape0", fallbackDims: [1, 256] },
-      { key: "logits", label: "logits 10", output: "Plus214_Output_0", fallbackDims: [1, 10] }
+      { key: "input", label: "Input3 输入张量", output: "Input3", fallbackDims: [1, 1, 28, 28], op: "image normalize", prev: "canvas", next: "Conv 5x5 SAME" },
+      { key: "relu1", label: "Conv/ReLU 1", output: "ReLU32_Output_0", fallbackDims: [1, 8, 28, 28], op: "Conv5x5 + bias + ReLU", prev: "Input3", next: "MaxPool 2x2 s2" },
+      { key: "pool1", label: "MaxPool 1", output: "Pooling66_Output_0", fallbackDims: [1, 8, 14, 14], op: "MaxPool 2x2 stride 2", prev: "ReLU32", next: "Conv 5x5 SAME" },
+      { key: "relu2", label: "Conv/ReLU 2", output: "ReLU114_Output_0", fallbackDims: [1, 16, 14, 14], op: "Conv5x5 + bias + ReLU", prev: "Pool66", next: "MaxPool 3x3 s3" },
+      { key: "pool2", label: "MaxPool 2", output: "Pooling160_Output_0", fallbackDims: [1, 16, 4, 4], op: "MaxPool 3x3 stride 3", prev: "ReLU114", next: "Reshape 256" },
+      { key: "flatten", label: "Flatten 256", output: "Pooling160_Output_0_reshape0", fallbackDims: [1, 256], op: "Reshape NCHW -> R^256", prev: "Pool160", next: "MatMul 256x10" },
+      { key: "logits", label: "logits 10", output: "Plus214_Output_0", fallbackDims: [1, 10], op: "MatMul + bias", prev: "Flatten256", next: "Softmax" }
     ];
 
     let isDrawing = false;
@@ -1526,6 +1595,7 @@
       renderProbe();
       renderPrediction();
       renderNetwork();
+      renderNodeDetail();
     }
 
     function renderPrediction() {
@@ -1660,6 +1730,11 @@
         : `[0, ${channel}]`;
       return {
         available: Boolean(tensor?.data),
+        key: definition.key,
+        label: definition.label,
+        op: definition.op,
+        prev: definition.prev,
+        next: definition.next,
         output: definition.output,
         dims,
         isSpatial,
@@ -1748,6 +1823,261 @@
       const abs = Math.abs(value);
       if (abs >= 1000 || (abs > 0 && abs < 0.001)) return value.toExponential(4);
       return value.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+    }
+
+    function renderNodeDetail() {
+      const result = lastResult || emptyResult();
+      const reading = getProbeReading(result);
+      const tensor = result.nodeTensors?.[reading.key] || null;
+      const mono = getComputedStyle(document.documentElement).getPropertyValue("--mono");
+      const sans = getComputedStyle(document.body).fontFamily;
+
+      if (!tensor?.data?.length) {
+        const ctx = prepareNodeDetailCanvas(820, 280);
+        drawNodeDetailBackground(ctx, 820, 280);
+        drawDetailLayerStrip(ctx, result, reading, 820, mono);
+        ctx.fillStyle = "rgba(255,255,255,0.72)";
+        ctx.font = `700 14px ${sans}`;
+        ctx.fillText("当前模型没有暴露该层的中间节点值", 28, 160);
+        nodeDetailMetaEl.textContent = `${reading.output} / unavailable`;
+        return;
+      }
+
+      const dims = tensor.dims;
+      if (dims.length === 4) {
+        const [, channels, rows, cols] = dims;
+        const channel = clampInt(reading.channel, 0, channels - 1);
+        const cell = cols <= 4 ? 82 : (cols <= 14 ? 46 : 34);
+        const gridLeft = 54;
+        const gridTop = 152;
+        const gridW = cols * cell;
+        const gridH = rows * cell;
+        const cssW = Math.max(820, gridLeft + gridW + 58);
+        const cssH = gridTop + gridH + 66;
+        const ctx = prepareNodeDetailCanvas(cssW, cssH);
+        const values = sliceSpatialChannel(tensor, channel);
+        const stats = tensorStats(values);
+
+        drawNodeDetailBackground(ctx, cssW, cssH);
+        drawDetailLayerStrip(ctx, result, reading, cssW, mono);
+        drawDetailHeading(ctx, `${reading.output} channel ${channel}`, `${dims.join("x")} / ${rows * cols} nodes / ${reading.op}`, 28, 128, sans, mono);
+        drawSpatialNodeGrid(ctx, values, rows, cols, gridLeft, gridTop, cell, stats, reading, mono);
+        nodeDetailMetaEl.textContent = `${reading.output} / ch ${channel} / ${rows}x${cols} nodes`;
+      } else {
+        const count = dims[dims.length - 1] || tensor.data.length;
+        const cols = count <= 10 ? count : 16;
+        const rows = Math.ceil(count / cols);
+        const cellW = count <= 10 ? 78 : 64;
+        const cellH = count <= 10 ? 68 : 48;
+        const gridLeft = 48;
+        const gridTop = 152;
+        const cssW = Math.max(820, gridLeft + cols * cellW + 58);
+        const cssH = gridTop + rows * cellH + 66;
+        const ctx = prepareNodeDetailCanvas(cssW, cssH);
+        const values = tensor.data.slice(0, count);
+        const stats = tensorStats(values);
+
+        drawNodeDetailBackground(ctx, cssW, cssH);
+        drawDetailLayerStrip(ctx, result, reading, cssW, mono);
+        drawDetailHeading(ctx, reading.output, `${dims.join("x")} / ${count} vector nodes / ${reading.op}`, 28, 128, sans, mono);
+        drawVectorNodeGrid(ctx, values, cols, gridLeft, gridTop, cellW, cellH, stats, reading, mono);
+        nodeDetailMetaEl.textContent = `${reading.output} / ${count} nodes`;
+      }
+    }
+
+    function prepareNodeDetailCanvas(cssW, cssH) {
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      nodeDetailCanvas.style.width = `${cssW}px`;
+      nodeDetailCanvas.style.height = `${cssH}px`;
+      const width = Math.floor(cssW * dpr);
+      const height = Math.floor(cssH * dpr);
+      if (nodeDetailCanvas.width !== width || nodeDetailCanvas.height !== height) {
+        nodeDetailCanvas.width = width;
+        nodeDetailCanvas.height = height;
+      }
+      nodeDetailCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return nodeDetailCtx;
+    }
+
+    function drawNodeDetailBackground(ctx, w, h) {
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "#060706";
+      ctx.fillRect(0, 0, w, h);
+      const gradient = ctx.createLinearGradient(0, 0, w, h);
+      gradient.addColorStop(0, "rgba(17,168,160,0.14)");
+      gradient.addColorStop(0.48, "rgba(255,255,255,0.02)");
+      gradient.addColorStop(1, "rgba(255,107,90,0.10)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    function drawDetailLayerStrip(ctx, result, reading, w, mono) {
+      const y = 24;
+      const h = 78;
+      const gap = 10;
+      const left = 28;
+      const boxW = Math.max(92, (w - left * 2 - gap * (probeDefinitions.length - 1)) / probeDefinitions.length);
+      probeDefinitions.forEach((definition, index) => {
+        const x = left + index * (boxW + gap);
+        const active = definition.key === reading.key;
+        const tensor = result.nodeTensors?.[definition.key];
+        const stats = tensor?.data ? tensorStats(tensor.data) : null;
+
+        if (index > 0) {
+          const ax = x - gap + 2;
+          const ay = y + h / 2;
+          drawDetailArrow(ctx, ax, ay, x - 4, ay, active ? "rgba(248,211,74,0.82)" : "rgba(255,255,255,0.22)");
+        }
+
+        ctx.save();
+        ctx.fillStyle = active ? "rgba(248,211,74,0.16)" : "rgba(255,255,255,0.055)";
+        ctx.strokeStyle = active ? "rgba(248,211,74,0.84)" : "rgba(255,255,255,0.18)";
+        ctx.lineWidth = active ? 1.6 : 1;
+        roundRect(ctx, x, y, boxW, h, 8);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = active ? "#f8d34a" : "rgba(255,255,255,0.78)";
+        ctx.font = `800 10px ${mono}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(definition.output.replace("_Output_0", ""), x + boxW / 2, y + 18);
+        ctx.fillStyle = "rgba(255,255,255,0.56)";
+        ctx.font = `600 9px ${mono}`;
+        ctx.fillText((tensor?.dims || definition.fallbackDims).join("x"), x + boxW / 2, y + 38);
+        ctx.fillText(stats ? `mean ${formatNodeLabel(stats.mean)}` : definition.op, x + boxW / 2, y + 58);
+        ctx.restore();
+      });
+    }
+
+    function drawDetailHeading(ctx, title, subtitle, x, y, sans, mono) {
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.font = `800 18px ${sans}`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(title, x, y);
+      ctx.fillStyle = "rgba(255,255,255,0.58)";
+      ctx.font = `600 11px ${mono}`;
+      ctx.fillText(subtitle, x, y + 22);
+    }
+
+    function drawSpatialNodeGrid(ctx, values, rows, cols, x, y, cell, stats, reading, mono) {
+      const radius = Math.min(20, cell * 0.38);
+      const axisStep = cols > 14 ? 4 : (cols > 4 ? 2 : 1);
+      ctx.save();
+      ctx.font = `700 ${cols > 14 ? 8 : 10}px ${mono}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      for (let row = 0; row < rows; row++) {
+        if (row % axisStep === 0) {
+          ctx.fillStyle = "rgba(255,255,255,0.34)";
+          ctx.fillText(String(row), x - 22, y + row * cell + cell / 2);
+        }
+        for (let col = 0; col < cols; col++) {
+          if (row === 0 && col % axisStep === 0) {
+            ctx.fillStyle = "rgba(255,255,255,0.34)";
+            ctx.fillText(String(col), x + col * cell + cell / 2, y - 16);
+          }
+          const index = row * cols + col;
+          const selected = row === reading.row && col === reading.col;
+          drawValueNode(ctx, x + col * cell + cell / 2, y + row * cell + cell / 2, radius, values[index], stats, selected, mono, cols > 14 ? 8 : 10);
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawVectorNodeGrid(ctx, values, cols, x, y, cellW, cellH, stats, reading, mono) {
+      const radius = Math.min(24, Math.min(cellW, cellH) * 0.36);
+      ctx.save();
+      ctx.font = `700 ${values.length > 32 ? 9 : 11}px ${mono}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      values.forEach((value, index) => {
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        const cx = x + col * cellW + cellW / 2;
+        const cy = y + row * cellH + cellH / 2;
+        drawValueNode(ctx, cx, cy, radius, value, stats, index === reading.channel, mono, values.length > 32 ? 9 : 11);
+        ctx.fillStyle = "rgba(255,255,255,0.36)";
+        ctx.font = `600 8px ${mono}`;
+        ctx.fillText(String(index), cx, cy + radius + 10);
+      });
+      ctx.restore();
+    }
+
+    function drawValueNode(ctx, cx, cy, radius, value, stats, selected, mono, fontSize) {
+      const [r, g, b] = colorForValue(value, stats);
+      const alpha = 0.18 + Math.min(0.74, Math.abs(value - stats.min) / Math.max(stats.range, 1e-6) * 0.74);
+      ctx.save();
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+      ctx.strokeStyle = selected ? "#f8d34a" : "rgba(255,255,255,0.22)";
+      ctx.lineWidth = selected ? 2.4 : 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = selected ? "#fff6b0" : "rgba(255,255,255,0.88)";
+      ctx.font = `800 ${fontSize}px ${mono}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(formatNodeLabel(value), cx, cy);
+      ctx.restore();
+    }
+
+    function colorForValue(value, stats) {
+      if (value < 0) return [255, 107, 90];
+      if (value === stats.max && stats.max > 0) return [248, 211, 74];
+      return [17, 168, 160];
+    }
+
+    function sliceSpatialChannel(tensor, channel) {
+      const [, , rows, cols] = tensor.dims;
+      const size = rows * cols;
+      const start = channel * size;
+      return tensor.data.slice(start, start + size);
+    }
+
+    function tensorStats(values) {
+      let min = Infinity;
+      let max = -Infinity;
+      let sum = 0;
+      values.forEach((value) => {
+        const v = Number(value) || 0;
+        if (v < min) min = v;
+        if (v > max) max = v;
+        sum += v;
+      });
+      if (!Number.isFinite(min)) min = 0;
+      if (!Number.isFinite(max)) max = 0;
+      const mean = sum / Math.max(values.length, 1);
+      return { min, max, mean, range: max - min };
+    }
+
+    function formatNodeLabel(value) {
+      if (!Number.isFinite(value)) return "--";
+      const abs = Math.abs(value);
+      if (abs < 0.005) return "0";
+      if (abs < 1) return value.toFixed(2);
+      if (abs < 10) return value.toFixed(1);
+      return value.toExponential(1);
+    }
+
+    function drawDetailArrow(ctx, x1, y1, x2, y2, color) {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - 6, y2 - 4);
+      ctx.lineTo(x2 - 6, y2 + 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
 
     function renderNetwork() {
@@ -2212,7 +2542,7 @@
     heatmapCanvas.addEventListener("click", selectInputProbeFromHeatmap);
     window.addEventListener("resize", () => {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(renderNetwork, 120);
+      resizeTimer = setTimeout(() => { renderNetwork(); renderNodeDetail(); }, 120);
     });
 
     buildTemplates();
