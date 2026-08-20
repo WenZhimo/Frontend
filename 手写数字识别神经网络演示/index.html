@@ -590,8 +590,8 @@
           </svg>
         </div>
         <div>
-          <h1>手写数字识别神经网络</h1>
-          <p class="subtitle">在画布中写下 0-9，页面会把笔迹压缩成 28x28 输入，并按当前实际推理链路展示特征、相似度、logits 与输出概率。</p>
+          <h1>手写数字识别 CNN Ensemble</h1>
+          <p class="subtitle">在画布中写下 0-9，页面会把笔迹归一化为 ONNX 需要的 1x1x28x28 张量，使用 Hugging Face ONNX Model Zoo 的 MNIST CNN，并用多视图测试时增强集成推理。</p>
         </div>
       </div>
       <div class="top-actions">
@@ -640,8 +640,8 @@
           <div class="stage-list" aria-label="识别流程">
             <div class="stage"><span>采样</span><div class="stage-track"><i class="stage-fill" id="stage0"></i></div><span id="stage0v">0%</span></div>
             <div class="stage"><span>归一化</span><div class="stage-track"><i class="stage-fill" id="stage1"></i></div><span id="stage1v">0%</span></div>
-            <div class="stage"><span>特征/相似度</span><div class="stage-track"><i class="stage-fill" id="stage2"></i></div><span id="stage2v">0%</span></div>
-            <div class="stage"><span>Softmax</span><div class="stage-track"><i class="stage-fill" id="stage3"></i></div><span id="stage3v">0%</span></div>
+            <div class="stage"><span>卷积激活</span><div class="stage-track"><i class="stage-fill" id="stage2"></i></div><span id="stage2v">0%</span></div>
+            <div class="stage"><span>集成平均</span><div class="stage-track"><i class="stage-fill" id="stage3"></i></div><span id="stage3v">0%</span></div>
           </div>
         </div>
       </div>
@@ -649,20 +649,20 @@
       <div class="panel">
         <div class="panel-header">
           <div>
-            <h2 class="panel-title">实际推理链路可视化</h2>
-            <p class="panel-note">按当前模型真实结构展示：784 维像素向量、12 维特征、10 类相似度、logits 和 Softmax。</p>
+            <h2 class="panel-title">CNN Ensemble 推理链路</h2>
+            <p class="panel-note">按当前真实 ONNX 图展示：Input3 1x1x28x28 → Conv/ReLU/Pool → Conv/ReLU/Pool → Flatten256 → logits10；多视图成员 logits 经 Softmax 后平均。</p>
           </div>
         </div>
         <div class="visual-grid">
           <div class="network-area">
             <div class="network-shell">
-              <canvas id="networkCanvas" width="920" height="560" aria-label="实际一维推理链路可视化"></canvas>
+              <canvas id="networkCanvas" width="920" height="560" aria-label="CNN 集成推理链路可视化"></canvas>
             </div>
             <div class="layer-tags">
-              <div class="tag"><strong>输入向量</strong><span>28x28 像素被展平成 784 维向量。</span></div>
-              <div class="tag"><strong>特征向量</strong><span>笔画密度、重心、边缘与环形等 12 个特征。</span></div>
-              <div class="tag"><strong>模板相似度</strong><span>当前笔迹与 10 个数字原型逐类比较。</span></div>
-              <div class="tag"><strong>Softmax 输出</strong><span>10 个 logits 被转换为最终概率。</span></div>
+              <div class="tag"><strong>输入张量</strong><span>28x28 灰度笔迹以 NCHW: 1x1x28x28 格式送入 ONNX。</span></div>
+              <div class="tag"><strong>卷积激活</strong><span>debug 版 ONNX 暴露 ReLU/Pool 中间张量并实时绘制。</span></div>
+              <div class="tag"><strong>TTA Ensemble</strong><span>原图、微平移与微旋转视图分别推理后求平均。</span></div>
+              <div class="tag"><strong>学术指标</strong><span>展示熵、margin、一致率和层激活统计。</span></div>
             </div>
           </div>
           <aside class="side-metrics">
@@ -677,7 +677,7 @@
               <div class="bars" id="bars"></div>
             </div>
             <div>
-              <div class="features-title"><h3>特征探针</h3><span>特征向量</span></div>
+              <div class="features-title"><h3>学术细节</h3><span>CNN probes</span></div>
               <div class="features" id="features"></div>
             </div>
           </aside>
@@ -685,9 +685,10 @@
       </div>
     </section>
 
-    <p class="footnote">说明：这是一个浏览器内教学演示。当前模型实际使用 784 维像素输入、12 维笔画特征、10 类模板相似度与 softmax 输出；演示区按这个真实链路动态绘制，而不是套用固定卷积示意图。</p>
+    <p class="footnote">说明：第二版使用从 Hugging Face <code>onnxmodelzoo/mnist-12</code> 获取的 MNIST CNN，并额外保存一个只增加中间输出的 debug ONNX，用于绘制真实卷积/池化激活。演示区只绘制当前模型实际产生的张量、成员概率和集成结果；请在本目录运行 <code>python -m http.server</code> 后访问页面。</p>
   </main>
 
+  <script src="vendor/ort.min.js"></script>
   <script>
     const drawCanvas = document.getElementById("drawCanvas");
     const drawCtx = drawCanvas.getContext("2d", { willReadFrequently: true });
@@ -704,9 +705,33 @@
     const topPairEl = document.getElementById("topPair");
     const inkCountEl = document.getElementById("inkCount");
 
-    const featureLabels = [
-      "总墨量", "上半区", "下半区", "左半区", "右半区", "中心密度",
-      "竖笔画", "横笔画", "左斜线", "右斜线", "顶部环", "底部环"
+    const probeLabels = [
+      "墨量", "Top-1 概率", "Top-1/2 间隔", "成员一致率", "低熵置信",
+      "TTA 稳定度", "ReLU1 均值", "Pool1 均值", "ReLU2 均值", "Flatten 均值"
+    ];
+
+    const modelCandidates = [
+      { path: "models/mnist-12-debug.onnx", debug: true, source: "local debug" },
+      { path: "models/mnist-12.onnx", debug: false, source: "local HF export" },
+      { path: "https://huggingface.co/onnxmodelzoo/mnist-12/resolve/main/mnist-12.onnx", debug: false, source: "Hugging Face fallback" }
+    ];
+
+    const ensembleViews = [
+      { name: "center", label: "原图", dx: 0, dy: 0, rotate: 0, weight: 1.0 },
+      { name: "left", label: "左移1px", dx: -1, dy: 0, rotate: 0, weight: 0.92 },
+      { name: "right", label: "右移1px", dx: 1, dy: 0, rotate: 0, weight: 0.92 },
+      { name: "up", label: "上移1px", dx: 0, dy: -1, rotate: 0, weight: 0.88 },
+      { name: "rotCw", label: "顺转4deg", dx: 0, dy: 0, rotate: Math.PI / 45, weight: 0.82 },
+      { name: "rotCcw", label: "逆转4deg", dx: 0, dy: 0, rotate: -Math.PI / 45, weight: 0.82 }
+    ];
+
+    const layerBlueprint = [
+      { key: "input", name: "Input3", label: "Input3", shape: "1x1x28x28" },
+      { key: "relu1", name: "ReLU32_Output_0", label: "Conv/ReLU 1", shape: "1x8x28x28" },
+      { key: "pool1", name: "Pooling66_Output_0", label: "MaxPool 1", shape: "1x8x14x14" },
+      { key: "relu2", name: "ReLU114_Output_0", label: "Conv/ReLU 2", shape: "1x16x14x14" },
+      { key: "pool2", name: "Pooling160_Output_0", label: "MaxPool 2", shape: "1x16x4x4" },
+      { key: "logits", name: "Plus214_Output_0", label: "logits", shape: "1x10" }
     ];
 
     let isDrawing = false;
@@ -717,6 +742,12 @@
     let templates = [];
     let sampleTemplates = [];
     let resizeTimer = 0;
+    let onnxSession = null;
+    let onnxInputName = "Input3";
+    let activeModelInfo = null;
+    let modelReady = false;
+    let modelStatus = "正在加载 ONNX MNIST CNN";
+    let classifyToken = 0;
 
     function setupCanvas() {
       drawCtx.fillStyle = "#ffffff";
@@ -781,13 +812,30 @@
     function emptyResult() {
       return {
         pixels: new Float32Array(784),
-        features: new Array(featureLabels.length).fill(0),
+        features: new Array(probeLabels.length).fill(0),
         similarities: new Array(10).fill(0),
         logits: new Array(10).fill(0),
         probs: new Array(10).fill(0.1),
         prediction: "?",
         confidence: 0,
-        ink: 0
+        ink: 0,
+        members: [],
+        activations: null,
+        embedding: new Array(256).fill(0),
+        entropy: 1,
+        margin: 0,
+        modelStatus
+      };
+    }
+
+    function loadingResult(pixels, ink) {
+      return {
+        ...emptyResult(),
+        pixels,
+        ink,
+        probs: new Array(10).fill(0),
+        prediction: "…",
+        modelStatus
       };
     }
 
@@ -877,6 +925,8 @@
           const [px, py] = points[i - 1];
           ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
         }
+        const [lastX, lastY] = points[points.length - 1];
+        ctx.lineTo(lastX, lastY);
         ctx.stroke();
       };
 
@@ -904,7 +954,9 @@
           p([[12, 14], [17, 14]]);
           break;
         case 4:
-          p([[19, 22], [19, 5], [7, 16], [21, 16]]);
+          p([[18, 5], [18, 23]]);
+          p([[8, 15], [22, 15]]);
+          p([[17, 5], [8, 15]]);
           break;
         case 5:
           p([[20, 6], [9, 6], [8, 13], [14, 13]]);
@@ -1023,61 +1075,252 @@
       return Math.max(0, Math.min(1, value));
     }
 
-    function classify(pixels, ink) {
+    async function initCnnModel() {
+      if (!window.ort) {
+        modelStatus = "ONNX Runtime Web 未加载";
+        renderAll();
+        return;
+      }
+
+      try {
+        ort.env.wasm.wasmPaths = "/vendor/";
+        ort.env.wasm.numThreads = 1;
+        for (const candidate of modelCandidates) {
+          try {
+            modelStatus = `加载 ONNX：${candidate.source}`;
+            renderAll();
+            onnxSession = await ort.InferenceSession.create(candidate.path, {
+              executionProviders: ["wasm"],
+              graphOptimizationLevel: "all"
+            });
+            activeModelInfo = candidate;
+            break;
+          } catch (error) {
+            console.warn("ONNX model load failed:", candidate.path, error);
+          }
+        }
+
+        if (!onnxSession) throw new Error("所有 ONNX 模型地址均加载失败");
+
+        onnxInputName = onnxSession.inputNames[0] || "Input3";
+        await runCnnView(new Float32Array(784));
+        modelReady = true;
+        modelStatus = `ONNX CNN 就绪：${activeModelInfo.source} / ${ensembleViews.length} 成员集成`;
+        seedInitialDigit();
+      } catch (error) {
+        modelReady = false;
+        modelStatus = `ONNX 加载失败：${error.message}`;
+        console.error(error);
+        renderAll();
+      }
+    }
+
+    async function classifyCnnEnsemble(pixels, ink) {
       if (ink < 1) return emptyResult();
-      const features = featuresFromPixels(pixels);
-      const scores = [];
-      const similarities = [];
-      for (let digit = 0; digit < 10; digit++) {
-        const sim = Math.max(...templates[digit].map((tpl) => cosine(pixels, tpl)));
-        similarities[digit] = sim;
-        scores[digit] = (sim * 11.5) - 6.5;
+      if (!modelReady || !onnxSession) return loadingResult(pixels, ink);
+
+      const members = [];
+      let canonical = null;
+      const avg = new Array(10).fill(0);
+      let weightTotal = 0;
+
+      for (const view of ensembleViews) {
+        const memberPixels = transformPixels(pixels, view);
+        const packet = await runCnnView(memberPixels);
+        const top = bestIndex(packet.probs);
+        const member = {
+          ...view,
+          pixels: memberPixels,
+          probs: packet.probs,
+          top,
+          confidence: packet.probs[top],
+          summaries: packet.summaries
+        };
+        members.push(member);
+        for (let i = 0; i < 10; i++) avg[i] += packet.probs[i] * view.weight;
+        weightTotal += view.weight;
+        if (view.name === "center") {
+          canonical = packet;
+        }
       }
 
-      const [mass, top, bottom, left, right, center, vertical, horizontal, diagA, diagB, ringTop, ringBottom] = features;
-      scores[0] += (ringTop + ringBottom) * 0.28 - center * 0.08;
-      scores[1] += vertical * 0.36 - horizontal * 0.12 - ringBottom * 0.1;
-      scores[2] += diagB * 0.18 + horizontal * 0.1;
-      scores[3] += right * 0.14 + ringTop * 0.08;
-      scores[4] += vertical * 0.18 + horizontal * 0.16 + diagB * 0.1;
-      scores[5] += left * 0.14 + horizontal * 0.2 + ringBottom * 0.08;
-      scores[6] += ringBottom * 0.22 + bottom * 0.12 - top * 0.04;
-      scores[7] += diagB * 0.22 + top * 0.1 - ringBottom * 0.16;
-      scores[8] += (ringTop + ringBottom) * 0.24 + center * 0.04;
-      scores[9] += ringTop * 0.24 + top * 0.1 - bottom * 0.04;
-
-      const rankedSims = similarities.map((sim, digit) => ({ sim, digit })).sort((a, b) => b.sim - a.sim);
-      if (rankedSims[0].sim - rankedSims[1].sim > 0.015) {
-        scores[rankedSims[0].digit] += 1.4;
-      }
-
-      const probs = softmax(scores);
+      for (let i = 0; i < 10; i++) avg[i] /= Math.max(weightTotal, 1e-6);
       let best = 0;
-      for (let i = 1; i < probs.length; i++) {
-        if (probs[i] > probs[best]) best = i;
+      for (let i = 1; i < avg.length; i++) {
+        if (avg[i] > avg[best]) best = i;
       }
+
+      const sorted = avg.map((p, digit) => ({ p, digit })).sort((a, b) => b.p - a.p);
+      const entropy = normalizedEntropy(avg);
+      const margin = sorted[0].p - sorted[1].p;
+      const agreement = members.filter((member) => member.top === best).length / members.length;
+      const bestVariance = probabilityVariance(members.map((member) => member.probs[best]));
+      const summaries = canonical?.summaries || {};
+      const features = [
+        clamp(ink / 130),
+        clamp(avg[best]),
+        clamp(margin * 2.5),
+        clamp(agreement),
+        clamp(1 - entropy),
+        clamp(1 - Math.sqrt(bestVariance) * 8),
+        clamp((summaries.conv1?.mean || 0) * 3.2),
+        clamp((summaries.pool1?.mean || 0) * 3.2),
+        clamp((summaries.conv2?.mean || 0) * 3.2),
+        clamp((summaries.dense?.mean || 0) * 2.6)
+      ];
+
       return {
         pixels,
         features,
-        similarities,
-        logits: scores.slice(),
-        probs,
+        similarities: members.map((member) => member.confidence),
+        logits: avg.map((p) => Math.log(Math.max(p, 1e-7))),
+        probs: avg,
         prediction: best,
-        confidence: probs[best],
-        ink
+        confidence: avg[best],
+        ink,
+        members,
+        activations: canonical?.activations || null,
+        embedding: canonical?.embedding || new Array(256).fill(0),
+        entropy,
+        margin,
+        modelStatus
       };
     }
 
-    function softmax(scores) {
-      const max = Math.max(...scores);
-      const exps = scores.map((s) => Math.exp((s - max) * 1.9));
-      const sum = exps.reduce((a, b) => a + b, 0);
-      return exps.map((e) => e / sum);
+    async function runCnnView(pixels) {
+      const inputTensor = new ort.Tensor("float32", pixelsToNchw(pixels), [1, 1, 28, 28]);
+      const outputs = await onnxSession.run({ [onnxInputName]: inputTensor });
+      const logits = Array.from(outputs.Plus214_Output_0.data);
+      const probs = softmaxLogits(logits);
+      const relu1 = outputs.ReLU32_Output_0;
+      const pool1 = outputs.Pooling66_Output_0;
+      const relu2 = outputs.ReLU114_Output_0;
+      const pool2 = outputs.Pooling160_Output_0;
+      const flat = outputs.Pooling160_Output_0_reshape0;
+      const activations = {
+        conv1: relu1 ? activationPacket(relu1.data, relu1.dims, 4) : null,
+        conv2: relu2 ? activationPacket(relu2.data, relu2.dims, 4) : null,
+        conv3: pool2 ? activationPacket(pool2.data, pool2.dims, 4) : null,
+        pool: pool1 ? activationPacket(pool1.data, pool1.dims, 4) : null
+      };
+      const summaries = {
+        conv1: relu1 ? summarizeTensor(relu1.data) : null,
+        pool1: pool1 ? summarizeTensor(pool1.data) : null,
+        conv2: relu2 ? summarizeTensor(relu2.data) : null,
+        pool2: pool2 ? summarizeTensor(pool2.data) : null,
+        dense: flat ? summarizeTensor(flat.data) : null
+      };
+      return {
+        logits,
+        probs,
+        embedding: flat ? Array.from(flat.data) : new Array(256).fill(0),
+        activations,
+        summaries
+      };
     }
 
-    function predict(live = false) {
+    function transformPixels(pixels, view) {
+      if (!view.dx && !view.dy && !view.rotate) return pixels;
+      const source = pixelsToCanvas(pixels);
+      const off = document.createElement("canvas");
+      off.width = 28;
+      off.height = 28;
+      const octx = off.getContext("2d", { willReadFrequently: true });
+      octx.fillStyle = "#fff";
+      octx.fillRect(0, 0, 28, 28);
+      octx.save();
+      octx.translate(14 + view.dx, 14 + view.dy);
+      octx.rotate(view.rotate);
+      octx.imageSmoothingEnabled = true;
+      octx.drawImage(source, -14, -14);
+      octx.restore();
+      return pixelsFromCanvas(off).pixels;
+    }
+
+    function pixelsToNchw(pixels) {
+      const nchw = new Float32Array(784);
+      for (let i = 0; i < 784; i++) nchw[i] = pixels[i] || 0;
+      return nchw;
+    }
+
+    function softmaxLogits(logits) {
+      const max = Math.max(...logits);
+      const exps = logits.map((value) => Math.exp(value - max));
+      const sum = exps.reduce((total, value) => total + value, 0) || 1;
+      return exps.map((value) => value / sum);
+    }
+
+    function activationPacket(data, shape, mapCount) {
+      const [, c, h, w] = shape;
+      const channels = [];
+      for (let ch = 0; ch < c; ch++) {
+        let sum = 0;
+        let max = 0;
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const value = data[((ch * h + y) * w) + x] || 0;
+            sum += value;
+            if (value > max) max = value;
+          }
+        }
+        channels.push({ ch, score: sum / (h * w), max });
+      }
+      channels.sort((a, b) => b.score - a.score);
+      const selected = channels.slice(0, mapCount).map(({ ch, max }) => {
+        const map = new Array(h * w);
+        const denom = Math.max(max, 1e-6);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            map[y * w + x] = clamp((data[((ch * h + y) * w) + x] || 0) / denom);
+          }
+        }
+        return { channel: ch, values: map, max };
+      });
+      return { shape, h, w, c, maps: selected };
+    }
+
+    function summarizeTensor(data) {
+      let sum = 0;
+      let max = 0;
+      for (let i = 0; i < data.length; i++) {
+        const value = Math.max(0, data[i] || 0);
+        sum += value;
+        if (value > max) max = value;
+      }
+      return { mean: sum / Math.max(data.length, 1), max };
+    }
+
+    function normalizedEntropy(probs) {
+      let entropy = 0;
+      probs.forEach((p) => {
+        if (p > 0) entropy -= p * Math.log(p);
+      });
+      return entropy / Math.log(10);
+    }
+
+    function probabilityVariance(values) {
+      const mean = values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
+      return values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / Math.max(values.length, 1);
+    }
+
+    async function predict(live = false) {
+      const token = ++classifyToken;
       const { pixels, ink } = preprocessCanvas();
-      lastResult = classify(pixels, ink);
+      if (ink < 1) {
+        lastResult = emptyResult();
+        renderAll();
+        return;
+      }
+      if (!modelReady) {
+        lastResult = loadingResult(pixels, ink);
+        renderAll();
+        return;
+      }
+      lastResult = loadingResult(pixels, ink);
+      renderAll();
+      const result = await classifyCnnEnsemble(pixels, ink);
+      if (token !== classifyToken) return;
+      lastResult = result;
       renderAll();
       if (!live) playStages();
     }
@@ -1119,11 +1362,16 @@
     function renderPrediction() {
       if (!lastResult || lastResult.prediction === "?") {
         predictionEl.textContent = "?";
-        confidenceEl.textContent = "等待输入";
+        confidenceEl.textContent = modelReady ? "等待输入" : modelStatus;
+        return;
+      }
+      if (lastResult.prediction === "…") {
+        predictionEl.textContent = "…";
+        confidenceEl.textContent = lastResult.modelStatus || modelStatus;
         return;
       }
       predictionEl.textContent = lastResult.prediction;
-      confidenceEl.textContent = `置信度 ${(lastResult.confidence * 100).toFixed(1)}%`;
+      confidenceEl.textContent = `集成置信度 ${(lastResult.confidence * 100).toFixed(1)}%`;
     }
 
     function renderHeatmap() {
@@ -1177,7 +1425,7 @@
         const item = document.createElement("div");
         item.className = "feature";
         item.innerHTML = `
-          <div class="feature-name"><span>${featureLabels[i]}</span><strong>${Math.round(v * 100)}</strong></div>
+          <div class="feature-name"><span>${probeLabels[i]}</span><strong>${Math.round(v * 100)}</strong></div>
           <div class="feature-meter"><i style="width:${Math.round(v * 100)}%"></i></div>
         `;
         featuresEl.appendChild(item);
@@ -1199,10 +1447,10 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const w = rect.width;
       const h = rect.height;
-      drawActualModelBoard(ctx, result, w, h);
+      drawCnnEnsembleBoard(ctx, result, w, h);
     }
 
-    function drawActualModelBoard(ctx, result, w, h) {
+    function drawCnnEnsembleBoard(ctx, result, w, h) {
       ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = "#050505";
       ctx.fillRect(0, 0, w, h);
@@ -1213,92 +1461,203 @@
       const sans = getComputedStyle(document.body).fontFamily;
       const mono = getComputedStyle(document.documentElement).getPropertyValue("--mono");
       const pass = clamp(animationPhase);
-      const prediction = result.prediction === "?" ? -1 : result.prediction;
+      const prediction = typeof result.prediction === "number" ? result.prediction : -1;
 
       drawBoardGlow(ctx, w, h);
       ctx.save();
       ctx.fillStyle = "#f8f8f8";
       ctx.font = `800 ${compact ? 15 : Math.min(20, Math.max(15, w / 34))}px ${sans}`;
+      ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText("Actual model flow: 784 → 12 → 10 → 10", pad, compact ? 22 : 30);
+      ctx.fillText("ONNX MNIST CNN + TTA ensemble", pad, compact ? 22 : 30);
       ctx.fillStyle = "rgba(248,248,248,0.58)";
       ctx.font = `600 ${compact ? 10 : 12}px ${mono}`;
       const status = prediction >= 0
-        ? `top=${prediction}  p=${(result.confidence * 100).toFixed(1)}%  ink=${Math.round(result.ink)}`
-        : "waiting for input";
+        ? `top=${prediction}  p=${(result.confidence * 100).toFixed(1)}%  members=${result.members.length}  margin=${(result.margin * 100).toFixed(1)}%`
+        : (result.modelStatus || modelStatus || "waiting for input");
       ctx.fillText(status, pad, compact ? 42 : 52);
       ctx.restore();
 
-      const inputY = compact ? 58 : 74;
-      const inputH = compact ? 42 : 58;
-      const midY = inputY + inputH + gap + 8;
-      const midH = compact ? 78 : 96;
-      const lowerY = midY + midH + gap + 4;
-      const lowerH = compact ? 58 : 72;
-      const probY = lowerY + lowerH + gap + 4;
-      const probH = Math.max(compact ? 42 : 56, h - probY - pad);
+      const topY = compact ? 60 : 72;
       const fullW = w - pad * 2;
-      const halfW = (fullW - gap) / 2;
+      const inputW = compact ? Math.min(110, fullW * 0.28) : 142;
+      const inputH = compact ? 86 : 128;
+      const archX = pad + inputW + gap;
+      const archW = fullW - inputW - gap;
+      drawTensorInput(ctx, pad, topY, inputW, inputH, result.pixels, mono, pass);
+      drawArchitectureStrip(ctx, archX, topY, archW, inputH, compact, mono, pass);
 
-      drawDenseVector(ctx, pad, inputY, fullW, inputH, result.pixels, {
-        label: "输入向量 x",
-        dim: "R^784",
-        reveal: 1,
-        color: [17, 168, 160],
+      const actY = topY + inputH + gap;
+      const actH = compact ? 112 : 138;
+      const actW = (fullW - gap * 2) / 3;
+      drawActivationBlock(ctx, pad, actY, actW, actH, result.activations?.conv1, "ReLU32_Output_0", "1x8x28x28", [17, 168, 160], mono, clamp((pass - 0.18) / 0.22), compact);
+      drawActivationBlock(ctx, pad + actW + gap, actY, actW, actH, result.activations?.conv2, "ReLU114_Output_0", "1x16x14x14", [242, 173, 61], mono, clamp((pass - 0.28) / 0.22), compact);
+      drawActivationBlock(ctx, pad + (actW + gap) * 2, actY, actW, actH, result.activations?.conv3, "Pooling160_Output_0", "1x16x4x4", [116, 184, 67], mono, clamp((pass - 0.38) / 0.22), compact);
+
+      const midY = actY + actH + gap;
+      const midH = compact ? 76 : 92;
+      const leftW = compact ? fullW : fullW * 0.42;
+      const rightX = compact ? pad : pad + leftW + gap;
+      const rightW = compact ? fullW : fullW - leftW - gap;
+      drawDenseVector(ctx, pad, midY, leftW, midH, result.embedding, {
+        label: "Flatten activation z",
+        dim: "R^256",
+        reveal: clamp((pass - 0.52) / 0.2),
+        color: [115, 87, 214],
         mono
       });
+      if (!compact) {
+        drawEnsembleMembers(ctx, rightX, midY, rightW, midH, result, mono, clamp((pass - 0.62) / 0.22));
+      }
 
-      drawFlowArrow(ctx, pad + fullW * 0.28, inputY + inputH + 5, pad + halfW * 0.5, midY - 6, clamp((pass - 0.06) / 0.2), "统计笔画");
-      drawFlowArrow(ctx, pad + fullW * 0.72, inputY + inputH + 5, pad + halfW + gap + halfW * 0.5, midY - 6, clamp((pass - 0.18) / 0.2), "比较模板");
+      const probY = midY + midH + gap;
+      const probH = Math.max(compact ? 48 : 60, h - probY - pad);
+      if (compact) {
+        drawEnsembleMembers(ctx, pad, probY, fullW, 70, result, mono, clamp((pass - 0.62) / 0.22));
+        drawBarVector(ctx, pad, probY + 82, fullW, Math.max(44, h - probY - 82 - pad), result.probs, {
+          label: "mean softmax p(y|x)",
+          dim: "10",
+          labels: Array.from({ length: 10 }, (_, i) => String(i)),
+          reveal: clamp((pass - 0.76) / 0.22),
+          color: [255, 107, 90],
+          topIndex: prediction,
+          percent: true,
+          mono,
+          compact
+        });
+      } else {
+        drawBarVector(ctx, pad, probY, fullW, probH, result.probs, {
+          label: "ensemble mean softmax p(y|x)",
+          dim: "10",
+          labels: Array.from({ length: 10 }, (_, i) => String(i)),
+          reveal: clamp((pass - 0.76) / 0.22),
+          color: [255, 107, 90],
+          topIndex: prediction,
+          percent: true,
+          mono,
+          compact
+        });
+      }
+    }
 
-      drawBarVector(ctx, pad, midY, halfW, midH, result.features, {
-        label: "特征向量 f",
-        dim: "12",
-        labels: featureLabels,
-        reveal: clamp((pass - 0.12) / 0.28),
-        color: [242, 173, 61],
-        mono,
-        compact
+    function drawTensorInput(ctx, x, y, w, h, pixels, mono, reveal) {
+      drawVectorFrame(ctx, x, y, w, h, "input tensor", "1x1x28x28", mono);
+      const side = Math.min(w - 22, h - 34);
+      const gx = x + (w - side) / 2;
+      const gy = y + 25;
+      drawSmallMatrix(ctx, gx, gy, side, side, pixels, 28, 28, [17, 168, 160], reveal);
+    }
+
+    function drawArchitectureStrip(ctx, x, y, w, h, compact, mono, reveal) {
+      drawVectorFrame(ctx, x, y, w, h, "model topology", "ONNX Runtime Web", mono);
+      const innerX = x + 12;
+      const innerY = y + 30;
+      const innerW = w - 24;
+      const stepW = innerW / layerBlueprint.length;
+      layerBlueprint.forEach((layer, index) => {
+        const px = innerX + index * stepW;
+        const active = reveal > index / layerBlueprint.length;
+        ctx.save();
+        ctx.globalAlpha = active ? 1 : 0.42;
+        ctx.fillStyle = active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.035)";
+        ctx.strokeStyle = active ? "rgba(248,211,74,0.42)" : "rgba(255,255,255,0.12)";
+        roundRect(ctx, px + 3, innerY, Math.max(18, stepW - 6), h - 43, 6);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = active ? "#f8d34a" : "rgba(255,255,255,0.58)";
+        ctx.font = `700 ${compact ? 8 : 10}px ${mono}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(compact ? layer.label.replace("Conv2D ", "C") : layer.label, px + stepW / 2, innerY + 16);
+        ctx.fillStyle = "rgba(255,255,255,0.58)";
+        ctx.font = `600 ${compact ? 7 : 9}px ${mono}`;
+        ctx.fillText(layer.shape, px + stepW / 2, innerY + 34);
+        ctx.restore();
       });
+    }
 
-      drawBarVector(ctx, pad + halfW + gap, midY, halfW, midH, result.similarities, {
-        label: "模板相似度 cosine(x,t)",
-        dim: "10",
-        labels: Array.from({ length: 10 }, (_, i) => String(i)),
-        reveal: clamp((pass - 0.25) / 0.28),
-        color: [116, 184, 67],
-        topIndex: bestIndex(result.similarities),
-        mono,
-        compact
-      });
+    function drawActivationBlock(ctx, x, y, w, h, packet, label, dim, color, mono, reveal, compact) {
+      drawVectorFrame(ctx, x, y, w, h, label, dim, mono);
+      const maps = packet?.maps || [];
+      const count = maps.length || 4;
+      const gap = 6;
+      const cols = 2;
+      const rows = 2;
+      const gridX = x + 10;
+      const gridY = y + 30;
+      const cellW = (w - 20 - gap) / cols;
+      const cellH = (h - 44 - gap) / rows;
+      for (let i = 0; i < count; i++) {
+        const cx = gridX + (i % cols) * (cellW + gap);
+        const cy = gridY + Math.floor(i / cols) * (cellH + gap);
+        const map = maps[i];
+        ctx.save();
+        ctx.globalAlpha = reveal;
+        ctx.fillStyle = "rgba(255,255,255,0.035)";
+        roundRect(ctx, cx, cy, cellW, cellH, 5);
+        ctx.fill();
+        if (map) {
+          const side = Math.min(cellW - 6, cellH - (compact ? 5 : 14));
+          drawSmallMatrix(ctx, cx + 3, cy + 3, side, side, map.values, packet.w, packet.h, color, reveal);
+          if (!compact) {
+            ctx.fillStyle = "rgba(255,255,255,0.55)";
+            ctx.font = `600 8px ${mono}`;
+            ctx.textAlign = "right";
+            ctx.textBaseline = "bottom";
+            ctx.fillText(`ch${map.channel}`, cx + cellW - 4, cy + cellH - 3);
+          }
+        }
+        ctx.restore();
+      }
+    }
 
-      drawFlowArrow(ctx, pad + halfW * 0.5, midY + midH + 5, pad + fullW * 0.42, lowerY - 6, clamp((pass - 0.42) / 0.18), "feature bonus");
-      drawFlowArrow(ctx, pad + halfW + gap + halfW * 0.5, midY + midH + 5, pad + fullW * 0.58, lowerY - 6, clamp((pass - 0.42) / 0.18), "11.5×sim-6.5");
+    function drawSmallMatrix(ctx, x, y, w, h, values, cols, rows, color, reveal) {
+      const [r, g, b] = color;
+      const cellW = w / cols;
+      const cellH = h / rows;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, y, w, h);
+      ctx.clip();
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const value = clamp((values[row * cols + col] || 0) * reveal);
+          ctx.fillStyle = `rgba(${r},${g},${b},${0.08 + value * 0.9})`;
+          ctx.fillRect(x + col * cellW, y + row * cellH, Math.ceil(cellW), Math.ceil(cellH));
+        }
+      }
+      ctx.restore();
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, w, h);
+    }
 
-      drawBarVector(ctx, pad, lowerY, fullW, lowerH, result.logits, {
-        label: "logits",
-        dim: "10",
-        labels: Array.from({ length: 10 }, (_, i) => String(i)),
-        reveal: clamp((pass - 0.52) / 0.22),
-        color: [115, 87, 214],
-        signed: true,
-        topIndex: prediction,
-        mono,
-        compact
-      });
-
-      drawFlowArrow(ctx, pad + fullW * 0.5, lowerY + lowerH + 5, pad + fullW * 0.5, probY - 6, clamp((pass - 0.72) / 0.2), "softmax");
-
-      drawBarVector(ctx, pad, probY, fullW, probH, result.probs, {
-        label: "输出概率 p(y|x)",
-        dim: "10",
-        labels: Array.from({ length: 10 }, (_, i) => String(i)),
-        reveal: clamp((pass - 0.78) / 0.22),
-        color: [255, 107, 90],
-        topIndex: prediction,
-        percent: true,
-        mono,
-        compact
+    function drawEnsembleMembers(ctx, x, y, w, h, result, mono, reveal) {
+      drawVectorFrame(ctx, x, y, w, h, "TTA ensemble members", `${ensembleViews.length} views`, mono);
+      const members = result.members.length ? result.members : ensembleViews.map((view) => ({
+        ...view,
+        top: "-",
+        confidence: 0
+      }));
+      const rowH = Math.max(9, (h - 33) / members.length);
+      const startY = y + 27;
+      members.forEach((member, index) => {
+        const py = startY + index * rowH;
+        const value = clamp((member.confidence || 0) * reveal);
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        ctx.font = `600 ${rowH < 12 ? 8 : 10}px ${mono}`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(member.label, x + 12, py + rowH / 2);
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        roundRect(ctx, x + w * 0.42, py + 2, w * 0.38, Math.max(5, rowH - 4), 99);
+        ctx.fill();
+        ctx.fillStyle = "rgba(248,211,74,0.9)";
+        roundRect(ctx, x + w * 0.42, py + 2, w * 0.38 * value, Math.max(5, rowH - 4), 99);
+        ctx.fill();
+        ctx.fillStyle = member.top === result.prediction ? "#f8d34a" : "rgba(255,255,255,0.72)";
+        ctx.textAlign = "right";
+        ctx.fillText(`${member.top} ${(member.confidence * 100).toFixed(0)}%`, x + w - 12, py + rowH / 2);
       });
     }
 
@@ -1514,7 +1873,7 @@
     buildDigitBank();
     lastResult = emptyResult();
     renderAll();
-    seedInitialDigit();
+    initCnnModel();
   </script>
 </body>
 </html>
