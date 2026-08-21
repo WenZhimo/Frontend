@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="纸质印刷照片处理应用图标">
+  <rect width="64" height="64" rx="10" fill="#f0dfb5"/>
+  <rect x="12" y="12" width="40" height="40" fill="#f7edd1" stroke="#1f2223" stroke-width="3"/>
+  <circle cx="26" cy="28" r="5" fill="#d84a24"/>
+  <circle cx="34" cy="28" r="5" fill="#217b82" opacity="0.9"/>
+  <circle cx="30" cy="36" r="5" fill="#d8a526" opacity="0.9"/>
+  <path d="M18 47 31 37 46 47Z" fill="#1f2223" opacity="0.72"/>
+</svg>

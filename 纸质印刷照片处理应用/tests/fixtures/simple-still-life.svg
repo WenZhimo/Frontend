@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="640" viewBox="0 0 960 640" role="img" aria-label="Simple still life test fixture">
+  <rect width="960" height="640" fill="#efe7d2"/>
+  <rect x="96" y="96" width="768" height="448" rx="18" fill="#d8d5c2"/>
+  <ellipse cx="452" cy="466" rx="230" ry="42" fill="#b8a88a" opacity="0.45"/>
+  <path d="M392 460 C410 350 408 270 374 200" fill="none" stroke="#4b7c62" stroke-width="16" stroke-linecap="round"/>
+  <path d="M454 462 C474 345 490 260 566 180" fill="none" stroke="#4f816a" stroke-width="14" stroke-linecap="round"/>
+  <path d="M316 436 C342 354 350 300 326 244" fill="none" stroke="#557c55" stroke-width="13" stroke-linecap="round"/>
+  <ellipse cx="356" cy="196" rx="70" ry="48" fill="#df542f" transform="rotate(-16 356 196)"/>
+  <ellipse cx="406" cy="186" rx="58" ry="42" fill="#f06a35" transform="rotate(18 406 186)"/>
+  <ellipse cx="552" cy="172" rx="74" ry="42" fill="#d9482b" transform="rotate(-25 552 172)"/>
+  <ellipse cx="602" cy="165" rx="54" ry="38" fill="#f06b37" transform="rotate(19 602 165)"/>
+  <ellipse cx="308" cy="242" rx="82" ry="30" fill="#7ca478" transform="rotate(30 308 242)" opacity="0.8"/>
+  <ellipse cx="512" cy="306" rx="92" ry="32" fill="#80aa94" transform="rotate(-25 512 306)" opacity="0.82"/>
+  <ellipse cx="630" cy="306" rx="68" ry="26" fill="#8bb49e" transform="rotate(28 630 306)" opacity="0.72"/>
+  <circle cx="720" cy="420" r="52" fill="#e2bd4f" opacity="0.9"/>
+  <rect x="680" y="396" width="110" height="90" rx="10" fill="#4b6f7d" opacity="0.55"/>
+</svg>

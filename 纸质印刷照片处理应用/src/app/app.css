@@ -1,0 +1,505 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  overflow: hidden;
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+input[type="range"] {
+  accent-color: var(--color-accent);
+}
+
+.app-shell {
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: center;
+  padding: 22px 28px;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-panel);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 36px);
+  line-height: 1.08;
+}
+
+.topbar p {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.button {
+  border: 1px solid var(--color-ink);
+  background: transparent;
+  color: var(--color-ink);
+  min-height: 42px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.button-primary {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.button-small {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.button input {
+  display: none;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr minmax(220px, 280px);
+  align-items: stretch;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar,
+.inspector {
+  min-height: 0;
+  padding: 22px;
+  border-right: 1px solid var(--color-line);
+  background: var(--color-panel);
+  overflow: auto;
+}
+
+.inspector {
+  border-right: 0;
+  border-left: 1px solid var(--color-line);
+}
+
+.sidebar h2,
+.inspector h2 {
+  margin: 0 0 16px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.preset-list {
+  display: grid;
+  gap: 10px;
+}
+
+.sidebar-note {
+  margin: -4px 0 14px;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.sidebar-action {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.preset {
+  width: 100%;
+  border: 1px solid var(--color-line-strong);
+  background: transparent;
+  color: var(--color-ink);
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.preset span,
+.preset small {
+  display: block;
+}
+
+.preset span {
+  font-weight: 700;
+}
+
+.preset small {
+  margin-top: 6px;
+  color: var(--color-muted);
+  line-height: 1.45;
+}
+
+.preset.is-active {
+  border-color: var(--color-ink);
+  background: var(--color-paper);
+  box-shadow: inset 4px 0 0 var(--color-accent);
+}
+
+.canvas-stage {
+  min-height: 0;
+  padding: 28px;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(90deg, rgba(25, 50, 60, 0.05) 1px, transparent 1px),
+    linear-gradient(rgba(25, 50, 60, 0.05) 1px, transparent 1px),
+    var(--color-page);
+  background-size: 28px 28px;
+  overflow: auto;
+}
+
+.canvas-stage.is-dragging {
+  outline: 3px solid var(--color-accent);
+  outline-offset: -12px;
+}
+
+.preview-frame {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+
+.preview-toolbar {
+  display: inline-flex;
+  gap: 0;
+  padding: 3px;
+  border: 1px solid var(--color-line-strong);
+  background: rgba(245, 240, 223, 0.82);
+}
+
+.preview-mode-button {
+  min-height: 34px;
+  min-width: 74px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.preview-mode-button.is-active {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.preview-canvas-stack {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+  max-width: min(100%, 1200px);
+  border: 1px solid rgba(31, 34, 35, 0.22);
+  box-shadow: 0 24px 80px rgba(31, 34, 35, 0.2);
+  background: var(--color-paper);
+  overflow: hidden;
+}
+
+.preview-canvas-stack canvas {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 170px);
+  width: auto;
+  height: auto;
+}
+
+.processed-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.preview-mode-processed .original-canvas {
+  visibility: hidden;
+}
+
+.preview-mode-original .processed-layer {
+  display: none;
+}
+
+.preview-mode-compare .processed-layer {
+  clip-path: inset(0 50% 0 0);
+}
+
+.compare-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background: rgba(245, 240, 223, 0.9);
+  box-shadow: 0 0 0 1px rgba(31, 34, 35, 0.22);
+}
+
+.compare-label {
+  position: absolute;
+  top: 12px;
+  z-index: 2;
+  background: rgba(31, 34, 35, 0.82);
+  color: var(--color-paper);
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 9px;
+}
+
+.compare-label-processed {
+  left: 12px;
+}
+
+.compare-label-original {
+  right: 12px;
+}
+
+.empty-state {
+  width: min(520px, 100%);
+  min-height: 320px;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  padding: 28px;
+  border: 1px dashed var(--color-line-strong);
+  background: rgba(255, 255, 255, 0.36);
+  text-align: center;
+}
+
+.empty-state strong {
+  font-size: 22px;
+}
+
+.empty-state span {
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+.inspector dl {
+  display: grid;
+  gap: 14px;
+  margin: 22px 0 0;
+}
+
+.inspector dl div {
+  border-bottom: 1px solid var(--color-line);
+  padding-bottom: 12px;
+}
+
+.inspector dt {
+  color: var(--color-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.inspector dd {
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+
+.paper-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.paper-swatch {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--color-line-strong);
+  flex: 0 0 auto;
+}
+
+.status {
+  margin: 24px 0 0;
+  color: var(--color-muted);
+  line-height: 1.55;
+}
+
+.control-group {
+  display: grid;
+  gap: 16px;
+}
+
+.control-section {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.control-section h3,
+.channel-card h4 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.channel-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.channel-list {
+  display: grid;
+  gap: 14px;
+}
+
+.channel-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-line);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.channel-card-header,
+.channel-card h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.channel-card-header {
+  justify-content: space-between;
+}
+
+.control {
+  display: grid;
+  gap: 8px;
+}
+
+.control span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.control strong {
+  font-size: 13px;
+}
+
+.control em {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.control input,
+.control select {
+  width: 100%;
+}
+
+.text-control input,
+.select-control select {
+  min-height: 34px;
+  border: 1px solid var(--color-line-strong);
+  background: rgba(255, 255, 255, 0.32);
+  color: var(--color-ink);
+  padding: 0 8px;
+}
+
+.color-control input {
+  width: 100%;
+  height: 34px;
+  border: 1px solid var(--color-line-strong);
+  background: transparent;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.toggle-control input {
+  justify-self: end;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+}
+
+@media (max-width: 900px) {
+  body {
+    overflow: auto;
+  }
+
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .topbar,
+  .workspace {
+    display: block;
+  }
+
+  .workspace {
+    overflow: visible;
+  }
+
+  .topbar-actions {
+    justify-content: flex-start;
+    margin-top: 18px;
+  }
+
+  .sidebar,
+  .inspector {
+    border: 0;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .canvas-stage {
+    min-height: 420px;
+    padding: 18px;
+  }
+
+  .preview-toolbar {
+    width: min(100%, 320px);
+  }
+
+  .preview-mode-button {
+    flex: 1;
+    min-width: 0;
+  }
+}

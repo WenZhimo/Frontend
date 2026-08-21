@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="620" viewBox="0 0 900 620" role="img" aria-label="Street lines test fixture">
+  <rect width="900" height="620" fill="#e8dfcd"/>
+  <rect x="80" y="86" width="250" height="410" fill="#b9b2a2"/>
+  <rect x="350" y="54" width="210" height="452" fill="#c9bea7"/>
+  <rect x="590" y="118" width="220" height="388" fill="#aeb8b4"/>
+  <g fill="#f0eadb">
+    <rect x="120" y="130" width="52" height="70"/>
+    <rect x="216" y="130" width="52" height="70"/>
+    <rect x="120" y="236" width="52" height="70"/>
+    <rect x="216" y="236" width="52" height="70"/>
+    <rect x="392" y="100" width="48" height="74"/>
+    <rect x="470" y="100" width="48" height="74"/>
+    <rect x="392" y="216" width="48" height="74"/>
+    <rect x="470" y="216" width="48" height="74"/>
+    <rect x="638" y="170" width="50" height="72"/>
+    <rect x="724" y="170" width="50" height="72"/>
+    <rect x="638" y="290" width="50" height="72"/>
+    <rect x="724" y="290" width="50" height="72"/>
+  </g>
+  <path d="M0 520 L900 520" stroke="#5c625f" stroke-width="30"/>
+  <path d="M112 620 L384 520 L520 620" fill="#817565" opacity="0.72"/>
+  <path d="M468 620 L584 520 L806 620" fill="#958775" opacity="0.55"/>
+  <path d="M80 505 L812 505" stroke="#f2df7c" stroke-width="8" stroke-dasharray="38 26"/>
+  <path d="M52 118 L836 506" stroke="#4d696f" stroke-width="7" opacity="0.6"/>
+  <path d="M840 96 L126 506" stroke="#9a4336" stroke-width="5" opacity="0.62"/>
+</svg>

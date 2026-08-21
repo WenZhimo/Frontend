@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600" role="img" aria-label="Portrait test fixture">
+  <rect width="800" height="600" fill="#eadbc4"/>
+  <rect x="96" y="72" width="608" height="456" rx="26" fill="#d7c7aa"/>
+  <circle cx="400" cy="250" r="96" fill="#d89b72"/>
+  <path d="M312 230 C328 116 478 112 492 230 C464 176 344 178 312 230Z" fill="#49352e"/>
+  <ellipse cx="368" cy="256" rx="13" ry="9" fill="#2f2a27"/>
+  <ellipse cx="432" cy="256" rx="13" ry="9" fill="#2f2a27"/>
+  <path d="M398 266 C388 292 390 302 412 304" fill="none" stroke="#b96e58" stroke-width="8" stroke-linecap="round"/>
+  <path d="M356 326 C386 350 422 350 452 326" fill="none" stroke="#8f3d37" stroke-width="9" stroke-linecap="round"/>
+  <path d="M260 528 C286 422 336 374 400 374 C464 374 514 422 540 528Z" fill="#497580"/>
+  <path d="M320 438 C356 468 444 468 480 438" fill="none" stroke="#f0d4bb" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="258" cy="186" r="42" fill="#c9583b" opacity="0.72"/>
+  <circle cx="560" cy="188" r="32" fill="#d8a526" opacity="0.72"/>
+</svg>

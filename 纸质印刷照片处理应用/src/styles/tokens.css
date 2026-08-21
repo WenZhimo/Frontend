@@ -1,0 +1,10 @@
+:root {
+  --color-page: #e8e0ca;
+  --color-paper: #f5f0df;
+  --color-panel: #eee6d4;
+  --color-ink: #1f2223;
+  --color-muted: #65706b;
+  --color-line: rgba(31, 34, 35, 0.14);
+  --color-line-strong: rgba(31, 34, 35, 0.32);
+  --color-accent: #d84a24;
+}

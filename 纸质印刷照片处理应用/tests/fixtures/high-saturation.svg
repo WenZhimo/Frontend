@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="560" viewBox="0 0 840 560" role="img" aria-label="High saturation test fixture">
+  <rect width="840" height="560" fill="#f0dfb5"/>
+  <rect x="80" y="80" width="680" height="400" rx="24" fill="#1f7d8b"/>
+  <circle cx="236" cy="232" r="100" fill="#e23c23"/>
+  <circle cx="384" cy="330" r="116" fill="#f2c423"/>
+  <circle cx="548" cy="232" r="102" fill="#236fd2"/>
+  <circle cx="620" cy="350" r="76" fill="#41a855"/>
+  <path d="M164 418 C270 334 342 420 464 322 C560 246 648 304 706 214" fill="none" stroke="#f06b37" stroke-width="38" stroke-linecap="round"/>
+  <path d="M126 144 L724 424" stroke="#7a2b8f" stroke-width="34" opacity="0.82"/>
+  <path d="M720 138 L150 430" stroke="#f4e85c" stroke-width="18" opacity="0.86"/>
+</svg>

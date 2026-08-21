@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="560" viewBox="0 0 840 560" role="img" aria-label="Low contrast test fixture">
+  <rect width="840" height="560" fill="#d8d0c1"/>
+  <rect x="84" y="82" width="672" height="396" rx="22" fill="#cfc7b8"/>
+  <circle cx="270" cy="254" r="96" fill="#c8bfae"/>
+  <circle cx="418" cy="220" r="118" fill="#d5cab8"/>
+  <circle cx="552" cy="304" r="108" fill="#c4bcad"/>
+  <path d="M142 410 C260 320 342 386 456 312 C558 246 630 318 708 258" fill="none" stroke="#b8b09f" stroke-width="34" stroke-linecap="round"/>
+  <path d="M112 178 C238 214 372 172 520 198 C616 214 674 194 744 176" fill="none" stroke="#dfd6c7" stroke-width="22" stroke-linecap="round"/>
+  <rect x="186" y="150" width="470" height="260" fill="none" stroke="#b9b1a3" stroke-width="10" opacity="0.6"/>
+</svg>
