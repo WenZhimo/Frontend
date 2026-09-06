@@ -43,6 +43,7 @@ export const WEAPONS = {
   laser:    { name: '弹弹激光枪', feed: 'stack', tint: '#00D6FF', melee: false, rate: 0.15, ammo: 18, pellets: 1, spread: 0.01, speed: 1320, noise: 300, kick: 2, ricochet: true, bounces: 6, shieldDmg: 1, life: 2.7, eSpeed: 900, eRate: 1.05, eBurst: 2 },
   butcher:  { name: '屠夫之触',  feed: 'none',   tint: '#E40808', melee: true,  reach: 52, rate: 0.2, ammo: 0, lethal: true, noise: 88, throwLethal: true, sawLauncher: true, sawRate: 2.25 },
   sawblade: { name: '电锯片',    feed: 'none',   tint: '#161513', melee: false, rate: 0, ammo: 0, throwSpeed: 980, noise: 150, kick: 0, throwLethal: true, blade: true, life: 14, noPickup: true },
+  virus:    { name: '传染病毒',  feed: 'none',   tint: '#7AC943', melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, offhandOnly: true, passive: true, noThrow: true, throwLethal: false },
   shield:   { name: '盾牌',      feed: 'none',   tint: '#12A3DA', melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, defense: true, shieldArc: 1.34, durability: 5, noThrow: true, throwLethal: false },
 };
 
@@ -121,12 +122,12 @@ export function makePools() {
       seeking: 0, skx: 0, sky: 0, blockFlash: 0, stagger: 0, look: 0, heldShieldHp: 0,
       armour: 0, segs: 0, layers: 0, shieldHp: 0, shieldSeg: 0,
       roomGoal: -1, roomSeq: 0,
-      friendly: false, converted: false,
+      friendly: false, converted: false, contagious: false,
     })),
     corpses: mk(MAX_CORPSES, () => ({
       alive: false, type: 'thug', weapon: 'fists', x: 0, y: 0, vx: 0, vy: 0, angle: 0,
       state: S_DEAD, deadAngle: 0, t: 0, armour: 0, segs: 0, layers: 0, shieldHp: 0,
-      shieldSeg: 0, friendly: false,
+      shieldSeg: 0, friendly: false, contagious: false, wave: 0,
     })),
     bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
     pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: 'pistol', ammo: 0, angle: 0 })),
@@ -261,6 +262,7 @@ export function updateEnemy(game, e, dt) {
     e.scanT = 0.35;
     for (const o of game.pools.corpses || []) {
       if (!o.alive) continue;
+      if (game.mode === 'defense' && o.wave !== (game.defense?.wave || 0)) continue;
       if (!!o.friendly !== !!e.friendly) continue;
       if (dist(e.x, e.y, o.x, o.y) > 230) continue;
       if (!canSee(level, e, def, o.x, o.y)) continue;
@@ -474,7 +476,7 @@ export function updateEnemy(game, e, dt) {
         game.damageShield(victim, 1, false, e.x, e.y);
         e.fireTimer = 0.28;
       } else if (w.lethal || e.type === 'hound' || victim.state === S_DOWN) {
-        game.killEnemy(victim, 1, Math.cos(a), Math.sin(a), true);
+        game.killEnemy(victim, 1, Math.cos(a), Math.sin(a), true, e);
       } else {
         game.knockdownEnemy(victim, Math.cos(a), Math.sin(a));
       }

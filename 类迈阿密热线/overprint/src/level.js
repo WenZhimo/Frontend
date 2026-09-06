@@ -349,8 +349,8 @@ export function makeLevel(seed, floorNum) {
     const r = pool[(i * 3 + 1) % pool.length];
     const p = freeSpot(r);
     const kinds = floorNum < 3
-      ? ['bat', 'knife', 'katana', 'quixote', 'pistol', 'pistol', 'smg', 'grenade', 'sentryPack', 'molotov', 'dart', 'tameDart', 'disguise', 'shield', 'shield', 'shield']
-      : ['bat', 'knife', 'knife', 'katana', 'katana', 'quixote', 'pistol', 'pistol', 'revolver', 'smg', 'smg', 'ripper', 'shotgun', 'grenade', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'molotov', 'dart', 'tameDart', 'disguise', 'sniper', 'laser', 'butcher', 'shield', 'shield', 'shield', 'shield'];
+      ? ['bat', 'knife', 'katana', 'quixote', 'pistol', 'pistol', 'smg', 'grenade', 'sentryPack', 'molotov', 'dart', 'tameDart', 'virus', 'disguise', 'shield', 'shield', 'shield']
+      : ['bat', 'knife', 'knife', 'katana', 'katana', 'quixote', 'pistol', 'pistol', 'revolver', 'smg', 'smg', 'ripper', 'shotgun', 'grenade', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'molotov', 'dart', 'tameDart', 'virus', 'disguise', 'sniper', 'laser', 'butcher', 'shield', 'shield', 'shield', 'shield'];
     pickupSpawns.push({ x: p.x, y: p.y, kind: rng.pick(kinds) });
   }
 
@@ -645,46 +645,8 @@ function makeStaticLevel(seed, kind = 'arena', mode = 'practice', enemyKind = 's
   const doorAt = new Map();
   const windows = [];
   const windowAt = new Map();
-  const addDoor = (gx, gy, horiz, hinge) => {
-    if (gx <= 0 || gy <= 0 || gx >= gw - 1 || gy >= gh - 1) return false;
-    const i = at(gx, gy);
-    if (doorAt.has(i) || tiles[i] !== T_FLOOR) return false;
-    const p = toWorld(gx, gy);
-    tiles[i] = T_DOOR;
-    const d = { gx, gy, i, x: p.x, y: p.y, horiz, hinge, open: 0, slam: 0, swing: 1 };
-    doors.push(d);
-    doorAt.set(i, d);
-    return true;
-  };
 
-  if (mode === 'defense' && roomIndex) {
-    const outsideRoom = (gx, gy, id) => gx >= 0 && gy >= 0 && gx < gw && gy < gh && roomIndex[at(gx, gy)] !== id;
-    const maybeDoorRun = (cells, horiz) => {
-      if (!cells.length) return;
-      const c = cells[(cells.length / 2) | 0];
-      addDoor(c.gx, c.gy, horiz, rng.chance(0.5) ? 1 : -1);
-    };
-    for (const r of rooms) {
-      for (const side of [
-        { horiz: true,  dx: 0, dy: -1, cells: Array.from({ length: r.w }, (_, i) => ({ gx: r.x + i, gy: r.y })) },
-        { horiz: true,  dx: 0, dy: 1,  cells: Array.from({ length: r.w }, (_, i) => ({ gx: r.x + i, gy: r.y + r.h - 1 })) },
-        { horiz: false, dx: -1, dy: 0, cells: Array.from({ length: r.h }, (_, i) => ({ gx: r.x, gy: r.y + i })) },
-        { horiz: false, dx: 1,  dy: 0, cells: Array.from({ length: r.h }, (_, i) => ({ gx: r.x + r.w - 1, gy: r.y + i })) },
-      ]) {
-        let run = [];
-        for (const c of side.cells) {
-          const outX = c.gx + side.dx, outY = c.gy + side.dy;
-          const qualifies = tiles[at(c.gx, c.gy)] === T_FLOOR
-            && roomIndex[at(c.gx, c.gy)] === r.id
-            && outsideRoom(outX, outY, r.id)
-            && tiles[at(outX, outY)] === T_FLOOR;
-          if (qualifies) run.push(c);
-          else { maybeDoorRun(run, side.horiz); run = []; }
-        }
-        maybeDoorRun(run, side.horiz);
-      }
-    }
-  }
+  // Defense mode keeps rooms open. Doors remain a normal-floor feature only.
 
   const solidAt = (x, y) => {
     const gx = (x / TILE) | 0, gy = (y / TILE) | 0;

@@ -339,6 +339,13 @@ export function createRenderer(canvas) {
         g.beginPath(); g.moveTo(18, 0); g.lineTo(10, -3.8); g.lineTo(10, 3.8); g.closePath(); g.fill();
         g.fillRect(-8, -4.5, 3, 9);
         break;
+      case 'virus':
+        g.lineWidth = 1.8;
+        g.beginPath(); g.arc(1, 0, 7, 0, TAU); g.stroke();
+        g.beginPath(); g.arc(-2, -2, 2, 0, TAU); g.arc(4, 3, 2.4, 0, TAU); g.fill();
+        g.fillRect(0, -10, 2, 20);
+        g.fillRect(-9, -1, 20, 2);
+        break;
       default: break;
     }
   }

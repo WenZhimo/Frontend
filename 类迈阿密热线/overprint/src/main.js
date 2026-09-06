@@ -8,7 +8,7 @@ import { initAudio, setMuted, isMuted } from './audio.js';
 
 // Bumped on every edit and printed in the corner. If the number on screen is
 // not the number the server reports, you are looking at a cached page.
-export const BUILD_ID = '184171';
+export const BUILD_ID = '184172';
 console.log('[overprint] build', BUILD_ID);
 if (window.buildTitle) window.buildTitle('版本 ' + BUILD_ID);
 
@@ -68,6 +68,7 @@ addEventListener('keydown', (e) => {
   }
   if (KEYMAP[e.code]) { inp[KEYMAP[e.code]] = true; e.preventDefault(); }
   if (e.code === 'Space') { inp.dash = true; e.preventDefault(); }
+  if (e.code === 'KeyE' && !e.repeat && game.state === 'play') { inp.swap = true; e.preventDefault(); }
   if (e.code === 'KeyQ') { inp.throwHeld = true; e.preventDefault(); }
   if (e.code === 'Backspace' && game.state === 'play') { e.preventDefault(); game.restartFloor(); }
   if (e.code === 'KeyM') { initAudio(); setMuted(!isMuted()); }
@@ -138,7 +139,7 @@ addEventListener('blur', () => {
   codexDrag = null;
   inp.up = inp.down = inp.left = inp.right = false;
   inp.fire = false; inp.fireReleased = false;
-  inp.throwHeld = false; inp.throwReleased = false; inp.throwIt = false;
+  inp.throwHeld = false; inp.throwReleased = false; inp.throwIt = false; inp.swap = false;
 });
 
 // ---------------------------------------------------------------------------

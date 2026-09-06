@@ -13,7 +13,7 @@ import { initAudio, sfx, setTimeScale } from './audio.js';
 import { YELLOW } from './brand.js';
 import { ZOOM } from './render.js';
 
-const WEAPON_KEYS = ['fists', 'knife', 'bat', 'katana', 'quixote', 'pistol', 'revolver', 'smg', 'shotgun', 'ripper', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'disguise', 'sniper', 'laser', 'butcher', 'shield'];
+const WEAPON_KEYS = ['fists', 'knife', 'bat', 'katana', 'quixote', 'pistol', 'revolver', 'smg', 'shotgun', 'ripper', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'disguise', 'sniper', 'laser', 'butcher', 'shield'];
 const CODEX_WEAPON_KEYS = WEAPON_KEYS.filter((k) => k !== 'fists');
 const ENEMY_KEYS = ['strawman', 'thug', 'gunner', 'hound', 'patroller', 'shield'];
 const PRACTICE_MAPS = [
@@ -22,8 +22,8 @@ const PRACTICE_MAPS = [
   { id: 'lanes', label: '长廊' },
 ];
 const PRACTICE_ENEMIES = ['strawman', 'thug', 'gunner', 'hound', 'patroller', 'shield'];
-const PRACTICE_WEAPONS = ['pistol', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'disguise', 'sniper', 'laser', 'butcher', 'shield', 'katana', 'quixote', 'knife', 'bat'];
-const DEFENSE_SHOP_WEAPONS = ['pistol', 'shield', 'katana', 'quixote', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'shield', 'molotov', 'dart', 'sniper', 'laser', 'butcher', 'shield'];
+const PRACTICE_WEAPONS = ['pistol', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'disguise', 'sniper', 'laser', 'butcher', 'shield', 'katana', 'quixote', 'knife', 'bat'];
+const DEFENSE_SHOP_WEAPONS = ['pistol', 'shield', 'katana', 'quixote', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'virus', 'shield', 'molotov', 'dart', 'sniper', 'laser', 'butcher', 'shield'];
 const CODEX_KEY = 'overprint.codex';
 
 // Slow motion is punctuation, not a stance. It fires on moments worth watching,
@@ -49,6 +49,10 @@ const DEFENSE_REST_SECONDS = 120;
 
 function loadoutFor(kind) {
   const w = WEAPONS[kind] || WEAPONS.fists;
+  if (w.offhandOnly) {
+    const paired = kind === 'virus' ? 'tameDart' : 'fists';
+    return { weapon: paired, ammo: WEAPONS[paired]?.ammo || 0, offhand: kind, offAmmo: 0 };
+  }
   return { weapon: kind || 'fists', ammo: w.melee ? 0 : (w.ammo || 0) };
 }
 
@@ -172,14 +176,14 @@ export function createGame(renderer) {
     input: {
       up: false, down: false, left: false, right: false,
       fire: false, dash: false,
-      fireReleased: false, throwIt: false, throwHeld: false, throwReleased: false, mx: 0, my: 0,
+      fireReleased: false, throwIt: false, throwHeld: false, throwReleased: false, swap: false, mx: 0, my: 0,
       buy: null,
       analog: false, axisX: 0, axisY: 0, hasAim: false, aimAngle: 0,
     },
     player: {
       x: 0, y: 0, vx: 0, vy: 0, aim: 0, alive: true,
-      weapon: 'fists', ammo: 0,
-      attackCd: 0, swing: 0, burnT: 0, sawCd: 0, blockFlash: 0,
+      weapon: 'fists', ammo: 0, offhandWeapon: 'fists', offhandAmmo: 0,
+      attackCd: 0, swing: 0, burnT: 0, sawCd: 0, blockFlash: 0, swapCd: 0,
       hp: 1, maxHp: 1, iframes: 0,
       dashCharges: MAX_DASH, maxDash: MAX_DASH, dashCd: 0, dashCdMax: DASH_CD, dashT: 0, dashX: 0, dashY: 0,
       katanaT: 0, katanaMax: 0, katanaX: 0, katanaY: 0,
@@ -849,7 +853,7 @@ export function createGame(renderer) {
     for (const k of game.pools.pickups) {
       if (!k.alive) continue;
       const w = WEAPONS[k.kind];
-      if (!w || w.lobbed) continue;
+      if (!w || w.lobbed || w.offhandOnly || w.passive) continue;
       const d = dist(e.x, e.y, k.x, k.y);
       if (d * d < bd) { bd = d * d; best = k; }
     }
@@ -863,7 +867,7 @@ export function createGame(renderer) {
     for (const k of game.pools.pickups) {
       if (!k.alive) continue;
       const w = WEAPONS[k.kind];
-      if (!w || w.lobbed) continue;
+      if (!w || w.lobbed || w.offhandOnly || w.passive) continue;
       if (dist(e.x, e.y, k.x, k.y) > 22) continue;
       e.weapon = k.kind; e.ammo = k.ammo || WEAPONS[k.kind].ammo;
       e.heldShieldHp = w.defense ? (w.durability || 5) : 0;
@@ -1146,31 +1150,78 @@ export function createGame(renderer) {
     const i = game.input;
     i.up = false; i.down = false; i.left = false; i.right = false;
     i.fire = false; i.fireReleased = false; i.dash = false;
-    i.throwIt = false; i.throwHeld = false; i.throwReleased = false;
+    i.throwIt = false; i.throwHeld = false; i.throwReleased = false; i.swap = false;
     i.buy = null;
     i.analog = false; i.axisX = 0; i.axisY = 0;
     game.throwCharge = 0; game.throwPreview = null;
   }
 
+  function storedSlot(kind, ammo = 0) {
+    const w = WEAPONS[kind];
+    if (!w || kind === 'fists') return { weapon: 'fists', ammo: 0 };
+    return {
+      weapon: kind,
+      ammo: w.melee ? 0 : clamp(Number(ammo) || 0, 0, w.ammo || 0),
+    };
+  }
+
+  function setMainSlot(p, kind, ammo = 0) {
+    const slot = storedSlot(kind, ammo);
+    p.weapon = slot.weapon;
+    p.ammo = slot.ammo;
+    if (slot.weapon !== 'fists') game.recordWeapon(slot.weapon);
+    return slot.weapon !== 'fists';
+  }
+
+  function setOffhandSlot(p, kind, ammo = 0) {
+    const slot = storedSlot(kind, ammo);
+    p.offhandWeapon = slot.weapon;
+    p.offhandAmmo = slot.ammo;
+    if (slot.weapon !== 'fists') game.recordWeapon(slot.weapon);
+    return slot.weapon !== 'fists';
+  }
+
+  function playerHasOffhand(kind) {
+    return game.player.offhandWeapon === kind;
+  }
+
+  function givePlayerWeapon(p, kind, ammo = WEAPONS[kind]?.ammo || 0, replaceOffhand = false) {
+    const w = WEAPONS[kind];
+    if (!w || kind === 'fists') return false;
+    if (w.offhandOnly) {
+      if (p.offhandWeapon !== 'fists' && !replaceOffhand) return false;
+      if (p.offhandWeapon !== 'fists') placePickup(p.x, p.y, p.offhandWeapon, p.offhandAmmo, p.aim + Math.PI);
+      return setOffhandSlot(p, kind, ammo);
+    }
+    if (p.weapon === 'fists') return setMainSlot(p, kind, ammo);
+    if (p.offhandWeapon === 'fists') return setOffhandSlot(p, kind, ammo);
+    if (!replaceOffhand) return false;
+    placePickup(p.x, p.y, p.offhandWeapon, p.offhandAmmo, p.aim + Math.PI);
+    return setOffhandSlot(p, kind, ammo);
+  }
+
   function stashPlayerWeapon() {
     const p = game.player;
     const w = WEAPONS[p.weapon];
-    if (!w || p.weapon === 'fists') return null;
+    const ow = WEAPONS[p.offhandWeapon];
+    if ((!w || p.weapon === 'fists') && (!ow || p.offhandWeapon === 'fists')) return null;
     return {
-      weapon: p.weapon,
-      ammo: w.melee ? 0 : clamp(p.ammo || 0, 0, w.ammo),
+      weapon: w && p.weapon !== 'fists' ? p.weapon : 'fists',
+      ammo: w && !w.melee ? clamp(p.ammo || 0, 0, w.ammo || 0) : 0,
+      offhand: ow && p.offhandWeapon !== 'fists' ? p.offhandWeapon : 'fists',
+      offAmmo: ow && !ow.melee ? clamp(p.offhandAmmo || 0, 0, ow.ammo || 0) : 0,
     };
   }
 
   function equipPlayerWeapon(p, carried) {
-    p.weapon = 'fists';
-    p.ammo = 0;
-    if (!carried || carried.weapon === 'fists') return;
-    const w = WEAPONS[carried.weapon];
-    if (!w) return;
-    p.weapon = carried.weapon;
-    p.ammo = w.melee ? 0 : clamp(Number(carried.ammo) || 0, 0, w.ammo);
-    game.recordWeapon(p.weapon);
+    setMainSlot(p, 'fists', 0);
+    setOffhandSlot(p, 'fists', 0);
+    if (!carried) return;
+    const main = carried.weapon || 'fists';
+    const offhand = carried.offhand || carried.sideWeapon || 'fists';
+    if (WEAPONS[main]?.offhandOnly) setOffhandSlot(p, main, carried.ammo);
+    else setMainSlot(p, main, carried.ammo);
+    if (offhand !== 'fists') setOffhandSlot(p, offhand, carried.offAmmo ?? carried.sideAmmo);
   }
 
   function choosePreviewSeed() {
@@ -1295,6 +1346,8 @@ export function createGame(renderer) {
     c.shieldHp = e.shieldHp || 0;
     c.shieldSeg = e.shieldSeg || 0;
     c.friendly = !!e.friendly;
+    c.contagious = !!e.contagious;
+    c.wave = game.mode === 'defense' ? (game.defense.wave || 0) : game.floor;
     return c;
   }
 
@@ -1324,7 +1377,7 @@ export function createGame(renderer) {
     e.stuckT = 0; e.lastX = s.x; e.lastY = s.y; e.scanT = rnd() * 0.4; e.reload = 0;
     e.madT = 0; e.burnT = 0;
     e.roomGoal = -1; e.roomSeq = 0;
-    e.friendly = false; e.converted = false;
+    e.friendly = false; e.converted = false; e.contagious = false;
     game.recordEnemy(e.type);
     return e;
   }
@@ -1368,7 +1421,7 @@ export function createGame(renderer) {
     p.iframes = 0;
     p.maxDash = game.playerStats.maxDash || MAX_DASH;
     p.dashCdMax = game.playerStats.dashCd || DASH_CD;
-    p.attackCd = 0; p.swing = 0; p.burnT = 0; p.sawCd = 0; p.blockFlash = 0;
+    p.attackCd = 0; p.swing = 0; p.burnT = 0; p.sawCd = 0; p.blockFlash = 0; p.swapCd = 0;
     p.dashCharges = p.maxDash; p.dashCd = 0; p.dashT = 0;
     p.katanaT = 0; p.katanaMax = 0; p.katanaX = 0; p.katanaY = 0;
     p.trail.length = 0;
@@ -1484,11 +1537,34 @@ export function createGame(renderer) {
     announceClear();
   }
 
-  function killEnemy(e, power = 1, dx = 0, dy = 0, byEnemy = false) {
+  function killEnemy(e, power = 1, dx = 0, dy = 0, byEnemy = false, source = null) {
     if (!e.alive || e.state === S_DEAD) return false;
     const x = e.x, y = e.y;
     const wasFriendly = !!e.friendly;
     const execution = e.state === S_DOWN;
+    const infected = !wasFriendly && !!(source && source.friendly && source.contagious);
+    if (infected) {
+      e.friendly = true;
+      e.converted = true;
+      e.contagious = true;
+      e.madT = 0;
+      e.burnT = 0;
+      e.state = S_CHASE;
+      e.seeking = 0;
+      e.seen = 1;
+      e.searchT = Math.max(e.searchT || 0, 7.5);
+      e.lkx = source.x || x;
+      e.lky = source.y || y;
+      e.vx = dx * 160;
+      e.vy = dy * 160;
+      e.stagger = Math.max(e.stagger || 0, 0.22);
+      registerKill(x, y, power, execution ? 2 : 1, dx, dy, true);
+      burst(x, y, 18, 230, WEAPONS.virus.tint, 2.7, 0.55);
+      burst(x, y, 8, 140, '#8A2BE2', 2.1, 0.42);
+      game.banner = '病毒扩散';
+      game.bannerT = 0.65;
+      return true;
+    }
     e.state = S_DEAD;
     e.deadAngle = e.angle;
     addCorpse(e);
@@ -1496,6 +1572,7 @@ export function createGame(renderer) {
     e.burnT = 0;
     e.friendly = false;
     e.converted = false;
+    e.contagious = false;
     e.vx = e.vy = 0;
     game.dropWeapon(e, true);
     e.alive = false;
@@ -1651,6 +1728,88 @@ export function createGame(renderer) {
     return Math.max(20, (w.slashRadius || 22) + 6);
   }
 
+  function katanaSwapSlash() {
+    const p = game.player;
+    const w = WEAPONS.katana;
+    const sx = p.x + Math.cos(p.aim) * 14;
+    const sy = p.y + Math.sin(p.aim) * 14;
+    const dx = Math.cos(p.aim);
+    const dy = Math.sin(p.aim);
+    const range = 430;
+    let ex = sx + dx * range;
+    let ey = sy + dy * range;
+    for (let i = 1; i <= 32; i++) {
+      const t = i / 32;
+      const x = sx + dx * range * t;
+      const y = sy + dy * range * t;
+      if (game.level.sightBlockedAt(x, y)) {
+        ex = sx + dx * range * (i - 1) / 32;
+        ey = sy + dy * range * (i - 1) / 32;
+        break;
+      }
+    }
+    p.katanaX = dx;
+    p.katanaY = dy;
+    let kills = 0;
+    for (const e of game.pools.enemies) {
+      if (!e.alive || e.state === S_DEAD || e.friendly) continue;
+      const def = ENEMY_DEF[e.type] || ENEMY_DEF.thug;
+      const hit = pointSegmentInfo(e.x, e.y, sx, sy, ex, ey);
+      if (hit.d > 23 + def.r) continue;
+      if (!blastClear(sx, sy, e.x, e.y)) continue;
+      if (killEnemy(e, 1.18, dx, dy)) kills++;
+    }
+    for (let i = 0; i <= 9; i++) {
+      const t = i / 9;
+      const x = sx + (ex - sx) * t;
+      const y = sy + (ey - sy) * t;
+      particle(x, y, -dy * 70 + (rnd() - 0.5) * 55, dx * 70 + (rnd() - 0.5) * 55,
+        0.22 + rnd() * 0.12, 3.3, w.tint);
+    }
+    game.flashes.push({ x: (sx + ex) / 2, y: (sy + ey) / 2, a: p.aim, t: 0, dur: 0.16, size: 1.45 });
+    burst(sx, sy, 7, 190, w.tint, 2.5, 0.34);
+    noise(p.x, p.y, 92, w.tint);
+    shake(kills ? 6 : 3);
+    triggerSlow(kills ? 'katana' : 'execute');
+    sfx.swing();
+    return kills;
+  }
+
+  function swapPlayerWeapon() {
+    const p = game.player;
+    const incoming = WEAPONS[p.offhandWeapon];
+    if (game.state !== 'play' || game.paused || !p.alive) return false;
+    if (p.swapCd > 0 || p.katanaT > 0 || p.dashT > 0) { sfx.empty(); return false; }
+    if (!incoming || p.offhandWeapon === 'fists') {
+      game.banner = '副手为空';
+      game.bannerT = 0.55;
+      sfx.empty();
+      return false;
+    }
+    if (incoming.offhandOnly) {
+      game.banner = `${incoming.name} 为副手被动`;
+      game.bannerT = 0.65;
+      sfx.empty();
+      return false;
+    }
+    const main = storedSlot(p.weapon, p.ammo);
+    const side = storedSlot(p.offhandWeapon, p.offhandAmmo);
+    setMainSlot(p, side.weapon, side.ammo);
+    setOffhandSlot(p, main.weapon, main.ammo);
+    p.swapCd = 0.26;
+    p.attackCd = Math.min(p.attackCd, 0.08);
+    p.swing = 0;
+    game.throwCharge = 0;
+    game.throwPreview = null;
+    game.floorLoadout = stashPlayerWeapon() || game.floorLoadout;
+    game.banner = `切出 ${WEAPONS[p.weapon].name}`;
+    game.bannerT = 0.58;
+    if (p.weapon === 'katana') katanaSwapSlash();
+    else sfx.pickup();
+    return true;
+  }
+  game.swapPlayerWeapon = swapPlayerWeapon;
+
   function maddenEnemy(e, seconds, x, y) {
     if (!e.alive || e.state === S_DEAD) return false;
     e.madT = Math.max(e.madT || 0, seconds || 6.5);
@@ -1670,6 +1829,7 @@ export function createGame(renderer) {
     if (!e.alive || e.state === S_DEAD || e.friendly) return false;
     e.friendly = true;
     e.converted = true;
+    e.contagious = playerHasOffhand('virus');
     e.madT = 0;
     e.state = S_CHASE;
     e.seeking = 0;
@@ -1694,7 +1854,7 @@ export function createGame(renderer) {
     game.enemiesLeft = hostilesLeft();
     burst(e.x, e.y, 18, 210, '#8A2BE2', 2.8, 0.62);
     burst(e.x, e.y, 8, 120, '#F7CF16', 1.9, 0.4);
-    game.banner = '已驯服';
+    game.banner = e.contagious ? '已驯服 · 传染' : '已驯服';
     game.bannerT = 0.65;
     sfx.status();
     announceClear();
@@ -2350,6 +2510,11 @@ export function createGame(renderer) {
       p.dashCd -= dt;
       if (p.dashCd <= 0) { p.dashCharges++; p.dashCd = dashCdMax; }
     }
+    if (p.swapCd > 0) p.swapCd = Math.max(0, p.swapCd - dt);
+    if (inp.swap) {
+      inp.swap = false;
+      if (swapPlayerWeapon()) game.didAttack = true;
+    }
     if (inp.dash && p.dashCharges > 0 && p.dashT <= 0 && p.katanaT <= 0) {
       inp.dash = false;
       const dx = ix || Math.cos(p.aim), dy = iy || Math.sin(p.aim);
@@ -2425,16 +2590,18 @@ export function createGame(renderer) {
 
     const currentHeld = WEAPONS[p.weapon] || WEAPONS.fists;
     if (inp.fire && !currentHeld.lobbed && !currentHeld.katana && !currentHeld.lance && p.katanaT <= 0) { playerAttack(); game.didAttack = true; }
-    if (p.weapon === 'fists') {
-      for (const k of game.pools.pickups) {
-        if (!k.alive) continue;
-        if (dist(p.x, p.y, k.x, k.y) < 20) {
-          p.weapon = k.kind; p.ammo = k.ammo; k.alive = false;
-          game.recordWeapon(p.weapon);
-          if (game.mode === 'defense') game.floorLoadout = stashPlayerWeapon();
-          sfx.pickup();
-          break;
-        }
+    for (const k of game.pools.pickups) {
+      if (!k.alive) continue;
+      if (dist(p.x, p.y, k.x, k.y) < 20) {
+        const took = givePlayerWeapon(p, k.kind, k.ammo, false);
+        if (!took) continue;
+        k.alive = false;
+        if (game.mode === 'defense') game.floorLoadout = stashPlayerWeapon();
+        const got = WEAPONS[k.kind];
+        game.banner = got?.offhandOnly || p.offhandWeapon === k.kind ? `副手 ${got.name}` : `拾取 ${got?.name || k.kind}`;
+        game.bannerT = 0.55;
+        sfx.pickup();
+        break;
       }
     }
   }
@@ -2569,7 +2736,7 @@ export function createGame(renderer) {
           }
           if (b.explosive) { detonateBullet(b); stop = true; break; }
           if (bw && bw.rail) {
-            killEnemy(e, 1.25, b.vx / sp, b.vy / sp, byOtherSide);
+            killEnemy(e, 1.25, b.vx / sp, b.vy / sp, byOtherSide, b.owner);
             continue;
           }
           if (shieldBlocks(e, fx, fy)) {
@@ -2590,7 +2757,7 @@ export function createGame(renderer) {
               e.blockFlash = 0.25;
               burst(fx, fy, 8, 220, '#161513', 2.4, 0.35);
               sfx.splinter();
-              killEnemy(e, 1.1, b.vx / sp0, b.vy / sp0, byOtherSide);
+              killEnemy(e, 1.1, b.vx / sp0, b.vy / sp0, byOtherSide, b.owner);
             } else {
               damageShield(e, b.shieldDmg ?? 1, false, fx, fy);
             }
@@ -2607,7 +2774,7 @@ export function createGame(renderer) {
             b.alive = false; stop = true;
             break;
           }
-          killEnemy(e, 0.9, b.vx / sp, b.vy / sp, byOtherSide);
+          killEnemy(e, 0.9, b.vx / sp, b.vy / sp, byOtherSide, b.owner);
           if (b.pierce > 0) b.pierce--;
           else { b.alive = false; stop = true; }
           break;
@@ -2801,10 +2968,12 @@ export function createGame(renderer) {
     if (slot === 1) {
       const kind = shop.weapon;
       if (!spend(shop.costs.weapon)) return false;
-      equipPlayerWeapon(p, loadoutFor(kind));
+      givePlayerWeapon(p, kind, WEAPONS[kind].ammo || 0, true);
       game.floorLoadout = stashPlayerWeapon();
       game.defense.shopIndex++;
-      game.banner = `购买 ${WEAPONS[kind].name}`;
+      game.banner = WEAPONS[kind].offhandOnly || p.offhandWeapon === kind
+        ? `购买副手 ${WEAPONS[kind].name}`
+        : `购买 ${WEAPONS[kind].name}`;
     } else if (slot === 2) {
       if (!spend(shop.costs.refresh)) return false;
       game.defense.shopIndex += 1 + Math.floor(rnd() * 4);

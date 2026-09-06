@@ -365,7 +365,7 @@
     for (let i = 0; i < weaponCount; i++) {
       const r = pool[(i * 3 + 1) % pool.length];
       const p = freeSpot(r);
-      const kinds = floorNum < 3 ? ["bat", "knife", "katana", "quixote", "pistol", "pistol", "smg", "grenade", "sentryPack", "molotov", "dart", "tameDart", "disguise", "shield", "shield", "shield"] : ["bat", "knife", "knife", "katana", "katana", "quixote", "pistol", "pistol", "revolver", "smg", "smg", "ripper", "shotgun", "grenade", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "molotov", "dart", "tameDart", "disguise", "sniper", "laser", "butcher", "shield", "shield", "shield", "shield"];
+      const kinds = floorNum < 3 ? ["bat", "knife", "katana", "quixote", "pistol", "pistol", "smg", "grenade", "sentryPack", "molotov", "dart", "tameDart", "virus", "disguise", "shield", "shield", "shield"] : ["bat", "knife", "knife", "katana", "katana", "quixote", "pistol", "pistol", "revolver", "smg", "smg", "ripper", "shotgun", "grenade", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "molotov", "dart", "tameDart", "virus", "disguise", "sniper", "laser", "butcher", "shield", "shield", "shield", "shield"];
       pickupSpawns.push({ x: p.x, y: p.y, kind: rng.pick(kinds) });
     }
     return {
@@ -711,45 +711,6 @@
     const doorAt = /* @__PURE__ */ new Map();
     const windows = [];
     const windowAt = /* @__PURE__ */ new Map();
-    const addDoor = (gx, gy, horiz, hinge) => {
-      if (gx <= 0 || gy <= 0 || gx >= gw - 1 || gy >= gh - 1) return false;
-      const i = at(gx, gy);
-      if (doorAt.has(i) || tiles[i] !== T_FLOOR) return false;
-      const p = toWorld(gx, gy);
-      tiles[i] = T_DOOR;
-      const d = { gx, gy, i, x: p.x, y: p.y, horiz, hinge, open: 0, slam: 0, swing: 1 };
-      doors.push(d);
-      doorAt.set(i, d);
-      return true;
-    };
-    if (mode === "defense" && roomIndex) {
-      const outsideRoom = (gx, gy, id) => gx >= 0 && gy >= 0 && gx < gw && gy < gh && roomIndex[at(gx, gy)] !== id;
-      const maybeDoorRun = (cells, horiz) => {
-        if (!cells.length) return;
-        const c = cells[cells.length / 2 | 0];
-        addDoor(c.gx, c.gy, horiz, rng.chance(0.5) ? 1 : -1);
-      };
-      for (const r of rooms) {
-        for (const side of [
-          { horiz: true, dx: 0, dy: -1, cells: Array.from({ length: r.w }, (_, i) => ({ gx: r.x + i, gy: r.y })) },
-          { horiz: true, dx: 0, dy: 1, cells: Array.from({ length: r.w }, (_, i) => ({ gx: r.x + i, gy: r.y + r.h - 1 })) },
-          { horiz: false, dx: -1, dy: 0, cells: Array.from({ length: r.h }, (_, i) => ({ gx: r.x, gy: r.y + i })) },
-          { horiz: false, dx: 1, dy: 0, cells: Array.from({ length: r.h }, (_, i) => ({ gx: r.x + r.w - 1, gy: r.y + i })) }
-        ]) {
-          let run = [];
-          for (const c of side.cells) {
-            const outX = c.gx + side.dx, outY = c.gy + side.dy;
-            const qualifies = tiles[at(c.gx, c.gy)] === T_FLOOR && roomIndex[at(c.gx, c.gy)] === r.id && outsideRoom(outX, outY, r.id) && tiles[at(outX, outY)] === T_FLOOR;
-            if (qualifies) run.push(c);
-            else {
-              maybeDoorRun(run, side.horiz);
-              run = [];
-            }
-          }
-          maybeDoorRun(run, side.horiz);
-        }
-      }
-    }
     const solidAt = (x, y) => {
       const gx = x / TILE | 0, gy = y / TILE | 0;
       if (gx < 0 || gy < 0 || gx >= gw || gy >= gh) return true;
@@ -958,7 +919,8 @@
         roomGoal: -1,
         roomSeq: 0,
         friendly: false,
-        converted: false
+        converted: false,
+        contagious: false
       })),
       corpses: mk(MAX_CORPSES, () => ({
         alive: false,
@@ -977,7 +939,9 @@
         layers: 0,
         shieldHp: 0,
         shieldSeg: 0,
-        friendly: false
+        friendly: false,
+        contagious: false,
+        wave: 0
       })),
       bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
       pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: "pistol", ammo: 0, angle: 0 })),
@@ -1100,6 +1064,7 @@
       e.scanT = 0.35;
       for (const o of game2.pools.corpses || []) {
         if (!o.alive) continue;
+        if (game2.mode === "defense" && o.wave !== (game2.defense?.wave || 0)) continue;
         if (!!o.friendly !== !!e.friendly) continue;
         if (dist(e.x, e.y, o.x, o.y) > 230) continue;
         if (!canSee(level, e, def, o.x, o.y)) continue;
@@ -1323,7 +1288,7 @@
           game2.damageShield(victim, 1, false, e.x, e.y);
           e.fireTimer = 0.28;
         } else if (w.lethal || e.type === "hound" || victim.state === S_DOWN) {
-          game2.killEnemy(victim, 1, Math.cos(a), Math.sin(a), true);
+          game2.killEnemy(victim, 1, Math.cos(a), Math.sin(a), true, e);
         } else {
           game2.knockdownEnemy(victim, Math.cos(a), Math.sin(a));
         }
@@ -1388,6 +1353,7 @@
         laser: { name: "\u5F39\u5F39\u6FC0\u5149\u67AA", feed: "stack", tint: "#00D6FF", melee: false, rate: 0.15, ammo: 18, pellets: 1, spread: 0.01, speed: 1320, noise: 300, kick: 2, ricochet: true, bounces: 6, shieldDmg: 1, life: 2.7, eSpeed: 900, eRate: 1.05, eBurst: 2 },
         butcher: { name: "\u5C60\u592B\u4E4B\u89E6", feed: "none", tint: "#E40808", melee: true, reach: 52, rate: 0.2, ammo: 0, lethal: true, noise: 88, throwLethal: true, sawLauncher: true, sawRate: 2.25 },
         sawblade: { name: "\u7535\u952F\u7247", feed: "none", tint: "#161513", melee: false, rate: 0, ammo: 0, throwSpeed: 980, noise: 150, kick: 0, throwLethal: true, blade: true, life: 14, noPickup: true },
+        virus: { name: "\u4F20\u67D3\u75C5\u6BD2", feed: "none", tint: "#7AC943", melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, offhandOnly: true, passive: true, noThrow: true, throwLethal: false },
         shield: { name: "\u76FE\u724C", feed: "none", tint: "#12A3DA", melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, defense: true, shieldArc: 1.34, durability: 5, noThrow: true, throwLethal: false }
       };
       ENEMY_DEF = {
@@ -1875,6 +1841,18 @@
           g.closePath();
           g.fill();
           g.fillRect(-8, -4.5, 3, 9);
+          break;
+        case "virus":
+          g.lineWidth = 1.8;
+          g.beginPath();
+          g.arc(1, 0, 7, 0, TAU);
+          g.stroke();
+          g.beginPath();
+          g.arc(-2, -2, 2, 0, TAU);
+          g.arc(4, 3, 2.4, 0, TAU);
+          g.fill();
+          g.fillRect(0, -10, 2, 20);
+          g.fillRect(-9, -1, 20, 2);
           break;
         default:
           break;
@@ -3445,7 +3423,7 @@
   };
 
   // overprint/src/game.js
-  var WEAPON_KEYS = ["fists", "knife", "bat", "katana", "quixote", "pistol", "revolver", "smg", "shotgun", "ripper", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "disguise", "sniper", "laser", "butcher", "shield"];
+  var WEAPON_KEYS = ["fists", "knife", "bat", "katana", "quixote", "pistol", "revolver", "smg", "shotgun", "ripper", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "virus", "disguise", "sniper", "laser", "butcher", "shield"];
   var CODEX_WEAPON_KEYS = WEAPON_KEYS.filter((k) => k !== "fists");
   var ENEMY_KEYS = ["strawman", "thug", "gunner", "hound", "patroller", "shield"];
   var PRACTICE_MAPS = [
@@ -3454,8 +3432,8 @@
     { id: "lanes", label: "\u957F\u5ECA" }
   ];
   var PRACTICE_ENEMIES = ["strawman", "thug", "gunner", "hound", "patroller", "shield"];
-  var PRACTICE_WEAPONS = ["pistol", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "disguise", "sniper", "laser", "butcher", "shield", "katana", "quixote", "knife", "bat"];
-  var DEFENSE_SHOP_WEAPONS = ["pistol", "shield", "katana", "quixote", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "shield", "molotov", "dart", "sniper", "laser", "butcher", "shield"];
+  var PRACTICE_WEAPONS = ["pistol", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "virus", "disguise", "sniper", "laser", "butcher", "shield", "katana", "quixote", "knife", "bat"];
+  var DEFENSE_SHOP_WEAPONS = ["pistol", "shield", "katana", "quixote", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "virus", "shield", "molotov", "dart", "sniper", "laser", "butcher", "shield"];
   var CODEX_KEY = "overprint.codex";
   var SLOW = {
     dash: { dur: 0.17, scale: 0.34 },
@@ -3477,6 +3455,10 @@
   var DEFENSE_REST_SECONDS = 120;
   function loadoutFor(kind) {
     const w = WEAPONS[kind] || WEAPONS.fists;
+    if (w.offhandOnly) {
+      const paired = kind === "virus" ? "tameDart" : "fists";
+      return { weapon: paired, ammo: WEAPONS[paired]?.ammo || 0, offhand: kind, offAmmo: 0 };
+    }
     return { weapon: kind || "fists", ammo: w.melee ? 0 : w.ammo || 0 };
   }
   function freshCodex() {
@@ -3657,6 +3639,7 @@
         throwIt: false,
         throwHeld: false,
         throwReleased: false,
+        swap: false,
         mx: 0,
         my: 0,
         buy: null,
@@ -3675,11 +3658,14 @@
         alive: true,
         weapon: "fists",
         ammo: 0,
+        offhandWeapon: "fists",
+        offhandAmmo: 0,
         attackCd: 0,
         swing: 0,
         burnT: 0,
         sawCd: 0,
         blockFlash: 0,
+        swapCd: 0,
         hp: 1,
         maxHp: 1,
         iframes: 0,
@@ -4339,7 +4325,7 @@
       for (const k of game2.pools.pickups) {
         if (!k.alive) continue;
         const w = WEAPONS[k.kind];
-        if (!w || w.lobbed) continue;
+        if (!w || w.lobbed || w.offhandOnly || w.passive) continue;
         const d = dist(e.x, e.y, k.x, k.y);
         if (d * d < bd) {
           bd = d * d;
@@ -4360,7 +4346,7 @@
       for (const k of game2.pools.pickups) {
         if (!k.alive) continue;
         const w = WEAPONS[k.kind];
-        if (!w || w.lobbed) continue;
+        if (!w || w.lobbed || w.offhandOnly || w.passive) continue;
         if (dist(e.x, e.y, k.x, k.y) > 22) continue;
         e.weapon = k.kind;
         e.ammo = k.ammo || WEAPONS[k.kind].ammo;
@@ -4640,6 +4626,7 @@
       i.throwIt = false;
       i.throwHeld = false;
       i.throwReleased = false;
+      i.swap = false;
       i.buy = null;
       i.analog = false;
       i.axisX = 0;
@@ -4647,24 +4634,66 @@
       game2.throwCharge = 0;
       game2.throwPreview = null;
     }
+    function storedSlot(kind, ammo = 0) {
+      const w = WEAPONS[kind];
+      if (!w || kind === "fists") return { weapon: "fists", ammo: 0 };
+      return {
+        weapon: kind,
+        ammo: w.melee ? 0 : clamp(Number(ammo) || 0, 0, w.ammo || 0)
+      };
+    }
+    function setMainSlot(p, kind, ammo = 0) {
+      const slot = storedSlot(kind, ammo);
+      p.weapon = slot.weapon;
+      p.ammo = slot.ammo;
+      if (slot.weapon !== "fists") game2.recordWeapon(slot.weapon);
+      return slot.weapon !== "fists";
+    }
+    function setOffhandSlot(p, kind, ammo = 0) {
+      const slot = storedSlot(kind, ammo);
+      p.offhandWeapon = slot.weapon;
+      p.offhandAmmo = slot.ammo;
+      if (slot.weapon !== "fists") game2.recordWeapon(slot.weapon);
+      return slot.weapon !== "fists";
+    }
+    function playerHasOffhand(kind) {
+      return game2.player.offhandWeapon === kind;
+    }
+    function givePlayerWeapon(p, kind, ammo = WEAPONS[kind]?.ammo || 0, replaceOffhand = false) {
+      const w = WEAPONS[kind];
+      if (!w || kind === "fists") return false;
+      if (w.offhandOnly) {
+        if (p.offhandWeapon !== "fists" && !replaceOffhand) return false;
+        if (p.offhandWeapon !== "fists") placePickup(p.x, p.y, p.offhandWeapon, p.offhandAmmo, p.aim + Math.PI);
+        return setOffhandSlot(p, kind, ammo);
+      }
+      if (p.weapon === "fists") return setMainSlot(p, kind, ammo);
+      if (p.offhandWeapon === "fists") return setOffhandSlot(p, kind, ammo);
+      if (!replaceOffhand) return false;
+      placePickup(p.x, p.y, p.offhandWeapon, p.offhandAmmo, p.aim + Math.PI);
+      return setOffhandSlot(p, kind, ammo);
+    }
     function stashPlayerWeapon() {
       const p = game2.player;
       const w = WEAPONS[p.weapon];
-      if (!w || p.weapon === "fists") return null;
+      const ow = WEAPONS[p.offhandWeapon];
+      if ((!w || p.weapon === "fists") && (!ow || p.offhandWeapon === "fists")) return null;
       return {
-        weapon: p.weapon,
-        ammo: w.melee ? 0 : clamp(p.ammo || 0, 0, w.ammo)
+        weapon: w && p.weapon !== "fists" ? p.weapon : "fists",
+        ammo: w && !w.melee ? clamp(p.ammo || 0, 0, w.ammo || 0) : 0,
+        offhand: ow && p.offhandWeapon !== "fists" ? p.offhandWeapon : "fists",
+        offAmmo: ow && !ow.melee ? clamp(p.offhandAmmo || 0, 0, ow.ammo || 0) : 0
       };
     }
     function equipPlayerWeapon(p, carried) {
-      p.weapon = "fists";
-      p.ammo = 0;
-      if (!carried || carried.weapon === "fists") return;
-      const w = WEAPONS[carried.weapon];
-      if (!w) return;
-      p.weapon = carried.weapon;
-      p.ammo = w.melee ? 0 : clamp(Number(carried.ammo) || 0, 0, w.ammo);
-      game2.recordWeapon(p.weapon);
+      setMainSlot(p, "fists", 0);
+      setOffhandSlot(p, "fists", 0);
+      if (!carried) return;
+      const main = carried.weapon || "fists";
+      const offhand = carried.offhand || carried.sideWeapon || "fists";
+      if (WEAPONS[main]?.offhandOnly) setOffhandSlot(p, main, carried.ammo);
+      else setMainSlot(p, main, carried.ammo);
+      if (offhand !== "fists") setOffhandSlot(p, offhand, carried.offAmmo ?? carried.sideAmmo);
     }
     function choosePreviewSeed() {
       const next = previewRunSeed();
@@ -4785,6 +4814,8 @@
       c.shieldHp = e.shieldHp || 0;
       c.shieldSeg = e.shieldSeg || 0;
       c.friendly = !!e.friendly;
+      c.contagious = !!e.contagious;
+      c.wave = game2.mode === "defense" ? game2.defense.wave || 0 : game2.floor;
       return c;
     }
     function spawnEnemy(s) {
@@ -4846,6 +4877,7 @@
       e.roomSeq = 0;
       e.friendly = false;
       e.converted = false;
+      e.contagious = false;
       game2.recordEnemy(e.type);
       return e;
     }
@@ -4903,6 +4935,7 @@
       p.burnT = 0;
       p.sawCd = 0;
       p.blockFlash = 0;
+      p.swapCd = 0;
       p.dashCharges = p.maxDash;
       p.dashCd = 0;
       p.dashT = 0;
@@ -5011,11 +5044,34 @@
       }
       announceClear();
     }
-    function killEnemy(e, power = 1, dx = 0, dy = 0, byEnemy = false) {
+    function killEnemy(e, power = 1, dx = 0, dy = 0, byEnemy = false, source = null) {
       if (!e.alive || e.state === S_DEAD) return false;
       const x = e.x, y = e.y;
       const wasFriendly = !!e.friendly;
       const execution = e.state === S_DOWN;
+      const infected = !wasFriendly && !!(source && source.friendly && source.contagious);
+      if (infected) {
+        e.friendly = true;
+        e.converted = true;
+        e.contagious = true;
+        e.madT = 0;
+        e.burnT = 0;
+        e.state = S_CHASE;
+        e.seeking = 0;
+        e.seen = 1;
+        e.searchT = Math.max(e.searchT || 0, 7.5);
+        e.lkx = source.x || x;
+        e.lky = source.y || y;
+        e.vx = dx * 160;
+        e.vy = dy * 160;
+        e.stagger = Math.max(e.stagger || 0, 0.22);
+        registerKill(x, y, power, execution ? 2 : 1, dx, dy, true);
+        burst(x, y, 18, 230, WEAPONS.virus.tint, 2.7, 0.55);
+        burst(x, y, 8, 140, "#8A2BE2", 2.1, 0.42);
+        game2.banner = "\u75C5\u6BD2\u6269\u6563";
+        game2.bannerT = 0.65;
+        return true;
+      }
       e.state = S_DEAD;
       e.deadAngle = e.angle;
       addCorpse(e);
@@ -5023,6 +5079,7 @@
       e.burnT = 0;
       e.friendly = false;
       e.converted = false;
+      e.contagious = false;
       e.vx = e.vy = 0;
       game2.dropWeapon(e, true);
       e.alive = false;
@@ -5173,6 +5230,96 @@
     function radiusFrom(w) {
       return Math.max(20, (w.slashRadius || 22) + 6);
     }
+    function katanaSwapSlash() {
+      const p = game2.player;
+      const w = WEAPONS.katana;
+      const sx = p.x + Math.cos(p.aim) * 14;
+      const sy = p.y + Math.sin(p.aim) * 14;
+      const dx = Math.cos(p.aim);
+      const dy = Math.sin(p.aim);
+      const range = 430;
+      let ex = sx + dx * range;
+      let ey = sy + dy * range;
+      for (let i = 1; i <= 32; i++) {
+        const t = i / 32;
+        const x = sx + dx * range * t;
+        const y = sy + dy * range * t;
+        if (game2.level.sightBlockedAt(x, y)) {
+          ex = sx + dx * range * (i - 1) / 32;
+          ey = sy + dy * range * (i - 1) / 32;
+          break;
+        }
+      }
+      p.katanaX = dx;
+      p.katanaY = dy;
+      let kills = 0;
+      for (const e of game2.pools.enemies) {
+        if (!e.alive || e.state === S_DEAD || e.friendly) continue;
+        const def = ENEMY_DEF[e.type] || ENEMY_DEF.thug;
+        const hit = pointSegmentInfo(e.x, e.y, sx, sy, ex, ey);
+        if (hit.d > 23 + def.r) continue;
+        if (!blastClear(sx, sy, e.x, e.y)) continue;
+        if (killEnemy(e, 1.18, dx, dy)) kills++;
+      }
+      for (let i = 0; i <= 9; i++) {
+        const t = i / 9;
+        const x = sx + (ex - sx) * t;
+        const y = sy + (ey - sy) * t;
+        particle(
+          x,
+          y,
+          -dy * 70 + (rnd() - 0.5) * 55,
+          dx * 70 + (rnd() - 0.5) * 55,
+          0.22 + rnd() * 0.12,
+          3.3,
+          w.tint
+        );
+      }
+      game2.flashes.push({ x: (sx + ex) / 2, y: (sy + ey) / 2, a: p.aim, t: 0, dur: 0.16, size: 1.45 });
+      burst(sx, sy, 7, 190, w.tint, 2.5, 0.34);
+      noise(p.x, p.y, 92, w.tint);
+      shake(kills ? 6 : 3);
+      triggerSlow(kills ? "katana" : "execute");
+      sfx.swing();
+      return kills;
+    }
+    function swapPlayerWeapon() {
+      const p = game2.player;
+      const incoming = WEAPONS[p.offhandWeapon];
+      if (game2.state !== "play" || game2.paused || !p.alive) return false;
+      if (p.swapCd > 0 || p.katanaT > 0 || p.dashT > 0) {
+        sfx.empty();
+        return false;
+      }
+      if (!incoming || p.offhandWeapon === "fists") {
+        game2.banner = "\u526F\u624B\u4E3A\u7A7A";
+        game2.bannerT = 0.55;
+        sfx.empty();
+        return false;
+      }
+      if (incoming.offhandOnly) {
+        game2.banner = `${incoming.name} \u4E3A\u526F\u624B\u88AB\u52A8`;
+        game2.bannerT = 0.65;
+        sfx.empty();
+        return false;
+      }
+      const main = storedSlot(p.weapon, p.ammo);
+      const side = storedSlot(p.offhandWeapon, p.offhandAmmo);
+      setMainSlot(p, side.weapon, side.ammo);
+      setOffhandSlot(p, main.weapon, main.ammo);
+      p.swapCd = 0.26;
+      p.attackCd = Math.min(p.attackCd, 0.08);
+      p.swing = 0;
+      game2.throwCharge = 0;
+      game2.throwPreview = null;
+      game2.floorLoadout = stashPlayerWeapon() || game2.floorLoadout;
+      game2.banner = `\u5207\u51FA ${WEAPONS[p.weapon].name}`;
+      game2.bannerT = 0.58;
+      if (p.weapon === "katana") katanaSwapSlash();
+      else sfx.pickup();
+      return true;
+    }
+    game2.swapPlayerWeapon = swapPlayerWeapon;
     function maddenEnemy(e, seconds, x, y) {
       if (!e.alive || e.state === S_DEAD) return false;
       e.madT = Math.max(e.madT || 0, seconds || 6.5);
@@ -5191,6 +5338,7 @@
       if (!e.alive || e.state === S_DEAD || e.friendly) return false;
       e.friendly = true;
       e.converted = true;
+      e.contagious = playerHasOffhand("virus");
       e.madT = 0;
       e.state = S_CHASE;
       e.seeking = 0;
@@ -5214,7 +5362,7 @@
       game2.enemiesLeft = hostilesLeft();
       burst(e.x, e.y, 18, 210, "#8A2BE2", 2.8, 0.62);
       burst(e.x, e.y, 8, 120, "#F7CF16", 1.9, 0.4);
-      game2.banner = "\u5DF2\u9A6F\u670D";
+      game2.banner = e.contagious ? "\u5DF2\u9A6F\u670D \xB7 \u4F20\u67D3" : "\u5DF2\u9A6F\u670D";
       game2.bannerT = 0.65;
       sfx.status();
       announceClear();
@@ -5933,6 +6081,11 @@
           p.dashCd = dashCdMax;
         }
       }
+      if (p.swapCd > 0) p.swapCd = Math.max(0, p.swapCd - dt);
+      if (inp2.swap) {
+        inp2.swap = false;
+        if (swapPlayerWeapon()) game2.didAttack = true;
+      }
       if (inp2.dash && p.dashCharges > 0 && p.dashT <= 0 && p.katanaT <= 0) {
         inp2.dash = false;
         const dx = ix || Math.cos(p.aim), dy = iy || Math.sin(p.aim);
@@ -6012,18 +6165,18 @@
         playerAttack();
         game2.didAttack = true;
       }
-      if (p.weapon === "fists") {
-        for (const k of game2.pools.pickups) {
-          if (!k.alive) continue;
-          if (dist(p.x, p.y, k.x, k.y) < 20) {
-            p.weapon = k.kind;
-            p.ammo = k.ammo;
-            k.alive = false;
-            game2.recordWeapon(p.weapon);
-            if (game2.mode === "defense") game2.floorLoadout = stashPlayerWeapon();
-            sfx.pickup();
-            break;
-          }
+      for (const k of game2.pools.pickups) {
+        if (!k.alive) continue;
+        if (dist(p.x, p.y, k.x, k.y) < 20) {
+          const took = givePlayerWeapon(p, k.kind, k.ammo, false);
+          if (!took) continue;
+          k.alive = false;
+          if (game2.mode === "defense") game2.floorLoadout = stashPlayerWeapon();
+          const got = WEAPONS[k.kind];
+          game2.banner = got?.offhandOnly || p.offhandWeapon === k.kind ? `\u526F\u624B ${got.name}` : `\u62FE\u53D6 ${got?.name || k.kind}`;
+          game2.bannerT = 0.55;
+          sfx.pickup();
+          break;
         }
       }
     }
@@ -6167,7 +6320,7 @@
               break;
             }
             if (bw && bw.rail) {
-              killEnemy(e, 1.25, b.vx / sp, b.vy / sp, byOtherSide);
+              killEnemy(e, 1.25, b.vx / sp, b.vy / sp, byOtherSide, b.owner);
               continue;
             }
             if (shieldBlocks(e, fx, fy)) {
@@ -6186,7 +6339,7 @@
                 e.blockFlash = 0.25;
                 burst(fx, fy, 8, 220, "#161513", 2.4, 0.35);
                 sfx.splinter();
-                killEnemy(e, 1.1, b.vx / sp0, b.vy / sp0, byOtherSide);
+                killEnemy(e, 1.1, b.vx / sp0, b.vy / sp0, byOtherSide, b.owner);
               } else {
                 damageShield(e, b.shieldDmg ?? 1, false, fx, fy);
               }
@@ -6206,7 +6359,7 @@
               stop = true;
               break;
             }
-            killEnemy(e, 0.9, b.vx / sp, b.vy / sp, byOtherSide);
+            killEnemy(e, 0.9, b.vx / sp, b.vy / sp, byOtherSide, b.owner);
             if (b.pierce > 0) b.pierce--;
             else {
               b.alive = false;
@@ -6421,10 +6574,10 @@
       if (slot === 1) {
         const kind = shop.weapon;
         if (!spend(shop.costs.weapon)) return false;
-        equipPlayerWeapon(p, loadoutFor(kind));
+        givePlayerWeapon(p, kind, WEAPONS[kind].ammo || 0, true);
         game2.floorLoadout = stashPlayerWeapon();
         game2.defense.shopIndex++;
-        game2.banner = `\u8D2D\u4E70 ${WEAPONS[kind].name}`;
+        game2.banner = WEAPONS[kind].offhandOnly || p.offhandWeapon === kind ? `\u8D2D\u4E70\u526F\u624B ${WEAPONS[kind].name}` : `\u8D2D\u4E70 ${WEAPONS[kind].name}`;
       } else if (slot === 2) {
         if (!spend(shop.costs.refresh)) return false;
         game2.defense.shopIndex += 1 + Math.floor(rnd() * 4);
@@ -7045,6 +7198,7 @@
     "molotov",
     "dart",
     "tameDart",
+    "virus",
     "disguise",
     "sniper",
     "laser",
@@ -7071,6 +7225,7 @@
     molotov: "\u843D\u5730\u71C3\u70E7\uFF0C\u7559\u4E0B\u6301\u7EED\u4F24\u5BB3\u533A\u57DF\u3002",
     dart: "\u65E0\u58F0\u75AF\u72C2\u6BD2\u9556\uFF0C\u4F7F\u654C\u4EBA\u65E0\u5DEE\u522B\u653B\u51FB\u3002",
     tameDart: "\u65E0\u58F0\u9A6F\u670D\u6BD2\u9556\uFF0C\u628A\u654C\u4EBA\u62C9\u5230\u4F60\u8FD9\u8FB9\u3002",
+    virus: "\u526F\u624B\u88AB\u52A8\uFF1A\u9A6F\u670D\u6BD2\u9556\u8F6C\u5316\u7684\u53CB\u519B\u51FB\u6740\u540E\u7EE7\u7EED\u4F20\u67D3\u3002",
     disguise: "\u6697\u6740\u7528\u67AA\uFF0C\u964D\u4F4E\u88AB\u8BC6\u7834\u7684\u538B\u529B\u3002",
     sniper: "\u8D85\u9AD8\u901F\u7A7F\u900F\u5F39\uFF0C\u7EA2\u5916\u7EBF\u6807\u51FA\u5F39\u9053\u3002",
     laser: "\u53EF\u53CD\u5F39\u80FD\u91CF\u5F39\uFF0C\u9002\u5408\u62D0\u89D2\u3002",
@@ -7324,8 +7479,9 @@
     drawDefenseHud(g, game2, W);
     drawKatanaDash(g, game2, W);
     const w = WEAPONS[p.weapon];
-    const WX = 22, WY = H - 92, WW = 208;
-    card(g, WX - PAD * 0.7, WY - 12, WW + PAD, 78);
+    const off = WEAPONS[p.offhandWeapon] || WEAPONS.fists;
+    const WX = 22, WY = H - 110, WW = 208;
+    card(g, WX - PAD * 0.7, WY - 12, WW + PAD, 96);
     g.save();
     g.globalCompositeOperation = "multiply";
     g.lineWidth = 1;
@@ -7347,10 +7503,22 @@
       g.textAlign = "left";
       track(g, 0);
     }
+    g.fillStyle = off.tint || ink(0.42);
+    track(g, 0.09);
+    g.font = `400 ${T_MICRO}px ${MONO}`;
+    const offName = off === WEAPONS.fists ? "\u7A7A" : off.name;
+    const offAmmo = off.feed && off.feed !== "none" ? ` ${p.offhandAmmo}/${off.ammo}` : "";
+    g.fillText(`\u526F\u624B ${offName}${offAmmo}`, WX, WY + 19, WW - 58);
+    g.textAlign = "right";
+    g.fillStyle = p.offhandWeapon !== "fists" && !off.offhandOnly ? M2 : ink(0.36);
+    const offAction = p.offhandWeapon === "fists" ? "\u7A7A" : off.offhandOnly ? "\u88AB\u52A8" : "E \u5207\u6362";
+    g.fillText(offAction, WX + WW, WY + 19);
+    g.textAlign = "left";
+    track(g, 0);
     g.fillStyle = ink(0.42);
     track(g, 0.09);
     g.font = `400 ${T_MICRO}px ${MONO}`;
-    g.fillText("\u51B2\u523A", WX, WY + 19);
+    g.fillText("\u51B2\u523A", WX, WY + 35);
     track(g, 0);
     const maxDash = p.maxDash || MAX_DASH;
     const dashCdMax = p.dashCdMax || DASH_CD;
@@ -7359,15 +7527,15 @@
       const bx = WX + WW - (maxDash - i) * (dw + 5) + 5;
       if (i < p.dashCharges) {
         g.fillStyle = game2.dashFlash > 0 ? M2 : INK3;
-        bar(g, bx, WY + 13, dw, BAR, true);
+        bar(g, bx, WY + 29, dw, BAR, true);
       } else if (i === p.dashCharges) {
-        gauge(g, bx, WY + 13, dw, BAR, clamp(1 - p.dashCd / dashCdMax, 0, 1), ink(0.26), ink(0.55));
+        gauge(g, bx, WY + 29, dw, BAR, clamp(1 - p.dashCd / dashCdMax, 0, 1), ink(0.26), ink(0.55));
       } else {
         g.strokeStyle = ink(0.26);
-        bar(g, bx, WY + 13, dw, BAR);
+        bar(g, bx, WY + 29, dw, BAR);
       }
     }
-    const BY = WY + 27, BH = 30;
+    const BY = WY + 43, BH = 30;
     if (w.feed && w.feed !== "none") {
       magazine(g, WX, BY, WW, BH, w.feed, p.ammo, w.ammo, INK3, ink(0.32));
     } else {
@@ -7576,6 +7744,18 @@
         g.closePath();
         g.fill();
         g.fillRect(-19, -7, 5, 14);
+        break;
+      case "virus":
+        g.lineWidth = 2.2;
+        g.beginPath();
+        g.arc(0, 0, 12, 0, TAU);
+        g.stroke();
+        g.beginPath();
+        g.arc(-4, -3, 3, 0, TAU);
+        g.arc(4, 2, 3.4, 0, TAU);
+        g.fill();
+        g.fillRect(-1, -16, 2, 32);
+        g.fillRect(-16, -1, 32, 2);
         break;
       case "disguise":
         g.fillRect(-10, -2.2, 20, 4.4);
@@ -8007,7 +8187,7 @@
     g.fillStyle = ink(0.55);
     g.font = `400 ${11.5 * k}px ${MONO}`;
     g.fillText("\u6709 404 \u4E2A\u969C\u788D\u6321\u5728\u8DEF\u4E0A\u3002\u6E05\u7406\u5B83\u4EEC\u3002", cx, cy + 82 * k);
-    const help = touch2 ? ["\u5DE6\u6447\u6746\u79FB\u52A8 \xB7 \u53F3\u6447\u6746\u7784\u51C6/\u653B\u51FB", "\u6309\u94AE\uFF1A\u51B2\u523A \xB7 \u6295\u63B7", "ESC \u6682\u505C \xB7 \u5F00\u542F\u540E\u53EF\u6309 R \u8865\u5F39"] : ["WASD \u79FB\u52A8 \xB7 \u9F20\u6807\u7784\u51C6 \xB7 \u70B9\u51FB\u653B\u51FB", "Space \u51B2\u523A \xB7 \u957F\u6309 Q/\u53F3\u952E\u6295\u63B7\u6B66\u5668", "\u624B\u96F7\u7C7B\u957F\u6309\u653B\u51FB\u6269\u5927\u8303\u56F4\u5E76\u9009\u62E9\u843D\u70B9 \xB7 R \u8865\u5F39 \xB7 ESC \u6682\u505C"];
+    const help = touch2 ? ["\u5DE6\u6447\u6746\u79FB\u52A8 \xB7 \u53F3\u6447\u6746\u7784\u51C6/\u653B\u51FB", "\u6309\u94AE\uFF1A\u51B2\u523A \xB7 \u6295\u63B7", "ESC \u6682\u505C \xB7 \u5F00\u542F\u540E\u53EF\u6309 R \u8865\u5F39"] : ["WASD \u79FB\u52A8 \xB7 \u9F20\u6807\u7784\u51C6 \xB7 \u70B9\u51FB\u653B\u51FB", "Space \u51B2\u523A \xB7 E \u5207\u6362\u4E3B\u526F\u624B \xB7 \u957F\u6309 Q/\u53F3\u952E\u6295\u63B7\u6B66\u5668", "\u624B\u96F7\u7C7B\u957F\u6309\u653B\u51FB\u6269\u5927\u8303\u56F4\u5E76\u9009\u62E9\u843D\u70B9 \xB7 R \u8865\u5F39 \xB7 ESC \u6682\u505C"];
     g.font = `400 ${9 * k}px ${MONO}`;
     g.fillStyle = ink(0.5);
     track(g, 0.08);
@@ -8029,7 +8209,7 @@
     if (!game2.tutorialT || game2.tutorialT <= 0) return;
     const a = clamp(game2.tutorialT / 1.2, 0, 1);
     const touch2 = game2.touch && game2.touch.enabled;
-    const line = touch2 ? "\u5DE6\u6447\u6746\u79FB\u52A8   \xB7   \u53F3\u6447\u6746\u8F6C\u5411\uFF0C\u63A8\u5230\u5E95\u653B\u51FB" : game2.mode === "defense" ? "\u9632\u5B88\uFF1A\u6CE2\u95F4\u6309 T/\u70B9\u51FB\u5546\u5E97\uFF0C\u6570\u5B57\u952E\u8D2D\u4E70\uFF0CENTER \u6216\u6309\u94AE\u7ED3\u675F\u4F11\u606F" : "WASD \u79FB\u52A8   \xB7   \u9F20\u6807\u7784\u51C6   \xB7   \u70B9\u51FB\u653B\u51FB   \xB7   Space \u51B2\u523A   \xB7   \u957F\u6309 Q/\u53F3\u952E\u84C4\u529B\u6295\u63B7   \xB7   R \u8865\u5F39   \xB7   ESC \u6682\u505C";
+    const line = touch2 ? "\u5DE6\u6447\u6746\u79FB\u52A8   \xB7   \u53F3\u6447\u6746\u8F6C\u5411\uFF0C\u63A8\u5230\u5E95\u653B\u51FB" : game2.mode === "defense" ? "\u9632\u5B88\uFF1AT/\u70B9\u51FB\u5546\u5E97\uFF0C\u6570\u5B57\u952E\u8D2D\u4E70\uFF0CE \u5207\u6362\u4E3B\u526F\u624B\uFF0CENTER \u6216\u6309\u94AE\u7ED3\u675F\u4F11\u606F" : "WASD \u79FB\u52A8   \xB7   \u9F20\u6807\u7784\u51C6   \xB7   \u70B9\u51FB\u653B\u51FB   \xB7   E \u5207\u6362\u4E3B\u526F\u624B   \xB7   Space \u51B2\u523A   \xB7   \u957F\u6309 Q/\u53F3\u952E\u84C4\u529B\u6295\u63B7   \xB7   R \u8865\u5F39   \xB7   ESC \u6682\u505C";
     g.save();
     g.textAlign = "center";
     g.font = `400 11px ${MONO}`;
@@ -8384,7 +8564,7 @@
   }
 
   // overprint/src/main.js
-  var BUILD_ID = "184171";
+  var BUILD_ID = "184172";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
   var canvas = document.getElementById("c");
@@ -8448,6 +8628,10 @@
     }
     if (e.code === "Space") {
       inp.dash = true;
+      e.preventDefault();
+    }
+    if (e.code === "KeyE" && !e.repeat && game.state === "play") {
+      inp.swap = true;
       e.preventDefault();
     }
     if (e.code === "KeyQ") {
@@ -8536,6 +8720,7 @@
     inp.throwHeld = false;
     inp.throwReleased = false;
     inp.throwIt = false;
+    inp.swap = false;
   });
   var claimForm = document.getElementById("claim");
   var claimName = document.getElementById("claimname");

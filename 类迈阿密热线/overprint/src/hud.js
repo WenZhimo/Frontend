@@ -63,7 +63,7 @@ const ENEMY_NAMES = {
 
 const CODEX_WEAPON_ORDER = [
   'knife', 'bat', 'katana', 'quixote', 'pistol', 'revolver', 'smg', 'shotgun', 'ripper', 'grenade', 'frag',
-  'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'disguise', 'sniper', 'laser', 'butcher', 'shield',
+  'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'disguise', 'sniper', 'laser', 'butcher', 'shield',
 ];
 const CODEX_ENEMY_ORDER = ['strawman', 'thug', 'gunner', 'hound', 'patroller', 'shield'];
 const WEAPON_DESC = {
@@ -85,6 +85,7 @@ const WEAPON_DESC = {
   molotov: '落地燃烧，留下持续伤害区域。',
   dart: '无声疯狂毒镖，使敌人无差别攻击。',
   tameDart: '无声驯服毒镖，把敌人拉到你这边。',
+  virus: '副手被动：驯服毒镖转化的友军击杀后继续传染。',
   disguise: '暗杀用枪，降低被识破的压力。',
   sniper: '超高速穿透弹，红外线标出弹道。',
   laser: '可反弹能量弹，适合拐角。',
@@ -372,8 +373,9 @@ export function drawHud(g, game, W, H) {
   // thing — the device the rounds sit in, drawn from behind and centred in it
   // — so the panel keeps its shape while the device inside it changes.
   const w = WEAPONS[p.weapon];
-  const WX = 22, WY = H - 92, WW = 208;
-  card(g, WX - PAD * 0.7, WY - 12, WW + PAD, 78);
+  const off = WEAPONS[p.offhandWeapon] || WEAPONS.fists;
+  const WX = 22, WY = H - 110, WW = 208;
+  card(g, WX - PAD * 0.7, WY - 12, WW + PAD, 96);
 
   g.save();
   g.globalCompositeOperation = 'multiply';
@@ -397,11 +399,25 @@ export function drawHud(g, game, W, H) {
     track(g, 0);
   }
 
-  // row two: the dash meter, labelled at the left and read from the right
+  // row two: the second weapon, stored until E brings it forward
+  g.fillStyle = off.tint || ink(0.42);
+  track(g, 0.09);
+  g.font = `400 ${T_MICRO}px ${MONO}`;
+  const offName = off === WEAPONS.fists ? '空' : off.name;
+  const offAmmo = off.feed && off.feed !== 'none' ? ` ${p.offhandAmmo}/${off.ammo}` : '';
+  g.fillText(`副手 ${offName}${offAmmo}`, WX, WY + 19, WW - 58);
+  g.textAlign = 'right';
+  g.fillStyle = p.offhandWeapon !== 'fists' && !off.offhandOnly ? M : ink(0.36);
+  const offAction = p.offhandWeapon === 'fists' ? '空' : off.offhandOnly ? '被动' : 'E 切换';
+  g.fillText(offAction, WX + WW, WY + 19);
+  g.textAlign = 'left';
+  track(g, 0);
+
+  // row three: the dash meter, labelled at the left and read from the right
   g.fillStyle = ink(0.42);
   track(g, 0.09);
   g.font = `400 ${T_MICRO}px ${MONO}`;
-  g.fillText('冲刺', WX, WY + 19);
+  g.fillText('冲刺', WX, WY + 35);
   track(g, 0);
   const maxDash = p.maxDash || MAX_DASH;
   const dashCdMax = p.dashCdMax || DASH_CD;
@@ -410,17 +426,17 @@ export function drawHud(g, game, W, H) {
     const bx = WX + WW - (maxDash - i) * (dw + 5) + 5;
     if (i < p.dashCharges) {
       g.fillStyle = game.dashFlash > 0 ? M : INK;
-      bar(g, bx, WY + 13, dw, BAR, true);
+      bar(g, bx, WY + 29, dw, BAR, true);
     } else if (i === p.dashCharges) {
-      gauge(g, bx, WY + 13, dw, BAR, clamp(1 - p.dashCd / dashCdMax, 0, 1), ink(0.26), ink(0.55));
+      gauge(g, bx, WY + 29, dw, BAR, clamp(1 - p.dashCd / dashCdMax, 0, 1), ink(0.26), ink(0.55));
     } else {
       g.strokeStyle = ink(0.26);
-      bar(g, bx, WY + 13, dw, BAR);
+      bar(g, bx, WY + 29, dw, BAR);
     }
   }
 
   // the band
-  const BY = WY + 27, BH = 30;
+  const BY = WY + 43, BH = 30;
   if (w.feed && w.feed !== 'none') {
     magazine(g, WX, BY, WW, BH, w.feed, p.ammo, w.ammo, INK, ink(0.32));
   } else {
@@ -565,6 +581,13 @@ function codexWeaponShape(g, kind) {
       g.beginPath(); g.moveTo(-17, 0); g.lineTo(17, 0); g.stroke();
       g.beginPath(); g.moveTo(20, 0); g.lineTo(8, -6); g.lineTo(8, 6); g.closePath(); g.fill();
       g.fillRect(-19, -7, 5, 14);
+      break;
+    case 'virus':
+      g.lineWidth = 2.2;
+      g.beginPath(); g.arc(0, 0, 12, 0, TAU); g.stroke();
+      g.beginPath(); g.arc(-4, -3, 3, 0, TAU); g.arc(4, 2, 3.4, 0, TAU); g.fill();
+      g.fillRect(-1, -16, 2, 32);
+      g.fillRect(-16, -1, 32, 2);
       break;
     case 'disguise':
       g.fillRect(-10, -2.2, 20, 4.4); g.fillRect(-7, 1, 5, 9); g.fillRect(5, -8, 5, 5);
@@ -1002,7 +1025,7 @@ export function drawTitle(g, game, W, H) {
 
   const help = touch
     ? ['左摇杆移动 · 右摇杆瞄准/攻击', '按钮：冲刺 · 投掷', 'ESC 暂停 · 开启后可按 R 补弹']
-    : ['WASD 移动 · 鼠标瞄准 · 点击攻击', 'Space 冲刺 · 长按 Q/右键投掷武器', '手雷类长按攻击扩大范围并选择落点 · R 补弹 · ESC 暂停'];
+    : ['WASD 移动 · 鼠标瞄准 · 点击攻击', 'Space 冲刺 · E 切换主副手 · 长按 Q/右键投掷武器', '手雷类长按攻击扩大范围并选择落点 · R 补弹 · ESC 暂停'];
   g.font = `400 ${9 * k}px ${MONO}`;
   g.fillStyle = ink(0.5);
   track(g, 0.08);
@@ -1033,8 +1056,8 @@ export function drawLegend(g, game, W, H) {
   const line = touch
     ? '左摇杆移动   ·   右摇杆转向，推到底攻击'
     : game.mode === 'defense'
-      ? '防守：波间按 T/点击商店，数字键购买，ENTER 或按钮结束休息'
-      : 'WASD 移动   ·   鼠标瞄准   ·   点击攻击   ·   Space 冲刺   ·   长按 Q/右键蓄力投掷   ·   R 补弹   ·   ESC 暂停';
+      ? '防守：T/点击商店，数字键购买，E 切换主副手，ENTER 或按钮结束休息'
+      : 'WASD 移动   ·   鼠标瞄准   ·   点击攻击   ·   E 切换主副手   ·   Space 冲刺   ·   长按 Q/右键蓄力投掷   ·   R 补弹   ·   ESC 暂停';
   g.save();
   g.textAlign = 'center';
   g.font = `400 11px ${MONO}`;
