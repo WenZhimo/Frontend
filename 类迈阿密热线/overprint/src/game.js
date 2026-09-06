@@ -13,7 +13,7 @@ import { initAudio, sfx, setTimeScale } from './audio.js';
 import { YELLOW } from './brand.js';
 import { ZOOM } from './render.js';
 
-const WEAPON_KEYS = ['fists', 'knife', 'bat', 'katana', 'quixote', 'pistol', 'revolver', 'smg', 'shotgun', 'ripper', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'disguise', 'sniper', 'laser', 'butcher', 'shield'];
+const WEAPON_KEYS = ['fists', 'knife', 'bat', 'katana', 'quixote', 'pistol', 'revolver', 'smg', 'shotgun', 'ripper', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'virusExtract', 'disguise', 'sniper', 'laser', 'butcher', 'shield'];
 const CODEX_WEAPON_KEYS = WEAPON_KEYS.filter((k) => k !== 'fists');
 const ENEMY_KEYS = ['strawman', 'thug', 'gunner', 'hound', 'patroller', 'shield'];
 const PRACTICE_MAPS = [
@@ -22,8 +22,8 @@ const PRACTICE_MAPS = [
   { id: 'lanes', label: '长廊' },
 ];
 const PRACTICE_ENEMIES = ['strawman', 'thug', 'gunner', 'hound', 'patroller', 'shield'];
-const PRACTICE_WEAPONS = ['pistol', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'disguise', 'sniper', 'laser', 'butcher', 'shield', 'katana', 'quixote', 'knife', 'bat'];
-const DEFENSE_SHOP_WEAPONS = ['pistol', 'shield', 'katana', 'quixote', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'virus', 'shield', 'molotov', 'dart', 'sniper', 'laser', 'butcher', 'shield'];
+const PRACTICE_WEAPONS = ['pistol', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'virusExtract', 'disguise', 'sniper', 'laser', 'butcher', 'shield', 'katana', 'quixote', 'knife', 'bat'];
+const DEFENSE_SHOP_WEAPONS = ['pistol', 'shield', 'katana', 'quixote', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'virus', 'copySauce', 'shield', 'molotov', 'dart', 'tameDart', 'sniper', 'laser', 'butcher', 'shield'];
 const CODEX_KEY = 'overprint.codex';
 
 // Slow motion is punctuation, not a stance. It fires on moments worth watching,
@@ -183,7 +183,8 @@ export function createGame(renderer) {
     player: {
       x: 0, y: 0, vx: 0, vy: 0, aim: 0, alive: true,
       weapon: 'fists', ammo: 0, offhandWeapon: 'fists', offhandAmmo: 0,
-      attackCd: 0, swing: 0, burnT: 0, sawCd: 0, blockFlash: 0, swapCd: 0,
+      attackCd: 0, swing: 0, burnT: 0, infectT: 0, madT: 0, madDirT: 0, madDirA: 0,
+      sawCd: 0, blockFlash: 0, swapCd: 0,
       hp: 1, maxHp: 1, iframes: 0,
       dashCharges: MAX_DASH, maxDash: MAX_DASH, dashCd: 0, dashCdMax: DASH_CD, dashT: 0, dashX: 0, dashY: 0,
       katanaT: 0, katanaMax: 0, katanaX: 0, katanaY: 0,
@@ -288,10 +289,122 @@ export function createGame(renderer) {
 
   function effectRadius(kind, effectScale = 1) {
     const w = WEAPONS[kind] || WEAPONS.pistol;
+    if (w.virusCloud) return (w.radius || 128) * effectScale;
     if (w.fire) return (w.fireRadius || 96) * effectScale;
     if (w.radius) return w.radius * effectScale;
     if (w.deploy) return (w.deployRadius || 42) * effectScale;
     return 24;
+  }
+
+  const EFFECT_WEAPON = { mad: 'dart', tame: 'tameDart', virus: 'virus' };
+  const EFFECT_EXTRACT = { mad: 'madExtract', tame: 'tameExtract', virus: 'virusExtract' };
+  const EFFECT_TINT = { mad: '#7AC943', tame: '#8A2BE2', virus: '#7AC943' };
+
+  function weaponStatusEffect(kind) {
+    const w = WEAPONS[kind];
+    return w && w.statusEffect ? w.statusEffect : null;
+  }
+
+  function enemyCanUseWeapon(kind) {
+    const w = WEAPONS[kind];
+    return !!(w && kind !== 'fists' && w.enemyUsable !== false
+      && !w.lobbed && !w.offhandOnly && !w.passive && !w.extract && !w.copySauce);
+  }
+
+  function extractKeyForEffect(effect) {
+    return EFFECT_EXTRACT[effect] || null;
+  }
+
+  function effectWeaponKey(effect) {
+    return EFFECT_WEAPON[effect] || null;
+  }
+
+  function activeAttackEffect(actor, weaponKey, surface = 'direct') {
+    const base = weaponStatusEffect(weaponKey);
+    if (actor === game.player) {
+      const off = WEAPONS[game.player.offhandWeapon];
+      if (off?.extract && off.extractEffect) return off.extractEffect;
+      const side = weaponStatusEffect(game.player.offhandWeapon);
+      if (surface === 'shrapnel' && weaponKey === 'frag' && (side === 'mad' || side === 'tame')) return side;
+    }
+    return base;
+  }
+
+  function applyAttackEffectToEnemy(e, effect, x, y, source = game.player) {
+    if (!effect || !e.alive || e.state === S_DEAD) return false;
+    if (effect === 'tame') return convertEnemy(e, x, y);
+    if (effect === 'mad') return maddenEnemy(e, WEAPONS.dart.mad || 7.2, x, y);
+    if (effect === 'virus') return infectEnemy(e, 20, source === game.player || !!source?.friendly);
+    return false;
+  }
+
+  function infectEnemy(e, seconds = 20, byPlayer = true) {
+    if (!e.alive || e.state === S_DEAD) return false;
+    const fresh = !(e.infectT > 0);
+    e.infectT = Math.max(e.infectT || 0, seconds);
+    e.infectByPlayer = !!(e.infectByPlayer || byPlayer);
+    e.stagger = Math.max(e.stagger || 0, fresh ? 0.18 : 0.08);
+    if (fresh) burst(e.x, e.y, 12, 150, EFFECT_TINT.virus, 2.3, 0.55);
+    return true;
+  }
+
+  function infectPlayer(seconds = 20) {
+    const p = game.player;
+    if (!p.alive || game.state !== 'play') return false;
+    const fresh = !(p.infectT > 0);
+    p.infectT = Math.max(p.infectT || 0, seconds);
+    if (fresh) {
+      game.banner = '感染：清空敌人可治愈';
+      game.bannerT = 1.15;
+      burst(p.x, p.y, 16, 170, EFFECT_TINT.virus, 2.5, 0.62);
+      sfx.status();
+    }
+    return true;
+  }
+
+  function applyStatusEffectToPlayer(effect, seconds = 5.8) {
+    const p = game.player;
+    if (!p.alive || game.state !== 'play') return false;
+    if (effect === 'virus') return infectPlayer(20);
+    if (effect === 'mad') {
+      p.madT = Math.max(p.madT || 0, seconds);
+      p.madDirT = 0;
+      game.banner = '疯狂：暂时失控';
+      game.bannerT = 0.9;
+      burst(p.x, p.y, 14, 150, EFFECT_TINT.mad, 2.2, 0.46);
+      sfx.status();
+      return true;
+    }
+    if (effect === 'tame') {
+      game.banner = '驯化无效：你免疫';
+      game.bannerT = 0.8;
+      sfx.status();
+      return true;
+    }
+    return false;
+  }
+
+  function infectAt(x, y, weaponKey = 'virus', byEnemy = false, effectScale = 1) {
+    const w = WEAPONS[weaponKey] || WEAPONS.virus;
+    const radius = (w.radius || 128) * effectScale;
+    const tint = w.tint || EFFECT_TINT.virus;
+    game.flashes.push({ x, y, a: rnd() * TAU, t: 0, dur: 0.16, size: 1.65 });
+    burst(x, y, 28, 230, tint, 3.1, 0.62);
+    burst(x, y, 14, 120, '#161513', 1.8, 0.55);
+    shake(3);
+    triggerSlow('throw');
+    for (const e of game.pools.enemies) {
+      if (!e.alive || e.state === S_DEAD) continue;
+      const d = dist(x, y, e.x, e.y);
+      if (d > radius || !blastClear(x, y, e.x, e.y)) continue;
+      infectEnemy(e, 20, !byEnemy);
+    }
+    const p = game.player;
+    if (p.alive && game.state === 'play' && dist(x, y, p.x, p.y) <= radius * 0.72 && blastClear(x, y, p.x, p.y)) {
+      infectPlayer(20);
+    }
+    game.banner = '病毒扩散';
+    game.bannerT = 0.85;
   }
 
   function estimateThrow(actor, kind, charge = 0) {
@@ -315,7 +428,7 @@ export function createGame(renderer) {
         ...target,
         points,
         radius: effectRadius(kind, 1),
-        explosive: !!w.fire || !!w.radius,
+        explosive: !!w.fire || !!w.radius || !!w.virusCloud,
         rangeMode: true,
       };
     }
@@ -511,7 +624,7 @@ export function createGame(renderer) {
   game.heldShieldBlocks = heldShieldBlocks;
   game.blockOnHeldShield = blockOnHeldShield;
 
-  function sprayShrapnel(x, y, w, byEnemy) {
+  function sprayShrapnel(x, y, w, byEnemy, statusEffect = null) {
     const n = w.shrapnel || 0;
     if (!n) return;
     const step = TAU / n;
@@ -528,23 +641,31 @@ export function createGame(renderer) {
       b.shieldDmg = 1; b.armourPierce = 0;
       b.throughDoors = false; b.hitDoor = null; b.owner = null;
       b.throughWalls = false; b.wallPierced = 0;
-      b.weapon = null; b.projectile = null; b.explosive = false;
+      b.statusEffect = statusEffect || null;
+      b.weapon = statusEffect ? effectWeaponKey(statusEffect) : null;
+      b.projectile = null; b.explosive = false;
     }
   }
 
-  function explodeAt(x, y, weaponKey, byEnemy = false, effectScale = 1) {
+  function explodeAt(x, y, weaponKey, byEnemy = false, effectScale = 1, statusEffect = null, shrapnelEffect = statusEffect) {
     const w = WEAPONS[weaponKey] || WEAPONS.grenade;
+    if (w.virusCloud && !statusEffect) {
+      infectAt(x, y, weaponKey, byEnemy, effectScale);
+      return;
+    }
     const radius = (w.radius || 96) * effectScale;
     const tint = w.tint || '#EC0A63';
     game.flashes.push({ x, y, a: rnd() * TAU, t: 0, dur: 0.18, size: 2.7 });
     burst(x, y, 34, 390, tint, 4.2, 0.68);
     burst(x, y, 22, 250, '#161513', 3, 0.75);
-    noise(x, y, w.noise || radius * 5, tint);
+    if (!w.silent) noise(x, y, w.noise ?? radius * 5, tint);
     shake(w.shake || 18);
     hitstop(0.075);
     triggerSlow('explosion');
-    if (sfx.explosion) sfx.explosion();
-    else sfx.splinter();
+    if (!w.silent) {
+      if (sfx.explosion) sfx.explosion();
+      else sfx.splinter();
+    }
 
     for (const win of game.level.windows) {
       if (win.broken || dist(x, y, win.x, win.y) > radius * 0.95) continue;
@@ -579,6 +700,10 @@ export function createGame(renderer) {
         damageShield(e, Math.max(1, Math.round((w.shieldDmg || 3) * falloff)), true, x, y);
         if (shieldBlocks(e, x, y)) continue;
       }
+      if (statusEffect) {
+        applyAttackEffectToEnemy(e, statusEffect, x, y, byEnemy ? null : game.player);
+        continue;
+      }
       if (d <= radius * (w.blastKill || 0.75) || e.state === S_DOWN) {
         killEnemy(e, 1.35, nx, ny, byEnemy);
       } else {
@@ -591,11 +716,12 @@ export function createGame(renderer) {
       const d = dist(x, y, p.x, p.y);
       if (d <= radius * 0.58 && blastClear(x, y, p.x, p.y)) {
         if (heldShieldBlocks(p, x, y)) blockOnHeldShield(p, x, y, true);
+        else if (statusEffect) applyStatusEffectToPlayer(statusEffect);
         else game.killPlayer();
       }
     }
 
-    sprayShrapnel(x, y, w, byEnemy);
+    sprayShrapnel(x, y, w, byEnemy, shrapnelEffect);
   }
 
   function panicFire(e, chance) {
@@ -680,10 +806,14 @@ export function createGame(renderer) {
 
   function finishLobbed(t, w) {
     t.alive = false;
+    if (w.virusCloud && (!t.statusEffect || t.statusEffect === 'virus')) {
+      infectAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
+      return;
+    }
     if (w.deploy) deployAt(t.x, t.y, w.deploy, t.friendly !== false);
     else if (w.flashbang) flashAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
     else if (w.fire) igniteAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
-    else explodeAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
+    else explodeAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1, t.statusEffect || null, t.shrapnelEffect || t.statusEffect || null);
   }
 
   function supportPointClear(x, y, r = 8) {
@@ -852,8 +982,7 @@ export function createGame(renderer) {
     let best = null, bd = 430 * 430;
     for (const k of game.pools.pickups) {
       if (!k.alive) continue;
-      const w = WEAPONS[k.kind];
-      if (!w || w.lobbed || w.offhandOnly || w.passive) continue;
+      if (!enemyCanUseWeapon(k.kind)) continue;
       const d = dist(e.x, e.y, k.x, k.y);
       if (d * d < bd) { bd = d * d; best = k; }
     }
@@ -866,8 +995,8 @@ export function createGame(renderer) {
     if (e.weapon !== 'fists') return true;
     for (const k of game.pools.pickups) {
       if (!k.alive) continue;
+      if (!enemyCanUseWeapon(k.kind)) continue;
       const w = WEAPONS[k.kind];
-      if (!w || w.lobbed || w.offhandOnly || w.passive) continue;
       if (dist(e.x, e.y, k.x, k.y) > 22) continue;
       e.weapon = k.kind; e.ammo = k.ammo || WEAPONS[k.kind].ammo;
       e.heldShieldHp = w.defense ? (w.durability || 5) : 0;
@@ -1356,7 +1485,9 @@ export function createGame(renderer) {
     const e = spawnFrom(game.pools.enemies);
     if (!e) return null;
     e.alive = true; e.type = s.type || 'thug'; e.x = s.x; e.y = s.y;
-    e.weapon = s.weapon || 'fists'; e.ammo = WEAPONS[e.weapon]?.ammo || 0;
+    const weapon = s.weapon || 'fists';
+    e.weapon = weapon === 'fists' || enemyCanUseWeapon(weapon) ? weapon : 'fists';
+    e.ammo = WEAPONS[e.weapon]?.ammo || 0;
     e.seeking = 0; e.blockFlash = 0; e.stagger = 0;
     e.heldShieldHp = WEAPONS[e.weapon]?.defense ? (WEAPONS[e.weapon].durability || 5) : 0;
     e.armour = s.armour || 0;
@@ -1371,11 +1502,11 @@ export function createGame(renderer) {
     } else { e.segs = 0; e.layers = 0; e.shieldSeg = 0; }
     e.shieldHp = e.armour;
     e.vx = e.vy = 0; e.angle = s.angle || 0; e.state = S_IDLE; e.timer = 0;
-    e.downTimer = 0; e.fireTimer = 0; e.burst = 0; e.searchT = 0;
+    e.downTimer = 0; e.fireTimer = 0; e.attackTimer = 0; e.burst = 0; e.searchT = 0;
     e.ptx = s.x; e.pty = s.y; e.seen = 0; e.chargeT = 0; e.windup = 0;
     e.shoutCd = 0; e.strafe = rnd() < 0.5 ? 1 : -1; e.strafeT = 0;
     e.stuckT = 0; e.lastX = s.x; e.lastY = s.y; e.scanT = rnd() * 0.4; e.reload = 0;
-    e.madT = 0; e.burnT = 0;
+    e.madT = 0; e.burnT = 0; e.infectT = 0; e.infectByPlayer = false;
     e.roomGoal = -1; e.roomSeq = 0;
     e.friendly = false; e.converted = false; e.contagious = false;
     game.recordEnemy(e.type);
@@ -1421,7 +1552,8 @@ export function createGame(renderer) {
     p.iframes = 0;
     p.maxDash = game.playerStats.maxDash || MAX_DASH;
     p.dashCdMax = game.playerStats.dashCd || DASH_CD;
-    p.attackCd = 0; p.swing = 0; p.burnT = 0; p.sawCd = 0; p.blockFlash = 0; p.swapCd = 0;
+    p.attackCd = 0; p.swing = 0; p.burnT = 0; p.infectT = 0; p.madT = 0; p.madDirT = 0;
+    p.sawCd = 0; p.blockFlash = 0; p.swapCd = 0;
     p.dashCharges = p.maxDash; p.dashCd = 0; p.dashT = 0;
     p.katanaT = 0; p.katanaMax = 0; p.katanaX = 0; p.katanaY = 0;
     p.trail.length = 0;
@@ -1549,6 +1681,8 @@ export function createGame(renderer) {
       e.contagious = true;
       e.madT = 0;
       e.burnT = 0;
+      e.infectT = 0;
+      e.infectByPlayer = false;
       e.state = S_CHASE;
       e.seeking = 0;
       e.seen = 1;
@@ -1570,6 +1704,8 @@ export function createGame(renderer) {
     addCorpse(e);
     e.madT = 0;
     e.burnT = 0;
+    e.infectT = 0;
+    e.infectByPlayer = false;
     e.friendly = false;
     e.converted = false;
     e.contagious = false;
@@ -1775,6 +1911,58 @@ export function createGame(renderer) {
     return kills;
   }
 
+  function isSwapGun(kind) {
+    const w = WEAPONS[kind];
+    return !!(w && !w.melee && !w.lobbed && !w.projectile && !w.defense
+      && !w.silent && !w.copySauce && !w.extract && !w.passive && w.pellets && w.ammo > 0);
+  }
+
+  function gunSwapBurst(kind) {
+    const p = game.player;
+    const w = WEAPONS[kind];
+    if (!w) return 0;
+    const shots = Math.max(1, Math.ceil((w.ammo || 1) / 2));
+    const statusEffect = activeAttackEffect(p, kind, 'direct');
+    const base = p.aim;
+    for (let shot = 0; shot < shots; shot++) {
+      const fan = shots > 1 ? (shot - (shots - 1) / 2) / (shots - 1) : 0;
+      const shotAim = base + fan * Math.min(0.2, (w.spread || 0.025) * 2.8) + (rnd() - 0.5) * (w.spread || 0.025);
+      for (let i = 0; i < (w.pellets || 1); i++) {
+        const b = spawnFrom(game.pools.bullets);
+        if (!b) break;
+        const a = shotAim + (rnd() - 0.5) * (w.pellets > 1 ? w.spread * 2 : w.spread || 0.02);
+        b.alive = true;
+        b.x = p.x + Math.cos(a) * 16; b.y = p.y + Math.sin(a) * 16;
+        b.vx = Math.cos(a) * w.speed * (0.92 + rnd() * 0.16);
+        b.vy = Math.sin(a) * w.speed * (0.92 + rnd() * 0.16);
+        b.life = w.life || 1.6; b.friendly = true; b.pierce = w.pierce || (w.rail ? 999 : 0);
+        b.shieldDmg = w.shieldDmg ?? 1;
+        b.armourPierce = w.armourPierce || 0;
+        b.throughDoors = !!w.throughDoors; b.hitDoor = null;
+        b.throughWalls = !!w.throughWalls; b.wallPierced = 0;
+        b.owner = null; b.near = 0;
+        b.statusEffect = statusEffect || null;
+        b.weapon = kind; b.projectile = null; b.explosive = false;
+        b.ricochet = !!w.ricochet; b.bounces = w.bounces || 0;
+      }
+      if (shot < 5) ejectCasing(p.x, p.y, shotAim);
+    }
+    const mx = p.x + Math.cos(base) * 19, my = p.y + Math.sin(base) * 19;
+    game.flashes.push({ x: mx, y: my, a: base, t: 0, dur: 0.13, size: w.pellets > 1 ? 1.8 : 1.25 });
+    burst(mx, my, 7, 220, '#F7CF16', 2.4, 0.18);
+    noise(p.x, p.y, Math.round((w.noise || 280) * 0.82), w.tint);
+    shake(Math.min(14, 3 + shots * 0.45 + (w.pellets > 1 ? 5 : 0)));
+    const fill = clamp((p.ammo ?? w.ammo) / w.ammo, 0, 1);
+    if (kind === 'shotgun') sfx.shotgun(fill);
+    else if (kind === 'smg' || kind === 'ripper') sfx.smg(fill);
+    else if (kind === 'revolver') sfx.revolver(fill);
+    else sfx.shot(fill);
+    game.banner = `换手连射 ×${shots}`;
+    game.bannerT = 0.7;
+    p.attackCd = Math.max(p.attackCd, Math.min(0.38, (w.rate || 0.2) * Math.min(shots, 5) * 0.3));
+    return shots;
+  }
+
   function swapPlayerWeapon() {
     const p = game.player;
     const incoming = WEAPONS[p.offhandWeapon];
@@ -1805,6 +1993,7 @@ export function createGame(renderer) {
     game.banner = `切出 ${WEAPONS[p.weapon].name}`;
     game.bannerT = 0.58;
     if (p.weapon === 'katana') katanaSwapSlash();
+    else if (isSwapGun(p.weapon)) gunSwapBurst(p.weapon);
     else sfx.pickup();
     return true;
   }
@@ -1813,6 +2002,8 @@ export function createGame(renderer) {
   function maddenEnemy(e, seconds, x, y) {
     if (!e.alive || e.state === S_DEAD) return false;
     e.madT = Math.max(e.madT || 0, seconds || 6.5);
+    e.infectT = 0;
+    e.infectByPlayer = false;
     e.state = S_CHASE;
     e.seeking = 0;
     e.seen = 1;
@@ -1831,6 +2022,8 @@ export function createGame(renderer) {
     e.converted = true;
     e.contagious = playerHasOffhand('virus');
     e.madT = 0;
+    e.infectT = 0;
+    e.infectByPlayer = false;
     e.state = S_CHASE;
     e.seeking = 0;
     e.seen = 1;
@@ -1905,11 +2098,79 @@ export function createGame(renderer) {
   }
   game.igniteAt = igniteAt;
 
-  game.killPlayer = function () {
+  function nearestHostile(x, y, range = Infinity, requireSight = false) {
+    let best = null, bd = range;
+    for (const e of game.pools.enemies) {
+      if (!e.alive || e.state === S_DEAD || e.friendly) continue;
+      const d = dist(x, y, e.x, e.y);
+      if (d >= bd) continue;
+      if (requireSight && !hasLineOfSight(game.level, x, y, e.x, e.y)) continue;
+      bd = d;
+      best = e;
+    }
+    return best;
+  }
+
+  function emitInfection(unit, dt) {
+    if (rnd() > Math.min(0.9, dt * 11)) return;
+    const a = rnd() * TAU;
+    const r = 9 + rnd() * 16;
+    particle(unit.x + Math.cos(a) * r, unit.y + Math.sin(a) * r,
+      Math.cos(a) * 18, Math.sin(a) * 18 - 34,
+      0.28 + rnd() * 0.24, 1.8 + rnd() * 2.1, EFFECT_TINT.virus);
+  }
+
+  function spreadVirusFrom(unit, byPlayer) {
+    for (const o of game.pools.enemies) {
+      if (o === unit || !o.alive || o.state === S_DEAD || o.infectT > 0) continue;
+      const d = dist(unit.x, unit.y, o.x, o.y);
+      if (d > 72 || !hasLineOfSight(game.level, unit.x, unit.y, o.x, o.y)) continue;
+      infectEnemy(o, 20, byPlayer);
+    }
+    const p = game.player;
+    if (unit !== p && p.alive && game.state === 'play' && p.infectT <= 0) {
+      const d = dist(unit.x, unit.y, p.x, p.y);
+      if (d <= 58 && hasLineOfSight(game.level, unit.x, unit.y, p.x, p.y)) infectPlayer(20);
+    }
+  }
+
+  function updateInfections(dt) {
+    for (const e of game.pools.enemies) {
+      if (!e.alive || e.state === S_DEAD || !(e.infectT > 0)) continue;
+      emitInfection(e, dt);
+      spreadVirusFrom(e, !!e.infectByPlayer);
+      e.infectT -= dt;
+      e.stagger = Math.max(e.stagger || 0, 0.04);
+      if (e.infectT <= 0) {
+        const a = rnd() * TAU;
+        killEnemy(e, 0.9, Math.cos(a), Math.sin(a), !e.infectByPlayer);
+      }
+    }
+
+    const p = game.player;
+    if (!p.alive || !(p.infectT > 0)) return;
+    if (hostilesLeft() === 0) {
+      p.infectT = 0;
+      game.banner = '感染已治愈';
+      game.bannerT = 0.9;
+      burst(p.x, p.y, 18, 190, '#8A2BE2', 2.4, 0.52);
+      sfx.status();
+      return;
+    }
+    emitInfection(p, dt);
+    spreadVirusFrom(p, true);
+    p.infectT -= dt;
+    if (p.infectT <= 0) {
+      p.hp = 1;
+      game.killPlayer(null, true);
+    }
+  }
+
+  game.killPlayer = function (_source = null, force = false) {
     const p = game.player;
     if (!p.alive || game.state !== 'play') return;
-    if (p.iframes > 0) return;
-    if ((p.hp || 1) > 1) {
+    if (!force && p.iframes > 0) return;
+    if (!force && (p.hp || 1) > 1) {
       p.hp--;
       p.iframes = 0.9;
       p.blockFlash = 0.35;
@@ -1940,7 +2201,7 @@ export function createGame(renderer) {
     sfx.alert();
   };
 
-  function launchProjectile(actor, angle, weaponKey, friendly) {
+  function launchProjectile(actor, angle, weaponKey, friendly, statusEffect = null) {
     const w = WEAPONS[weaponKey];
     const b = spawnFrom(game.pools.bullets);
     if (!b) return null;
@@ -1953,6 +2214,7 @@ export function createGame(renderer) {
     b.armourPierce = w.armourPierce || 0;
     b.throughDoors = !!w.throughDoors; b.hitDoor = null; b.owner = actor === game.player ? null : actor;
     b.throughWalls = !!w.throughWalls; b.wallPierced = 0;
+    b.statusEffect = statusEffect || weaponStatusEffect(weaponKey);
     b.weapon = weaponKey; b.projectile = w.projectile || null; b.explosive = !!w.projectile;
     b.ricochet = !!w.ricochet; b.bounces = w.bounces || 0;
     return b;
@@ -1989,6 +2251,7 @@ export function createGame(renderer) {
       b.throughDoors = !!w.throughDoors; b.hitDoor = null;
       b.throughWalls = !!w.throughWalls; b.wallPierced = 0;
       b.owner = e;
+      b.statusEffect = weaponStatusEffect(e.weapon);
       b.weapon = e.weapon; b.projectile = null; b.explosive = false;
       b.ricochet = !!w.ricochet; b.bounces = w.bounces || 0;
     }
@@ -2205,6 +2468,7 @@ export function createGame(renderer) {
   // one attack routine for every armed thing on the board
   function doAttack(actor, weaponKey) {
     const w = WEAPONS[weaponKey];
+    const statusEffect = activeAttackEffect(actor, weaponKey, 'direct');
     if (w.melee) {
       sfx.swing();
       let hit = false;
@@ -2224,7 +2488,8 @@ export function createGame(renderer) {
           continue;
         }
         hit = true;
-        if (w.lethal || e.state === S_DOWN) killEnemy(e, 1, Math.cos(a), Math.sin(a));
+        if (statusEffect) applyAttackEffectToEnemy(e, statusEffect, actor.x, actor.y, actor);
+        else if (w.lethal || e.state === S_DOWN) killEnemy(e, 1, Math.cos(a), Math.sin(a));
         else knockdown(e, Math.cos(a), Math.sin(a));
       }
       for (const win of game.level.windows) {
@@ -2239,7 +2504,7 @@ export function createGame(renderer) {
       return true;
     }
     if (w.projectile) {
-      launchProjectile(actor, actor.aim, weaponKey, actor === game.player);
+      launchProjectile(actor, actor.aim, weaponKey, actor === game.player, statusEffect);
       const mx = actor.x + Math.cos(actor.aim) * 19, my = actor.y + Math.sin(actor.aim) * 19;
       if (!w.silent) {
         game.flashes.push({ x: mx, y: my, a: actor.aim, t: 0, dur: 0.11, size: 1.25 });
@@ -2266,6 +2531,7 @@ export function createGame(renderer) {
       b.throughDoors = !!w.throughDoors; b.hitDoor = null;
       b.throughWalls = !!w.throughWalls; b.wallPierced = 0;
       b.owner = null; b.near = 0;
+      b.statusEffect = statusEffect || null;
       b.weapon = weaponKey; b.projectile = null; b.explosive = false;
       b.ricochet = !!w.ricochet; b.bounces = w.bounces || 0;
     }
@@ -2288,11 +2554,54 @@ export function createGame(renderer) {
     return true;
   }
 
+  function useCopySauce() {
+    const p = game.player;
+    const w = WEAPONS[p.weapon];
+    const sideEffect = weaponStatusEffect(p.offhandWeapon);
+    const extract = extractKeyForEffect(sideEffect);
+    p.attackCd = (w.rate || 0.34) * (game.playerStats.attackRate || 1);
+    if (!extract) {
+      game.banner = '副手没有可复制效果';
+      game.bannerT = 0.75;
+      sfx.empty();
+      return false;
+    }
+    setMainSlot(p, extract, WEAPONS[extract].ammo || 1);
+    game.floorLoadout = stashPlayerWeapon() || game.floorLoadout;
+    game.banner = `提取：${WEAPONS[extract].name}`;
+    game.bannerT = 0.85;
+    burst(p.x, p.y, 18, 160, WEAPONS[extract].tint || '#00D6FF', 2.4, 0.48);
+    sfx.status();
+    return true;
+  }
+
+  function useExtractOnPlayer() {
+    const p = game.player;
+    const w = WEAPONS[p.weapon];
+    const effect = w.extractEffect;
+    p.attackCd = (w.rate || 0.34) * (game.playerStats.attackRate || 1);
+    p.ammo = Math.max(0, (p.ammo || 1) - 1);
+    applyStatusEffectToPlayer(effect, 5.8);
+    burst(p.x, p.y, 16, 160, w.tint || '#7AC943', 2.3, 0.5);
+    sfx.status();
+    if (p.ammo <= 0) setMainSlot(p, 'fists', 0);
+    if (game.mode === 'defense') game.floorLoadout = stashPlayerWeapon();
+    return true;
+  }
+
   function playerAttack() {
     const p = game.player;
     const w = WEAPONS[p.weapon];
     if (p.attackCd > 0) return;
     const rateScale = game.playerStats.attackRate || 1;
+    if (w.copySauce) {
+      useCopySauce();
+      return;
+    }
+    if (w.extract) {
+      useExtractOnPlayer();
+      return;
+    }
     if (w.melee) {
       p.attackCd = w.rate * rateScale;
       p.swing = 0.16;
@@ -2331,6 +2640,10 @@ export function createGame(renderer) {
     const w = WEAPONS[kind] || WEAPONS.pistol;
     const lobbed = !!w.lobbed;
     const st = lobbed ? throwStats(charge) : { charge: 0, power: 1, effectScale: 1 };
+    const statusEffect = activeAttackEffect(actor, kind, lobbed ? 'direct' : 'thrown');
+    const shrapnelEffect = lobbed && kind === 'frag'
+      ? activeAttackEffect(actor, kind, 'shrapnel')
+      : null;
     t.alive = true;
     t.kind = kind; t.ammo = ammo; t.spin = 0;
     if (lobbed) {
@@ -2350,9 +2663,11 @@ export function createGame(renderer) {
       t.targetX = NaN; t.targetY = NaN;
     }
     t.charge = st.charge; t.power = st.power; t.effectScale = 1;
+    t.statusEffect = statusEffect || null;
+    t.shrapnelEffect = shrapnelEffect || null;
     t.friendly = actor === game.player;
     t.noPickup = !!w.noPickup;
-    sfx.throwIt();
+    if (!w.silent) sfx.throwIt();
     shake(2);
     triggerSlow('throw');
   }
@@ -2367,7 +2682,7 @@ export function createGame(renderer) {
     t.vx = Math.cos(actor.aim) * sp; t.vy = Math.sin(actor.aim) * sp;
     t.kind = 'sawblade'; t.ammo = 0; t.spin = actor.aim; t.life = w.life || 14;
     t.maxLife = t.life; t.targetX = NaN; t.targetY = NaN;
-    t.charge = 0; t.power = 1; t.effectScale = 1; t.friendly = actor === game.player;
+    t.charge = 0; t.power = 1; t.effectScale = 1; t.statusEffect = null; t.shrapnelEffect = null; t.friendly = actor === game.player;
     t.noPickup = true;
     burst(t.x, t.y, 6, 150, w.tint || '#161513', 1.8, 0.24);
     sfx.throwIt();
@@ -2438,8 +2753,21 @@ export function createGame(renderer) {
     const p = game.player;
     const inp = game.input;
     if (!p.alive) return;
+    if (p.madT > 0) p.madT = Math.max(0, p.madT - dt);
+    const playerMad = p.madT > 0;
+    const madTarget = playerMad ? nearestHostile(p.x, p.y, 920, false) : null;
 
-    if (inp.hasAim) {
+    if (playerMad) {
+      if (madTarget) p.aim = Math.atan2(madTarget.y - p.y, madTarget.x - p.x);
+      else {
+        p.madDirT -= dt;
+        if (p.madDirT <= 0) {
+          p.madDirT = 0.45 + rnd() * 0.65;
+          p.madDirA = rnd() * TAU;
+        }
+        p.aim += angDelta(p.aim, p.madDirA) * Math.min(1, 4.5 * dt);
+      }
+    } else if (inp.hasAim) {
       // Thumb aiming can't be precise, so it gets help: the stick picks a
       // direction and the game snaps it onto the nearest thing actually there.
       let best = inp.aimAngle, bd = 0.44;
@@ -2460,7 +2788,15 @@ export function createGame(renderer) {
     }
 
     let ix, iy;
-    if (inp.analog) {
+    if (playerMad) {
+      if (madTarget) {
+        const dx = madTarget.x - p.x, dy = madTarget.y - p.y;
+        const l = Math.hypot(dx, dy) || 1;
+        ix = dx / l; iy = dy / l;
+      } else {
+        ix = Math.cos(p.aim); iy = Math.sin(p.aim);
+      }
+    } else if (inp.analog) {
       ix = inp.axisX; iy = inp.axisY;
     } else {
       ix = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
@@ -2511,11 +2847,19 @@ export function createGame(renderer) {
       if (p.dashCd <= 0) { p.dashCharges++; p.dashCd = dashCdMax; }
     }
     if (p.swapCd > 0) p.swapCd = Math.max(0, p.swapCd - dt);
-    if (inp.swap) {
+    if (playerMad) {
+      inp.swap = false;
+      inp.dash = false;
+      inp.throwHeld = false;
+      inp.throwReleased = false;
+      inp.throwIt = false;
+      inp.fireReleased = false;
+    }
+    if (!playerMad && inp.swap) {
       inp.swap = false;
       if (swapPlayerWeapon()) game.didAttack = true;
     }
-    if (inp.dash && p.dashCharges > 0 && p.dashT <= 0 && p.katanaT <= 0) {
+    if (!playerMad && inp.dash && p.dashCharges > 0 && p.dashT <= 0 && p.katanaT <= 0) {
       inp.dash = false;
       const dx = ix || Math.cos(p.aim), dy = iy || Math.sin(p.aim);
       const dl = Math.hypot(dx, dy) || 1;
@@ -2536,7 +2880,9 @@ export function createGame(renderer) {
     if (p.blockFlash > 0) p.blockFlash -= dt;
 
     const held = WEAPONS[p.weapon] || WEAPONS.fists;
-    const chargingLob = held.lobbed && inp.fire;
+    const manualFire = !playerMad && inp.fire;
+    const autoMadFire = playerMad && madTarget && hasLineOfSight(game.level, p.x, p.y, madTarget.x, madTarget.y);
+    const chargingLob = held.lobbed && manualFire;
     if (held.sawLauncher) {
       p.sawCd -= dt;
       if (p.sawCd <= 0) {
@@ -2546,7 +2892,7 @@ export function createGame(renderer) {
     } else {
       p.sawCd = 0;
     }
-    const chargingKatana = (held.katana || held.lance) && inp.fire && p.katanaT <= 0;
+    const chargingKatana = (held.katana || held.lance) && manualFire && p.katanaT <= 0;
     const chargingThrow = p.weapon !== 'fists' && !held.noThrow && inp.throwHeld;
     if (chargingKatana) {
       game.throwCharge = Math.min(held.chargeMax || THROW_CHARGE_MAX, game.throwCharge + dt);
@@ -2589,7 +2935,7 @@ export function createGame(renderer) {
     }
 
     const currentHeld = WEAPONS[p.weapon] || WEAPONS.fists;
-    if (inp.fire && !currentHeld.lobbed && !currentHeld.katana && !currentHeld.lance && p.katanaT <= 0) { playerAttack(); game.didAttack = true; }
+    if ((manualFire || autoMadFire) && !currentHeld.lobbed && !currentHeld.katana && !currentHeld.lance && p.katanaT <= 0) { playerAttack(); game.didAttack = true; }
     for (const k of game.pools.pickups) {
       if (!k.alive) continue;
       if (dist(p.x, p.y, k.x, k.y) < 20) {
@@ -2611,7 +2957,7 @@ export function createGame(renderer) {
     const weaponKey = b.weapon || 'rocket';
     const byEnemy = !b.friendly || !!(b.owner && b.owner.friendly);
     b.alive = false;
-    explodeAt(b.x, b.y, weaponKey, byEnemy);
+    explodeAt(b.x, b.y, weaponKey, byEnemy, 1, b.statusEffect || null);
   }
 
   function ricochetBullet(b, px, py, sx, sy) {
@@ -2719,6 +3065,7 @@ export function createGame(renderer) {
           if (b.friendly && e.friendly) continue;
           if (dist(b.x, b.y, e.x, e.y) > ENEMY_DEF[e.type].r + 3) continue;
           const bw = WEAPONS[b.weapon] || null;
+          const statusEffect = b.statusEffect || weaponStatusEffect(b.weapon);
           const fx = b.x - b.vx * 0.02, fy = b.y - b.vy * 0.02;
           const sp = Math.hypot(b.vx, b.vy) || 1;
           const byOtherSide = !b.friendly || !!(b.owner && b.owner.friendly);
@@ -2735,13 +3082,13 @@ export function createGame(renderer) {
             detonateBullet(b); stop = true; break;
           }
           if (b.explosive) { detonateBullet(b); stop = true; break; }
-          if (bw && bw.rail) {
+          if (bw && bw.rail && !statusEffect) {
             killEnemy(e, 1.25, b.vx / sp, b.vy / sp, byOtherSide, b.owner);
             continue;
           }
           if (shieldBlocks(e, fx, fy)) {
-            if (bw && (bw.poison || bw.tame)) {
-              burst(fx, fy, 3, 70, bw.tint || '#7AC943', 1.4, 0.22);
+            if (statusEffect) {
+              burst(fx, fy, 3, 70, bw?.tint || EFFECT_TINT[statusEffect] || '#7AC943', 1.4, 0.22);
               b.alive = false; stop = true; break;
             }
             const col = shieldSegmentAt(e, fx, fy);
@@ -2764,13 +3111,8 @@ export function createGame(renderer) {
             b.alive = false; stop = true;
             break;
           }
-          if (bw && bw.tame) {
-            convertEnemy(e, b.x, b.y);
-            b.alive = false; stop = true;
-            break;
-          }
-          if (bw && bw.poison) {
-            maddenEnemy(e, bw.mad || 6.5, b.x, b.y);
+          if (statusEffect) {
+            applyAttackEffectToEnemy(e, statusEffect, b.x, b.y, b.owner || (b.friendly ? game.player : null));
             b.alive = false; stop = true;
             break;
           }
@@ -2869,7 +3211,8 @@ export function createGame(renderer) {
               hit = true; break;
             }
             const l = Math.hypot(t.vx, t.vy) || 1;
-            if (lethal) killEnemy(e, 1, t.vx / l, t.vy / l);
+            if (t.statusEffect) applyAttackEffectToEnemy(e, t.statusEffect, t.x, t.y, t.friendly ? game.player : null);
+            else if (lethal) killEnemy(e, 1, t.vx / l, t.vy / l);
             else if (e.state !== S_DOWN) knockdown(e, t.vx / l, t.vy / l);
             else continue;
             if (blade) continue;
@@ -3194,6 +3537,7 @@ export function createGame(renderer) {
     updateBullets(wdt);
     updateThrown(wdt);
     updateFireZones(wdt);
+    updateInfections(wdt);
     updateDoors(wdt);
     updateDefense(wdt);
 

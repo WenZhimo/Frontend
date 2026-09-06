@@ -365,7 +365,7 @@
     for (let i = 0; i < weaponCount; i++) {
       const r = pool[(i * 3 + 1) % pool.length];
       const p = freeSpot(r);
-      const kinds = floorNum < 3 ? ["bat", "knife", "katana", "quixote", "pistol", "pistol", "smg", "grenade", "sentryPack", "molotov", "dart", "tameDart", "virus", "disguise", "shield", "shield", "shield"] : ["bat", "knife", "knife", "katana", "katana", "quixote", "pistol", "pistol", "revolver", "smg", "smg", "ripper", "shotgun", "grenade", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "molotov", "dart", "tameDart", "virus", "disguise", "sniper", "laser", "butcher", "shield", "shield", "shield", "shield"];
+      const kinds = floorNum < 3 ? ["bat", "knife", "katana", "quixote", "pistol", "pistol", "smg", "grenade", "sentryPack", "molotov", "dart", "tameDart", "virus", "copySauce", "disguise", "shield", "shield", "shield"] : ["bat", "knife", "knife", "katana", "katana", "quixote", "pistol", "pistol", "revolver", "smg", "smg", "ripper", "shotgun", "grenade", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "molotov", "dart", "tameDart", "virus", "copySauce", "disguise", "sniper", "laser", "butcher", "shield", "shield", "shield", "shield"];
       pickupSpawns.push({ x: p.x, y: p.y, kind: rng.pick(kinds) });
     }
     return {
@@ -711,6 +711,11 @@
     const doorAt = /* @__PURE__ */ new Map();
     const windows = [];
     const windowAt = /* @__PURE__ */ new Map();
+    if (mode === "defense") {
+      doors.length = 0;
+      doorAt.clear();
+      for (let i = 0; i < tiles.length; i++) if (tiles[i] === T_DOOR) tiles[i] = T_FLOOR;
+    }
     const solidAt = (x, y) => {
       const gx = x / TILE | 0, gy = y / TILE | 0;
       if (gx < 0 || gy < 0 || gx >= gw || gy >= gh) return true;
@@ -884,6 +889,7 @@
         timer: 0,
         downTimer: 0,
         fireTimer: 0,
+        attackTimer: 0,
         burst: 0,
         ammo: 0,
         lkx: 0,
@@ -920,7 +926,9 @@
         roomSeq: 0,
         friendly: false,
         converted: false,
-        contagious: false
+        contagious: false,
+        infectT: 0,
+        infectByPlayer: false
       })),
       corpses: mk(MAX_CORPSES, () => ({
         alive: false,
@@ -943,9 +951,9 @@
         contagious: false,
         wave: 0
       })),
-      bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
+      bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, statusEffect: null, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
       pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: "pistol", ammo: 0, angle: 0 })),
-      thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: "pistol", ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, noPickup: false })),
+      thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: "pistol", ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, statusEffect: null, shrapnelEffect: null, noPickup: false })),
       deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: "sentry", x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, friendly: true, spin: 0, target: null })),
       drones: mk(MAX_DRONES, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0 }))
     };
@@ -1005,6 +1013,7 @@
     if (e.state === S_DEAD) return;
     if (e.blockFlash > 0) e.blockFlash -= dt;
     if (e.stagger > 0) e.stagger -= dt;
+    if (e.attackTimer > 0) e.attackTimer -= dt;
     if (def.passive) {
       e.vx = 0;
       e.vy = 0;
@@ -1276,10 +1285,12 @@
     e.lastX = e.x;
     e.lastY = e.y;
     const p = game2.player;
+    const meleeCooldown = Math.max(0.24, (w.rate || 0.32) * (e.type === "hound" ? 1.35 : 1));
     const victim = target && target.enemy && target.enemy.alive && target.enemy.state !== S_DEAD ? target.enemy : null;
-    if (victim && e.state === S_CHASE && w.melee) {
+    if (victim && e.state === S_CHASE && w.melee && e.attackTimer <= 0) {
       const vd = ENEMY_DEF[victim.type];
       if (dist(e.x, e.y, victim.x, victim.y) < def.r + vd.r + 7) {
+        e.attackTimer = meleeCooldown;
         const a = Math.atan2(victim.y - e.y, victim.x - e.x);
         if (game2.heldShieldBlocks?.(victim, e.x, e.y)) {
           game2.blockOnHeldShield?.(victim, e.x, e.y);
@@ -1293,8 +1304,9 @@
           game2.knockdownEnemy(victim, Math.cos(a), Math.sin(a));
         }
       }
-    } else if (!e.friendly && !game2.playerDisguised?.() && p.alive && e.state === S_CHASE && w.melee) {
+    } else if (!e.friendly && !game2.playerDisguised?.() && p.alive && e.state === S_CHASE && w.melee && e.attackTimer <= 0) {
       if (dist(e.x, e.y, p.x, p.y) < def.r + 11) {
+        e.attackTimer = meleeCooldown;
         if (game2.heldShieldBlocks?.(p, e.x, e.y)) {
           game2.blockOnHeldShield?.(p, e.x, e.y);
           e.stagger = Math.max(e.stagger || 0, 0.25);
@@ -1302,7 +1314,8 @@
           e.vy *= -0.25;
         } else game2.killPlayer(e);
       }
-    } else if (!e.friendly && !game2.playerDisguised?.() && p.alive && e.state === S_CHASE && !mad && !w.defense && dist(e.x, e.y, p.x, p.y) < 20) {
+    } else if (!e.friendly && !game2.playerDisguised?.() && p.alive && e.state === S_CHASE && !mad && !w.defense && e.attackTimer <= 0 && dist(e.x, e.y, p.x, p.y) < 20) {
+      e.attackTimer = meleeCooldown;
       if (game2.heldShieldBlocks?.(p, e.x, e.y)) {
         game2.blockOnHeldShield?.(p, e.x, e.y);
         e.stagger = Math.max(e.stagger || 0, 0.25);
@@ -1346,15 +1359,19 @@
         dronePack: { name: "\u6BD2\u8702\u65E0\u4EBA\u673A\u90E8\u7F72\u5305", feed: "stack", tint: "#F7CF16", melee: false, rate: 0.5, ammo: 3, lobbed: true, fuse: 0.58, throwSpeed: 720, deploy: "drones", deployRadius: 64, droneCount: 3, droneAmmo: 3, noise: 170, kick: 0, throwLethal: false },
         rocket: { name: "\u706B\u7BAD\u5F39", feed: "barrel", tint: "#EC0A63", melee: false, rate: 0.9, ammo: 3, pellets: 1, spread: 0.012, speed: 560, noise: 760, kick: 14, projectile: "rocket", radius: 132, shieldDmg: 5, armourPierce: 2, throughDoors: true, eSpeed: 420, eRate: 2.2, eBurst: 1, throwLethal: false },
         molotov: { name: "\u71C3\u70E7\u74F6", feed: "stack", tint: "#FF6A00", melee: false, rate: 0.48, ammo: 3, lobbed: true, fuse: 0.62, throwSpeed: 560, fire: true, fireRadius: 106, fireDur: 5.4, fireKill: 0.34, noise: 380, kick: 0, throwLethal: false },
-        dart: { name: "\u75AF\u72C2\u6BD2\u9556", feed: "stack", tint: "#7AC943", melee: false, rate: 0.26, ammo: 8, pellets: 1, spread: 6e-3, speed: 1120, noise: 0, kick: 0, poison: true, mad: 7.2, silent: true, shieldDmg: 0, eSpeed: 690, eRate: 1, eBurst: 1 },
-        tameDart: { name: "\u9A6F\u670D\u6BD2\u6807", feed: "stack", tint: "#8A2BE2", melee: false, rate: 0.3, ammo: 6, pellets: 1, spread: 6e-3, speed: 1100, noise: 0, kick: 0, tame: true, silent: true, shieldDmg: 0, eSpeed: 680, eRate: 1.05, eBurst: 1 },
+        dart: { name: "\u75AF\u72C2\u6BD2\u9556", feed: "stack", tint: "#7AC943", melee: false, rate: 0.26, ammo: 8, pellets: 1, spread: 6e-3, speed: 1120, noise: 0, kick: 0, poison: true, statusEffect: "mad", mad: 7.2, silent: true, shieldDmg: 0, eSpeed: 690, eRate: 1, eBurst: 1 },
+        tameDart: { name: "\u9A6F\u670D\u6BD2\u6807", feed: "stack", tint: "#8A2BE2", melee: false, rate: 0.3, ammo: 6, pellets: 1, spread: 6e-3, speed: 1100, noise: 0, kick: 0, tame: true, statusEffect: "tame", silent: true, shieldDmg: 0, eSpeed: 680, eRate: 1.05, eBurst: 1 },
         disguise: { name: "\u6697\u6740 \xB7 D", feed: "stack", tint: "#161513", melee: false, rate: 0.23, ammo: 9, pellets: 1, spread: 0.018, speed: 1160, noise: 240, kick: 3.2, disguise: true, shieldDmg: 1, eSpeed: 640, eRate: 1.05, eBurst: 2 },
         sniper: { name: "\u72D9\u51FB\u67AA", feed: "stack", tint: "#0047AB", melee: false, rate: 0.82, ammo: 5, pellets: 1, spread: 6e-4, speed: 7600, noise: 760, kick: 17, rail: true, pierce: 999, shieldDmg: 99, armourPierce: 99, throughDoors: true, life: 1.25, eSpeed: 3200, eRate: 2.4, eBurst: 1 },
         laser: { name: "\u5F39\u5F39\u6FC0\u5149\u67AA", feed: "stack", tint: "#00D6FF", melee: false, rate: 0.15, ammo: 18, pellets: 1, spread: 0.01, speed: 1320, noise: 300, kick: 2, ricochet: true, bounces: 6, shieldDmg: 1, life: 2.7, eSpeed: 900, eRate: 1.05, eBurst: 2 },
         butcher: { name: "\u5C60\u592B\u4E4B\u89E6", feed: "none", tint: "#E40808", melee: true, reach: 52, rate: 0.2, ammo: 0, lethal: true, noise: 88, throwLethal: true, sawLauncher: true, sawRate: 2.25 },
         sawblade: { name: "\u7535\u952F\u7247", feed: "none", tint: "#161513", melee: false, rate: 0, ammo: 0, throwSpeed: 980, noise: 150, kick: 0, throwLethal: true, blade: true, life: 14, noPickup: true },
-        virus: { name: "\u4F20\u67D3\u75C5\u6BD2", feed: "none", tint: "#7AC943", melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, offhandOnly: true, passive: true, noThrow: true, throwLethal: false },
-        shield: { name: "\u76FE\u724C", feed: "none", tint: "#12A3DA", melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, defense: true, shieldArc: 1.34, durability: 5, noThrow: true, throwLethal: false }
+        virus: { name: "\u4F20\u67D3\u75C5\u6BD2", feed: "stack", tint: "#7AC943", melee: false, rate: 0.42, ammo: 1, lobbed: true, fuse: 0.42, throwSpeed: 760, radius: 132, noise: 0, kick: 0, passive: true, statusEffect: "virus", virusCloud: true, silent: true, throwLethal: false, enemyUsable: false },
+        copySauce: { name: "\u590D\u5236\u8638\u6599", feed: "stack", tint: "#00D6FF", melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, copySauce: true, noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+        madExtract: { name: "\u75AF\u72C2\u63D0\u53D6\u6DB2", feed: "stack", tint: "#7AC943", melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: "mad", noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+        tameExtract: { name: "\u9A6F\u5316\u63D0\u53D6\u6DB2", feed: "stack", tint: "#8A2BE2", melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: "tame", noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+        virusExtract: { name: "\u75C5\u6BD2\u63D0\u53D6\u6DB2", feed: "stack", tint: "#7AC943", melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: "virus", noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+        shield: { name: "\u76FE\u724C", feed: "none", tint: "#12A3DA", melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, defense: true, shieldArc: 1.34, durability: 5, throwSpeed: 760, throwLethal: false }
       };
       ENEMY_DEF = {
         strawman: { speed: 0, patrol: 0, cone: 0, range: 0, r: 11, turn: 0, keep: 0, passive: true, handless: true },
@@ -1638,7 +1655,7 @@
       g.restore();
     }
     function isDartWeapon(kind) {
-      return kind === "dart" || kind === "tameDart";
+      return kind === "dart" || kind === "tameDart" || kind === "virus";
     }
     function weaponSilhouette(g, kind) {
       switch (kind) {
@@ -1854,6 +1871,30 @@
           g.fillRect(0, -10, 2, 20);
           g.fillRect(-9, -1, 20, 2);
           break;
+        case "copySauce":
+        case "madExtract":
+        case "tameExtract":
+        case "virusExtract":
+          g.lineWidth = 1.8;
+          g.strokeRect(-5.5, -9, 11, 18);
+          g.fillRect(-3.2, -13, 6.4, 4);
+          if (kind === "copySauce") {
+            g.beginPath();
+            g.arc(0, 0, 4.8, 0.35, TAU * 0.82);
+            g.stroke();
+            g.beginPath();
+            g.moveTo(5, -1);
+            g.lineTo(8.5, -3.5);
+            g.lineTo(7.2, 1.5);
+            g.closePath();
+            g.fill();
+          } else {
+            g.beginPath();
+            g.arc(-2.2, -1, 2.1, 0, TAU);
+            g.arc(2.8, 3, 1.8, 0, TAU);
+            g.fill();
+          }
+          break;
         default:
           break;
       }
@@ -1902,6 +1943,14 @@
         if (!e.alive || e.state === S_DEAD || e.state === S_DOWN) continue;
         const def = ENEMY_DEF[e.type];
         const pulse = 1 + Math.sin(game2.time * 13 + e.x * 0.01) * 0.11;
+        if (e.infectT > 0) {
+          ctx2.globalAlpha = 0.58;
+          ctx2.strokeStyle = WEAPONS.virus.tint;
+          ctx2.lineWidth = 1.8;
+          ctx2.beginPath();
+          ctx2.arc(e.x, e.y, (def.r + 14) * pulse, 0, TAU);
+          ctx2.stroke();
+        }
         if (e.friendly) {
           ctx2.globalAlpha = 0.74;
           ctx2.strokeStyle = WEAPONS.tameDart.tint;
@@ -3423,7 +3472,7 @@
   };
 
   // overprint/src/game.js
-  var WEAPON_KEYS = ["fists", "knife", "bat", "katana", "quixote", "pistol", "revolver", "smg", "shotgun", "ripper", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "virus", "disguise", "sniper", "laser", "butcher", "shield"];
+  var WEAPON_KEYS = ["fists", "knife", "bat", "katana", "quixote", "pistol", "revolver", "smg", "shotgun", "ripper", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "virus", "copySauce", "madExtract", "tameExtract", "virusExtract", "disguise", "sniper", "laser", "butcher", "shield"];
   var CODEX_WEAPON_KEYS = WEAPON_KEYS.filter((k) => k !== "fists");
   var ENEMY_KEYS = ["strawman", "thug", "gunner", "hound", "patroller", "shield"];
   var PRACTICE_MAPS = [
@@ -3432,8 +3481,8 @@
     { id: "lanes", label: "\u957F\u5ECA" }
   ];
   var PRACTICE_ENEMIES = ["strawman", "thug", "gunner", "hound", "patroller", "shield"];
-  var PRACTICE_WEAPONS = ["pistol", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "virus", "disguise", "sniper", "laser", "butcher", "shield", "katana", "quixote", "knife", "bat"];
-  var DEFENSE_SHOP_WEAPONS = ["pistol", "shield", "katana", "quixote", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "virus", "shield", "molotov", "dart", "sniper", "laser", "butcher", "shield"];
+  var PRACTICE_WEAPONS = ["pistol", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "virus", "copySauce", "madExtract", "tameExtract", "virusExtract", "disguise", "sniper", "laser", "butcher", "shield", "katana", "quixote", "knife", "bat"];
+  var DEFENSE_SHOP_WEAPONS = ["pistol", "shield", "katana", "quixote", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "virus", "copySauce", "shield", "molotov", "dart", "tameDart", "sniper", "laser", "butcher", "shield"];
   var CODEX_KEY = "overprint.codex";
   var SLOW = {
     dash: { dur: 0.17, scale: 0.34 },
@@ -3663,6 +3712,10 @@
         attackCd: 0,
         swing: 0,
         burnT: 0,
+        infectT: 0,
+        madT: 0,
+        madDirT: 0,
+        madDirA: 0,
         sawCd: 0,
         blockFlash: 0,
         swapCd: 0,
@@ -3790,10 +3843,110 @@
     }
     function effectRadius(kind, effectScale = 1) {
       const w = WEAPONS[kind] || WEAPONS.pistol;
+      if (w.virusCloud) return (w.radius || 128) * effectScale;
       if (w.fire) return (w.fireRadius || 96) * effectScale;
       if (w.radius) return w.radius * effectScale;
       if (w.deploy) return (w.deployRadius || 42) * effectScale;
       return 24;
+    }
+    const EFFECT_WEAPON = { mad: "dart", tame: "tameDart", virus: "virus" };
+    const EFFECT_EXTRACT = { mad: "madExtract", tame: "tameExtract", virus: "virusExtract" };
+    const EFFECT_TINT = { mad: "#7AC943", tame: "#8A2BE2", virus: "#7AC943" };
+    function weaponStatusEffect(kind) {
+      const w = WEAPONS[kind];
+      return w && w.statusEffect ? w.statusEffect : null;
+    }
+    function enemyCanUseWeapon(kind) {
+      const w = WEAPONS[kind];
+      return !!(w && kind !== "fists" && w.enemyUsable !== false && !w.lobbed && !w.offhandOnly && !w.passive && !w.extract && !w.copySauce);
+    }
+    function extractKeyForEffect(effect) {
+      return EFFECT_EXTRACT[effect] || null;
+    }
+    function effectWeaponKey(effect) {
+      return EFFECT_WEAPON[effect] || null;
+    }
+    function activeAttackEffect(actor, weaponKey, surface = "direct") {
+      const base = weaponStatusEffect(weaponKey);
+      if (actor === game2.player) {
+        const off = WEAPONS[game2.player.offhandWeapon];
+        if (off?.extract && off.extractEffect) return off.extractEffect;
+        const side = weaponStatusEffect(game2.player.offhandWeapon);
+        if (surface === "shrapnel" && weaponKey === "frag" && (side === "mad" || side === "tame")) return side;
+      }
+      return base;
+    }
+    function applyAttackEffectToEnemy(e, effect, x, y, source = game2.player) {
+      if (!effect || !e.alive || e.state === S_DEAD) return false;
+      if (effect === "tame") return convertEnemy(e, x, y);
+      if (effect === "mad") return maddenEnemy(e, WEAPONS.dart.mad || 7.2, x, y);
+      if (effect === "virus") return infectEnemy(e, 20, source === game2.player || !!source?.friendly);
+      return false;
+    }
+    function infectEnemy(e, seconds = 20, byPlayer = true) {
+      if (!e.alive || e.state === S_DEAD) return false;
+      const fresh = !(e.infectT > 0);
+      e.infectT = Math.max(e.infectT || 0, seconds);
+      e.infectByPlayer = !!(e.infectByPlayer || byPlayer);
+      e.stagger = Math.max(e.stagger || 0, fresh ? 0.18 : 0.08);
+      if (fresh) burst(e.x, e.y, 12, 150, EFFECT_TINT.virus, 2.3, 0.55);
+      return true;
+    }
+    function infectPlayer(seconds = 20) {
+      const p = game2.player;
+      if (!p.alive || game2.state !== "play") return false;
+      const fresh = !(p.infectT > 0);
+      p.infectT = Math.max(p.infectT || 0, seconds);
+      if (fresh) {
+        game2.banner = "\u611F\u67D3\uFF1A\u6E05\u7A7A\u654C\u4EBA\u53EF\u6CBB\u6108";
+        game2.bannerT = 1.15;
+        burst(p.x, p.y, 16, 170, EFFECT_TINT.virus, 2.5, 0.62);
+        sfx.status();
+      }
+      return true;
+    }
+    function applyStatusEffectToPlayer(effect, seconds = 5.8) {
+      const p = game2.player;
+      if (!p.alive || game2.state !== "play") return false;
+      if (effect === "virus") return infectPlayer(20);
+      if (effect === "mad") {
+        p.madT = Math.max(p.madT || 0, seconds);
+        p.madDirT = 0;
+        game2.banner = "\u75AF\u72C2\uFF1A\u6682\u65F6\u5931\u63A7";
+        game2.bannerT = 0.9;
+        burst(p.x, p.y, 14, 150, EFFECT_TINT.mad, 2.2, 0.46);
+        sfx.status();
+        return true;
+      }
+      if (effect === "tame") {
+        game2.banner = "\u9A6F\u5316\u65E0\u6548\uFF1A\u4F60\u514D\u75AB";
+        game2.bannerT = 0.8;
+        sfx.status();
+        return true;
+      }
+      return false;
+    }
+    function infectAt(x, y, weaponKey = "virus", byEnemy = false, effectScale = 1) {
+      const w = WEAPONS[weaponKey] || WEAPONS.virus;
+      const radius = (w.radius || 128) * effectScale;
+      const tint = w.tint || EFFECT_TINT.virus;
+      game2.flashes.push({ x, y, a: rnd() * TAU, t: 0, dur: 0.16, size: 1.65 });
+      burst(x, y, 28, 230, tint, 3.1, 0.62);
+      burst(x, y, 14, 120, "#161513", 1.8, 0.55);
+      shake(3);
+      triggerSlow("throw");
+      for (const e of game2.pools.enemies) {
+        if (!e.alive || e.state === S_DEAD) continue;
+        const d = dist(x, y, e.x, e.y);
+        if (d > radius || !blastClear(x, y, e.x, e.y)) continue;
+        infectEnemy(e, 20, !byEnemy);
+      }
+      const p = game2.player;
+      if (p.alive && game2.state === "play" && dist(x, y, p.x, p.y) <= radius * 0.72 && blastClear(x, y, p.x, p.y)) {
+        infectPlayer(20);
+      }
+      game2.banner = "\u75C5\u6BD2\u6269\u6563";
+      game2.bannerT = 0.85;
     }
     function estimateThrow(actor, kind, charge = 0) {
       const w = WEAPONS[kind] || WEAPONS.pistol;
@@ -3816,7 +3969,7 @@
           ...target,
           points: points2,
           radius: effectRadius(kind, 1),
-          explosive: !!w.fire || !!w.radius,
+          explosive: !!w.fire || !!w.radius || !!w.virusCloud,
           rangeMode: true
         };
       }
@@ -3991,7 +4144,7 @@
     }
     game2.heldShieldBlocks = heldShieldBlocks;
     game2.blockOnHeldShield = blockOnHeldShield;
-    function sprayShrapnel(x, y, w, byEnemy) {
+    function sprayShrapnel(x, y, w, byEnemy, statusEffect = null) {
       const n = w.shrapnel || 0;
       if (!n) return;
       const step2 = TAU / n;
@@ -4016,24 +4169,31 @@
         b.owner = null;
         b.throughWalls = false;
         b.wallPierced = 0;
-        b.weapon = null;
+        b.statusEffect = statusEffect || null;
+        b.weapon = statusEffect ? effectWeaponKey(statusEffect) : null;
         b.projectile = null;
         b.explosive = false;
       }
     }
-    function explodeAt(x, y, weaponKey, byEnemy = false, effectScale = 1) {
+    function explodeAt(x, y, weaponKey, byEnemy = false, effectScale = 1, statusEffect = null, shrapnelEffect = statusEffect) {
       const w = WEAPONS[weaponKey] || WEAPONS.grenade;
+      if (w.virusCloud && !statusEffect) {
+        infectAt(x, y, weaponKey, byEnemy, effectScale);
+        return;
+      }
       const radius = (w.radius || 96) * effectScale;
       const tint = w.tint || "#EC0A63";
       game2.flashes.push({ x, y, a: rnd() * TAU, t: 0, dur: 0.18, size: 2.7 });
       burst(x, y, 34, 390, tint, 4.2, 0.68);
       burst(x, y, 22, 250, "#161513", 3, 0.75);
-      noise(x, y, w.noise || radius * 5, tint);
+      if (!w.silent) noise(x, y, w.noise ?? radius * 5, tint);
       shake(w.shake || 18);
       hitstop(0.075);
       triggerSlow("explosion");
-      if (sfx.explosion) sfx.explosion();
-      else sfx.splinter();
+      if (!w.silent) {
+        if (sfx.explosion) sfx.explosion();
+        else sfx.splinter();
+      }
       for (const win of game2.level.windows) {
         if (win.broken || dist(x, y, win.x, win.y) > radius * 0.95) continue;
         if (!blastClear(x, y, win.x, win.y)) continue;
@@ -4065,6 +4225,10 @@
           damageShield(e, Math.max(1, Math.round((w.shieldDmg || 3) * falloff)), true, x, y);
           if (shieldBlocks(e, x, y)) continue;
         }
+        if (statusEffect) {
+          applyAttackEffectToEnemy(e, statusEffect, x, y, byEnemy ? null : game2.player);
+          continue;
+        }
         if (d <= radius * (w.blastKill || 0.75) || e.state === S_DOWN) {
           killEnemy(e, 1.35, nx, ny, byEnemy);
         } else {
@@ -4076,10 +4240,11 @@
         const d = dist(x, y, p.x, p.y);
         if (d <= radius * 0.58 && blastClear(x, y, p.x, p.y)) {
           if (heldShieldBlocks(p, x, y)) blockOnHeldShield(p, x, y, true);
+          else if (statusEffect) applyStatusEffectToPlayer(statusEffect);
           else game2.killPlayer();
         }
       }
-      sprayShrapnel(x, y, w, byEnemy);
+      sprayShrapnel(x, y, w, byEnemy, shrapnelEffect);
     }
     function panicFire(e, chance) {
       const w = WEAPONS[e.weapon];
@@ -4159,10 +4324,14 @@
     }
     function finishLobbed(t, w) {
       t.alive = false;
+      if (w.virusCloud && (!t.statusEffect || t.statusEffect === "virus")) {
+        infectAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
+        return;
+      }
       if (w.deploy) deployAt(t.x, t.y, w.deploy, t.friendly !== false);
       else if (w.flashbang) flashAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
       else if (w.fire) igniteAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
-      else explodeAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
+      else explodeAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1, t.statusEffect || null, t.shrapnelEffect || t.statusEffect || null);
     }
     function supportPointClear(x, y, r = 8) {
       return !game2.level.solidAt(x, y) && !game2.level.solidAt(x + r, y) && !game2.level.solidAt(x - r, y) && !game2.level.solidAt(x, y + r) && !game2.level.solidAt(x, y - r);
@@ -4324,8 +4493,7 @@
       let best = null, bd = 430 * 430;
       for (const k of game2.pools.pickups) {
         if (!k.alive) continue;
-        const w = WEAPONS[k.kind];
-        if (!w || w.lobbed || w.offhandOnly || w.passive) continue;
+        if (!enemyCanUseWeapon(k.kind)) continue;
         const d = dist(e.x, e.y, k.x, k.y);
         if (d * d < bd) {
           bd = d * d;
@@ -4345,8 +4513,8 @@
       if (e.weapon !== "fists") return true;
       for (const k of game2.pools.pickups) {
         if (!k.alive) continue;
+        if (!enemyCanUseWeapon(k.kind)) continue;
         const w = WEAPONS[k.kind];
-        if (!w || w.lobbed || w.offhandOnly || w.passive) continue;
         if (dist(e.x, e.y, k.x, k.y) > 22) continue;
         e.weapon = k.kind;
         e.ammo = k.ammo || WEAPONS[k.kind].ammo;
@@ -4825,7 +4993,8 @@
       e.type = s.type || "thug";
       e.x = s.x;
       e.y = s.y;
-      e.weapon = s.weapon || "fists";
+      const weapon = s.weapon || "fists";
+      e.weapon = weapon === "fists" || enemyCanUseWeapon(weapon) ? weapon : "fists";
       e.ammo = WEAPONS[e.weapon]?.ammo || 0;
       e.seeking = 0;
       e.blockFlash = 0;
@@ -4856,6 +5025,7 @@
       e.timer = 0;
       e.downTimer = 0;
       e.fireTimer = 0;
+      e.attackTimer = 0;
       e.burst = 0;
       e.searchT = 0;
       e.ptx = s.x;
@@ -4873,6 +5043,8 @@
       e.reload = 0;
       e.madT = 0;
       e.burnT = 0;
+      e.infectT = 0;
+      e.infectByPlayer = false;
       e.roomGoal = -1;
       e.roomSeq = 0;
       e.friendly = false;
@@ -4933,6 +5105,9 @@
       p.attackCd = 0;
       p.swing = 0;
       p.burnT = 0;
+      p.infectT = 0;
+      p.madT = 0;
+      p.madDirT = 0;
       p.sawCd = 0;
       p.blockFlash = 0;
       p.swapCd = 0;
@@ -5056,6 +5231,8 @@
         e.contagious = true;
         e.madT = 0;
         e.burnT = 0;
+        e.infectT = 0;
+        e.infectByPlayer = false;
         e.state = S_CHASE;
         e.seeking = 0;
         e.seen = 1;
@@ -5077,6 +5254,8 @@
       addCorpse(e);
       e.madT = 0;
       e.burnT = 0;
+      e.infectT = 0;
+      e.infectByPlayer = false;
       e.friendly = false;
       e.converted = false;
       e.contagious = false;
@@ -5283,6 +5462,64 @@
       sfx.swing();
       return kills;
     }
+    function isSwapGun(kind) {
+      const w = WEAPONS[kind];
+      return !!(w && !w.melee && !w.lobbed && !w.projectile && !w.defense && !w.silent && !w.copySauce && !w.extract && !w.passive && w.pellets && w.ammo > 0);
+    }
+    function gunSwapBurst(kind) {
+      const p = game2.player;
+      const w = WEAPONS[kind];
+      if (!w) return 0;
+      const shots = Math.max(1, Math.ceil((w.ammo || 1) / 2));
+      const statusEffect = activeAttackEffect(p, kind, "direct");
+      const base = p.aim;
+      for (let shot = 0; shot < shots; shot++) {
+        const fan = shots > 1 ? (shot - (shots - 1) / 2) / (shots - 1) : 0;
+        const shotAim = base + fan * Math.min(0.2, (w.spread || 0.025) * 2.8) + (rnd() - 0.5) * (w.spread || 0.025);
+        for (let i = 0; i < (w.pellets || 1); i++) {
+          const b = spawnFrom(game2.pools.bullets);
+          if (!b) break;
+          const a = shotAim + (rnd() - 0.5) * (w.pellets > 1 ? w.spread * 2 : w.spread || 0.02);
+          b.alive = true;
+          b.x = p.x + Math.cos(a) * 16;
+          b.y = p.y + Math.sin(a) * 16;
+          b.vx = Math.cos(a) * w.speed * (0.92 + rnd() * 0.16);
+          b.vy = Math.sin(a) * w.speed * (0.92 + rnd() * 0.16);
+          b.life = w.life || 1.6;
+          b.friendly = true;
+          b.pierce = w.pierce || (w.rail ? 999 : 0);
+          b.shieldDmg = w.shieldDmg ?? 1;
+          b.armourPierce = w.armourPierce || 0;
+          b.throughDoors = !!w.throughDoors;
+          b.hitDoor = null;
+          b.throughWalls = !!w.throughWalls;
+          b.wallPierced = 0;
+          b.owner = null;
+          b.near = 0;
+          b.statusEffect = statusEffect || null;
+          b.weapon = kind;
+          b.projectile = null;
+          b.explosive = false;
+          b.ricochet = !!w.ricochet;
+          b.bounces = w.bounces || 0;
+        }
+        if (shot < 5) ejectCasing(p.x, p.y, shotAim);
+      }
+      const mx = p.x + Math.cos(base) * 19, my = p.y + Math.sin(base) * 19;
+      game2.flashes.push({ x: mx, y: my, a: base, t: 0, dur: 0.13, size: w.pellets > 1 ? 1.8 : 1.25 });
+      burst(mx, my, 7, 220, "#F7CF16", 2.4, 0.18);
+      noise(p.x, p.y, Math.round((w.noise || 280) * 0.82), w.tint);
+      shake(Math.min(14, 3 + shots * 0.45 + (w.pellets > 1 ? 5 : 0)));
+      const fill = clamp((p.ammo ?? w.ammo) / w.ammo, 0, 1);
+      if (kind === "shotgun") sfx.shotgun(fill);
+      else if (kind === "smg" || kind === "ripper") sfx.smg(fill);
+      else if (kind === "revolver") sfx.revolver(fill);
+      else sfx.shot(fill);
+      game2.banner = `\u6362\u624B\u8FDE\u5C04 \xD7${shots}`;
+      game2.bannerT = 0.7;
+      p.attackCd = Math.max(p.attackCd, Math.min(0.38, (w.rate || 0.2) * Math.min(shots, 5) * 0.3));
+      return shots;
+    }
     function swapPlayerWeapon() {
       const p = game2.player;
       const incoming = WEAPONS[p.offhandWeapon];
@@ -5316,6 +5553,7 @@
       game2.banner = `\u5207\u51FA ${WEAPONS[p.weapon].name}`;
       game2.bannerT = 0.58;
       if (p.weapon === "katana") katanaSwapSlash();
+      else if (isSwapGun(p.weapon)) gunSwapBurst(p.weapon);
       else sfx.pickup();
       return true;
     }
@@ -5323,6 +5561,8 @@
     function maddenEnemy(e, seconds, x, y) {
       if (!e.alive || e.state === S_DEAD) return false;
       e.madT = Math.max(e.madT || 0, seconds || 6.5);
+      e.infectT = 0;
+      e.infectByPlayer = false;
       e.state = S_CHASE;
       e.seeking = 0;
       e.seen = 1;
@@ -5340,6 +5580,8 @@
       e.converted = true;
       e.contagious = playerHasOffhand("virus");
       e.madT = 0;
+      e.infectT = 0;
+      e.infectByPlayer = false;
       e.state = S_CHASE;
       e.seeking = 0;
       e.seen = 1;
@@ -5415,11 +5657,80 @@
       }
     }
     game2.igniteAt = igniteAt;
-    game2.killPlayer = function() {
+    function nearestHostile(x, y, range = Infinity, requireSight = false) {
+      let best = null, bd = range;
+      for (const e of game2.pools.enemies) {
+        if (!e.alive || e.state === S_DEAD || e.friendly) continue;
+        const d = dist(x, y, e.x, e.y);
+        if (d >= bd) continue;
+        if (requireSight && !hasLineOfSight(game2.level, x, y, e.x, e.y)) continue;
+        bd = d;
+        best = e;
+      }
+      return best;
+    }
+    function emitInfection(unit, dt) {
+      if (rnd() > Math.min(0.9, dt * 11)) return;
+      const a = rnd() * TAU;
+      const r = 9 + rnd() * 16;
+      particle(
+        unit.x + Math.cos(a) * r,
+        unit.y + Math.sin(a) * r,
+        Math.cos(a) * 18,
+        Math.sin(a) * 18 - 34,
+        0.28 + rnd() * 0.24,
+        1.8 + rnd() * 2.1,
+        EFFECT_TINT.virus
+      );
+    }
+    function spreadVirusFrom(unit, byPlayer) {
+      for (const o of game2.pools.enemies) {
+        if (o === unit || !o.alive || o.state === S_DEAD || o.infectT > 0) continue;
+        const d = dist(unit.x, unit.y, o.x, o.y);
+        if (d > 72 || !hasLineOfSight(game2.level, unit.x, unit.y, o.x, o.y)) continue;
+        infectEnemy(o, 20, byPlayer);
+      }
+      const p = game2.player;
+      if (unit !== p && p.alive && game2.state === "play" && p.infectT <= 0) {
+        const d = dist(unit.x, unit.y, p.x, p.y);
+        if (d <= 58 && hasLineOfSight(game2.level, unit.x, unit.y, p.x, p.y)) infectPlayer(20);
+      }
+    }
+    function updateInfections(dt) {
+      for (const e of game2.pools.enemies) {
+        if (!e.alive || e.state === S_DEAD || !(e.infectT > 0)) continue;
+        emitInfection(e, dt);
+        spreadVirusFrom(e, !!e.infectByPlayer);
+        e.infectT -= dt;
+        e.stagger = Math.max(e.stagger || 0, 0.04);
+        if (e.infectT <= 0) {
+          const a = rnd() * TAU;
+          killEnemy(e, 0.9, Math.cos(a), Math.sin(a), !e.infectByPlayer);
+        }
+      }
+      const p = game2.player;
+      if (!p.alive || !(p.infectT > 0)) return;
+      if (hostilesLeft() === 0) {
+        p.infectT = 0;
+        game2.banner = "\u611F\u67D3\u5DF2\u6CBB\u6108";
+        game2.bannerT = 0.9;
+        burst(p.x, p.y, 18, 190, "#8A2BE2", 2.4, 0.52);
+        sfx.status();
+        return;
+      }
+      emitInfection(p, dt);
+      spreadVirusFrom(p, true);
+      p.infectT -= dt;
+      if (p.infectT <= 0) {
+        p.hp = 1;
+        game2.killPlayer(null, true);
+      }
+    }
+    game2.killPlayer = function(_source = null, force = false) {
       const p = game2.player;
       if (!p.alive || game2.state !== "play") return;
-      if (p.iframes > 0) return;
-      if ((p.hp || 1) > 1) {
+      if (!force && p.iframes > 0) return;
+      if (!force && (p.hp || 1) > 1) {
         p.hp--;
         p.iframes = 0.9;
         p.blockFlash = 0.35;
@@ -5447,7 +5758,7 @@
       game2.raiseAlarm(e.lkx, e.lky);
       sfx.alert();
     };
-    function launchProjectile(actor, angle, weaponKey, friendly) {
+    function launchProjectile(actor, angle, weaponKey, friendly, statusEffect = null) {
       const w = WEAPONS[weaponKey];
       const b = spawnFrom(game2.pools.bullets);
       if (!b) return null;
@@ -5468,6 +5779,7 @@
       b.owner = actor === game2.player ? null : actor;
       b.throughWalls = !!w.throughWalls;
       b.wallPierced = 0;
+      b.statusEffect = statusEffect || weaponStatusEffect(weaponKey);
       b.weapon = weaponKey;
       b.projectile = w.projectile || null;
       b.explosive = !!w.projectile;
@@ -5513,6 +5825,7 @@
         b.throughWalls = !!w.throughWalls;
         b.wallPierced = 0;
         b.owner = e;
+        b.statusEffect = weaponStatusEffect(e.weapon);
         b.weapon = e.weapon;
         b.projectile = null;
         b.explosive = false;
@@ -5726,6 +6039,7 @@
     game2.updateDeploys = updateDeploys;
     function doAttack(actor, weaponKey) {
       const w = WEAPONS[weaponKey];
+      const statusEffect = activeAttackEffect(actor, weaponKey, "direct");
       if (w.melee) {
         sfx.swing();
         let hit = false;
@@ -5745,7 +6059,8 @@
             continue;
           }
           hit = true;
-          if (w.lethal || e.state === S_DOWN) killEnemy(e, 1, Math.cos(a), Math.sin(a));
+          if (statusEffect) applyAttackEffectToEnemy(e, statusEffect, actor.x, actor.y, actor);
+          else if (w.lethal || e.state === S_DOWN) killEnemy(e, 1, Math.cos(a), Math.sin(a));
           else knockdown(e, Math.cos(a), Math.sin(a));
         }
         for (const win of game2.level.windows) {
@@ -5760,7 +6075,7 @@
         return true;
       }
       if (w.projectile) {
-        launchProjectile(actor, actor.aim, weaponKey, actor === game2.player);
+        launchProjectile(actor, actor.aim, weaponKey, actor === game2.player, statusEffect);
         const mx2 = actor.x + Math.cos(actor.aim) * 19, my2 = actor.y + Math.sin(actor.aim) * 19;
         if (!w.silent) {
           game2.flashes.push({ x: mx2, y: my2, a: actor.aim, t: 0, dur: 0.11, size: 1.25 });
@@ -5793,6 +6108,7 @@
         b.wallPierced = 0;
         b.owner = null;
         b.near = 0;
+        b.statusEffect = statusEffect || null;
         b.weapon = weaponKey;
         b.projectile = null;
         b.explosive = false;
@@ -5816,11 +6132,52 @@
       }
       return true;
     }
+    function useCopySauce() {
+      const p = game2.player;
+      const w = WEAPONS[p.weapon];
+      const sideEffect = weaponStatusEffect(p.offhandWeapon);
+      const extract = extractKeyForEffect(sideEffect);
+      p.attackCd = (w.rate || 0.34) * (game2.playerStats.attackRate || 1);
+      if (!extract) {
+        game2.banner = "\u526F\u624B\u6CA1\u6709\u53EF\u590D\u5236\u6548\u679C";
+        game2.bannerT = 0.75;
+        sfx.empty();
+        return false;
+      }
+      setMainSlot(p, extract, WEAPONS[extract].ammo || 1);
+      game2.floorLoadout = stashPlayerWeapon() || game2.floorLoadout;
+      game2.banner = `\u63D0\u53D6\uFF1A${WEAPONS[extract].name}`;
+      game2.bannerT = 0.85;
+      burst(p.x, p.y, 18, 160, WEAPONS[extract].tint || "#00D6FF", 2.4, 0.48);
+      sfx.status();
+      return true;
+    }
+    function useExtractOnPlayer() {
+      const p = game2.player;
+      const w = WEAPONS[p.weapon];
+      const effect = w.extractEffect;
+      p.attackCd = (w.rate || 0.34) * (game2.playerStats.attackRate || 1);
+      p.ammo = Math.max(0, (p.ammo || 1) - 1);
+      applyStatusEffectToPlayer(effect, 5.8);
+      burst(p.x, p.y, 16, 160, w.tint || "#7AC943", 2.3, 0.5);
+      sfx.status();
+      if (p.ammo <= 0) setMainSlot(p, "fists", 0);
+      if (game2.mode === "defense") game2.floorLoadout = stashPlayerWeapon();
+      return true;
+    }
     function playerAttack() {
       const p = game2.player;
       const w = WEAPONS[p.weapon];
       if (p.attackCd > 0) return;
       const rateScale = game2.playerStats.attackRate || 1;
+      if (w.copySauce) {
+        useCopySauce();
+        return;
+      }
+      if (w.extract) {
+        useExtractOnPlayer();
+        return;
+      }
       if (w.melee) {
         p.attackCd = w.rate * rateScale;
         p.swing = 0.16;
@@ -5868,6 +6225,8 @@
       const w = WEAPONS[kind] || WEAPONS.pistol;
       const lobbed = !!w.lobbed;
       const st = lobbed ? throwStats(charge) : { charge: 0, power: 1, effectScale: 1 };
+      const statusEffect = activeAttackEffect(actor, kind, lobbed ? "direct" : "thrown");
+      const shrapnelEffect = lobbed && kind === "frag" ? activeAttackEffect(actor, kind, "shrapnel") : null;
       t.alive = true;
       t.kind = kind;
       t.ammo = ammo;
@@ -5899,9 +6258,11 @@
       t.charge = st.charge;
       t.power = st.power;
       t.effectScale = 1;
+      t.statusEffect = statusEffect || null;
+      t.shrapnelEffect = shrapnelEffect || null;
       t.friendly = actor === game2.player;
       t.noPickup = !!w.noPickup;
-      sfx.throwIt();
+      if (!w.silent) sfx.throwIt();
       shake(2);
       triggerSlow("throw");
     }
@@ -5925,6 +6286,8 @@
       t.charge = 0;
       t.power = 1;
       t.effectScale = 1;
+      t.statusEffect = null;
+      t.shrapnelEffect = null;
       t.friendly = actor === game2.player;
       t.noPickup = true;
       burst(t.x, t.y, 6, 150, w.tint || "#161513", 1.8, 0.24);
@@ -6004,7 +6367,20 @@
       const p = game2.player;
       const inp2 = game2.input;
       if (!p.alive) return;
-      if (inp2.hasAim) {
+      if (p.madT > 0) p.madT = Math.max(0, p.madT - dt);
+      const playerMad = p.madT > 0;
+      const madTarget = playerMad ? nearestHostile(p.x, p.y, 920, false) : null;
+      if (playerMad) {
+        if (madTarget) p.aim = Math.atan2(madTarget.y - p.y, madTarget.x - p.x);
+        else {
+          p.madDirT -= dt;
+          if (p.madDirT <= 0) {
+            p.madDirT = 0.45 + rnd() * 0.65;
+            p.madDirA = rnd() * TAU;
+          }
+          p.aim += angDelta(p.aim, p.madDirA) * Math.min(1, 4.5 * dt);
+        }
+      } else if (inp2.hasAim) {
         let best = inp2.aimAngle, bd = 0.44;
         for (const e of game2.pools.enemies) {
           if (!e.alive || e.state === S_DEAD) continue;
@@ -6025,7 +6401,17 @@
         p.aim = Math.atan2(wy - p.y, wx - p.x);
       }
       let ix, iy;
-      if (inp2.analog) {
+      if (playerMad) {
+        if (madTarget) {
+          const dx = madTarget.x - p.x, dy = madTarget.y - p.y;
+          const l = Math.hypot(dx, dy) || 1;
+          ix = dx / l;
+          iy = dy / l;
+        } else {
+          ix = Math.cos(p.aim);
+          iy = Math.sin(p.aim);
+        }
+      } else if (inp2.analog) {
         ix = inp2.axisX;
         iy = inp2.axisY;
       } else {
@@ -6082,11 +6468,19 @@
         }
       }
       if (p.swapCd > 0) p.swapCd = Math.max(0, p.swapCd - dt);
-      if (inp2.swap) {
+      if (playerMad) {
+        inp2.swap = false;
+        inp2.dash = false;
+        inp2.throwHeld = false;
+        inp2.throwReleased = false;
+        inp2.throwIt = false;
+        inp2.fireReleased = false;
+      }
+      if (!playerMad && inp2.swap) {
         inp2.swap = false;
         if (swapPlayerWeapon()) game2.didAttack = true;
       }
-      if (inp2.dash && p.dashCharges > 0 && p.dashT <= 0 && p.katanaT <= 0) {
+      if (!playerMad && inp2.dash && p.dashCharges > 0 && p.dashT <= 0 && p.katanaT <= 0) {
         inp2.dash = false;
         const dx = ix || Math.cos(p.aim), dy = iy || Math.sin(p.aim);
         const dl = Math.hypot(dx, dy) || 1;
@@ -6106,7 +6500,9 @@
       if (p.iframes > 0) p.iframes -= dt;
       if (p.blockFlash > 0) p.blockFlash -= dt;
       const held = WEAPONS[p.weapon] || WEAPONS.fists;
-      const chargingLob = held.lobbed && inp2.fire;
+      const manualFire = !playerMad && inp2.fire;
+      const autoMadFire = playerMad && madTarget && hasLineOfSight(game2.level, p.x, p.y, madTarget.x, madTarget.y);
+      const chargingLob = held.lobbed && manualFire;
       if (held.sawLauncher) {
         p.sawCd -= dt;
         if (p.sawCd <= 0) {
@@ -6116,7 +6512,7 @@
       } else {
         p.sawCd = 0;
       }
-      const chargingKatana = (held.katana || held.lance) && inp2.fire && p.katanaT <= 0;
+      const chargingKatana = (held.katana || held.lance) && manualFire && p.katanaT <= 0;
       const chargingThrow = p.weapon !== "fists" && !held.noThrow && inp2.throwHeld;
       if (chargingKatana) {
         game2.throwCharge = Math.min(held.chargeMax || THROW_CHARGE_MAX, game2.throwCharge + dt);
@@ -6161,7 +6557,7 @@
         game2.throwPreview = null;
       }
       const currentHeld = WEAPONS[p.weapon] || WEAPONS.fists;
-      if (inp2.fire && !currentHeld.lobbed && !currentHeld.katana && !currentHeld.lance && p.katanaT <= 0) {
+      if ((manualFire || autoMadFire) && !currentHeld.lobbed && !currentHeld.katana && !currentHeld.lance && p.katanaT <= 0) {
         playerAttack();
         game2.didAttack = true;
       }
@@ -6185,7 +6581,7 @@
       const weaponKey = b.weapon || "rocket";
       const byEnemy = !b.friendly || !!(b.owner && b.owner.friendly);
       b.alive = false;
-      explodeAt(b.x, b.y, weaponKey, byEnemy);
+      explodeAt(b.x, b.y, weaponKey, byEnemy, 1, b.statusEffect || null);
     }
     function ricochetBullet(b, px, py, sx, sy) {
       if (!b.ricochet || b.bounces <= 0) return false;
@@ -6293,6 +6689,7 @@
             if (b.friendly && e.friendly) continue;
             if (dist(b.x, b.y, e.x, e.y) > ENEMY_DEF[e.type].r + 3) continue;
             const bw = WEAPONS[b.weapon] || null;
+            const statusEffect = b.statusEffect || weaponStatusEffect(b.weapon);
             const fx = b.x - b.vx * 0.02, fy = b.y - b.vy * 0.02;
             const sp = Math.hypot(b.vx, b.vy) || 1;
             const byOtherSide = !b.friendly || !!(b.owner && b.owner.friendly);
@@ -6319,13 +6716,13 @@
               stop = true;
               break;
             }
-            if (bw && bw.rail) {
+            if (bw && bw.rail && !statusEffect) {
               killEnemy(e, 1.25, b.vx / sp, b.vy / sp, byOtherSide, b.owner);
               continue;
             }
             if (shieldBlocks(e, fx, fy)) {
-              if (bw && (bw.poison || bw.tame)) {
-                burst(fx, fy, 3, 70, bw.tint || "#7AC943", 1.4, 0.22);
+              if (statusEffect) {
+                burst(fx, fy, 3, 70, bw?.tint || EFFECT_TINT[statusEffect] || "#7AC943", 1.4, 0.22);
                 b.alive = false;
                 stop = true;
                 break;
@@ -6347,14 +6744,8 @@
               stop = true;
               break;
             }
-            if (bw && bw.tame) {
-              convertEnemy(e, b.x, b.y);
-              b.alive = false;
-              stop = true;
-              break;
-            }
-            if (bw && bw.poison) {
-              maddenEnemy(e, bw.mad || 6.5, b.x, b.y);
+            if (statusEffect) {
+              applyAttackEffectToEnemy(e, statusEffect, b.x, b.y, b.owner || (b.friendly ? game2.player : null));
               b.alive = false;
               stop = true;
               break;
@@ -6472,7 +6863,8 @@
                 break;
               }
               const l = Math.hypot(t.vx, t.vy) || 1;
-              if (lethal) killEnemy(e, 1, t.vx / l, t.vy / l);
+              if (t.statusEffect) applyAttackEffectToEnemy(e, t.statusEffect, t.x, t.y, t.friendly ? game2.player : null);
+              else if (lethal) killEnemy(e, 1, t.vx / l, t.vy / l);
               else if (e.state !== S_DOWN) knockdown(e, t.vx / l, t.vy / l);
               else continue;
               if (blade) continue;
@@ -6788,6 +7180,7 @@
       updateBullets(wdt);
       updateThrown(wdt);
       updateFireZones(wdt);
+      updateInfections(wdt);
       updateDoors(wdt);
       updateDefense(wdt);
       for (const n of game2.noiseRings) n.t += wdt;
@@ -7199,6 +7592,10 @@
     "dart",
     "tameDart",
     "virus",
+    "copySauce",
+    "madExtract",
+    "tameExtract",
+    "virusExtract",
     "disguise",
     "sniper",
     "laser",
@@ -7225,7 +7622,11 @@
     molotov: "\u843D\u5730\u71C3\u70E7\uFF0C\u7559\u4E0B\u6301\u7EED\u4F24\u5BB3\u533A\u57DF\u3002",
     dart: "\u65E0\u58F0\u75AF\u72C2\u6BD2\u9556\uFF0C\u4F7F\u654C\u4EBA\u65E0\u5DEE\u522B\u653B\u51FB\u3002",
     tameDart: "\u65E0\u58F0\u9A6F\u670D\u6BD2\u9556\uFF0C\u628A\u654C\u4EBA\u62C9\u5230\u4F60\u8FD9\u8FB9\u3002",
-    virus: "\u526F\u624B\u88AB\u52A8\uFF1A\u9A6F\u670D\u6BD2\u9556\u8F6C\u5316\u7684\u53CB\u519B\u51FB\u6740\u540E\u7EE7\u7EED\u4F20\u67D3\u3002",
+    virus: "\u65E0\u58F0\u6295\u63B7\u611F\u67D3\u4E91\uFF1B\u4E5F\u53EF\u5728\u526F\u624B\u8BA9\u9A6F\u670D\u53CB\u519B\u7EE7\u7EED\u4F20\u67D3\u3002",
+    copySauce: "\u4E3B\u624B\u4F7F\u7528\u65F6\u590D\u5236\u526F\u624B\u72B6\u6001\u6B66\u5668\uFF0C\u8F6C\u5316\u4E3A\u5BF9\u5E94\u63D0\u53D6\u6DB2\u3002",
+    madExtract: "\u526F\u624B\u6D82\u5C42\uFF1A\u4E3B\u624B\u653B\u51FB\u9644\u5E26\u75AF\u72C2\uFF1B\u4E3B\u624B\u4F7F\u7528\u4F1A\u8BA9\u81EA\u5DF1\u6682\u65F6\u5931\u63A7\u3002",
+    tameExtract: "\u526F\u624B\u6D82\u5C42\uFF1A\u4E3B\u624B\u653B\u51FB\u9644\u5E26\u9A6F\u5316\uFF1B\u4E3B\u624B\u4F7F\u7528\u5BF9\u81EA\u5DF1\u65E0\u6548\u3002",
+    virusExtract: "\u526F\u624B\u6D82\u5C42\uFF1A\u4E3B\u624B\u653B\u51FB\u9644\u5E26\u611F\u67D3\uFF1B\u4E3B\u624B\u4F7F\u7528\u4F1A\u611F\u67D3\u81EA\u5DF1\u3002",
     disguise: "\u6697\u6740\u7528\u67AA\uFF0C\u964D\u4F4E\u88AB\u8BC6\u7834\u7684\u538B\u529B\u3002",
     sniper: "\u8D85\u9AD8\u901F\u7A7F\u900F\u5F39\uFF0C\u7EA2\u5916\u7EBF\u6807\u51FA\u5F39\u9053\u3002",
     laser: "\u53EF\u53CD\u5F39\u80FD\u91CF\u5F39\uFF0C\u9002\u5408\u62D0\u89D2\u3002",
@@ -7427,6 +7828,29 @@
     gauge(g, x + 12, y + 18, w - 24, BAR, pct, ink(0.24), def.tint || M2);
     g.restore();
   }
+  function drawPlayerStatuses(g, game2, H) {
+    const p = game2.player;
+    const rows = [];
+    if (p.infectT > 0) rows.push({ label: `\u611F\u67D3 ${Math.ceil(p.infectT)}s`, col: "#7AC943" });
+    if (p.madT > 0) rows.push({ label: `\u75AF\u72C2 ${Math.ceil(p.madT)}s`, col: M2 });
+    if (!rows.length) return;
+    const x = 22 - PAD * 0.7, w = 208 + PAD;
+    const h = 12 + rows.length * 16;
+    const y = H - 126 - h;
+    card(g, x, y, w, h);
+    g.save();
+    g.globalCompositeOperation = "multiply";
+    g.textAlign = "left";
+    g.textBaseline = "alphabetic";
+    g.font = `600 ${T_MICRO}px ${MONO}`;
+    rows.forEach((row, i) => {
+      const ry = y + 16 + i * 16;
+      g.fillStyle = row.col;
+      bar(g, x + 10, ry - 9, 12, BAR, true);
+      g.fillText(row.label, x + 30, ry);
+    });
+    g.restore();
+  }
   function drawHud(g, game2, W, H) {
     const p = game2.player;
     drawFurniture(g, W, H);
@@ -7478,6 +7902,7 @@
     drawChain(g, game2, SX - PAD * 0.7, SY - 10 + 94 + 7, SW + PAD);
     drawDefenseHud(g, game2, W);
     drawKatanaDash(g, game2, W);
+    drawPlayerStatuses(g, game2, H);
     const w = WEAPONS[p.weapon];
     const off = WEAPONS[p.offhandWeapon] || WEAPONS.fists;
     const WX = 22, WY = H - 110, WW = 208;
@@ -7511,7 +7936,7 @@
     g.fillText(`\u526F\u624B ${offName}${offAmmo}`, WX, WY + 19, WW - 58);
     g.textAlign = "right";
     g.fillStyle = p.offhandWeapon !== "fists" && !off.offhandOnly ? M2 : ink(0.36);
-    const offAction = p.offhandWeapon === "fists" ? "\u7A7A" : off.offhandOnly ? "\u88AB\u52A8" : "E \u5207\u6362";
+    const offAction = p.offhandWeapon === "fists" ? "\u7A7A" : off.extract ? "\u6D82\u5C42" : off.offhandOnly || off.passive ? "\u88AB\u52A8" : "E \u5207\u6362";
     g.fillText(offAction, WX + WW, WY + 19);
     g.textAlign = "left";
     track(g, 0);
@@ -7545,7 +7970,7 @@
       track(g, 0.09);
       g.font = `400 ${T_MICRO}px ${MONO}`;
       g.textAlign = "center";
-      const tag = w.defense ? "\u6B63\u9762\u683C\u6321" : w.katana ? "\u84C4\u529B\u5C45\u5408" : w.lance ? "\u84C4\u529B\u51B2\u950B" : w.deploy ? "\u90E8\u7F72\u5305" : w.sawLauncher ? "\u81EA\u52A8\u952F\u7247" : w.blade ? "\u957F\u5BFF\u547D\u6295\u63B7\u7269" : w.lethal ? "\u5229\u5203" : "\u5F92\u624B";
+      const tag = w.extract ? "\u81EA\u7528/\u6D82\u5C42" : w.copySauce ? "\u590D\u5236\u72B6\u6001" : w.defense ? "\u6B63\u9762\u683C\u6321" : w.katana ? "\u84C4\u529B\u5C45\u5408" : w.lance ? "\u84C4\u529B\u51B2\u950B" : w.deploy ? "\u90E8\u7F72\u5305" : w.sawLauncher ? "\u81EA\u52A8\u952F\u7247" : w.blade ? "\u957F\u5BFF\u547D\u6295\u63B7\u7269" : w.lethal ? "\u5229\u5203" : "\u5F92\u624B";
       g.fillText(tag, WX + WW / 2, BY + BH / 2 + 3);
       track(g, 0);
       g.textAlign = "left";
@@ -7756,6 +8181,29 @@
         g.fill();
         g.fillRect(-1, -16, 2, 32);
         g.fillRect(-16, -1, 32, 2);
+        break;
+      case "copySauce":
+      case "madExtract":
+      case "tameExtract":
+      case "virusExtract":
+        g.lineWidth = 2.2;
+        g.strokeRect(-8, -12, 16, 24);
+        g.fillRect(-5, -18, 10, 6);
+        g.beginPath();
+        if (kind === "copySauce") {
+          g.arc(0, 0, 7, 0.3, TAU * 0.82);
+          g.stroke();
+          g.beginPath();
+          g.moveTo(7, -1);
+          g.lineTo(12, -4);
+          g.lineTo(10, 2);
+          g.closePath();
+          g.fill();
+        } else {
+          g.arc(-3, -1, 3.2, 0, TAU);
+          g.arc(4, 4, 2.7, 0, TAU);
+          g.fill();
+        }
         break;
       case "disguise":
         g.fillRect(-10, -2.2, 20, 4.4);
@@ -8564,7 +9012,7 @@
   }
 
   // overprint/src/main.js
-  var BUILD_ID = "184172";
+  var BUILD_ID = "184173";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
   var canvas = document.getElementById("c");

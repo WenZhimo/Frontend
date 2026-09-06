@@ -63,7 +63,8 @@ const ENEMY_NAMES = {
 
 const CODEX_WEAPON_ORDER = [
   'knife', 'bat', 'katana', 'quixote', 'pistol', 'revolver', 'smg', 'shotgun', 'ripper', 'grenade', 'frag',
-  'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'disguise', 'sniper', 'laser', 'butcher', 'shield',
+  'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'virusExtract',
+  'disguise', 'sniper', 'laser', 'butcher', 'shield',
 ];
 const CODEX_ENEMY_ORDER = ['strawman', 'thug', 'gunner', 'hound', 'patroller', 'shield'];
 const WEAPON_DESC = {
@@ -85,7 +86,11 @@ const WEAPON_DESC = {
   molotov: '落地燃烧，留下持续伤害区域。',
   dart: '无声疯狂毒镖，使敌人无差别攻击。',
   tameDart: '无声驯服毒镖，把敌人拉到你这边。',
-  virus: '副手被动：驯服毒镖转化的友军击杀后继续传染。',
+  virus: '无声投掷感染云；也可在副手让驯服友军继续传染。',
+  copySauce: '主手使用时复制副手状态武器，转化为对应提取液。',
+  madExtract: '副手涂层：主手攻击附带疯狂；主手使用会让自己暂时失控。',
+  tameExtract: '副手涂层：主手攻击附带驯化；主手使用对自己无效。',
+  virusExtract: '副手涂层：主手攻击附带感染；主手使用会感染自己。',
   disguise: '暗杀用枪，降低被识破的压力。',
   sniper: '超高速穿透弹，红外线标出弹道。',
   laser: '可反弹能量弹，适合拐角。',
@@ -303,6 +308,30 @@ function drawKatanaDash(g, game, W) {
   g.restore();
 }
 
+function drawPlayerStatuses(g, game, H) {
+  const p = game.player;
+  const rows = [];
+  if (p.infectT > 0) rows.push({ label: `感染 ${Math.ceil(p.infectT)}s`, col: '#7AC943' });
+  if (p.madT > 0) rows.push({ label: `疯狂 ${Math.ceil(p.madT)}s`, col: M });
+  if (!rows.length) return;
+  const x = 22 - PAD * 0.7, w = 208 + PAD;
+  const h = 12 + rows.length * 16;
+  const y = H - 126 - h;
+  card(g, x, y, w, h);
+  g.save();
+  g.globalCompositeOperation = 'multiply';
+  g.textAlign = 'left';
+  g.textBaseline = 'alphabetic';
+  g.font = `600 ${T_MICRO}px ${MONO}`;
+  rows.forEach((row, i) => {
+    const ry = y + 16 + i * 16;
+    g.fillStyle = row.col;
+    bar(g, x + 10, ry - 9, 12, BAR, true);
+    g.fillText(row.label, x + 30, ry);
+  });
+  g.restore();
+}
+
 export function drawHud(g, game, W, H) {
   const p = game.player;
   drawFurniture(g, W, H);
@@ -367,6 +396,7 @@ export function drawHud(g, game, W, H) {
   drawChain(g, game, SX - PAD * 0.7, SY - 10 + 94 + 7, SW + PAD);
   drawDefenseHud(g, game, W);
   drawKatanaDash(g, game, W);
+  drawPlayerStatuses(g, game, H);
 
   // ---- weapon ------------------------------------------------------------
   // Two rows of text over one full-width band. The band always holds the same
@@ -408,7 +438,13 @@ export function drawHud(g, game, W, H) {
   g.fillText(`副手 ${offName}${offAmmo}`, WX, WY + 19, WW - 58);
   g.textAlign = 'right';
   g.fillStyle = p.offhandWeapon !== 'fists' && !off.offhandOnly ? M : ink(0.36);
-  const offAction = p.offhandWeapon === 'fists' ? '空' : off.offhandOnly ? '被动' : 'E 切换';
+  const offAction = p.offhandWeapon === 'fists'
+    ? '空'
+    : off.extract
+      ? '涂层'
+      : (off.offhandOnly || off.passive)
+        ? '被动'
+        : 'E 切换';
   g.fillText(offAction, WX + WW, WY + 19);
   g.textAlign = 'left';
   track(g, 0);
@@ -446,7 +482,7 @@ export function drawHud(g, game, W, H) {
     track(g, 0.09);
     g.font = `400 ${T_MICRO}px ${MONO}`;
     g.textAlign = 'center';
-    const tag = w.defense ? '正面格挡' : w.katana ? '蓄力居合' : w.lance ? '蓄力冲锋' : w.deploy ? '部署包' : w.sawLauncher ? '自动锯片' : w.blade ? '长寿命投掷物' : w.lethal ? '利刃' : '徒手';
+    const tag = w.extract ? '自用/涂层' : w.copySauce ? '复制状态' : w.defense ? '正面格挡' : w.katana ? '蓄力居合' : w.lance ? '蓄力冲锋' : w.deploy ? '部署包' : w.sawLauncher ? '自动锯片' : w.blade ? '长寿命投掷物' : w.lethal ? '利刃' : '徒手';
     g.fillText(tag, WX + WW / 2, BY + BH / 2 + 3);
     track(g, 0);
     g.textAlign = 'left';
@@ -588,6 +624,24 @@ function codexWeaponShape(g, kind) {
       g.beginPath(); g.arc(-4, -3, 3, 0, TAU); g.arc(4, 2, 3.4, 0, TAU); g.fill();
       g.fillRect(-1, -16, 2, 32);
       g.fillRect(-16, -1, 32, 2);
+      break;
+    case 'copySauce':
+    case 'madExtract':
+    case 'tameExtract':
+    case 'virusExtract':
+      g.lineWidth = 2.2;
+      g.strokeRect(-8, -12, 16, 24);
+      g.fillRect(-5, -18, 10, 6);
+      g.beginPath();
+      if (kind === 'copySauce') {
+        g.arc(0, 0, 7, 0.3, TAU * 0.82);
+        g.stroke();
+        g.beginPath(); g.moveTo(7, -1); g.lineTo(12, -4); g.lineTo(10, 2); g.closePath(); g.fill();
+      } else {
+        g.arc(-3, -1, 3.2, 0, TAU);
+        g.arc(4, 4, 2.7, 0, TAU);
+        g.fill();
+      }
       break;
     case 'disguise':
       g.fillRect(-10, -2.2, 20, 4.4); g.fillRect(-7, 1, 5, 9); g.fillRect(5, -8, 5, 5);

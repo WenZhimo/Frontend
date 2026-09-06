@@ -349,8 +349,8 @@ export function makeLevel(seed, floorNum) {
     const r = pool[(i * 3 + 1) % pool.length];
     const p = freeSpot(r);
     const kinds = floorNum < 3
-      ? ['bat', 'knife', 'katana', 'quixote', 'pistol', 'pistol', 'smg', 'grenade', 'sentryPack', 'molotov', 'dart', 'tameDart', 'virus', 'disguise', 'shield', 'shield', 'shield']
-      : ['bat', 'knife', 'knife', 'katana', 'katana', 'quixote', 'pistol', 'pistol', 'revolver', 'smg', 'smg', 'ripper', 'shotgun', 'grenade', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'molotov', 'dart', 'tameDart', 'virus', 'disguise', 'sniper', 'laser', 'butcher', 'shield', 'shield', 'shield', 'shield'];
+      ? ['bat', 'knife', 'katana', 'quixote', 'pistol', 'pistol', 'smg', 'grenade', 'sentryPack', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'disguise', 'shield', 'shield', 'shield']
+      : ['bat', 'knife', 'knife', 'katana', 'katana', 'quixote', 'pistol', 'pistol', 'revolver', 'smg', 'smg', 'ripper', 'shotgun', 'grenade', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'disguise', 'sniper', 'laser', 'butcher', 'shield', 'shield', 'shield', 'shield'];
     pickupSpawns.push({ x: p.x, y: p.y, kind: rng.pick(kinds) });
   }
 
@@ -647,6 +647,11 @@ function makeStaticLevel(seed, kind = 'arena', mode = 'practice', enemyKind = 's
   const windowAt = new Map();
 
   // Defense mode keeps rooms open. Doors remain a normal-floor feature only.
+  if (mode === 'defense') {
+    doors.length = 0;
+    doorAt.clear();
+    for (let i = 0; i < tiles.length; i++) if (tiles[i] === T_DOOR) tiles[i] = T_FLOOR;
+  }
 
   const solidAt = (x, y) => {
     const gx = (x / TILE) | 0, gy = (y / TILE) | 0;

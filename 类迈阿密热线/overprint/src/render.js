@@ -234,7 +234,7 @@ export function createRenderer(canvas) {
 
   // the weapon in their hands, drawn at the hand, pointing forward
   function isDartWeapon(kind) {
-    return kind === 'dart' || kind === 'tameDart';
+    return kind === 'dart' || kind === 'tameDart' || kind === 'virus';
   }
 
   function weaponSilhouette(g, kind) {
@@ -346,6 +346,20 @@ export function createRenderer(canvas) {
         g.fillRect(0, -10, 2, 20);
         g.fillRect(-9, -1, 20, 2);
         break;
+      case 'copySauce':
+      case 'madExtract':
+      case 'tameExtract':
+      case 'virusExtract':
+        g.lineWidth = 1.8;
+        g.strokeRect(-5.5, -9, 11, 18);
+        g.fillRect(-3.2, -13, 6.4, 4);
+        if (kind === 'copySauce') {
+          g.beginPath(); g.arc(0, 0, 4.8, 0.35, TAU * 0.82); g.stroke();
+          g.beginPath(); g.moveTo(5, -1); g.lineTo(8.5, -3.5); g.lineTo(7.2, 1.5); g.closePath(); g.fill();
+        } else {
+          g.beginPath(); g.arc(-2.2, -1, 2.1, 0, TAU); g.arc(2.8, 3, 1.8, 0, TAU); g.fill();
+        }
+        break;
       default: break;
     }
   }
@@ -398,6 +412,14 @@ export function createRenderer(canvas) {
       if (!e.alive || e.state === S_DEAD || e.state === S_DOWN) continue;
       const def = ENEMY_DEF[e.type];
       const pulse = 1 + Math.sin(game.time * 13 + e.x * 0.01) * 0.11;
+      if (e.infectT > 0) {
+        ctx.globalAlpha = 0.58;
+        ctx.strokeStyle = WEAPONS.virus.tint;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, (def.r + 14) * pulse, 0, TAU);
+        ctx.stroke();
+      }
       if (e.friendly) {
         ctx.globalAlpha = 0.74;
         ctx.strokeStyle = WEAPONS.tameDart.tint;

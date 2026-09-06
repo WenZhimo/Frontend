@@ -36,15 +36,19 @@ export const WEAPONS = {
   dronePack:{ name: '毒蜂无人机部署包', feed: 'stack', tint: '#F7CF16', melee: false, rate: 0.5, ammo: 3, lobbed: true, fuse: 0.58, throwSpeed: 720, deploy: 'drones', deployRadius: 64, droneCount: 3, droneAmmo: 3, noise: 170, kick: 0, throwLethal: false },
   rocket:   { name: '火箭弹',    feed: 'barrel', tint: '#EC0A63', melee: false, rate: 0.9,  ammo: 3,  pellets: 1, spread: 0.012, speed: 560, noise: 760, kick: 14, projectile: 'rocket', radius: 132, shieldDmg: 5, armourPierce: 2, throughDoors: true, eSpeed: 420, eRate: 2.2, eBurst: 1, throwLethal: false },
   molotov:  { name: '燃烧瓶',    feed: 'stack',  tint: '#FF6A00', melee: false, rate: 0.48, ammo: 3,  lobbed: true, fuse: 0.62, throwSpeed: 560, fire: true, fireRadius: 106, fireDur: 5.4, fireKill: 0.34, noise: 380, kick: 0, throwLethal: false },
-  dart:     { name: '疯狂毒镖',  feed: 'stack',  tint: '#7AC943', melee: false, rate: 0.26, ammo: 8,  pellets: 1, spread: 0.006, speed: 1120, noise: 0, kick: 0, poison: true, mad: 7.2, silent: true, shieldDmg: 0, eSpeed: 690, eRate: 1.0, eBurst: 1 },
-  tameDart: { name: '驯服毒标',  feed: 'stack',  tint: '#8A2BE2', melee: false, rate: 0.3,  ammo: 6,  pellets: 1, spread: 0.006, speed: 1100, noise: 0, kick: 0, tame: true, silent: true, shieldDmg: 0, eSpeed: 680, eRate: 1.05, eBurst: 1 },
+  dart:     { name: '疯狂毒镖',  feed: 'stack',  tint: '#7AC943', melee: false, rate: 0.26, ammo: 8,  pellets: 1, spread: 0.006, speed: 1120, noise: 0, kick: 0, poison: true, statusEffect: 'mad', mad: 7.2, silent: true, shieldDmg: 0, eSpeed: 690, eRate: 1.0, eBurst: 1 },
+  tameDart: { name: '驯服毒标',  feed: 'stack',  tint: '#8A2BE2', melee: false, rate: 0.3,  ammo: 6,  pellets: 1, spread: 0.006, speed: 1100, noise: 0, kick: 0, tame: true, statusEffect: 'tame', silent: true, shieldDmg: 0, eSpeed: 680, eRate: 1.05, eBurst: 1 },
   disguise: { name: '暗杀 · D',  feed: 'stack',  tint: '#161513', melee: false, rate: 0.23, ammo: 9,  pellets: 1, spread: 0.018, speed: 1160, noise: 240, kick: 3.2, disguise: true, shieldDmg: 1, eSpeed: 640, eRate: 1.05, eBurst: 2 },
   sniper:   { name: '狙击枪',    feed: 'stack',  tint: '#0047AB', melee: false, rate: 0.82, ammo: 5,  pellets: 1, spread: 0.0006, speed: 7600, noise: 760, kick: 17, rail: true, pierce: 999, shieldDmg: 99, armourPierce: 99, throughDoors: true, life: 1.25, eSpeed: 3200, eRate: 2.4, eBurst: 1 },
   laser:    { name: '弹弹激光枪', feed: 'stack', tint: '#00D6FF', melee: false, rate: 0.15, ammo: 18, pellets: 1, spread: 0.01, speed: 1320, noise: 300, kick: 2, ricochet: true, bounces: 6, shieldDmg: 1, life: 2.7, eSpeed: 900, eRate: 1.05, eBurst: 2 },
   butcher:  { name: '屠夫之触',  feed: 'none',   tint: '#E40808', melee: true,  reach: 52, rate: 0.2, ammo: 0, lethal: true, noise: 88, throwLethal: true, sawLauncher: true, sawRate: 2.25 },
   sawblade: { name: '电锯片',    feed: 'none',   tint: '#161513', melee: false, rate: 0, ammo: 0, throwSpeed: 980, noise: 150, kick: 0, throwLethal: true, blade: true, life: 14, noPickup: true },
-  virus:    { name: '传染病毒',  feed: 'none',   tint: '#7AC943', melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, offhandOnly: true, passive: true, noThrow: true, throwLethal: false },
-  shield:   { name: '盾牌',      feed: 'none',   tint: '#12A3DA', melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, defense: true, shieldArc: 1.34, durability: 5, noThrow: true, throwLethal: false },
+  virus:    { name: '传染病毒',  feed: 'stack',  tint: '#7AC943', melee: false, rate: 0.42, ammo: 1,  lobbed: true, fuse: 0.42, throwSpeed: 760, radius: 132, noise: 0, kick: 0, passive: true, statusEffect: 'virus', virusCloud: true, silent: true, throwLethal: false, enemyUsable: false },
+  copySauce:{ name: '复制蘸料',  feed: 'stack',  tint: '#00D6FF', melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, copySauce: true, noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+  madExtract:{ name: '疯狂提取液', feed: 'stack', tint: '#7AC943', melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: 'mad', noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+  tameExtract:{ name: '驯化提取液', feed: 'stack', tint: '#8A2BE2', melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: 'tame', noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+  virusExtract:{ name: '病毒提取液', feed: 'stack', tint: '#7AC943', melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: 'virus', noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+  shield:   { name: '盾牌',      feed: 'none',   tint: '#12A3DA', melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, defense: true, shieldArc: 1.34, durability: 5, throwSpeed: 760, throwLethal: false },
 };
 
 export const ENEMY_DEF = {
@@ -115,23 +119,23 @@ export function makePools() {
   return {
     enemies: mk(MAX_ENEMIES, () => ({
       alive: false, type: 'thug', weapon: 'fists', x: 0, y: 0, vx: 0, vy: 0, angle: 0,
-      state: S_IDLE, timer: 0, downTimer: 0, fireTimer: 0, burst: 0, ammo: 0,
+      state: S_IDLE, timer: 0, downTimer: 0, fireTimer: 0, attackTimer: 0, burst: 0, ammo: 0,
       lkx: 0, lky: 0, ptx: 0, pty: 0, searchT: 0, shoutCd: 0,
       strafe: 1, strafeT: 0, windup: 0, chargeT: 0, seen: 0,
       stuckT: 0, lastX: 0, lastY: 0, scanT: 0, reload: 0, madT: 0, burnT: 0,
       seeking: 0, skx: 0, sky: 0, blockFlash: 0, stagger: 0, look: 0, heldShieldHp: 0,
       armour: 0, segs: 0, layers: 0, shieldHp: 0, shieldSeg: 0,
       roomGoal: -1, roomSeq: 0,
-      friendly: false, converted: false, contagious: false,
+      friendly: false, converted: false, contagious: false, infectT: 0, infectByPlayer: false,
     })),
     corpses: mk(MAX_CORPSES, () => ({
       alive: false, type: 'thug', weapon: 'fists', x: 0, y: 0, vx: 0, vy: 0, angle: 0,
       state: S_DEAD, deadAngle: 0, t: 0, armour: 0, segs: 0, layers: 0, shieldHp: 0,
       shieldSeg: 0, friendly: false, contagious: false, wave: 0,
     })),
-    bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
+    bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, statusEffect: null, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
     pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: 'pistol', ammo: 0, angle: 0 })),
-    thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: 'pistol', ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, noPickup: false })),
+    thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: 'pistol', ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, statusEffect: null, shrapnelEffect: null, noPickup: false })),
     deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: 'sentry', x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, friendly: true, spin: 0, target: null })),
     drones: mk(MAX_DRONES, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0 })),
   };
@@ -201,6 +205,7 @@ export function updateEnemy(game, e, dt) {
   if (e.state === S_DEAD) return;
   if (e.blockFlash > 0) e.blockFlash -= dt;
   if (e.stagger > 0) e.stagger -= dt;
+  if (e.attackTimer > 0) e.attackTimer -= dt;
   if (def.passive) {
     e.vx = 0; e.vy = 0;
     return;
@@ -462,12 +467,14 @@ export function updateEnemy(game, e, dt) {
   e.lastX = e.x; e.lastY = e.y;
 
   const p = game.player;
+  const meleeCooldown = Math.max(0.24, (w.rate || 0.32) * (e.type === 'hound' ? 1.35 : 1));
   const victim = target && target.enemy && target.enemy.alive && target.enemy.state !== S_DEAD
     ? target.enemy
     : null;
-  if (victim && e.state === S_CHASE && w.melee) {
+  if (victim && e.state === S_CHASE && w.melee && e.attackTimer <= 0) {
     const vd = ENEMY_DEF[victim.type];
     if (dist(e.x, e.y, victim.x, victim.y) < def.r + vd.r + 7) {
+      e.attackTimer = meleeCooldown;
       const a = Math.atan2(victim.y - e.y, victim.x - e.x);
       if (game.heldShieldBlocks?.(victim, e.x, e.y)) {
         game.blockOnHeldShield?.(victim, e.x, e.y);
@@ -481,15 +488,17 @@ export function updateEnemy(game, e, dt) {
         game.knockdownEnemy(victim, Math.cos(a), Math.sin(a));
       }
     }
-  } else if (!e.friendly && !game.playerDisguised?.() && p.alive && e.state === S_CHASE && w.melee) {
+  } else if (!e.friendly && !game.playerDisguised?.() && p.alive && e.state === S_CHASE && w.melee && e.attackTimer <= 0) {
     if (dist(e.x, e.y, p.x, p.y) < def.r + 11) {
+      e.attackTimer = meleeCooldown;
       if (game.heldShieldBlocks?.(p, e.x, e.y)) {
         game.blockOnHeldShield?.(p, e.x, e.y);
         e.stagger = Math.max(e.stagger || 0, 0.25);
         e.vx *= -0.25; e.vy *= -0.25;
       } else game.killPlayer(e);
     }
-  } else if (!e.friendly && !game.playerDisguised?.() && p.alive && e.state === S_CHASE && !mad && !w.defense && dist(e.x, e.y, p.x, p.y) < 20) {
+  } else if (!e.friendly && !game.playerDisguised?.() && p.alive && e.state === S_CHASE && !mad && !w.defense && e.attackTimer <= 0 && dist(e.x, e.y, p.x, p.y) < 20) {
+    e.attackTimer = meleeCooldown;
     if (game.heldShieldBlocks?.(p, e.x, e.y)) {
       game.blockOnHeldShield?.(p, e.x, e.y);
       e.stagger = Math.max(e.stagger || 0, 0.25);
