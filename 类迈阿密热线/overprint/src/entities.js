@@ -36,8 +36,8 @@ export const WEAPONS = {
   dronePack:{ name: '毒蜂无人机部署包', feed: 'stack', tint: '#F7CF16', melee: false, rate: 0.5, ammo: 3, lobbed: true, fuse: 0.58, throwSpeed: 720, deploy: 'drones', deployRadius: 64, droneCount: 3, droneAmmo: 3, noise: 170, kick: 0, throwLethal: false },
   rocket:   { name: '火箭弹',    feed: 'barrel', tint: '#EC0A63', melee: false, rate: 0.9,  ammo: 3,  pellets: 1, spread: 0.012, speed: 560, noise: 760, kick: 14, projectile: 'rocket', radius: 132, shieldDmg: 5, armourPierce: 2, throughDoors: true, eSpeed: 420, eRate: 2.2, eBurst: 1, throwLethal: false },
   molotov:  { name: '燃烧瓶',    feed: 'stack',  tint: '#FF6A00', melee: false, rate: 0.48, ammo: 3,  lobbed: true, fuse: 0.62, throwSpeed: 560, fire: true, fireRadius: 106, fireDur: 5.4, fireKill: 0.34, noise: 380, kick: 0, throwLethal: false },
-  dart:     { name: '疯狂毒镖',  feed: 'stack',  tint: '#7AC943', melee: false, rate: 0.26, ammo: 8,  pellets: 1, spread: 0.006, speed: 1120, noise: 0, kick: 0, poison: true, statusEffect: 'mad', mad: 7.2, silent: true, shieldDmg: 0, eSpeed: 690, eRate: 1.0, eBurst: 1 },
-  tameDart: { name: '驯服毒标',  feed: 'stack',  tint: '#8A2BE2', melee: false, rate: 0.3,  ammo: 6,  pellets: 1, spread: 0.006, speed: 1100, noise: 0, kick: 0, tame: true, statusEffect: 'tame', tameDur: 8.5, silent: true, shieldDmg: 0, eSpeed: 680, eRate: 1.05, eBurst: 1 },
+  dart:     { name: '疯狂毒镖',  feed: 'stack',  tint: '#7AC943', melee: false, rate: 0.26, ammo: 8,  pellets: 1, spread: 0.006, speed: 1120, noise: 0, kick: 0, poison: true, statusEffect: 'mad', mad: Infinity, silent: true, shieldDmg: 0, eSpeed: 690, eRate: 1.0, eBurst: 1 },
+  tameDart: { name: '驯服毒标',  feed: 'stack',  tint: '#8A2BE2', melee: false, rate: 0.3,  ammo: 6,  pellets: 1, spread: 0.006, speed: 1100, noise: 0, kick: 0, tame: true, statusEffect: 'tame', tameDur: Infinity, silent: true, shieldDmg: 0, eSpeed: 680, eRate: 1.05, eBurst: 1 },
   disguise: { name: '暗杀 · D',  feed: 'stack',  tint: '#161513', melee: false, rate: 0.23, ammo: 9,  pellets: 1, spread: 0.018, speed: 1160, noise: 240, kick: 3.2, disguise: true, shieldDmg: 1, eSpeed: 640, eRate: 1.05, eBurst: 2 },
   sniper:   { name: '狙击枪',    feed: 'stack',  tint: '#0047AB', melee: false, rate: 0.82, ammo: 5,  pellets: 1, spread: 0.0006, speed: 7600, noise: 760, kick: 17, rail: true, pierce: 999, shieldDmg: 99, armourPierce: 99, throughDoors: true, life: 1.25, eSpeed: 3200, eRate: 2.4, eBurst: 1 },
   laser:    { name: '弹弹激光枪', feed: 'stack', tint: '#00D6FF', melee: false, rate: 0.15, ammo: 18, pellets: 1, spread: 0.01, speed: 1320, noise: 300, kick: 2, ricochet: true, bounces: 6, shieldDmg: 1, life: 2.7, eSpeed: 900, eRate: 1.05, eBurst: 2 },
@@ -207,11 +207,11 @@ export function updateEnemy(game, e, dt) {
   if (e.stagger > 0) e.stagger -= dt;
   if (e.attackTimer > 0) e.attackTimer -= dt;
   if (e.madT > 0) {
-    e.madT = Math.max(0, e.madT - dt);
+    if (Number.isFinite(e.madT)) e.madT = Math.max(0, e.madT - dt);
     if (e.madT > 0 && e.state !== S_DOWN) e.state = S_CHASE;
   }
   if (e.tameT > 0) {
-    e.tameT = Math.max(0, e.tameT - dt);
+    if (Number.isFinite(e.tameT)) e.tameT = Math.max(0, e.tameT - dt);
     if (e.tameT <= 0 && e.converted) {
       e.friendly = false;
       e.converted = false;

@@ -1016,11 +1016,11 @@
     if (e.stagger > 0) e.stagger -= dt;
     if (e.attackTimer > 0) e.attackTimer -= dt;
     if (e.madT > 0) {
-      e.madT = Math.max(0, e.madT - dt);
+      if (Number.isFinite(e.madT)) e.madT = Math.max(0, e.madT - dt);
       if (e.madT > 0 && e.state !== S_DOWN) e.state = S_CHASE;
     }
     if (e.tameT > 0) {
-      e.tameT = Math.max(0, e.tameT - dt);
+      if (Number.isFinite(e.tameT)) e.tameT = Math.max(0, e.tameT - dt);
       if (e.tameT <= 0 && e.converted) {
         e.friendly = false;
         e.converted = false;
@@ -1380,8 +1380,8 @@
         dronePack: { name: "\u6BD2\u8702\u65E0\u4EBA\u673A\u90E8\u7F72\u5305", feed: "stack", tint: "#F7CF16", melee: false, rate: 0.5, ammo: 3, lobbed: true, fuse: 0.58, throwSpeed: 720, deploy: "drones", deployRadius: 64, droneCount: 3, droneAmmo: 3, noise: 170, kick: 0, throwLethal: false },
         rocket: { name: "\u706B\u7BAD\u5F39", feed: "barrel", tint: "#EC0A63", melee: false, rate: 0.9, ammo: 3, pellets: 1, spread: 0.012, speed: 560, noise: 760, kick: 14, projectile: "rocket", radius: 132, shieldDmg: 5, armourPierce: 2, throughDoors: true, eSpeed: 420, eRate: 2.2, eBurst: 1, throwLethal: false },
         molotov: { name: "\u71C3\u70E7\u74F6", feed: "stack", tint: "#FF6A00", melee: false, rate: 0.48, ammo: 3, lobbed: true, fuse: 0.62, throwSpeed: 560, fire: true, fireRadius: 106, fireDur: 5.4, fireKill: 0.34, noise: 380, kick: 0, throwLethal: false },
-        dart: { name: "\u75AF\u72C2\u6BD2\u9556", feed: "stack", tint: "#7AC943", melee: false, rate: 0.26, ammo: 8, pellets: 1, spread: 6e-3, speed: 1120, noise: 0, kick: 0, poison: true, statusEffect: "mad", mad: 7.2, silent: true, shieldDmg: 0, eSpeed: 690, eRate: 1, eBurst: 1 },
-        tameDart: { name: "\u9A6F\u670D\u6BD2\u6807", feed: "stack", tint: "#8A2BE2", melee: false, rate: 0.3, ammo: 6, pellets: 1, spread: 6e-3, speed: 1100, noise: 0, kick: 0, tame: true, statusEffect: "tame", tameDur: 8.5, silent: true, shieldDmg: 0, eSpeed: 680, eRate: 1.05, eBurst: 1 },
+        dart: { name: "\u75AF\u72C2\u6BD2\u9556", feed: "stack", tint: "#7AC943", melee: false, rate: 0.26, ammo: 8, pellets: 1, spread: 6e-3, speed: 1120, noise: 0, kick: 0, poison: true, statusEffect: "mad", mad: Infinity, silent: true, shieldDmg: 0, eSpeed: 690, eRate: 1, eBurst: 1 },
+        tameDart: { name: "\u9A6F\u670D\u6BD2\u6807", feed: "stack", tint: "#8A2BE2", melee: false, rate: 0.3, ammo: 6, pellets: 1, spread: 6e-3, speed: 1100, noise: 0, kick: 0, tame: true, statusEffect: "tame", tameDur: Infinity, silent: true, shieldDmg: 0, eSpeed: 680, eRate: 1.05, eBurst: 1 },
         disguise: { name: "\u6697\u6740 \xB7 D", feed: "stack", tint: "#161513", melee: false, rate: 0.23, ammo: 9, pellets: 1, spread: 0.018, speed: 1160, noise: 240, kick: 3.2, disguise: true, shieldDmg: 1, eSpeed: 640, eRate: 1.05, eBurst: 2 },
         sniper: { name: "\u72D9\u51FB\u67AA", feed: "stack", tint: "#0047AB", melee: false, rate: 0.82, ammo: 5, pellets: 1, spread: 6e-4, speed: 7600, noise: 760, kick: 17, rail: true, pierce: 999, shieldDmg: 99, armourPierce: 99, throughDoors: true, life: 1.25, eSpeed: 3200, eRate: 2.4, eBurst: 1 },
         laser: { name: "\u5F39\u5F39\u6FC0\u5149\u67AA", feed: "stack", tint: "#00D6FF", melee: false, rate: 0.15, ammo: 18, pellets: 1, spread: 0.01, speed: 1320, noise: 300, kick: 2, ricochet: true, bounces: 6, shieldDmg: 1, life: 2.7, eSpeed: 900, eRate: 1.05, eBurst: 2 },
@@ -1979,11 +1979,12 @@
           ctx2.beginPath();
           ctx2.arc(e.x, e.y, (def.r + 9) * pulse, 0, TAU);
           ctx2.stroke();
-          if (e.tameT > 0) {
+          const tameDur = WEAPONS.tameDart.tameDur || 0;
+          if (e.tameT > 0 && Number.isFinite(e.tameT) && Number.isFinite(tameDur) && tameDur > 0) {
             ctx2.globalAlpha = 0.58;
             ctx2.lineWidth = 1.7;
             ctx2.beginPath();
-            ctx2.arc(e.x, e.y, def.r + 15, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(e.tameT / (WEAPONS.tameDart.tameDur || 8.5), 0, 1));
+            ctx2.arc(e.x, e.y, def.r + 15, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(e.tameT / tameDur, 0, 1));
             ctx2.stroke();
           }
           continue;
@@ -5672,7 +5673,7 @@
       game2.enemiesLeft = hostilesLeft();
       burst(e.x, e.y, 18, 210, "#8A2BE2", 2.8, 0.62);
       burst(e.x, e.y, 8, 120, "#F7CF16", 1.9, 0.4);
-      const tameLabel = e.tameT > 0 ? `${Math.ceil(e.tameT)}s` : "";
+      const tameLabel = e.tameT > 0 ? Number.isFinite(e.tameT) ? `${Math.ceil(e.tameT)}s` : "\u6C38\u4E45" : "";
       game2.banner = e.contagious ? `\u5DF2\u9A6F\u670D ${tameLabel} \xB7 \u4F20\u67D3` : `\u5DF2\u9A6F\u670D ${tameLabel}`;
       game2.bannerT = 0.65;
       sfx.status();
@@ -7689,8 +7690,8 @@
     dronePack: "\u84C4\u529B\u6295\u63B7\uFF0C\u843D\u70B9\u91CA\u653E 3 \u67B6\u5404\u5E26 3 \u53D1\u5B50\u5F39\u7684\u6BD2\u8702\u65E0\u4EBA\u673A\u3002",
     rocket: "\u4E09\u53D1\u91CD\u578B\u706B\u7BAD\uFF0C\u53EF\u8865\u5F39\u3002",
     molotov: "\u843D\u5730\u71C3\u70E7\uFF0C\u7559\u4E0B\u6301\u7EED\u4F24\u5BB3\u533A\u57DF\u3002",
-    dart: "\u65E0\u58F0\u75AF\u72C2\u6BD2\u9556\uFF0C\u4F7F\u654C\u4EBA\u77ED\u65F6\u65E0\u5DEE\u522B\u653B\u51FB\u3002",
-    tameDart: "\u65E0\u58F0\u9A6F\u670D\u6BD2\u9556\uFF0C\u77ED\u65F6\u628A\u654C\u4EBA\u62C9\u5230\u4F60\u8FD9\u8FB9\u3002",
+    dart: "\u65E0\u58F0\u75AF\u72C2\u6BD2\u9556\uFF0C\u4F7F\u654C\u4EBA\u6C38\u4E45\u65E0\u5DEE\u522B\u653B\u51FB\u3002",
+    tameDart: "\u65E0\u58F0\u9A6F\u670D\u6BD2\u9556\uFF0C\u6C38\u4E45\u628A\u654C\u4EBA\u62C9\u5230\u4F60\u8FD9\u8FB9\u3002",
     virus: "\u65E0\u58F0\u6295\u63B7\u611F\u67D3\u4E91\uFF1B\u4E5F\u53EF\u5728\u526F\u624B\u8BA9\u9A6F\u670D\u53CB\u519B\u7EE7\u7EED\u4F20\u67D3\u3002",
     copySauce: "\u4E3B\u624B\u4F7F\u7528\u65F6\u590D\u5236\u526F\u624B\u72B6\u6001\u6B66\u5668\uFF0C\u8F6C\u5316\u4E3A\u5BF9\u5E94\u63D0\u53D6\u6DB2\u3002",
     madExtract: "\u526F\u624B\u6D82\u5C42\uFF1A\u4E3B\u624B\u653B\u51FB\u9644\u5E26\u75AF\u72C2\uFF1B\u4E3B\u624B\u4F7F\u7528\u4F1A\u8BA9\u81EA\u5DF1\u6682\u65F6\u5931\u63A7\u3002",
@@ -9082,7 +9083,7 @@
   }
 
   // overprint/src/main.js
-  var BUILD_ID = "184174";
+  var BUILD_ID = "184175";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
   var canvas = document.getElementById("c");

@@ -2088,7 +2088,7 @@ export function createGame(renderer) {
     game.enemiesLeft = hostilesLeft();
     burst(e.x, e.y, 18, 210, '#8A2BE2', 2.8, 0.62);
     burst(e.x, e.y, 8, 120, '#F7CF16', 1.9, 0.4);
-    const tameLabel = e.tameT > 0 ? `${Math.ceil(e.tameT)}s` : '';
+    const tameLabel = e.tameT > 0 ? (Number.isFinite(e.tameT) ? `${Math.ceil(e.tameT)}s` : '永久') : '';
     game.banner = e.contagious ? `已驯服 ${tameLabel} · 传染` : `已驯服 ${tameLabel}`;
     game.bannerT = 0.65;
     sfx.status();
