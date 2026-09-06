@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#EFECE3" />
+<title>404 游戏 — ISKRA.GRAPHICS</title>
+<script>window.buildTitle=t=>document.title='404 游戏 · '+t;</script>
+<meta name="robots" content="noindex" />
+<style>
+  :root { color-scheme: light; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: #EFECE3;
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    color: #161513;
+    /* the whole page is a game surface: no scroll, no bounce, no pinch, no
+       long-press callout, and no double-tap zoom stealing the second shot */
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #c { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; cursor: crosshair; }
+
+  .chrome {
+    position: fixed; z-index: 2; font-size: 10px; letter-spacing: .16em;
+    text-transform: uppercase; user-select: none; pointer-events: none;
+  }
+  #mark { left: 14px; bottom: calc(10px + env(safe-area-inset-bottom)); color: rgba(22,21,19,.45); }
+  #mark b { font-weight: 600; color: rgba(22,21,19,.72); }
+
+  /* the one piece of real UI in the whole page: claiming a finished run */
+  #claim {
+    left: 50%; transform: translateX(-50%); pointer-events: auto;
+    display: flex; gap: 8px; align-items: stretch; letter-spacing: 0;
+  }
+  #claim[hidden] { display: none; }
+  #claimname {
+    font: 400 13px "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    letter-spacing: .12em; text-transform: uppercase;
+    width: 172px; padding: 7px 9px; color: #161513;
+    background: rgba(255,255,255,.55);
+    border: 1px solid rgba(22,21,19,.45); border-radius: 0; outline: none;
+  }
+  #claimname:focus { border-color: #EC0A63; }
+  #claimname::placeholder { color: rgba(22,21,19,.35); letter-spacing: .12em; }
+  #claimgo {
+    font: 600 11px "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    letter-spacing: .14em; padding: 7px 12px; cursor: pointer;
+    color: #EFECE3; background: #EC0A63; border: 1px solid #EC0A63; border-radius: 0;
+  }
+  #claimgo:disabled { opacity: .45; cursor: default; }
+
+  .plus { position: fixed; z-index: 2; width: 9px; height: 9px; pointer-events: none; opacity: .3; }
+  .plus::before, .plus::after { content: ''; position: absolute; background: #161513; }
+  .plus::before { left: 4px; top: 0; width: 1px; height: 9px; }
+  .plus::after { top: 4px; left: 0; height: 1px; width: 9px; }
+  #p1 { left: 14px; top: calc(12px + env(safe-area-inset-top)); }
+  #p2 { right: 14px; bottom: calc(12px + env(safe-area-inset-bottom)); }
+
+  /* on a phone the thumbs live in the bottom corners — get the furniture out
+     of the way and leave only the escape hatch */
+  @media (pointer: coarse), (max-width: 720px) {
+    #mark { font-size: 9px; bottom: auto; top: calc(10px + env(safe-area-inset-top)); left: 12px; }
+    #p1, #p2 { display: none; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="chrome" id="mark"><b>ISKRA.GRAPHICS</b> — 404 游戏</div>
+  <form class="chrome" id="claim" hidden autocomplete="off">
+    <input id="claimname" maxlength="15" placeholder="@名字" aria-label="排行榜名字" />
+    <button id="claimgo" type="submit">提交记录</button>
+  </form>
+  <script src="overprint/game.bundle.js" defer></script>
+</body>
+</html>
