@@ -8,7 +8,7 @@ import { initAudio, setMuted, isMuted } from './audio.js';
 
 // Bumped on every edit and printed in the corner. If the number on screen is
 // not the number the server reports, you are looking at a cached page.
-export const BUILD_ID = '184170';
+export const BUILD_ID = '184171';
 console.log('[overprint] build', BUILD_ID);
 if (window.buildTitle) window.buildTitle('版本 ' + BUILD_ID);
 

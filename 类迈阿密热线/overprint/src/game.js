@@ -149,6 +149,7 @@ export function createGame(renderer) {
     level: null,
     pools: makePools(),
     corpseWrite: 0,
+    pickupWrite: 0,
     particles: [],
     flashes: [],
     noiseRings: [],
@@ -715,6 +716,28 @@ export function createGame(renderer) {
     return oldest;
   }
 
+  function pickupSlot() {
+    const pool = game.pools.pickups || [];
+    const open = spawnFrom(pool);
+    if (open) return open;
+    if (!pool.length) return null;
+    const slot = pool[game.pickupWrite % pool.length];
+    game.pickupWrite = (game.pickupWrite + 1) % pool.length;
+    return slot;
+  }
+
+  function placePickup(x, y, kind, ammo = 0, angle = rnd() * TAU) {
+    const k = pickupSlot();
+    if (!k) return false;
+    k.alive = true;
+    k.x = x;
+    k.y = y;
+    k.kind = kind;
+    k.ammo = ammo;
+    k.angle = angle;
+    return true;
+  }
+
   function deployAt(x, y, deployKind, friendly = true) {
     const key = deployKind === 'drones' ? 'dronePack' : 'sentryPack';
     const w = WEAPONS[key] || WEAPONS.sentryPack;
@@ -737,6 +760,8 @@ export function createGame(renderer) {
         slot.target = null;
         slot.navX = Math.cos(a); slot.navY = Math.sin(a); slot.navT = 0;
         slot.spin = rnd() * TAU;
+        slot.kamikaze = false;
+        slot.blastT = 0;
       }
       game.banner = '毒蜂无人机部署';
     } else {
@@ -813,13 +838,7 @@ export function createGame(renderer) {
 
   game.dropWeapon = function (e, silent) {
     if (!e.weapon || e.weapon === 'fists') return;
-    const k = spawnFrom(game.pools.pickups);
-    if (k) {
-      k.alive = true;
-      k.x = e.x + (rnd() - 0.5) * 18;
-      k.y = e.y + (rnd() - 0.5) * 18;
-      k.kind = e.weapon; k.ammo = e.ammo; k.angle = rnd() * TAU;
-    }
+    placePickup(e.x + (rnd() - 0.5) * 18, e.y + (rnd() - 0.5) * 18, e.weapon, e.ammo, rnd() * TAU);
     e.weapon = 'fists'; e.ammo = 0; e.heldShieldHp = 0;
     if (!silent) burst(e.x, e.y, 3, 90, '#161513', 2, 0.3);
   };
@@ -1319,6 +1338,7 @@ export function createGame(renderer) {
     }
     for (const b of game.pools.bullets) b.alive = false;
     for (const k of game.pools.pickups) k.alive = false;
+    game.pickupWrite = 0;
     for (const t of game.pools.thrown) t.alive = false;
     for (const d of game.pools.deploys || []) d.alive = false;
     for (const d of game.pools.drones || []) d.alive = false;
@@ -1902,15 +1922,81 @@ export function createGame(renderer) {
       }
     }
 
+    function fizzleDrone(d) {
+      d.alive = false;
+      d.kamikaze = false;
+      d.blastT = 0;
+      burst(d.x, d.y, 7, 110, WEAPONS.dronePack.tint, 1.8, 0.25);
+    }
+
+    function armDroneSelfDestruct(d) {
+      if (d.kamikaze) return;
+      d.kamikaze = true;
+      d.blastT = 0;
+      d.fireTimer = 0;
+      d.life = Math.max(d.life, 8);
+      burst(d.x, d.y, 5, 130, WEAPONS.dronePack.tint, 1.8, 0.22);
+    }
+
+    function detonateDrone(d) {
+      d.alive = false;
+      d.kamikaze = false;
+      d.blastT = 0;
+      explodeAt(d.x, d.y, 'grenade', d.friendly === false, 0.5);
+    }
+
     for (const d of game.pools.drones || []) {
       if (!d.alive) continue;
       d.life -= dt;
       d.fireTimer -= dt;
       d.navT -= dt;
       d.spin += dt * 4.8;
-      if (d.life <= 0 || d.ammo <= 0) {
-        d.alive = false;
-        burst(d.x, d.y, 7, 110, WEAPONS.dronePack.tint, 1.8, 0.25);
+      if (d.life <= 0) {
+        fizzleDrone(d);
+        continue;
+      }
+      if (d.ammo <= 0) armDroneSelfDestruct(d);
+      if (d.kamikaze) {
+        const target = supportTarget(d, 1300, false);
+        if (!target) {
+          d.vx = approach(d.vx, Math.cos(d.angle) * 58, 6, dt);
+          d.vy = approach(d.vy, Math.sin(d.angle) * 58, 6, dt);
+          d.angle += dt * 1.8;
+          moveCollide(game.level, d, d.vx * dt, d.vy * dt, 6);
+          continue;
+        }
+        d.target = target.enemy || null;
+        const td = dist(d.x, d.y, target.x, target.y);
+        const ta = Math.atan2(target.y - d.y, target.x - d.x);
+        const visible = hasLineOfSight(game.level, d.x, d.y, target.x, target.y);
+        d.angle += angDelta(d.angle, ta) * Math.min(1, 18 * dt);
+        if ((visible && td < 54) || td < 24) {
+          d.blastT += dt;
+          if (d.blastT > 0.08) {
+            detonateDrone(d);
+            continue;
+          }
+        } else {
+          d.blastT = 0;
+        }
+        if (d.navT <= 0 || visible) {
+          if (visible) {
+            d.navX = Math.cos(ta);
+            d.navY = Math.sin(ta);
+          } else {
+            const nav = game.pathDirToPoint(d, target.x, target.y, 6);
+            d.navX = nav.x;
+            d.navY = nav.y;
+          }
+          d.navT = 0.12 + rnd() * 0.08;
+        }
+        const speed = visible ? 285 : 230;
+        d.vx = approach(d.vx, d.navX * speed, 12, dt);
+        d.vy = approach(d.vy, d.navY * speed, 12, dt);
+        moveCollide(game.level, d, d.vx * dt, d.vy * dt, 6);
+        if (dist(d.x, d.y, target.x, target.y) < 44 && hasLineOfSight(game.level, d.x, d.y, target.x, target.y)) {
+          detonateDrone(d);
+        }
         continue;
       }
       const target = supportTarget(d, 920, false);
@@ -1947,7 +2033,10 @@ export function createGame(renderer) {
       moveCollide(game.level, d, d.vx * dt, d.vy * dt, 6);
 
       if (visible && td < 540 && d.fireTimer <= 0) {
-        if (fireSupportBullet(d, target, true)) d.fireTimer = Math.max(0.16, smg.rate * 1.9);
+        if (fireSupportBullet(d, target, true)) {
+          d.fireTimer = Math.max(0.16, smg.rate * 1.9);
+          if (d.ammo <= 0) armDroneSelfDestruct(d);
+        }
       }
     }
   }
@@ -2639,8 +2728,7 @@ export function createGame(renderer) {
       if (t.life <= 0 || Math.hypot(t.vx, t.vy) < 30) {
         t.alive = false;
         if (t.noPickup) continue;
-        const k = spawnFrom(game.pools.pickups);
-        if (k) { k.alive = true; k.x = t.x; k.y = t.y; k.kind = t.kind; k.ammo = t.ammo; k.angle = t.spin; }
+        placePickup(t.x, t.y, t.kind, t.ammo, t.spin);
       }
     }
   }

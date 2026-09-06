@@ -9,7 +9,7 @@
       __defProp(target, name, { get: all[name], enumerable: true });
   };
 
-  // site/overprint/src/util.js
+  // overprint/src/util.js
   function angDelta(a, b) {
     let d = (b - a) % TAU;
     if (d > Math.PI) d -= TAU;
@@ -42,7 +42,7 @@
   }
   var TAU, clamp, lerp, dist2, dist, approach, sim, rnd;
   var init_util = __esm({
-    "site/overprint/src/util.js"() {
+    "overprint/src/util.js"() {
       TAU = Math.PI * 2;
       clamp = (v, a, b) => v < a ? a : v > b ? b : v;
       lerp = (a, b, t) => a + (b - a) * t;
@@ -57,7 +57,7 @@
     }
   });
 
-  // site/overprint/src/level.js
+  // overprint/src/level.js
   function makeLevel(seed, floorNum) {
     const rng = makeRng(seed);
     const gw = Math.min(58, 36 + Math.floor(floorNum * 1.2));
@@ -833,7 +833,7 @@
   }
   var TILE, T_FLOOR, T_WALL, T_FURNITURE, T_WINDOW, T_DOOR;
   var init_level = __esm({
-    "site/overprint/src/level.js"() {
+    "overprint/src/level.js"() {
       init_util();
       TILE = 34;
       T_FLOOR = 0;
@@ -844,7 +844,7 @@
     }
   });
 
-  // site/overprint/src/entities.js
+  // overprint/src/entities.js
   var entities_exports = {};
   __export(entities_exports, {
     DASH_CD: () => DASH_CD,
@@ -983,7 +983,7 @@
       pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: "pistol", ammo: 0, angle: 0 })),
       thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: "pistol", ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, noPickup: false })),
       deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: "sentry", x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, friendly: true, spin: 0, target: null })),
-      drones: mk(MAX_DRONES, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0 }))
+      drones: mk(MAX_DRONES, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0 }))
     };
   }
   function spawnFrom(pool) {
@@ -1346,7 +1346,7 @@
   }
   var MAX_ENEMIES, MAX_CORPSES, MAX_BULLETS, MAX_PICKUPS, MAX_THROWN, MAX_DEPLOYS, MAX_DRONES, MAX_DASH, DASH_CD, S_IDLE, S_SEARCH, S_CHASE, S_DOWN, S_DEAD, WEAPONS, ENEMY_DEF, SEG_SPAN, SEGS_MAX, plateBit;
   var init_entities = __esm({
-    "site/overprint/src/entities.js"() {
+    "overprint/src/entities.js"() {
       init_util();
       init_level();
       MAX_ENEMIES = 40;
@@ -1405,11 +1405,11 @@
     }
   });
 
-  // site/overprint/src/render.js
+  // overprint/src/render.js
   init_util();
   init_level();
 
-  // site/overprint/src/brand.js
+  // overprint/src/brand.js
   var PAPER = "#EFECE3";
   var INK = "#161513";
   var CYAN = "#12A3DA";
@@ -1473,7 +1473,7 @@
     g.restore();
   }
 
-  // site/overprint/src/render.js
+  // overprint/src/render.js
   init_entities();
   var ZOOM = 1.6;
   var PAPER2 = "#EFECE3";
@@ -2992,7 +2992,7 @@
     } };
   }
 
-  // site/overprint/src/dev.js
+  // overprint/src/dev.js
   var local = typeof location !== "undefined" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
   var q = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
   var num = (k, dflt) => {
@@ -3028,7 +3028,7 @@
     console.log(`[overprint] recording rig: ${REC.speed.toFixed(2)}x time` + (REC.floor ? `, floor ${REC.floor} difficulty` : "") + (REC.statusBanner ? "" : ", no status banners") + (REC.shot ? `, SHOT MODE: ${REC.shot} kills left, audio pre-stretched ${REC.stretch.toFixed(1)}x` : ""));
   }
 
-  // site/overprint/src/net.js
+  // overprint/src/net.js
   var params = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
   var sameOrigin = typeof location !== "undefined" && /(^|\.)iskra\.graphics$/.test(location.hostname);
   var API = sameOrigin ? "" : params.get("api") || null;
@@ -3081,10 +3081,10 @@
     });
   }
 
-  // site/overprint/src/game.js
+  // overprint/src/game.js
   init_util();
 
-  // site/overprint/src/board.js
+  // overprint/src/board.js
   var DAY_KEY = "overprint.seedBase";
   var RUN_KEY = "overprint.runNo";
   function params2() {
@@ -3183,11 +3183,11 @@
     return rec;
   }
 
-  // site/overprint/src/game.js
+  // overprint/src/game.js
   init_level();
   init_entities();
 
-  // site/overprint/src/audio.js
+  // overprint/src/audio.js
   var ctx = null;
   var master = null;
   var comp = null;
@@ -3444,7 +3444,7 @@
     }
   };
 
-  // site/overprint/src/game.js
+  // overprint/src/game.js
   var WEAPON_KEYS = ["fists", "knife", "bat", "katana", "quixote", "pistol", "revolver", "smg", "shotgun", "ripper", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "disguise", "sniper", "laser", "butcher", "shield"];
   var CODEX_WEAPON_KEYS = WEAPON_KEYS.filter((k) => k !== "fists");
   var ENEMY_KEYS = ["strawman", "thug", "gunner", "hound", "patroller", "shield"];
@@ -3600,6 +3600,7 @@
       level: null,
       pools: makePools(),
       corpseWrite: 0,
+      pickupWrite: 0,
       particles: [],
       flashes: [],
       noiseRings: [],
@@ -4204,6 +4205,26 @@
       for (const item of pool) if ((item.life || 0) < (oldest.life || 0)) oldest = item;
       return oldest;
     }
+    function pickupSlot() {
+      const pool = game2.pools.pickups || [];
+      const open = spawnFrom(pool);
+      if (open) return open;
+      if (!pool.length) return null;
+      const slot = pool[game2.pickupWrite % pool.length];
+      game2.pickupWrite = (game2.pickupWrite + 1) % pool.length;
+      return slot;
+    }
+    function placePickup(x, y, kind, ammo = 0, angle = rnd() * TAU) {
+      const k = pickupSlot();
+      if (!k) return false;
+      k.alive = true;
+      k.x = x;
+      k.y = y;
+      k.kind = kind;
+      k.ammo = ammo;
+      k.angle = angle;
+      return true;
+    }
     function deployAt(x, y, deployKind, friendly = true) {
       const key2 = deployKind === "drones" ? "dronePack" : "sentryPack";
       const w = WEAPONS[key2] || WEAPONS.sentryPack;
@@ -4230,6 +4251,8 @@
           slot.navY = Math.sin(a);
           slot.navT = 0;
           slot.spin = rnd() * TAU;
+          slot.kamikaze = false;
+          slot.blastT = 0;
         }
         game2.banner = "\u6BD2\u8702\u65E0\u4EBA\u673A\u90E8\u7F72";
       } else {
@@ -4301,15 +4324,7 @@
     game2.damageShield = damageShield;
     game2.dropWeapon = function(e, silent) {
       if (!e.weapon || e.weapon === "fists") return;
-      const k = spawnFrom(game2.pools.pickups);
-      if (k) {
-        k.alive = true;
-        k.x = e.x + (rnd() - 0.5) * 18;
-        k.y = e.y + (rnd() - 0.5) * 18;
-        k.kind = e.weapon;
-        k.ammo = e.ammo;
-        k.angle = rnd() * TAU;
-      }
+      placePickup(e.x + (rnd() - 0.5) * 18, e.y + (rnd() - 0.5) * 18, e.weapon, e.ammo, rnd() * TAU);
       e.weapon = "fists";
       e.ammo = 0;
       e.heldShieldHp = 0;
@@ -4843,6 +4858,7 @@
       }
       for (const b of game2.pools.bullets) b.alive = false;
       for (const k of game2.pools.pickups) k.alive = false;
+      game2.pickupWrite = 0;
       for (const t of game2.pools.thrown) t.alive = false;
       for (const d of game2.pools.deploys || []) d.alive = false;
       for (const d of game2.pools.drones || []) d.alive = false;
@@ -5441,15 +5457,78 @@
           if (fireSupportBullet(d, target, false)) d.fireTimer = smg.rate;
         }
       }
+      function fizzleDrone(d) {
+        d.alive = false;
+        d.kamikaze = false;
+        d.blastT = 0;
+        burst(d.x, d.y, 7, 110, WEAPONS.dronePack.tint, 1.8, 0.25);
+      }
+      function armDroneSelfDestruct(d) {
+        if (d.kamikaze) return;
+        d.kamikaze = true;
+        d.blastT = 0;
+        d.fireTimer = 0;
+        d.life = Math.max(d.life, 8);
+        burst(d.x, d.y, 5, 130, WEAPONS.dronePack.tint, 1.8, 0.22);
+      }
+      function detonateDrone(d) {
+        d.alive = false;
+        d.kamikaze = false;
+        d.blastT = 0;
+        explodeAt(d.x, d.y, "grenade", d.friendly === false, 0.5);
+      }
       for (const d of game2.pools.drones || []) {
         if (!d.alive) continue;
         d.life -= dt;
         d.fireTimer -= dt;
         d.navT -= dt;
         d.spin += dt * 4.8;
-        if (d.life <= 0 || d.ammo <= 0) {
-          d.alive = false;
-          burst(d.x, d.y, 7, 110, WEAPONS.dronePack.tint, 1.8, 0.25);
+        if (d.life <= 0) {
+          fizzleDrone(d);
+          continue;
+        }
+        if (d.ammo <= 0) armDroneSelfDestruct(d);
+        if (d.kamikaze) {
+          const target2 = supportTarget(d, 1300, false);
+          if (!target2) {
+            d.vx = approach(d.vx, Math.cos(d.angle) * 58, 6, dt);
+            d.vy = approach(d.vy, Math.sin(d.angle) * 58, 6, dt);
+            d.angle += dt * 1.8;
+            moveCollide(game2.level, d, d.vx * dt, d.vy * dt, 6);
+            continue;
+          }
+          d.target = target2.enemy || null;
+          const td2 = dist(d.x, d.y, target2.x, target2.y);
+          const ta2 = Math.atan2(target2.y - d.y, target2.x - d.x);
+          const visible2 = hasLineOfSight(game2.level, d.x, d.y, target2.x, target2.y);
+          d.angle += angDelta(d.angle, ta2) * Math.min(1, 18 * dt);
+          if (visible2 && td2 < 54 || td2 < 24) {
+            d.blastT += dt;
+            if (d.blastT > 0.08) {
+              detonateDrone(d);
+              continue;
+            }
+          } else {
+            d.blastT = 0;
+          }
+          if (d.navT <= 0 || visible2) {
+            if (visible2) {
+              d.navX = Math.cos(ta2);
+              d.navY = Math.sin(ta2);
+            } else {
+              const nav = game2.pathDirToPoint(d, target2.x, target2.y, 6);
+              d.navX = nav.x;
+              d.navY = nav.y;
+            }
+            d.navT = 0.12 + rnd() * 0.08;
+          }
+          const speed2 = visible2 ? 285 : 230;
+          d.vx = approach(d.vx, d.navX * speed2, 12, dt);
+          d.vy = approach(d.vy, d.navY * speed2, 12, dt);
+          moveCollide(game2.level, d, d.vx * dt, d.vy * dt, 6);
+          if (dist(d.x, d.y, target2.x, target2.y) < 44 && hasLineOfSight(game2.level, d.x, d.y, target2.x, target2.y)) {
+            detonateDrone(d);
+          }
           continue;
         }
         const target = supportTarget(d, 920, false);
@@ -5489,7 +5568,10 @@
         d.vy = approach(d.vy, ny * speed, 9, dt);
         moveCollide(game2.level, d, d.vx * dt, d.vy * dt, 6);
         if (visible && td < 540 && d.fireTimer <= 0) {
-          if (fireSupportBullet(d, target, true)) d.fireTimer = Math.max(0.16, smg.rate * 1.9);
+          if (fireSupportBullet(d, target, true)) {
+            d.fireTimer = Math.max(0.16, smg.rate * 1.9);
+            if (d.ammo <= 0) armDroneSelfDestruct(d);
+          }
         }
       }
     }
@@ -6270,15 +6352,7 @@
         if (t.life <= 0 || Math.hypot(t.vx, t.vy) < 30) {
           t.alive = false;
           if (t.noPickup) continue;
-          const k = spawnFrom(game2.pools.pickups);
-          if (k) {
-            k.alive = true;
-            k.x = t.x;
-            k.y = t.y;
-            k.kind = t.kind;
-            k.ammo = t.ammo;
-            k.angle = t.spin;
-          }
+          placePickup(t.x, t.y, t.kind, t.ammo, t.spin);
         }
       }
     }
@@ -6769,11 +6843,11 @@
     return game2;
   }
 
-  // site/overprint/src/hud.js
+  // overprint/src/hud.js
   init_util();
   init_entities();
 
-  // site/overprint/src/micro.js
+  // overprint/src/micro.js
   var TAU2 = Math.PI * 2;
   function bar(g, x, y, w, h, fill = false) {
     if (fill) g.fillRect(x, y, w, h);
@@ -6909,7 +6983,7 @@
     g.stroke();
   }
 
-  // site/overprint/src/hud.js
+  // overprint/src/hud.js
   var INK3 = "#161513";
   var M2 = "#EC0A63";
   var C2 = "#12A3DA";
@@ -8093,7 +8167,7 @@
     g.restore();
   }
 
-  // site/overprint/src/touch.js
+  // overprint/src/touch.js
   init_util();
   var INK4 = "#161513";
   var M3 = "#EC0A63";
@@ -8309,8 +8383,8 @@
     return t;
   }
 
-  // site/overprint/src/main.js
-  var BUILD_ID = "184170";
+  // overprint/src/main.js
+  var BUILD_ID = "184171";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
   var canvas = document.getElementById("c");

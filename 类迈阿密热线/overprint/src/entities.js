@@ -132,7 +132,7 @@ export function makePools() {
     pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: 'pistol', ammo: 0, angle: 0 })),
     thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: 'pistol', ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, noPickup: false })),
     deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: 'sentry', x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, friendly: true, spin: 0, target: null })),
-    drones: mk(MAX_DRONES, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0 })),
+    drones: mk(MAX_DRONES, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0 })),
   };
 }
 
