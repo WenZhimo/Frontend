@@ -84,8 +84,8 @@ const WEAPON_DESC = {
   dronePack: '蓄力投掷，落点释放 3 架各带 3 发子弹的毒蜂无人机。',
   rocket: '三发重型火箭，可补弹。',
   molotov: '落地燃烧，留下持续伤害区域。',
-  dart: '无声疯狂毒镖，使敌人无差别攻击。',
-  tameDart: '无声驯服毒镖，把敌人拉到你这边。',
+  dart: '无声疯狂毒镖，使敌人短时无差别攻击。',
+  tameDart: '无声驯服毒镖，短时把敌人拉到你这边。',
   virus: '无声投掷感染云；也可在副手让驯服友军继续传染。',
   copySauce: '主手使用时复制副手状态武器，转化为对应提取液。',
   madExtract: '副手涂层：主手攻击附带疯狂；主手使用会让自己暂时失控。',
@@ -313,6 +313,7 @@ function drawPlayerStatuses(g, game, H) {
   const rows = [];
   if (p.infectT > 0) rows.push({ label: `感染 ${Math.ceil(p.infectT)}s`, col: '#7AC943' });
   if (p.madT > 0) rows.push({ label: `疯狂 ${Math.ceil(p.madT)}s`, col: M });
+  if (p.iframes > 1) rows.push({ label: `无敌 ${Math.ceil(p.iframes)}s`, col: '#12A3DA' });
   if (!rows.length) return;
   const x = 22 - PAD * 0.7, w = 208 + PAD;
   const h = 12 + rows.length * 16;

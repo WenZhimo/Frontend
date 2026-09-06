@@ -427,6 +427,13 @@ export function createRenderer(canvas) {
         ctx.beginPath();
         ctx.arc(e.x, e.y, (def.r + 9) * pulse, 0, TAU);
         ctx.stroke();
+        if (e.tameT > 0) {
+          ctx.globalAlpha = 0.58;
+          ctx.lineWidth = 1.7;
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, def.r + 15, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(e.tameT / (WEAPONS.tameDart.tameDur || 8.5), 0, 1));
+          ctx.stroke();
+        }
         continue;
       }
       if (e.madT <= 0) continue;

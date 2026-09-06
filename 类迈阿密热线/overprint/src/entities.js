@@ -37,7 +37,7 @@ export const WEAPONS = {
   rocket:   { name: '火箭弹',    feed: 'barrel', tint: '#EC0A63', melee: false, rate: 0.9,  ammo: 3,  pellets: 1, spread: 0.012, speed: 560, noise: 760, kick: 14, projectile: 'rocket', radius: 132, shieldDmg: 5, armourPierce: 2, throughDoors: true, eSpeed: 420, eRate: 2.2, eBurst: 1, throwLethal: false },
   molotov:  { name: '燃烧瓶',    feed: 'stack',  tint: '#FF6A00', melee: false, rate: 0.48, ammo: 3,  lobbed: true, fuse: 0.62, throwSpeed: 560, fire: true, fireRadius: 106, fireDur: 5.4, fireKill: 0.34, noise: 380, kick: 0, throwLethal: false },
   dart:     { name: '疯狂毒镖',  feed: 'stack',  tint: '#7AC943', melee: false, rate: 0.26, ammo: 8,  pellets: 1, spread: 0.006, speed: 1120, noise: 0, kick: 0, poison: true, statusEffect: 'mad', mad: 7.2, silent: true, shieldDmg: 0, eSpeed: 690, eRate: 1.0, eBurst: 1 },
-  tameDart: { name: '驯服毒标',  feed: 'stack',  tint: '#8A2BE2', melee: false, rate: 0.3,  ammo: 6,  pellets: 1, spread: 0.006, speed: 1100, noise: 0, kick: 0, tame: true, statusEffect: 'tame', silent: true, shieldDmg: 0, eSpeed: 680, eRate: 1.05, eBurst: 1 },
+  tameDart: { name: '驯服毒标',  feed: 'stack',  tint: '#8A2BE2', melee: false, rate: 0.3,  ammo: 6,  pellets: 1, spread: 0.006, speed: 1100, noise: 0, kick: 0, tame: true, statusEffect: 'tame', tameDur: 8.5, silent: true, shieldDmg: 0, eSpeed: 680, eRate: 1.05, eBurst: 1 },
   disguise: { name: '暗杀 · D',  feed: 'stack',  tint: '#161513', melee: false, rate: 0.23, ammo: 9,  pellets: 1, spread: 0.018, speed: 1160, noise: 240, kick: 3.2, disguise: true, shieldDmg: 1, eSpeed: 640, eRate: 1.05, eBurst: 2 },
   sniper:   { name: '狙击枪',    feed: 'stack',  tint: '#0047AB', melee: false, rate: 0.82, ammo: 5,  pellets: 1, spread: 0.0006, speed: 7600, noise: 760, kick: 17, rail: true, pierce: 999, shieldDmg: 99, armourPierce: 99, throughDoors: true, life: 1.25, eSpeed: 3200, eRate: 2.4, eBurst: 1 },
   laser:    { name: '弹弹激光枪', feed: 'stack', tint: '#00D6FF', melee: false, rate: 0.15, ammo: 18, pellets: 1, spread: 0.01, speed: 1320, noise: 300, kick: 2, ricochet: true, bounces: 6, shieldDmg: 1, life: 2.7, eSpeed: 900, eRate: 1.05, eBurst: 2 },
@@ -122,7 +122,7 @@ export function makePools() {
       state: S_IDLE, timer: 0, downTimer: 0, fireTimer: 0, attackTimer: 0, burst: 0, ammo: 0,
       lkx: 0, lky: 0, ptx: 0, pty: 0, searchT: 0, shoutCd: 0,
       strafe: 1, strafeT: 0, windup: 0, chargeT: 0, seen: 0,
-      stuckT: 0, lastX: 0, lastY: 0, scanT: 0, reload: 0, madT: 0, burnT: 0,
+      stuckT: 0, lastX: 0, lastY: 0, scanT: 0, reload: 0, madT: 0, tameT: 0, burnT: 0,
       seeking: 0, skx: 0, sky: 0, blockFlash: 0, stagger: 0, look: 0, heldShieldHp: 0,
       armour: 0, segs: 0, layers: 0, shieldHp: 0, shieldSeg: 0,
       roomGoal: -1, roomSeq: 0,
@@ -206,15 +206,33 @@ export function updateEnemy(game, e, dt) {
   if (e.blockFlash > 0) e.blockFlash -= dt;
   if (e.stagger > 0) e.stagger -= dt;
   if (e.attackTimer > 0) e.attackTimer -= dt;
-  if (def.passive) {
-    e.vx = 0; e.vy = 0;
-    return;
-  }
   if (e.madT > 0) {
     e.madT = Math.max(0, e.madT - dt);
     if (e.madT > 0 && e.state !== S_DOWN) e.state = S_CHASE;
   }
+  if (e.tameT > 0) {
+    e.tameT = Math.max(0, e.tameT - dt);
+    if (e.tameT <= 0 && e.converted) {
+      e.friendly = false;
+      e.converted = false;
+      e.contagious = false;
+      e.seen = 0;
+      if (e.state !== S_DOWN) {
+        e.state = S_SEARCH;
+        e.searchT = Math.max(e.searchT || 0, 4.2);
+      }
+      if (game.player) {
+        e.lkx = game.player.x;
+        e.lky = game.player.y;
+      }
+      game.refreshEnemyCount?.();
+    }
+  }
   const mad = e.madT > 0;
+  if (def.passive) {
+    e.vx = 0; e.vy = 0;
+    return;
+  }
 
   if (e.state === S_DOWN) {
     e.downTimer -= dt;
@@ -235,7 +253,7 @@ export function updateEnemy(game, e, dt) {
   e.shoutCd -= dt;
   e.scanT -= dt;
 
-  let target = null, bestD = Infinity;
+  let target = null, bestD = Infinity, bestScore = Infinity;
   const targets = mad && game.frenzyTargets
     ? game.frenzyTargets(e)
     : game.enemyTargets
@@ -244,7 +262,12 @@ export function updateEnemy(game, e, dt) {
   for (const t of targets) {
     if (!t.alive) continue;
     const d = dist(e.x, e.y, t.x, t.y);
-    if (d < bestD && canSee(level, e, def, t.x, t.y)) { bestD = d; target = t; }
+    const score = d - (mad && t.enemy ? Math.min(260, Math.max(0, def.range - d) * 0.85) : 0);
+    if (score < bestScore && canSee(level, e, def, t.x, t.y)) {
+      bestScore = score;
+      bestD = d;
+      target = t;
+    }
   }
 
   if (target) {

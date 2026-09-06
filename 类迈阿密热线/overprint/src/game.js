@@ -332,7 +332,7 @@ export function createGame(renderer) {
 
   function applyAttackEffectToEnemy(e, effect, x, y, source = game.player) {
     if (!effect || !e.alive || e.state === S_DEAD) return false;
-    if (effect === 'tame') return convertEnemy(e, x, y);
+    if (effect === 'tame') return convertEnemy(e, x, y, WEAPONS.tameDart.tameDur || 8.5);
     if (effect === 'mad') return maddenEnemy(e, WEAPONS.dart.mad || 7.2, x, y);
     if (effect === 'virus') return infectEnemy(e, 20, source === game.player || !!source?.friendly);
     return false;
@@ -1034,6 +1034,10 @@ export function createGame(renderer) {
   function hostilesLeft() {
     return game.pools.enemies.reduce((n, e) => n + (e.alive && e.state !== S_DEAD && !e.friendly ? 1 : 0), 0);
   }
+  game.refreshEnemyCount = function () {
+    game.enemiesLeft = hostilesLeft();
+    return game.enemiesLeft;
+  };
 
   function startingLoadout() {
     if (game.mode === 'practice') return loadoutFor(game.practice.weapon);
@@ -1314,18 +1318,26 @@ export function createGame(renderer) {
     return game.player.offhandWeapon === kind;
   }
 
+  function dropReplacedWeapon(p, kind, ammo, angle = p.aim + Math.PI) {
+    const w = WEAPONS[kind];
+    if (!w || kind === 'fists' || w.passive || w.extract || w.copySauce || w.offhandOnly) return false;
+    return placePickup(p.x, p.y, kind, ammo, angle);
+  }
+
   function givePlayerWeapon(p, kind, ammo = WEAPONS[kind]?.ammo || 0, replaceOffhand = false) {
     const w = WEAPONS[kind];
     if (!w || kind === 'fists') return false;
     if (w.offhandOnly) {
       if (p.offhandWeapon !== 'fists' && !replaceOffhand) return false;
-      if (p.offhandWeapon !== 'fists') placePickup(p.x, p.y, p.offhandWeapon, p.offhandAmmo, p.aim + Math.PI);
+      if (p.offhandWeapon === kind) return setOffhandSlot(p, kind, ammo);
+      if (p.offhandWeapon !== 'fists') dropReplacedWeapon(p, p.offhandWeapon, p.offhandAmmo);
       return setOffhandSlot(p, kind, ammo);
     }
     if (p.weapon === 'fists') return setMainSlot(p, kind, ammo);
     if (p.offhandWeapon === 'fists') return setOffhandSlot(p, kind, ammo);
     if (!replaceOffhand) return false;
-    placePickup(p.x, p.y, p.offhandWeapon, p.offhandAmmo, p.aim + Math.PI);
+    if (p.offhandWeapon === kind) return setOffhandSlot(p, kind, ammo);
+    dropReplacedWeapon(p, p.offhandWeapon, p.offhandAmmo);
     return setOffhandSlot(p, kind, ammo);
   }
 
@@ -1506,7 +1518,7 @@ export function createGame(renderer) {
     e.ptx = s.x; e.pty = s.y; e.seen = 0; e.chargeT = 0; e.windup = 0;
     e.shoutCd = 0; e.strafe = rnd() < 0.5 ? 1 : -1; e.strafeT = 0;
     e.stuckT = 0; e.lastX = s.x; e.lastY = s.y; e.scanT = rnd() * 0.4; e.reload = 0;
-    e.madT = 0; e.burnT = 0; e.infectT = 0; e.infectByPlayer = false;
+    e.madT = 0; e.tameT = 0; e.burnT = 0; e.infectT = 0; e.infectByPlayer = false;
     e.roomGoal = -1; e.roomSeq = 0;
     e.friendly = false; e.converted = false; e.contagious = false;
     game.recordEnemy(e.type);
@@ -1680,6 +1692,7 @@ export function createGame(renderer) {
       e.converted = true;
       e.contagious = true;
       e.madT = 0;
+      e.tameT = 0;
       e.burnT = 0;
       e.infectT = 0;
       e.infectByPlayer = false;
@@ -1703,6 +1716,7 @@ export function createGame(renderer) {
     e.deadAngle = e.angle;
     addCorpse(e);
     e.madT = 0;
+    e.tameT = 0;
     e.burnT = 0;
     e.infectT = 0;
     e.infectByPlayer = false;
@@ -1963,6 +1977,26 @@ export function createGame(renderer) {
     return shots;
   }
 
+  function shieldSwapCharge() {
+    const p = game.player;
+    const dx = Math.cos(p.aim);
+    const dy = Math.sin(p.aim);
+    p.dashX = dx;
+    p.dashY = dy;
+    p.dashT = Math.max(p.dashT, 0.18);
+    p.iframes = Math.max(p.iframes || 0, 3);
+    p.blockFlash = Math.max(p.blockFlash || 0, 0.55);
+    p.trail.length = 0;
+    burst(p.x + dx * 14, p.y + dy * 14, 14, 210, WEAPONS.shield.tint, 2.8, 0.42);
+    noise(p.x, p.y, 150, WEAPONS.shield.tint);
+    shake(5);
+    triggerSlow('dash');
+    sfx.dash();
+    game.banner = '盾牌冲锋 · 无敌 3s';
+    game.bannerT = 0.85;
+    return true;
+  }
+
   function swapPlayerWeapon() {
     const p = game.player;
     const incoming = WEAPONS[p.offhandWeapon];
@@ -1993,6 +2027,7 @@ export function createGame(renderer) {
     game.banner = `切出 ${WEAPONS[p.weapon].name}`;
     game.bannerT = 0.58;
     if (p.weapon === 'katana') katanaSwapSlash();
+    else if (p.weapon === 'shield') shieldSwapCharge();
     else if (isSwapGun(p.weapon)) gunSwapBurst(p.weapon);
     else sfx.pickup();
     return true;
@@ -2002,8 +2037,12 @@ export function createGame(renderer) {
   function maddenEnemy(e, seconds, x, y) {
     if (!e.alive || e.state === S_DEAD) return false;
     e.madT = Math.max(e.madT || 0, seconds || 6.5);
+    e.tameT = 0;
     e.infectT = 0;
     e.infectByPlayer = false;
+    e.friendly = false;
+    e.converted = false;
+    e.contagious = false;
     e.state = S_CHASE;
     e.seeking = 0;
     e.seen = 1;
@@ -2011,17 +2050,19 @@ export function createGame(renderer) {
     e.lkx = x || e.x;
     e.lky = y || e.y;
     e.stagger = Math.max(e.stagger || 0, 0.18);
+    game.enemiesLeft = hostilesLeft();
     burst(e.x, e.y, 10, 150, '#7AC943', 2.4, 0.55);
     return true;
   }
   game.maddenEnemy = maddenEnemy;
 
-  function convertEnemy(e, x, y) {
+  function convertEnemy(e, x, y, seconds = WEAPONS.tameDart.tameDur || 8.5) {
     if (!e.alive || e.state === S_DEAD || e.friendly) return false;
     e.friendly = true;
     e.converted = true;
     e.contagious = playerHasOffhand('virus');
     e.madT = 0;
+    e.tameT = Math.max(e.tameT || 0, seconds || 0);
     e.infectT = 0;
     e.infectByPlayer = false;
     e.state = S_CHASE;
@@ -2047,7 +2088,8 @@ export function createGame(renderer) {
     game.enemiesLeft = hostilesLeft();
     burst(e.x, e.y, 18, 210, '#8A2BE2', 2.8, 0.62);
     burst(e.x, e.y, 8, 120, '#F7CF16', 1.9, 0.4);
-    game.banner = e.contagious ? '已驯服 · 传染' : '已驯服';
+    const tameLabel = e.tameT > 0 ? `${Math.ceil(e.tameT)}s` : '';
+    game.banner = e.contagious ? `已驯服 ${tameLabel} · 传染` : `已驯服 ${tameLabel}`;
     game.bannerT = 0.65;
     sfx.status();
     announceClear();
