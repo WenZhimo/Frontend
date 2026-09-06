@@ -188,6 +188,63 @@ function canSee(level, e, def, tx, ty) {
   return hasLineOfSight(level, e.x, e.y, tx, ty);
 }
 
+function tickStatusTimer(value, dt) {
+  return value > 0 && Number.isFinite(value) ? Math.max(0, value - dt) : value;
+}
+
+function clearConvertedEnemy(e, game) {
+  e.friendly = false;
+  e.converted = false;
+  e.contagious = false;
+  e.seen = 0;
+  if (e.state !== S_DOWN) {
+    e.state = S_SEARCH;
+    e.searchT = Math.max(e.searchT || 0, 4.2);
+  }
+  if (game.player) {
+    e.lkx = game.player.x;
+    e.lky = game.player.y;
+  }
+  game.refreshEnemyCount?.();
+}
+
+function updateControlTimers(e, dt, game) {
+  if (e.madT > 0) {
+    e.madT = tickStatusTimer(e.madT, dt);
+    if (e.madT > 0 && e.state !== S_DOWN) e.state = S_CHASE;
+  }
+  if (e.tameT > 0) {
+    e.tameT = tickStatusTimer(e.tameT, dt);
+    if (e.tameT <= 0 && e.converted) clearConvertedEnemy(e, game);
+  }
+}
+
+function targetListFor(game, e, mad) {
+  if (mad && game.frenzyTargets) return game.frenzyTargets(e);
+  if (game.enemyTargets) return game.enemyTargets(e);
+  return game.targets;
+}
+
+function frenzyTargetScore(def, mad, t, d) {
+  return d - (mad && t.enemy ? Math.min(260, Math.max(0, def.range - d) * 0.85) : 0);
+}
+
+function selectEnemyTarget(game, e, def, mad) {
+  const targets = targetListFor(game, e, mad);
+  let target = null, bestD = Infinity, bestScore = Infinity;
+  for (const t of targets) {
+    if (!t.alive) continue;
+    const d = dist(e.x, e.y, t.x, t.y);
+    const score = frenzyTargetScore(def, mad, t, d);
+    if (score < bestScore && canSee(game.level, e, def, t.x, t.y)) {
+      bestScore = score;
+      bestD = d;
+      target = t;
+    }
+  }
+  return { target, bestD };
+}
+
 export function alertEnemy(e, x, y, search = 7) {
   if (e.state === S_DOWN || e.state === S_DEAD) return;
   e.state = Math.max(e.state, S_SEARCH);
@@ -206,28 +263,7 @@ export function updateEnemy(game, e, dt) {
   if (e.blockFlash > 0) e.blockFlash -= dt;
   if (e.stagger > 0) e.stagger -= dt;
   if (e.attackTimer > 0) e.attackTimer -= dt;
-  if (e.madT > 0) {
-    if (Number.isFinite(e.madT)) e.madT = Math.max(0, e.madT - dt);
-    if (e.madT > 0 && e.state !== S_DOWN) e.state = S_CHASE;
-  }
-  if (e.tameT > 0) {
-    if (Number.isFinite(e.tameT)) e.tameT = Math.max(0, e.tameT - dt);
-    if (e.tameT <= 0 && e.converted) {
-      e.friendly = false;
-      e.converted = false;
-      e.contagious = false;
-      e.seen = 0;
-      if (e.state !== S_DOWN) {
-        e.state = S_SEARCH;
-        e.searchT = Math.max(e.searchT || 0, 4.2);
-      }
-      if (game.player) {
-        e.lkx = game.player.x;
-        e.lky = game.player.y;
-      }
-      game.refreshEnemyCount?.();
-    }
-  }
+  updateControlTimers(e, dt, game);
   const mad = e.madT > 0;
   if (def.passive) {
     e.vx = 0; e.vy = 0;
@@ -253,22 +289,7 @@ export function updateEnemy(game, e, dt) {
   e.shoutCd -= dt;
   e.scanT -= dt;
 
-  let target = null, bestD = Infinity, bestScore = Infinity;
-  const targets = mad && game.frenzyTargets
-    ? game.frenzyTargets(e)
-    : game.enemyTargets
-      ? game.enemyTargets(e)
-      : game.targets;
-  for (const t of targets) {
-    if (!t.alive) continue;
-    const d = dist(e.x, e.y, t.x, t.y);
-    const score = d - (mad && t.enemy ? Math.min(260, Math.max(0, def.range - d) * 0.85) : 0);
-    if (score < bestScore && canSee(level, e, def, t.x, t.y)) {
-      bestScore = score;
-      bestD = d;
-      target = t;
-    }
-  }
+  const { target, bestD } = selectEnemyTarget(game, e, def, mad);
 
   if (target) {
     e.seen += dt;

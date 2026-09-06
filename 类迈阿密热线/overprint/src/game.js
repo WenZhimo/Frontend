@@ -1239,17 +1239,21 @@ export function createGame(renderer) {
     return game.state === 'play' && game.player.alive && !!(w && w.disguise);
   };
 
+  function targetSnapshot(unit, enemy = null, alive = true) {
+    return { alive, x: unit.x, y: unit.y, vx: unit.vx || 0, vy: unit.vy || 0, enemy };
+  }
+
   game.enemyTargets = function (e) {
     const out = game.madTargets;
     out.length = 0;
     const p = game.player;
     if (!e.friendly && p.alive && game.state === 'play' && !game.playerDisguised()) {
-      out.push({ alive: true, x: p.x, y: p.y, vx: p.vx, vy: p.vy, enemy: null });
+      out.push(targetSnapshot(p));
     }
     for (const o of game.pools.enemies) {
       if (o === e || !o.alive || o.state === S_DEAD) continue;
       if (!!o.friendly === !!e.friendly) continue;
-      out.push({ alive: true, x: o.x, y: o.y, vx: o.vx || 0, vy: o.vy || 0, enemy: o });
+      out.push(targetSnapshot(o, o));
     }
     return out;
   };
@@ -1259,11 +1263,11 @@ export function createGame(renderer) {
     out.length = 0;
     const p = game.player;
     if (p.alive && game.state === 'play') {
-      out.push({ alive: true, x: p.x, y: p.y, vx: p.vx, vy: p.vy, enemy: null });
+      out.push(targetSnapshot(p));
     }
     for (const o of game.pools.enemies) {
       if (o === e || !o.alive || o.state === S_DEAD) continue;
-      out.push({ alive: true, x: o.x, y: o.y, vx: o.vx || 0, vy: o.vy || 0, enemy: o });
+      out.push(targetSnapshot(o, o));
     }
     return out;
   };
@@ -1492,6 +1496,24 @@ export function createGame(renderer) {
     return c;
   }
 
+  function clearEnemyInfection(e) {
+    e.infectT = 0;
+    e.infectByPlayer = false;
+  }
+
+  function clearEnemyStatusTimers(e) {
+    e.madT = 0;
+    e.tameT = 0;
+    e.burnT = 0;
+    clearEnemyInfection(e);
+  }
+
+  function clearEnemyAllegiance(e) {
+    e.friendly = false;
+    e.converted = false;
+    e.contagious = false;
+  }
+
   // -- floors ---------------------------------------------------------------
   function spawnEnemy(s) {
     const e = spawnFrom(game.pools.enemies);
@@ -1518,15 +1540,14 @@ export function createGame(renderer) {
     e.ptx = s.x; e.pty = s.y; e.seen = 0; e.chargeT = 0; e.windup = 0;
     e.shoutCd = 0; e.strafe = rnd() < 0.5 ? 1 : -1; e.strafeT = 0;
     e.stuckT = 0; e.lastX = s.x; e.lastY = s.y; e.scanT = rnd() * 0.4; e.reload = 0;
-    e.madT = 0; e.tameT = 0; e.burnT = 0; e.infectT = 0; e.infectByPlayer = false;
+    clearEnemyStatusTimers(e);
     e.roomGoal = -1; e.roomSeq = 0;
-    e.friendly = false; e.converted = false; e.contagious = false;
+    clearEnemyAllegiance(e);
     game.recordEnemy(e.type);
     return e;
   }
 
-  function populate(level, carried = null) {
-    reseedSim(game.seed + game.floor * 104729);
+  function clearLevelRuntime(level) {
     for (const e of game.pools.enemies) e.alive = false;
     if (game.pools.corpses) {
       for (const c of game.pools.corpses) c.alive = false;
@@ -1542,9 +1563,15 @@ export function createGame(renderer) {
     game.flashes.length = 0;
     game.noiseRings.length = 0;
     game.fireZones.length = 0;
-    game.throwCharge = 0; game.throwPreview = null;
+    game.throwCharge = 0;
+    game.throwPreview = null;
     for (const d of level.doors) { d.open = 0; d.slam = 0; d.swing = 1; }
     level.resetWindows();
+  }
+
+  function populate(level, carried = null) {
+    reseedSim(game.seed + game.floor * 104729);
+    clearLevelRuntime(level);
 
     for (const s of level.enemySpawns) {
       if (!spawnEnemy(s)) break;
@@ -1691,11 +1718,7 @@ export function createGame(renderer) {
       e.friendly = true;
       e.converted = true;
       e.contagious = true;
-      e.madT = 0;
-      e.tameT = 0;
-      e.burnT = 0;
-      e.infectT = 0;
-      e.infectByPlayer = false;
+      clearEnemyStatusTimers(e);
       e.state = S_CHASE;
       e.seeking = 0;
       e.seen = 1;
@@ -1715,14 +1738,8 @@ export function createGame(renderer) {
     e.state = S_DEAD;
     e.deadAngle = e.angle;
     addCorpse(e);
-    e.madT = 0;
-    e.tameT = 0;
-    e.burnT = 0;
-    e.infectT = 0;
-    e.infectByPlayer = false;
-    e.friendly = false;
-    e.converted = false;
-    e.contagious = false;
+    clearEnemyStatusTimers(e);
+    clearEnemyAllegiance(e);
     e.vx = e.vy = 0;
     game.dropWeapon(e, true);
     e.alive = false;
@@ -2038,11 +2055,8 @@ export function createGame(renderer) {
     if (!e.alive || e.state === S_DEAD) return false;
     e.madT = Math.max(e.madT || 0, seconds || 6.5);
     e.tameT = 0;
-    e.infectT = 0;
-    e.infectByPlayer = false;
-    e.friendly = false;
-    e.converted = false;
-    e.contagious = false;
+    clearEnemyInfection(e);
+    clearEnemyAllegiance(e);
     e.state = S_CHASE;
     e.seeking = 0;
     e.seen = 1;
@@ -2063,8 +2077,7 @@ export function createGame(renderer) {
     e.contagious = playerHasOffhand('virus');
     e.madT = 0;
     e.tameT = Math.max(e.tameT || 0, seconds || 0);
-    e.infectT = 0;
-    e.infectByPlayer = false;
+    clearEnemyInfection(e);
     e.state = S_CHASE;
     e.seeking = 0;
     e.seen = 1;
@@ -3288,7 +3301,7 @@ export function createGame(renderer) {
   function refreshTargets() {
     game.targets.length = 0;
     const p = game.player;
-    if (!game.playerDisguised()) game.targets.push({ alive: p.alive, x: p.x, y: p.y, vx: p.vx, vy: p.vy });
+    if (!game.playerDisguised()) game.targets.push(targetSnapshot(p, null, p.alive));
   }
 
   function defenseShopWeapon() {

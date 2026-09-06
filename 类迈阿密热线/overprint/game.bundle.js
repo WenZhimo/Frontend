@@ -999,6 +999,57 @@
     if (Math.abs(angDelta(e.angle, a)) > def.cone) return d < 46;
     return hasLineOfSight(level, e.x, e.y, tx, ty);
   }
+  function tickStatusTimer(value, dt) {
+    return value > 0 && Number.isFinite(value) ? Math.max(0, value - dt) : value;
+  }
+  function clearConvertedEnemy(e, game2) {
+    e.friendly = false;
+    e.converted = false;
+    e.contagious = false;
+    e.seen = 0;
+    if (e.state !== S_DOWN) {
+      e.state = S_SEARCH;
+      e.searchT = Math.max(e.searchT || 0, 4.2);
+    }
+    if (game2.player) {
+      e.lkx = game2.player.x;
+      e.lky = game2.player.y;
+    }
+    game2.refreshEnemyCount?.();
+  }
+  function updateControlTimers(e, dt, game2) {
+    if (e.madT > 0) {
+      e.madT = tickStatusTimer(e.madT, dt);
+      if (e.madT > 0 && e.state !== S_DOWN) e.state = S_CHASE;
+    }
+    if (e.tameT > 0) {
+      e.tameT = tickStatusTimer(e.tameT, dt);
+      if (e.tameT <= 0 && e.converted) clearConvertedEnemy(e, game2);
+    }
+  }
+  function targetListFor(game2, e, mad) {
+    if (mad && game2.frenzyTargets) return game2.frenzyTargets(e);
+    if (game2.enemyTargets) return game2.enemyTargets(e);
+    return game2.targets;
+  }
+  function frenzyTargetScore(def, mad, t, d) {
+    return d - (mad && t.enemy ? Math.min(260, Math.max(0, def.range - d) * 0.85) : 0);
+  }
+  function selectEnemyTarget(game2, e, def, mad) {
+    const targets = targetListFor(game2, e, mad);
+    let target = null, bestD = Infinity, bestScore = Infinity;
+    for (const t of targets) {
+      if (!t.alive) continue;
+      const d = dist(e.x, e.y, t.x, t.y);
+      const score = frenzyTargetScore(def, mad, t, d);
+      if (score < bestScore && canSee(game2.level, e, def, t.x, t.y)) {
+        bestScore = score;
+        bestD = d;
+        target = t;
+      }
+    }
+    return { target, bestD };
+  }
   function alertEnemy(e, x, y, search = 7) {
     if (e.state === S_DOWN || e.state === S_DEAD) return;
     e.state = Math.max(e.state, S_SEARCH);
@@ -1015,28 +1066,7 @@
     if (e.blockFlash > 0) e.blockFlash -= dt;
     if (e.stagger > 0) e.stagger -= dt;
     if (e.attackTimer > 0) e.attackTimer -= dt;
-    if (e.madT > 0) {
-      if (Number.isFinite(e.madT)) e.madT = Math.max(0, e.madT - dt);
-      if (e.madT > 0 && e.state !== S_DOWN) e.state = S_CHASE;
-    }
-    if (e.tameT > 0) {
-      if (Number.isFinite(e.tameT)) e.tameT = Math.max(0, e.tameT - dt);
-      if (e.tameT <= 0 && e.converted) {
-        e.friendly = false;
-        e.converted = false;
-        e.contagious = false;
-        e.seen = 0;
-        if (e.state !== S_DOWN) {
-          e.state = S_SEARCH;
-          e.searchT = Math.max(e.searchT || 0, 4.2);
-        }
-        if (game2.player) {
-          e.lkx = game2.player.x;
-          e.lky = game2.player.y;
-        }
-        game2.refreshEnemyCount?.();
-      }
-    }
+    updateControlTimers(e, dt, game2);
     const mad = e.madT > 0;
     if (def.passive) {
       e.vx = 0;
@@ -1059,18 +1089,7 @@
     }
     e.shoutCd -= dt;
     e.scanT -= dt;
-    let target = null, bestD = Infinity, bestScore = Infinity;
-    const targets = mad && game2.frenzyTargets ? game2.frenzyTargets(e) : game2.enemyTargets ? game2.enemyTargets(e) : game2.targets;
-    for (const t of targets) {
-      if (!t.alive) continue;
-      const d = dist(e.x, e.y, t.x, t.y);
-      const score = d - (mad && t.enemy ? Math.min(260, Math.max(0, def.range - d) * 0.85) : 0);
-      if (score < bestScore && canSee(level, e, def, t.x, t.y)) {
-        bestScore = score;
-        bestD = d;
-        target = t;
-      }
-    }
+    const { target, bestD } = selectEnemyTarget(game2, e, def, mad);
     if (target) {
       e.seen += dt;
       if (e.state !== S_CHASE && e.seen > (w.melee ? 0.09 : 0.16)) {
@@ -4778,17 +4797,20 @@
       const w = WEAPONS[game2.player.weapon];
       return game2.state === "play" && game2.player.alive && !!(w && w.disguise);
     };
+    function targetSnapshot(unit, enemy = null, alive = true) {
+      return { alive, x: unit.x, y: unit.y, vx: unit.vx || 0, vy: unit.vy || 0, enemy };
+    }
     game2.enemyTargets = function(e) {
       const out = game2.madTargets;
       out.length = 0;
       const p = game2.player;
       if (!e.friendly && p.alive && game2.state === "play" && !game2.playerDisguised()) {
-        out.push({ alive: true, x: p.x, y: p.y, vx: p.vx, vy: p.vy, enemy: null });
+        out.push(targetSnapshot(p));
       }
       for (const o of game2.pools.enemies) {
         if (o === e || !o.alive || o.state === S_DEAD) continue;
         if (!!o.friendly === !!e.friendly) continue;
-        out.push({ alive: true, x: o.x, y: o.y, vx: o.vx || 0, vy: o.vy || 0, enemy: o });
+        out.push(targetSnapshot(o, o));
       }
       return out;
     };
@@ -4797,11 +4819,11 @@
       out.length = 0;
       const p = game2.player;
       if (p.alive && game2.state === "play") {
-        out.push({ alive: true, x: p.x, y: p.y, vx: p.vx, vy: p.vy, enemy: null });
+        out.push(targetSnapshot(p));
       }
       for (const o of game2.pools.enemies) {
         if (o === e || !o.alive || o.state === S_DEAD) continue;
-        out.push({ alive: true, x: o.x, y: o.y, vx: o.vx || 0, vy: o.vy || 0, enemy: o });
+        out.push(targetSnapshot(o, o));
       }
       return out;
     };
@@ -5026,6 +5048,21 @@
       c.wave = game2.mode === "defense" ? game2.defense.wave || 0 : game2.floor;
       return c;
     }
+    function clearEnemyInfection(e) {
+      e.infectT = 0;
+      e.infectByPlayer = false;
+    }
+    function clearEnemyStatusTimers(e) {
+      e.madT = 0;
+      e.tameT = 0;
+      e.burnT = 0;
+      clearEnemyInfection(e);
+    }
+    function clearEnemyAllegiance(e) {
+      e.friendly = false;
+      e.converted = false;
+      e.contagious = false;
+    }
     function spawnEnemy(s) {
       const e = spawnFrom(game2.pools.enemies);
       if (!e) return null;
@@ -5081,21 +5118,14 @@
       e.lastY = s.y;
       e.scanT = rnd() * 0.4;
       e.reload = 0;
-      e.madT = 0;
-      e.tameT = 0;
-      e.burnT = 0;
-      e.infectT = 0;
-      e.infectByPlayer = false;
+      clearEnemyStatusTimers(e);
       e.roomGoal = -1;
       e.roomSeq = 0;
-      e.friendly = false;
-      e.converted = false;
-      e.contagious = false;
+      clearEnemyAllegiance(e);
       game2.recordEnemy(e.type);
       return e;
     }
-    function populate(level, carried = null) {
-      reseedSim(game2.seed + game2.floor * 104729);
+    function clearLevelRuntime(level) {
       for (const e of game2.pools.enemies) e.alive = false;
       if (game2.pools.corpses) {
         for (const c of game2.pools.corpses) c.alive = false;
@@ -5119,6 +5149,10 @@
         d.swing = 1;
       }
       level.resetWindows();
+    }
+    function populate(level, carried = null) {
+      reseedSim(game2.seed + game2.floor * 104729);
+      clearLevelRuntime(level);
       for (const s of level.enemySpawns) {
         if (!spawnEnemy(s)) break;
       }
@@ -5270,11 +5304,7 @@
         e.friendly = true;
         e.converted = true;
         e.contagious = true;
-        e.madT = 0;
-        e.tameT = 0;
-        e.burnT = 0;
-        e.infectT = 0;
-        e.infectByPlayer = false;
+        clearEnemyStatusTimers(e);
         e.state = S_CHASE;
         e.seeking = 0;
         e.seen = 1;
@@ -5294,14 +5324,8 @@
       e.state = S_DEAD;
       e.deadAngle = e.angle;
       addCorpse(e);
-      e.madT = 0;
-      e.tameT = 0;
-      e.burnT = 0;
-      e.infectT = 0;
-      e.infectByPlayer = false;
-      e.friendly = false;
-      e.converted = false;
-      e.contagious = false;
+      clearEnemyStatusTimers(e);
+      clearEnemyAllegiance(e);
       e.vx = e.vy = 0;
       game2.dropWeapon(e, true);
       e.alive = false;
@@ -5625,11 +5649,8 @@
       if (!e.alive || e.state === S_DEAD) return false;
       e.madT = Math.max(e.madT || 0, seconds || 6.5);
       e.tameT = 0;
-      e.infectT = 0;
-      e.infectByPlayer = false;
-      e.friendly = false;
-      e.converted = false;
-      e.contagious = false;
+      clearEnemyInfection(e);
+      clearEnemyAllegiance(e);
       e.state = S_CHASE;
       e.seeking = 0;
       e.seen = 1;
@@ -5649,8 +5670,7 @@
       e.contagious = playerHasOffhand("virus");
       e.madT = 0;
       e.tameT = Math.max(e.tameT || 0, seconds || 0);
-      e.infectT = 0;
-      e.infectByPlayer = false;
+      clearEnemyInfection(e);
       e.state = S_CHASE;
       e.seeking = 0;
       e.seen = 1;
@@ -6974,7 +6994,7 @@
     function refreshTargets() {
       game2.targets.length = 0;
       const p = game2.player;
-      if (!game2.playerDisguised()) game2.targets.push({ alive: p.alive, x: p.x, y: p.y, vx: p.vx, vy: p.vy });
+      if (!game2.playerDisguised()) game2.targets.push(targetSnapshot(p, null, p.alive));
     }
     function defenseShopWeapon() {
       return DEFENSE_SHOP_WEAPONS[game2.defense.shopIndex % DEFENSE_SHOP_WEAPONS.length];
@@ -9083,7 +9103,7 @@
   }
 
   // overprint/src/main.js
-  var BUILD_ID = "184175";
+  var BUILD_ID = "184176";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
   var canvas = document.getElementById("c");
