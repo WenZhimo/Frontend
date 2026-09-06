@@ -4882,9 +4882,27 @@
     function playerHasOffhand(kind) {
       return game2.player.offhandWeapon === kind;
     }
-    function dropReplacedWeapon(p, kind, ammo, angle = p.aim + Math.PI) {
+    function canDropWeapon(kind) {
       const w = WEAPONS[kind];
-      if (!w || kind === "fists" || w.passive || w.extract || w.copySauce || w.offhandOnly) return false;
+      return !!w && kind !== "fists" && !w.passive && !w.extract && !w.offhandOnly;
+    }
+    function placeDroppedFromPlayer(p, kind, ammo, angle = p.aim) {
+      const offsets = [0, 0.55, -0.55, Math.PI];
+      const ranges = [34, 42, 26];
+      for (const off of offsets) {
+        for (const range of ranges) {
+          const a = angle + off;
+          const x = p.x + Math.cos(a) * range;
+          const y = p.y + Math.sin(a) * range;
+          if (dist(p.x, p.y, x, y) < 22 || !supportPointClear(x, y, 7)) continue;
+          return placePickup(x, y, kind, ammo, angle);
+        }
+      }
+      const pos = nearestSupportPoint(p.x + Math.cos(angle) * 34, p.y + Math.sin(angle) * 34, 7, { x: p.x, y: p.y });
+      return placePickup(pos.x, pos.y, kind, ammo, angle);
+    }
+    function dropReplacedWeapon(p, kind, ammo, angle = p.aim + Math.PI) {
+      if (!canDropWeapon(kind)) return false;
       return placePickup(p.x, p.y, kind, ammo, angle);
     }
     function givePlayerWeapon(p, kind, ammo = WEAPONS[kind]?.ammo || 0, replaceOffhand = false) {
@@ -6392,8 +6410,21 @@
         sfx.empty();
         return;
       }
-      if (!w || w.noThrow) {
+      if (!w) {
         sfx.empty();
+        return;
+      }
+      if (w.noThrow) {
+        if (!canDropWeapon(p.weapon) || !placeDroppedFromPlayer(p, p.weapon, p.ammo, p.aim)) {
+          sfx.empty();
+          return;
+        }
+        game2.banner = `\u4E22\u5F03 ${w.name}`;
+        game2.bannerT = 0.55;
+        burst(p.x, p.y, 10, 120, w.tint || "#00D6FF", 1.8, 0.28);
+        p.weapon = "fists";
+        p.ammo = 0;
+        if (game2.mode === "defense") game2.floorLoadout = stashPlayerWeapon();
         return;
       }
       spawnThrown(p, p.weapon, p.ammo, charge);
@@ -9085,7 +9116,7 @@
   }
 
   // overprint/src/main.js
-  var BUILD_ID = "184177";
+  var BUILD_ID = "184178";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
   var canvas = document.getElementById("c");
