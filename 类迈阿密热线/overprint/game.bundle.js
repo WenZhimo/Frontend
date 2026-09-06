@@ -8344,64 +8344,46 @@
         break;
     }
   }
+  var CODEX_CURSOR = [[15, 0], [-8, -8], [-4, 0], [-8, 8]];
+  function codexCursorPath(g, scale = 1) {
+    g.beginPath();
+    for (let i = 0; i < CODEX_CURSOR.length; i++) {
+      const [x, y] = CODEX_CURSOR[i];
+      if (i) g.lineTo(x * scale, y * scale);
+      else g.moveTo(x * scale, y * scale);
+    }
+    g.closePath();
+  }
   function codexEnemyShape(g, kind) {
-    g.lineWidth = 2;
-    if (kind === "hound") {
+    if (kind === "strawman") {
+      g.lineWidth = 2;
+      g.strokeRect(-9, -9, 18, 18);
+      g.beginPath();
+      g.moveTo(-13, 0);
+      g.lineTo(13, 0);
+      g.moveTo(0, -13);
+      g.lineTo(0, 13);
+      g.stroke();
+    } else if (kind === "gunner") {
+      g.fillRect(-8.5, -8.5, 17, 17);
+    } else if (kind === "shield") {
+      g.fillRect(-13, -13, 26, 26);
+    } else if (kind === "patroller") {
       g.beginPath();
       g.moveTo(0, -13);
-      g.lineTo(16, 0);
+      g.lineTo(12, -5);
+      g.lineTo(12, 5);
       g.lineTo(0, 13);
-      g.lineTo(-16, 0);
+      g.lineTo(-12, 5);
+      g.lineTo(-12, -5);
       g.closePath();
-      g.stroke();
-      g.beginPath();
-      g.arc(8, 0, 4, 0, TAU);
       g.fill();
-      return;
-    }
-    if (kind === "strawman") {
-      g.beginPath();
-      g.arc(0, -9, 6, 0, TAU);
-      g.stroke();
-      g.beginPath();
-      g.moveTo(0, -3);
-      g.lineTo(0, 15);
-      g.moveTo(-13, 4);
-      g.lineTo(13, 4);
-      g.moveTo(-8, 24);
-      g.lineTo(0, 15);
-      g.lineTo(8, 24);
-      g.stroke();
-      return;
-    }
-    if (kind === "patroller") {
-      g.beginPath();
-      g.moveTo(0, -15);
-      g.lineTo(14, -6);
-      g.lineTo(14, 6);
-      g.lineTo(0, 15);
-      g.lineTo(-14, 6);
-      g.lineTo(-14, -6);
-      g.closePath();
-      g.stroke();
-      g.beginPath();
-      g.arc(0, 0, 7, 0, TAU);
+      g.fillRect(5, -2, 12, 4);
+    } else if (kind === "hound") {
+      codexCursorPath(g, 1);
       g.fill();
-      g.fillRect(7, -2, 20, 4);
-      return;
-    }
-    g.beginPath();
-    g.arc(0, 0, kind === "shield" ? 13 : 11, 0, TAU);
-    g.stroke();
-    g.beginPath();
-    g.arc(0, 0, kind === "shield" ? 7 : 8, 0, TAU);
-    g.fill();
-    if (kind === "gunner") g.fillRect(8, -2, 19, 4);
-    if (kind === "thug") g.fillRect(8, -1.8, 16, 3.6);
-    if (kind === "shield") {
-      g.beginPath();
-      g.arc(10, 0, 17, -1.1, 1.1);
-      g.stroke();
+    } else {
+      g.fillRect(-9.5, -9.5, 19, 19);
     }
   }
   function drawCodexEntry(g, x, y, w, kind, seen, enemy) {
@@ -9103,7 +9085,7 @@
   }
 
   // overprint/src/main.js
-  var BUILD_ID = "184176";
+  var BUILD_ID = "184177";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
   var canvas = document.getElementById("c");
