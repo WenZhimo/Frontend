@@ -5,15 +5,54 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#EFECE3" />
 <title>404 游戏 — ISKRA.GRAPHICS</title>
-<script>window.buildTitle=t=>document.title='404 游戏 · '+t;</script>
+<script>
+  (() => {
+    try {
+      const theme = localStorage.getItem('overprint.theme') || 'light';
+      document.documentElement.dataset.theme = theme;
+    } catch {
+      document.documentElement.dataset.theme = 'light';
+    }
+    window.buildTitle = (t) => { document.title = '404 游戏 · ' + t; };
+  })();
+</script>
 <meta name="robots" content="noindex" />
 <style>
-  :root { color-scheme: light; }
+  :root {
+    color-scheme: light;
+    --paper: #EFECE3;
+    --ink: #161513;
+    --cyan: #12A3DA;
+    --mag: #EC0A63;
+    --yellow: #F7CF16;
+    --green: #00A651;
+    --violet: #4A44A0;
+    --red: #E40808;
+    --panel: rgba(255,255,255,.55);
+    --ink-35: rgba(22,21,19,.35);
+    --ink-45: rgba(22,21,19,.45);
+    --ink-72: rgba(22,21,19,.72);
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #101116;
+    --ink: #EFECE3;
+    --cyan: #32C8FF;
+    --mag: #FF3B82;
+    --yellow: #FFE45C;
+    --green: #39D98A;
+    --violet: #9A7CFF;
+    --red: #FF5148;
+    --panel: rgba(255,255,255,.08);
+    --ink-35: rgba(239,236,227,.35);
+    --ink-45: rgba(239,236,227,.45);
+    --ink-72: rgba(239,236,227,.72);
+  }
   html, body {
     margin: 0; padding: 0; height: 100%; overflow: hidden;
-    background: #EFECE3;
+    background: var(--paper);
     font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-    color: #161513;
+    color: var(--ink);
     /* the whole page is a game surface: no scroll, no bounce, no pinch, no
        long-press callout, and no double-tap zoom stealing the second shot */
     overscroll-behavior: none;
@@ -28,8 +67,8 @@
     position: fixed; z-index: 2; font-size: 10px; letter-spacing: .16em;
     text-transform: uppercase; user-select: none; pointer-events: none;
   }
-  #mark { left: 14px; bottom: calc(10px + env(safe-area-inset-bottom)); color: rgba(22,21,19,.45); }
-  #mark b { font-weight: 600; color: rgba(22,21,19,.72); }
+  #mark { left: 14px; bottom: calc(10px + env(safe-area-inset-bottom)); color: var(--ink-45); }
+  #mark b { font-weight: 600; color: var(--ink-72); }
 
   /* the one piece of real UI in the whole page: claiming a finished run */
   #claim {
@@ -40,21 +79,21 @@
   #claimname {
     font: 400 13px "IBM Plex Mono", ui-monospace, Menlo, monospace;
     letter-spacing: .12em; text-transform: uppercase;
-    width: 172px; padding: 7px 9px; color: #161513;
-    background: rgba(255,255,255,.55);
-    border: 1px solid rgba(22,21,19,.45); border-radius: 0; outline: none;
+    width: 172px; padding: 7px 9px; color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--ink-45); border-radius: 0; outline: none;
   }
-  #claimname:focus { border-color: #EC0A63; }
-  #claimname::placeholder { color: rgba(22,21,19,.35); letter-spacing: .12em; }
+  #claimname:focus { border-color: var(--mag); }
+  #claimname::placeholder { color: var(--ink-35); letter-spacing: .12em; }
   #claimgo {
     font: 600 11px "IBM Plex Mono", ui-monospace, Menlo, monospace;
     letter-spacing: .14em; padding: 7px 12px; cursor: pointer;
-    color: #EFECE3; background: #EC0A63; border: 1px solid #EC0A63; border-radius: 0;
+    color: var(--paper); background: var(--mag); border: 1px solid var(--mag); border-radius: 0;
   }
   #claimgo:disabled { opacity: .45; cursor: default; }
 
   .plus { position: fixed; z-index: 2; width: 9px; height: 9px; pointer-events: none; opacity: .3; }
-  .plus::before, .plus::after { content: ''; position: absolute; background: #161513; }
+  .plus::before, .plus::after { content: ''; position: absolute; background: var(--ink); }
   .plus::before { left: 4px; top: 0; width: 1px; height: 9px; }
   .plus::after { top: 4px; left: 0; height: 1px; width: 9px; }
   #p1 { left: 14px; top: calc(12px + env(safe-area-inset-top)); }

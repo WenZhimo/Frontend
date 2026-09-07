@@ -5,12 +5,14 @@ import { createGame } from './game.js';
 import { drawHud, drawTitle, drawWin, drawFurniture, drawLegend, drawPause, drawCodexPopup } from './hud.js';
 import { createTouch } from './touch.js';
 import { initAudio, setMuted, isMuted } from './audio.js';
+import { applyThemeToDocument, cycleTheme } from './brand.js';
 
 // Bumped on every edit and printed in the corner. If the number on screen is
 // not the number the server reports, you are looking at a cached page.
-export const BUILD_ID = '184180';
+export const BUILD_ID = '184181';
 console.log('[overprint] build', BUILD_ID);
 if (window.buildTitle) window.buildTitle('版本 ' + BUILD_ID);
+applyThemeToDocument();
 
 const canvas = document.getElementById('c');
 const renderer = createRenderer(canvas);
@@ -257,6 +259,7 @@ function hitTab(x, y) {
     for (const p of game.ui.pauseOptions || []) {
       if (x < p.x || x > p.x + p.w || y < p.y || y > p.y + p.h) continue;
       if (p.id === 'resume') game.togglePause();
+      if (p.id === 'theme') cycleTheme();
       if (p.id === 'menu' && game.returnToMenu) {
         game.returnToMenu();
         loadStandings(true);
@@ -297,6 +300,7 @@ function hitTab(x, y) {
   for (const o of game.ui.options || []) {
     if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) {
       if (o.id === 'refill') game.toggleRefill();
+      if (o.id === 'theme') cycleTheme();
       if (o.id === 'codex') game.toggleCodex();
       if (o.id === 'practiceMap') game.cyclePracticeMap();
       if (o.id === 'practiceWeapon') game.cyclePracticeWeapon();

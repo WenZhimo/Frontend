@@ -1,7 +1,5 @@
 import { TAU, clamp } from './util.js';
-
-const INK = '#161513';
-const M = '#EC0A63';
+import { printMode, INK, MAG as M, PAPER } from './brand.js';
 const MONO = '"IBM Plex Mono", ui-monospace, Menlo, monospace';
 
 const STICK_R = 58;   // move stick: how far the thumb travels for full speed
@@ -158,7 +156,7 @@ export function createTouch(canvas, game, renderer) {
     layout();
     const s = t.scale;
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     ctx.lineWidth = 1.6;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -168,10 +166,10 @@ export function createTouch(canvas, game, renderer) {
       // legible over the wall hatch
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 0.82;
-      ctx.fillStyle = '#EFECE3';
+      ctx.fillStyle = PAPER;
       ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill();
 
-      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalCompositeOperation = printMode();
       if (b.press > 0) {
         ctx.globalAlpha = 0.55 * b.press;
         ctx.fillStyle = M;

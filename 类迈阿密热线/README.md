@@ -40,6 +40,7 @@ npx esbuild@0.25.9 overprint/src/main.js --bundle --format=iife --target=es2020 
 | 重新开始本层 | `Backspace` |
 | 静音切换 | `M` |
 | 图鉴 | 标题页点击“图鉴”，弹窗内可滚轮或拖动滚动条 |
+| 风格切换 | 标题页或暂停菜单点击“风格” |
 
 ## 核心玩法
 
@@ -170,3 +171,4 @@ npx esbuild@0.25.9 overprint/src/main.js --bundle --format=iife --target=es2020 
 - 盾牌很强，但燃烧、锯片等区域伤害依然危险。
 - 防守模式中不要把休息期全等完：买好武器和升级后可以提前开波。
 - 图鉴是学习武器和敌人形状的最佳位置；遇到或拾取后会自动补全。
+- 风格系统集中在 `overprint/src/brand.js`，未来新增主题可通过 `registerTheme()` 注册并加入切换序列。

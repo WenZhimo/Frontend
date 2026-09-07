@@ -1442,12 +1442,160 @@
   init_level();
 
   // overprint/src/brand.js
-  var PAPER = "#EFECE3";
-  var INK = "#161513";
-  var CYAN = "#12A3DA";
-  var MAG = "#EC0A63";
-  var YELLOW = "#F7CF16";
-  var ink = (a) => `rgba(22, 21, 19, ${a})`;
+  var THEME_STORAGE_KEY = "overprint.theme";
+  var THEMES = {};
+  var THEME_ORDER = [];
+  var REQUIRED_THEME_FIELDS = ["id", "label", "paper", "ink", "cyan", "mag", "yellow", "green", "violet", "red"];
+  function registerTheme(theme) {
+    const next = { ...theme };
+    for (const key2 of REQUIRED_THEME_FIELDS) {
+      if (!next[key2]) throw new Error(`theme missing required field: ${key2}`);
+    }
+    const known = !!THEMES[next.id];
+    THEMES[next.id] = next;
+    if (!known) THEME_ORDER.push(next.id);
+    return next;
+  }
+  registerTheme({
+    id: "light",
+    label: "\u7EB8\u9762",
+    colorScheme: "light",
+    paper: "#EFECE3",
+    ink: "#161513",
+    cyan: "#12A3DA",
+    mag: "#EC0A63",
+    yellow: "#F7CF16",
+    green: "#00A651",
+    // C + Y
+    violet: "#4A44A0",
+    // C + M
+    red: "#E40808",
+    // M + Y, multiplied from the two plates
+    panel: "rgba(255, 255, 255, 0.55)",
+    grainAlpha: 0.55,
+    printBlend: "multiply"
+  });
+  registerTheme({
+    id: "dark",
+    label: "\u6697\u9ED1",
+    colorScheme: "dark",
+    paper: "#101116",
+    ink: "#EFECE3",
+    cyan: "#32C8FF",
+    mag: "#FF3B82",
+    yellow: "#FFE45C",
+    green: "#39D98A",
+    violet: "#9A7CFF",
+    red: "#FF5148",
+    panel: "rgba(255, 255, 255, 0.08)",
+    grainAlpha: 0.38,
+    printBlend: "screen"
+  });
+  function readStoredThemeId() {
+    try {
+      if (typeof localStorage !== "undefined") return localStorage.getItem(THEME_STORAGE_KEY);
+    } catch {
+    }
+    if (typeof document !== "undefined") return document.documentElement?.dataset?.theme;
+    return null;
+  }
+  function pickThemeId(id) {
+    return THEMES[id] ? id : "light";
+  }
+  var activeThemeId = pickThemeId(readStoredThemeId());
+  var PAPER = THEMES[activeThemeId].paper;
+  var INK = THEMES[activeThemeId].ink;
+  var CYAN = THEMES[activeThemeId].cyan;
+  var MAG = THEMES[activeThemeId].mag;
+  var YELLOW = THEMES[activeThemeId].yellow;
+  var GREEN = THEMES[activeThemeId].green;
+  var VIOLET = THEMES[activeThemeId].violet;
+  var RED = THEMES[activeThemeId].red;
+  function syncThemeBindings(t) {
+    PAPER = t.paper;
+    INK = t.ink;
+    CYAN = t.cyan;
+    MAG = t.mag;
+    YELLOW = t.yellow;
+    GREEN = t.green;
+    VIOLET = t.violet;
+    RED = t.red;
+  }
+  function hexToRgb(hex) {
+    const value = String(hex || "").trim();
+    const short = /^#([0-9a-f]{3})$/i.exec(value);
+    if (short) {
+      const [r, g, b] = short[1].split("").map((c) => parseInt(c + c, 16));
+      return { r, g, b };
+    }
+    const full = /^#([0-9a-f]{6})$/i.exec(value);
+    if (full) {
+      const n = parseInt(full[1], 16);
+      return { r: n >> 16 & 255, g: n >> 8 & 255, b: n & 255 };
+    }
+    return { r: 22, g: 21, b: 19 };
+  }
+  function alpha(hex, a) {
+    const { r, g, b } = hexToRgb(hex);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+  function currentTheme() {
+    return THEMES[activeThemeId] || THEMES.light;
+  }
+  function themeColor(name) {
+    return currentTheme()[name] || currentTheme().ink;
+  }
+  function printMode() {
+    return currentTheme().printBlend || "multiply";
+  }
+  var ink = (a) => alpha(INK, a);
+  var paper = (a) => alpha(PAPER, a);
+  function applyThemeToDocument() {
+    if (typeof document === "undefined") return currentTheme();
+    const t = currentTheme();
+    const root = document.documentElement;
+    root.dataset.theme = t.id;
+    root.style.colorScheme = t.colorScheme || "light";
+    const vars = {
+      paper: t.paper,
+      ink: t.ink,
+      cyan: t.cyan,
+      mag: t.mag,
+      yellow: t.yellow,
+      green: t.green,
+      violet: t.violet,
+      red: t.red,
+      panel: t.panel || paper(0.55),
+      "ink-35": ink(0.35),
+      "ink-45": ink(0.45),
+      "ink-72": ink(0.72)
+    };
+    for (const [key2, value] of Object.entries(vars)) root.style.setProperty(`--${key2}`, value);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", t.paper);
+    return t;
+  }
+  function setTheme(id, opts = {}) {
+    const nextId = pickThemeId(id);
+    activeThemeId = nextId;
+    const t = currentTheme();
+    syncThemeBindings(t);
+    if (opts.persist !== false) {
+      try {
+        if (typeof localStorage !== "undefined") localStorage.setItem(THEME_STORAGE_KEY, nextId);
+      } catch {
+      }
+    }
+    applyThemeToDocument();
+    if (typeof window !== "undefined" && typeof CustomEvent !== "undefined") {
+      window.dispatchEvent(new CustomEvent("overprint:themechange", { detail: t }));
+    }
+    return t;
+  }
+  function cycleTheme() {
+    const idx = THEME_ORDER.indexOf(activeThemeId);
+    return setTheme(THEME_ORDER[(idx + 1) % THEME_ORDER.length] || "light");
+  }
   var WORDMARK = [
     [0, 0, 4, 14],
     [6.5, 0, 10, 3],
@@ -1480,11 +1628,11 @@
     g.restore();
   }
   var PLATES_MARK = [
-    [0, 0, 128, 64, CYAN],
-    [128, 0, 64, 64, PAPER],
-    [192, 0, 128, 64, MAG],
-    [128, 64, 64, 64, YELLOW],
-    [192, 64, 64, 64, INK]
+    [0, 0, 128, 64, "cyan"],
+    [128, 0, 64, 64, "paper"],
+    [192, 0, 128, 64, "mag"],
+    [128, 64, 64, 64, "yellow"],
+    [192, 64, 64, 64, "ink"]
   ];
   var MARK_RATIO = 320 / 128;
   var LOCKUP_RATIO = 320 / 226;
@@ -1499,7 +1647,7 @@
     g.translate(x, y);
     g.scale(k, k);
     for (const [rx, ry, rw, rh, col] of PLATES_MARK) {
-      g.fillStyle = col;
+      g.fillStyle = themeColor(col);
       g.fillRect(rx, ry, rw, rh);
     }
     g.restore();
@@ -1508,15 +1656,10 @@
   // overprint/src/render.js
   init_entities();
   var ZOOM = 1.6;
-  var PAPER2 = "#EFECE3";
-  var INK2 = "#161513";
-  var C = "#12A3DA";
-  var M = "#EC0A63";
-  var Y = "#F7CF16";
-  var PLATES = [
-    [C, 1, 0],
-    [M, -0.5, 0.866],
-    [Y, -0.5, -0.866]
+  var processPlates = () => [
+    [CYAN, 1, 0],
+    [MAG, -0.5, 0.866],
+    [YELLOW, -0.5, -0.866]
   ];
   function grainTile() {
     const s = 180;
@@ -1576,7 +1719,7 @@
     function shards(x, y, dx, dy) {
       if (!stainCtx) return;
       const g = stainCtx;
-      g.fillStyle = INK2;
+      g.fillStyle = INK;
       for (let i = 0; i < 16; i++) {
         const a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 1.9;
         const d = 6 + Math.random() * 46;
@@ -1611,7 +1754,7 @@
       g.closePath();
       g.fill();
     }
-    function splat(x, y, power, dx = 0, dy = 0, tint = M) {
+    function splat(x, y, power, dx = 0, dy = 0, tint = MAG) {
       if (!stainCtx) return;
       const g = stainCtx;
       g.fillStyle = tint;
@@ -1673,8 +1816,8 @@
     }
     function plates(split, draw2) {
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
-      for (const [col, ox, oy] of PLATES) {
+      ctx2.globalCompositeOperation = printMode();
+      for (const [col, ox, oy] of processPlates()) {
         ctx2.save();
         ctx2.translate(ox * split, oy * split);
         ctx2.fillStyle = col;
@@ -1951,7 +2094,7 @@
     function drawFireZones(game2) {
       if (!game2.fireZones || !game2.fireZones.length) return;
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       for (const z of game2.fireZones) {
         const live = clamp(1 - z.t / z.dur, 0, 1);
         if (live <= 0) continue;
@@ -1969,7 +2112,7 @@
         ctx2.arc(z.x, z.y, r * 0.96, 0, TAU);
         ctx2.stroke();
         ctx2.globalAlpha = 0.32 * live;
-        ctx2.fillStyle = Y;
+        ctx2.fillStyle = YELLOW;
         for (let i = 0; i < 8; i++) {
           const a = i * TAU / 8 + Math.sin(game2.time * 4 + i) * 0.18;
           const rr = r * (0.18 + i * 37 % 61 / 100);
@@ -1987,7 +2130,7 @@
     }
     function drawMadMarkers(game2) {
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       for (const e of game2.pools.enemies) {
         if (!e.alive || e.state === S_DEAD || e.state === S_DOWN) continue;
         const def = ENEMY_DEF[e.type];
@@ -2025,7 +2168,7 @@
         ctx2.arc(e.x, e.y, (def.r + 11) * pulse, 0, TAU);
         ctx2.stroke();
         ctx2.globalAlpha = 0.55;
-        ctx2.strokeStyle = Y;
+        ctx2.strokeStyle = YELLOW;
         ctx2.lineWidth = 1.4;
         ctx2.beginPath();
         ctx2.arc(e.x, e.y, def.r + 17, e.angle - 1.1, e.angle + 1.1);
@@ -2054,7 +2197,7 @@
       const sy = p.y + Math.sin(p.aim) * 19;
       const end = traceBulletPath(game2, sx, sy, p.aim, 3200);
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       ctx2.strokeStyle = "#E40808";
       ctx2.lineCap = "square";
       ctx2.globalAlpha = 0.18 + 0.08 * Math.sin(game2.time * 14);
@@ -2079,9 +2222,9 @@
     function drawThrowPreview(game2) {
       const pv = game2.throwPreview;
       if (!pv || !pv.points || pv.points.length < 2 || game2.state !== "play") return;
-      const tint = WEAPONS[pv.kind]?.tint || M;
+      const tint = WEAPONS[pv.kind]?.tint || MAG;
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       ctx2.lineCap = "square";
       if (pv.rangeMode && pv.maxRange && pv.originX != null) {
         ctx2.globalAlpha = 0.11 + pv.charge * 0.08;
@@ -2155,11 +2298,11 @@
       if (!p.alive || game2.state !== "play" || !w?.katana && !w?.lance || !game2.input.fire || p.katanaT > 0) return;
       const t = clamp(game2.throwCharge / (w.chargeMax || 1.15), 0, 1);
       if (t <= 0.01) return;
-      const tint = w.tint || M;
+      const tint = w.tint || MAG;
       const bw = 52, bh = 5;
       const bx = p.x - bw / 2, by = p.y - 35;
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       ctx2.strokeStyle = tint;
       ctx2.fillStyle = tint;
       ctx2.globalAlpha = 0.26;
@@ -2208,9 +2351,9 @@
       if (!arrows.length) return;
       const r = 68;
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
-      ctx2.fillStyle = M;
-      ctx2.strokeStyle = M;
+      ctx2.globalCompositeOperation = printMode();
+      ctx2.fillStyle = MAG;
+      ctx2.strokeStyle = MAG;
       ctx2.lineWidth = 1.4;
       for (const a of arrows) {
         const pulse = 1 + Math.sin(game2.time * 5 + a * 3) * 0.08;
@@ -2320,12 +2463,12 @@
       }
       g.restore();
     }
-    function drawWeapon(g, x, y, angle, kind, alpha = 1) {
+    function drawWeapon(g, x, y, angle, kind, alpha2 = 1) {
       const w = WEAPONS[kind];
       if (!w || !w.tint) return;
       g.save();
-      g.globalCompositeOperation = "multiply";
-      g.globalAlpha = alpha;
+      g.globalCompositeOperation = printMode();
+      g.globalAlpha = alpha2;
       g.fillStyle = w.tint;
       g.strokeStyle = w.tint;
       g.translate(x, y);
@@ -2353,7 +2496,7 @@
     function drawDeployables(game2) {
       const smg = WEAPONS.smg;
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       for (const d of game2.pools.deploys || []) {
         if (!d.alive) continue;
         const pct = clamp(d.ammo / smg.ammo, 0, 1);
@@ -2415,8 +2558,8 @@
       const w = WEAPONS[p.weapon];
       if (!p.alive || !w || !w.defense) return;
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
-      ctx2.strokeStyle = w.tint || C;
+      ctx2.globalCompositeOperation = printMode();
+      ctx2.strokeStyle = w.tint || CYAN;
       ctx2.globalAlpha = p.blockFlash > 0 ? 0.95 : 0.58;
       ctx2.lineWidth = p.blockFlash > 0 ? 5 : 3;
       const arc = w.shieldArc || 1.28;
@@ -2424,7 +2567,7 @@
       ctx2.arc(p.x, p.y, 24, p.aim - arc, p.aim + arc);
       ctx2.stroke();
       ctx2.globalAlpha = 0.18;
-      ctx2.fillStyle = w.tint || C;
+      ctx2.fillStyle = w.tint || CYAN;
       ctx2.beginPath();
       ctx2.moveTo(p.x, p.y);
       ctx2.arc(p.x, p.y, 31, p.aim - arc, p.aim + arc);
@@ -2435,8 +2578,8 @@
     function drawSleepers(game2) {
       const t = game2.time;
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
-      ctx2.fillStyle = INK2;
+      ctx2.globalCompositeOperation = printMode();
+      ctx2.fillStyle = INK;
       ctx2.textAlign = "left";
       ctx2.textBaseline = "alphabetic";
       for (const e of game2.pools.enemies) {
@@ -2541,7 +2684,7 @@
       ctx2.fillStyle = ink(0.085);
       ctx2.fill(furn);
       ctx2.save();
-      ctx2.strokeStyle = INK2;
+      ctx2.strokeStyle = INK;
       ctx2.lineWidth = 2.4 / ZOOM;
       ctx2.beginPath();
       for (let gy = gy0; gy <= gy1; gy++) {
@@ -2669,7 +2812,7 @@
     function draw(game2) {
       const cam = game2.camera;
       const split = game2.plateSplit;
-      ctx2.fillStyle = PAPER2;
+      ctx2.fillStyle = PAPER;
       ctx2.fillRect(0, 0, W, H);
       ctx2.save();
       let ox = W / 2 - cam.x * ZOOM;
@@ -2681,7 +2824,7 @@
       drawLevelLive(game2, cam);
       if (stainCanvas) {
         ctx2.save();
-        ctx2.globalCompositeOperation = "multiply";
+        ctx2.globalCompositeOperation = printMode();
         ctx2.globalAlpha = 0.85;
         ctx2.drawImage(stainCanvas, 0, 0, stainCanvas.width / STAIN_SS, stainCanvas.height / STAIN_SS);
         ctx2.restore();
@@ -2691,8 +2834,8 @@
         const ex = game2.level.exit;
         const open = game2.enemiesLeft === 0;
         ctx2.save();
-        ctx2.globalCompositeOperation = "multiply";
-        ctx2.strokeStyle = open ? M : ink(0.28);
+        ctx2.globalCompositeOperation = printMode();
+        ctx2.strokeStyle = open ? MAG : ink(0.28);
         ctx2.lineWidth = open ? 3 : 1.6;
         const pulse = open ? 1 + Math.sin(game2.time * 4) * 0.09 : 1;
         ctx2.save();
@@ -2710,7 +2853,7 @@
         ctx2.stroke();
         ctx2.restore();
         if (open) {
-          ctx2.fillStyle = M;
+          ctx2.fillStyle = MAG;
           ctx2.font = '600 11px "IBM Plex Mono", ui-monospace, monospace';
           ctx2.textAlign = "center";
           ctx2.fillText("\u51FA\u53E3", ex.x, ex.y + 36);
@@ -2718,7 +2861,7 @@
         ctx2.restore();
       }
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       const rayReach = (e, a, reach) => {
         for (let st = 12; st < reach; st += 8) {
           if (game2.level.sightBlockedAt(e.x + Math.cos(a) * st, e.y + Math.sin(a) * st)) return st;
@@ -2729,7 +2872,7 @@
         if (!e.alive || e.state === S_DOWN || e.state === S_DEAD) continue;
         const def = ENEMY_DEF[e.type];
         const lines = e.state === S_CHASE ? 18 : e.state === S_SEARCH ? 14 : 10;
-        const col = e.friendly ? WEAPONS.tameDart.tint : e.state === S_CHASE ? M : e.state === S_SEARCH ? "#4A44A0" : C;
+        const col = e.friendly ? WEAPONS.tameDart.tint : e.state === S_CHASE ? MAG : e.state === S_SEARCH ? "#4A44A0" : CYAN;
         const pts = [];
         for (let i = 0; i <= lines; i++) {
           const a = e.angle - def.cone + i / lines * def.cone * 2;
@@ -2763,9 +2906,9 @@
       drawThrowPreview(game2);
       drawKatanaCharge(game2);
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       for (const n of game2.noiseRings) {
-        ctx2.strokeStyle = n.col || C;
+        ctx2.strokeStyle = n.col || CYAN;
         ctx2.globalAlpha = clamp(1 - n.t / n.dur, 0, 1) * 0.7;
         ctx2.lineWidth = 2 * (1 - n.t / n.dur) + 0.5;
         ctx2.beginPath();
@@ -2774,12 +2917,12 @@
       }
       ctx2.restore();
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       for (const win of game2.level.windows) {
         if (win.broken) continue;
         const x = win.gx * TILE, y = win.gy * TILE;
-        ctx2.fillStyle = INK2;
-        ctx2.strokeStyle = INK2;
+        ctx2.fillStyle = INK;
+        ctx2.strokeStyle = INK;
         ctx2.lineWidth = 2.8;
         if (win.horiz) {
           ctx2.globalAlpha = 0.34;
@@ -2806,7 +2949,7 @@
       ctx2.globalAlpha = 1;
       ctx2.restore();
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       for (const d of game2.level.doors) {
         const a = d.open * 1.32;
         const hinge = d.hinge || -1;
@@ -2816,11 +2959,11 @@
         if (!d.horiz) ctx2.rotate(Math.PI / 2);
         ctx2.translate(hinge * TILE / 2, 0);
         ctx2.rotate(-hinge * a * swing);
-        ctx2.fillStyle = INK2;
+        ctx2.fillStyle = INK;
         ctx2.fillRect(hinge > 0 ? -TILE : 0, -3, TILE, 6);
         ctx2.restore();
         if (d.slam > 0) {
-          ctx2.strokeStyle = M;
+          ctx2.strokeStyle = MAG;
           ctx2.globalAlpha = d.slam * 0.8;
           ctx2.lineWidth = 3 * d.slam + 0.5;
           ctx2.beginPath();
@@ -2835,7 +2978,7 @@
       }
       if (landed.length) {
         ctx2.save();
-        ctx2.globalCompositeOperation = "multiply";
+        ctx2.globalCompositeOperation = printMode();
         for (const c of landed) {
           ctx2.save();
           ctx2.translate(c.x, c.y);
@@ -2898,7 +3041,7 @@
         }
       });
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       ctx2.lineWidth = 1.7;
       for (const b of game2.pools.bullets) {
         if (!b.alive || !isDartWeapon(b.weapon)) continue;
@@ -2927,13 +3070,13 @@
       }
       ctx2.restore();
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       for (const e of game2.pools.enemies) {
         if (!e.alive || e.blockFlash <= 0) continue;
         const def = ENEMY_DEF[e.type];
         const w = WEAPONS[e.weapon];
         const arc = w && w.defense ? w.shieldArc || 1.28 : def.shieldArc || 1;
-        ctx2.strokeStyle = C;
+        ctx2.strokeStyle = CYAN;
         ctx2.globalAlpha = clamp(e.blockFlash / 0.25, 0, 1) * 0.9;
         ctx2.lineWidth = 3;
         ctx2.beginPath();
@@ -2942,7 +3085,7 @@
       }
       ctx2.restore();
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       for (const p of game2.particles) {
         ctx2.globalAlpha = clamp(p.life / p.max, 0, 1);
         ctx2.fillStyle = p.col;
@@ -2964,7 +3107,7 @@
       ctx2.restore();
       if (game2.flashes.length) {
         ctx2.save();
-        ctx2.globalCompositeOperation = "multiply";
+        ctx2.globalCompositeOperation = printMode();
         for (const f of game2.flashes) {
           const k = 1 - clamp(f.t / f.dur, 0, 1);
           const L = (16 + 16 * f.size) * k, Wd = (5 + 4 * f.size) * k;
@@ -2972,7 +3115,7 @@
           ctx2.translate(f.x, f.y);
           ctx2.rotate(f.a);
           ctx2.globalAlpha = 0.55 + 0.45 * k;
-          ctx2.fillStyle = Y;
+          ctx2.fillStyle = YELLOW;
           ctx2.beginPath();
           ctx2.moveTo(L, 0);
           ctx2.lineTo(0, -Wd);
@@ -2996,8 +3139,8 @@
         const w = WEAPONS[p.weapon];
         const t = 1 - game2.player.swing / 0.16;
         ctx2.save();
-        ctx2.globalCompositeOperation = "multiply";
-        ctx2.strokeStyle = M;
+        ctx2.globalCompositeOperation = printMode();
+        ctx2.strokeStyle = MAG;
         ctx2.lineWidth = 3.5 * (1 - t) + 1;
         ctx2.beginPath();
         ctx2.arc(p.x, p.y, (w.reach || 36) * (0.5 + t * 0.6), p.aim - 1.1 + t * 1.4, p.aim + 0.5 + t * 1.4);
@@ -3008,8 +3151,8 @@
       if (game2.player.trail.length > 1) {
         const dashWeapon = WEAPONS[game2.player.weapon] || WEAPONS.katana;
         ctx2.save();
-        ctx2.globalCompositeOperation = "multiply";
-        ctx2.strokeStyle = game2.player.katanaT > 0 ? dashWeapon.tint || M : C;
+        ctx2.globalCompositeOperation = printMode();
+        ctx2.strokeStyle = game2.player.katanaT > 0 ? dashWeapon.tint || MAG : CYAN;
         ctx2.lineWidth = game2.player.katanaT > 0 ? 8 : 6;
         ctx2.globalAlpha = game2.player.katanaT > 0 ? 0.54 : 0.45;
         ctx2.beginPath();
@@ -3029,11 +3172,11 @@
           const a = Math.atan2(dy, dx);
           const r = 54 + Math.sin(game2.time * 4) * 3;
           ctx2.save();
-          ctx2.globalCompositeOperation = "multiply";
+          ctx2.globalCompositeOperation = printMode();
           ctx2.globalAlpha = fade;
           ctx2.translate(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r);
           ctx2.rotate(a);
-          ctx2.fillStyle = M;
+          ctx2.fillStyle = MAG;
           ctx2.beginPath();
           ctx2.moveTo(13, 0);
           ctx2.lineTo(-5, -8);
@@ -3047,13 +3190,13 @@
           ctx2.lineTo(2, 0);
           ctx2.lineTo(-8, 6);
           ctx2.lineWidth = 1.6;
-          ctx2.strokeStyle = M;
+          ctx2.strokeStyle = MAG;
           ctx2.stroke();
           ctx2.restore();
           ctx2.save();
-          ctx2.globalCompositeOperation = "multiply";
+          ctx2.globalCompositeOperation = printMode();
           ctx2.globalAlpha = fade * 0.8;
-          ctx2.fillStyle = M;
+          ctx2.fillStyle = MAG;
           ctx2.font = '600 9px "IBM Plex Mono", ui-monospace, monospace';
           ctx2.textAlign = "center";
           ctx2.fillText(`\u51FA\u53E3 ${Math.round(dist3 / TILE)}`, p.x + Math.cos(a) * (r + 46), p.y + Math.sin(a) * (r + 46) + 3);
@@ -3062,8 +3205,8 @@
       }
       ctx2.restore();
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
-      ctx2.globalAlpha = 0.55;
+      ctx2.globalCompositeOperation = printMode();
+      ctx2.globalAlpha = currentTheme().grainAlpha ?? 0.55;
       ctx2.fillStyle = grainPat;
       ctx2.translate(-(cam.x * ZOOM % 180), -(cam.y * ZOOM % 180));
       ctx2.fillRect(0, 0, W + 180, H + 180);
@@ -7770,22 +7913,18 @@
   }
 
   // overprint/src/hud.js
-  var INK3 = "#161513";
-  var M2 = "#EC0A63";
-  var C2 = "#12A3DA";
   var MONO = '"IBM Plex Mono", ui-monospace, Menlo, monospace';
-  var PAPER3 = "#EFECE3";
   function card(g, x, y, w, h) {
     g.save();
     g.globalAlpha = 0.9;
-    g.fillStyle = PAPER3;
+    g.fillStyle = PAPER;
     g.fillRect(x, y, w, h);
     g.restore();
   }
   function drawFurniture(g, W, H) {
     const m = 16;
     g.save();
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     g.strokeStyle = ink(0.36);
     g.lineWidth = 1;
     bracket(g, m, m, 1, 1, 11);
@@ -7896,18 +8035,18 @@
     g.translate(-punch2 * 3, -(1 - Math.min(1, open)) * 7);
     g.globalAlpha = Math.min(1, open * 1.3);
     if (hot) {
-      g.fillStyle = M2;
+      g.fillStyle = MAG;
       g.fillRect(x, y, w, CHAIN_H);
     } else {
       g.globalAlpha *= 0.9;
-      g.fillStyle = PAPER3;
+      g.fillStyle = PAPER;
       g.fillRect(x, y, w, CHAIN_H);
       g.globalAlpha = Math.min(1, open * 1.3);
-      g.strokeStyle = M2;
+      g.strokeStyle = MAG;
       g.lineWidth = 1;
       g.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(w) - 1, CHAIN_H - 1);
     }
-    const fg = hot ? PAPER3 : M2;
+    const fg = hot ? PAPER : MAG;
     g.fillStyle = fg;
     g.textAlign = "left";
     g.textBaseline = "alphabetic";
@@ -7926,7 +8065,7 @@
       w - 24,
       BAR,
       clamp(game2.ui.chain, 0, 1),
-      hot ? "rgba(239,236,227,.34)" : ink(0.22),
+      hot ? paper(0.34) : ink(0.22),
       fg
     );
     g.fillStyle = fg;
@@ -7950,17 +8089,17 @@
     game2.ui.defenseShopPanel = { x, y, w, h };
     card(g, x, y, w, h);
     g.save();
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     g.textAlign = "left";
     g.textBaseline = "alphabetic";
-    g.fillStyle = INK3;
+    g.fillStyle = INK;
     g.font = `600 ${T_LABEL}px ${MONO}`;
     g.fillText(`\u9632\u5B88  \u6CE2 ${String(d.wave).padStart(2, "0")}  \u79EF\u5206 ${d.points}`, x + 14, y + 20);
     const shopBtn = { x: x + w - 78, y: y + 9, w: 62, h: 22 };
     game2.ui.defenseShopButton = shopBtn;
-    g.strokeStyle = d.between ? M2 : ink(0.26);
+    g.strokeStyle = d.between ? MAG : ink(0.26);
     bar(g, shopBtn.x, shopBtn.y, shopBtn.w, shopBtn.h);
-    g.fillStyle = d.between ? M2 : ink(0.34);
+    g.fillStyle = d.between ? MAG : ink(0.34);
     g.textAlign = "center";
     g.font = `600 ${T_MICRO}px ${MONO}`;
     track(g, 0.12);
@@ -7975,7 +8114,7 @@
     if (d.between) {
       const t = Math.ceil(Math.max(0, d.nextWaveT));
       const rest = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
-      g.fillStyle = C2;
+      g.fillStyle = CYAN;
       g.font = `600 ${T_MICRO}px ${MONO}`;
       g.fillText(`\u4F11\u606F ${rest}   T \u6253\u5F00\u5546\u5E97 \xB7 \u70B9\u51FB\u8D2D\u4E70`, x + 14, y + 76);
     } else {
@@ -7987,9 +8126,9 @@
       if (d.between) {
         const done2 = { x: x + 14, y: y + 83, w: 104, h: 18 };
         game2.ui.defenseRestButton = done2;
-        g.strokeStyle = C2;
+        g.strokeStyle = CYAN;
         bar(g, done2.x, done2.y, done2.w, done2.h);
-        g.fillStyle = C2;
+        g.fillStyle = CYAN;
         g.font = `600 ${T_MICRO}px ${MONO}`;
         track(g, 0.1);
         g.textAlign = "center";
@@ -8003,15 +8142,15 @@
     }
     const weapon = WEAPONS[shop.weapon]?.name || shop.weapon;
     const items = [
-      { slot: 1, label: `\u6B66\u5668 ${weapon}`, cost: shop.costs.weapon, col: M2, can: shop.can.weapon },
-      { slot: 2, label: "\u5237\u65B0\u7269\u54C1", cost: shop.costs.refresh, col: "#F7CF16", can: shop.can.refresh },
-      { slot: 3, label: "\u8865\u5145\u5B50\u5F39", cost: shop.costs.refill, col: "#00A651", can: shop.can.refill },
-      { slot: 4, label: "\u6062\u590D\u751F\u547D", cost: shop.costs.heal, col: "#E40808", can: shop.can.heal },
-      { slot: 5, label: "\u6700\u5927\u751F\u547D", cost: shop.costs.hp, col: C2, can: shop.can.hp },
-      { slot: 6, label: "\u653B\u51FB\u901F\u5EA6", cost: shop.costs.attack, col: "#4A44A0", can: shop.can.attack },
-      { slot: 7, label: "\u51B2\u523A\u69FD", cost: shop.costs.dash, col: "#F7CF16", can: shop.can.dash },
-      { slot: 8, label: "\u51B2\u523A\u6062\u590D", cost: shop.costs.recover, col: "#00A651", can: shop.can.recover },
-      { slot: 9, label: "\u5B50\u5F39\u65F6\u95F4", cost: shop.costs.slow, col: INK3, can: shop.can.slow }
+      { slot: 1, label: `\u6B66\u5668 ${weapon}`, cost: shop.costs.weapon, col: MAG, can: shop.can.weapon },
+      { slot: 2, label: "\u5237\u65B0\u7269\u54C1", cost: shop.costs.refresh, col: YELLOW, can: shop.can.refresh },
+      { slot: 3, label: "\u8865\u5145\u5B50\u5F39", cost: shop.costs.refill, col: GREEN, can: shop.can.refill },
+      { slot: 4, label: "\u6062\u590D\u751F\u547D", cost: shop.costs.heal, col: RED, can: shop.can.heal },
+      { slot: 5, label: "\u6700\u5927\u751F\u547D", cost: shop.costs.hp, col: CYAN, can: shop.can.hp },
+      { slot: 6, label: "\u653B\u51FB\u901F\u5EA6", cost: shop.costs.attack, col: VIOLET, can: shop.can.attack },
+      { slot: 7, label: "\u51B2\u523A\u69FD", cost: shop.costs.dash, col: YELLOW, can: shop.can.dash },
+      { slot: 8, label: "\u51B2\u523A\u6062\u590D", cost: shop.costs.recover, col: GREEN, can: shop.can.recover },
+      { slot: 9, label: "\u5B50\u5F39\u65F6\u95F4", cost: shop.costs.slow, col: INK, can: shop.can.slow }
     ];
     const bx = x + 14, bw = w - 28, bh = 20;
     items.forEach((item, i) => {
@@ -8032,9 +8171,9 @@
     });
     const done = { x: bx, y: y + h - 30, w: bw, h: 22 };
     game2.ui.defenseRestButton = done;
-    g.strokeStyle = C2;
+    g.strokeStyle = CYAN;
     bar(g, done.x, done.y, done.w, done.h);
-    g.fillStyle = C2;
+    g.fillStyle = CYAN;
     g.font = `600 ${T_MICRO}px ${MONO}`;
     track(g, 0.1);
     g.textAlign = "center";
@@ -8056,31 +8195,31 @@
     const pct = clamp(p.katanaT / p.katanaMax, 0, 1);
     card(g, x, y, w, h);
     g.save();
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     g.textAlign = "left";
     g.textBaseline = "alphabetic";
-    g.fillStyle = INK3;
+    g.fillStyle = INK;
     g.font = `600 ${T_MICRO}px ${MONO}`;
     track(g, 0.14);
     const def = WEAPONS[p.weapon] || WEAPONS.katana;
     g.fillText(def.lance ? "\u5802\u5409\u67EF\u5FB7\u51B2\u950B" : "\u6B66\u58EB\u5200\u51B2\u523A", x + 12, y + 13);
     track(g, 0);
-    gauge(g, x + 12, y + 18, w - 24, BAR, pct, ink(0.24), def.tint || M2);
+    gauge(g, x + 12, y + 18, w - 24, BAR, pct, ink(0.24), def.tint || MAG);
     g.restore();
   }
   function drawPlayerStatuses(g, game2, H) {
     const p = game2.player;
     const rows = [];
     if (p.infectT > 0) rows.push({ label: `\u611F\u67D3 ${Math.ceil(p.infectT)}s`, col: "#7AC943" });
-    if (p.madT > 0) rows.push({ label: `\u75AF\u72C2 ${Math.ceil(p.madT)}s`, col: M2 });
-    if (p.iframes > 1) rows.push({ label: `\u65E0\u654C ${Math.ceil(p.iframes)}s`, col: "#12A3DA" });
+    if (p.madT > 0) rows.push({ label: `\u75AF\u72C2 ${Math.ceil(p.madT)}s`, col: MAG });
+    if (p.iframes > 1) rows.push({ label: `\u65E0\u654C ${Math.ceil(p.iframes)}s`, col: CYAN });
     if (!rows.length) return;
     const x = 22 - PAD * 0.7, w = 208 + PAD;
     const h = 12 + rows.length * 16;
     const y = H - 126 - h;
     card(g, x, y, w, h);
     g.save();
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     g.textAlign = "left";
     g.textBaseline = "alphabetic";
     g.font = `600 ${T_MICRO}px ${MONO}`;
@@ -8098,11 +8237,11 @@
     const SX = 22, SY = 22, SW = 208;
     card(g, SX - PAD * 0.7, SY - 10, SW + PAD, 94);
     g.save();
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     g.lineWidth = 1;
     g.textBaseline = "alphabetic";
     g.textAlign = "left";
-    g.fillStyle = INK3;
+    g.fillStyle = INK;
     track(g, -0.03);
     g.font = `600 ${T_CODE}px ${MONO}`;
     g.fillText(String(Math.round(game2.ui.code)), SX, SY + 18);
@@ -8111,12 +8250,12 @@
     track(g, 0.09);
     g.font = `600 ${T_MICRO}px ${MONO}`;
     const lw = g.measureText(label).width + 18;
-    g.strokeStyle = M2;
+    g.strokeStyle = MAG;
     bar(g, SX + SW - lw, SY + 4, lw, BAR_TALL);
-    g.fillStyle = M2;
+    g.fillStyle = MAG;
     g.textAlign = "center";
     g.fillText(label, SX + SW - lw / 2, SY + 13);
-    gauge(g, SX, SY + 28, SW, BAR, game2.ui.gauge, ink(0.3), INK3);
+    gauge(g, SX, SY + 28, SW, BAR, game2.ui.gauge, ink(0.3), INK);
     g.textAlign = "left";
     track(g, 0.07);
     g.font = `400 ${T_MICRO}px ${MONO}`;
@@ -8149,7 +8288,7 @@
     const WX = 22, WY = H - 110, WW = 208;
     card(g, WX - PAD * 0.7, WY - 12, WW + PAD, 96);
     g.save();
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     g.lineWidth = 1;
     g.textAlign = "left";
     g.textBaseline = "alphabetic";
@@ -8157,7 +8296,7 @@
       g.fillStyle = w.tint;
       bar(g, WX, WY - 5, 14, BAR, true);
     }
-    g.fillStyle = INK3;
+    g.fillStyle = INK;
     g.font = `600 ${T_LABEL}px ${MONO}`;
     g.fillText(w.name, WX + (w.tint ? 20 : 0), WY + 3);
     if (w.feed && w.feed !== "none") {
@@ -8176,7 +8315,7 @@
     const offAmmo = off.feed && off.feed !== "none" ? ` ${p.offhandAmmo}/${off.ammo}` : "";
     g.fillText(`\u526F\u624B ${offName}${offAmmo}`, WX, WY + 19, WW - 58);
     g.textAlign = "right";
-    g.fillStyle = p.offhandWeapon !== "fists" && !off.offhandOnly ? M2 : ink(0.36);
+    g.fillStyle = p.offhandWeapon !== "fists" && !off.offhandOnly ? MAG : ink(0.36);
     const offAction = p.offhandWeapon === "fists" ? "\u7A7A" : off.extract ? "\u6D82\u5C42" : off.offhandOnly || off.passive ? "\u88AB\u52A8" : "E \u5207\u6362";
     g.fillText(offAction, WX + WW, WY + 19);
     g.textAlign = "left";
@@ -8192,7 +8331,7 @@
     for (let i = 0; i < maxDash; i++) {
       const bx = WX + WW - (maxDash - i) * (dw + 5) + 5;
       if (i < p.dashCharges) {
-        g.fillStyle = game2.dashFlash > 0 ? M2 : INK3;
+        g.fillStyle = game2.dashFlash > 0 ? MAG : INK;
         bar(g, bx, WY + 29, dw, BAR, true);
       } else if (i === p.dashCharges) {
         gauge(g, bx, WY + 29, dw, BAR, clamp(1 - p.dashCd / dashCdMax, 0, 1), ink(0.26), ink(0.55));
@@ -8203,7 +8342,7 @@
     }
     const BY = WY + 43, BH = 30;
     if (w.feed && w.feed !== "none") {
-      magazine(g, WX, BY, WW, BH, w.feed, p.ammo, w.ammo, INK3, ink(0.32));
+      magazine(g, WX, BY, WW, BH, w.feed, p.ammo, w.ammo, INK, ink(0.32));
     } else {
       g.strokeStyle = ink(0.28);
       bar(g, WX, BY + BH / 2 - BAR / 2, WW, BAR);
@@ -8224,9 +8363,9 @@
       g.textAlign = "center";
       const bw = g.measureText(game2.banner).width + 56;
       g.globalAlpha = a * 0.93;
-      g.fillStyle = PAPER3;
+      g.fillStyle = PAPER;
       g.fillRect(W / 2 - bw / 2, H / 2 - 116, bw, 38);
-      g.globalCompositeOperation = "multiply";
+      g.globalCompositeOperation = printMode();
       g.globalAlpha = a;
       g.lineWidth = 1;
       g.strokeStyle = ink(0.35);
@@ -8234,15 +8373,15 @@
       bracket(g, W / 2 + bw / 2 - 5, H / 2 - 111, -1, 1, 7);
       bracket(g, W / 2 - bw / 2 + 5, H / 2 - 83, 1, -1, 7);
       bracket(g, W / 2 + bw / 2 - 5, H / 2 - 83, -1, -1, 7);
-      g.fillStyle = INK3;
+      g.fillStyle = INK;
       g.fillText(game2.banner, W / 2, H / 2 - 90);
       g.restore();
     }
     if (game2.flash > 0) {
       g.save();
-      g.globalCompositeOperation = "multiply";
+      g.globalCompositeOperation = printMode();
       g.globalAlpha = game2.flash * 0.5;
-      g.fillStyle = M2;
+      g.fillStyle = MAG;
       g.fillRect(0, 0, W, H);
       g.restore();
     }
@@ -8537,7 +8676,7 @@
     }
   }
   function drawCodexEntry(g, x, y, w, kind, seen, enemy) {
-    const tint = enemy ? kind === "hound" ? M2 : kind === "shield" ? C2 : INK3 : WEAPONS[kind]?.tint || INK3;
+    const tint = enemy ? kind === "hound" ? MAG : kind === "shield" ? CYAN : INK : WEAPONS[kind]?.tint || INK;
     g.save();
     g.globalAlpha = seen ? 1 : 0.34;
     g.strokeStyle = tint;
@@ -8549,7 +8688,7 @@
     else codexWeaponShape(g, kind);
     g.restore();
     g.textAlign = "left";
-    g.fillStyle = seen ? INK3 : ink(0.38);
+    g.fillStyle = seen ? INK : ink(0.38);
     g.font = `600 10px ${MONO}`;
     track(g, 0.08);
     const name = enemy ? ENEMY_NAMES[kind] || kind : WEAPONS[kind]?.name || kind;
@@ -8577,23 +8716,23 @@
     game2.ui.codexClose = close;
     g.save();
     g.globalAlpha = 0.28;
-    g.fillStyle = INK3;
+    g.fillStyle = INK;
     g.fillRect(0, 0, W, H);
     g.restore();
     g.save();
     g.globalAlpha = 0.97;
-    g.fillStyle = PAPER3;
+    g.fillStyle = PAPER;
     g.fillRect(x, y, cw, ch);
     g.restore();
     g.save();
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     g.strokeStyle = ink(0.36);
     bracket(g, x + 12, y + 12, 1, 1, 12);
     bracket(g, x + cw - 12, y + 12, -1, 1, 12);
     bracket(g, x + 12, y + ch - 12, 1, -1, 12);
     bracket(g, x + cw - 12, y + ch - 12, -1, -1, 12);
     g.textAlign = "left";
-    g.fillStyle = INK3;
+    g.fillStyle = INK;
     g.font = `600 24px ${MONO}`;
     track(g, 0.08);
     g.fillText("\u56FE\u9274", x + 34, y + 48);
@@ -8603,7 +8742,7 @@
     track(g, 0);
     g.strokeStyle = ink(0.34);
     bar(g, close.x, close.y, close.w, close.h);
-    g.fillStyle = M2;
+    g.fillStyle = MAG;
     g.textAlign = "center";
     g.font = `600 10px ${MONO}`;
     track(g, 0.12);
@@ -8648,7 +8787,7 @@
     g.globalAlpha = maxScroll > 0 ? 1 : 0.34;
     g.strokeStyle = ink(0.2);
     bar(g, sx, sy, sw, sh);
-    g.fillStyle = M2;
+    g.fillStyle = MAG;
     bar(g, sx, thumbY, sw, thumbH, true);
     g.globalAlpha = 1;
     g.fillStyle = ink(0.38);
@@ -8725,7 +8864,7 @@
     shown.forEach((r, i) => {
       const ry = y + 20 + i * row;
       const mine = isMine(r);
-      g.fillStyle = mine ? M2 : ink(0.62);
+      g.fillStyle = mine ? MAG : ink(0.62);
       g.font = `${mine ? 600 : 400} ${fs}px ${MONO}`;
       g.textAlign = "left";
       g.fillText(String(r.rank).padStart(2, "0"), x, ry);
@@ -8757,9 +8896,9 @@
       if (on) {
         g.save();
         g.globalCompositeOperation = "source-over";
-        g.fillStyle = INK3;
+        g.fillStyle = INK;
         bar(g, x, y, w, h, true);
-        g.fillStyle = PAPER3;
+        g.fillStyle = PAPER;
         g.fillText(m.label, x + w / 2, y + h - Math.round(5.5 * k));
         g.restore();
       } else {
@@ -8787,18 +8926,21 @@
     const seedBase2 = String(game2.seedBase || "").slice(0, 18) || "\u4ECA\u5929";
     const counts = game2.codexCounts ? game2.codexCounts() : { weapons: 0, weaponTotal: 0, enemies: 0, enemyTotal: 0 };
     const chips = [
-      { id: "refill", label: `R \u8865\u5F39 ${game2.refillEnabled ? "\u5F00" : "\u5173"}`, on: game2.refillEnabled, col: C2 }
+      { id: "refill", label: `R \u8865\u5F39 ${game2.refillEnabled ? "\u5F00" : "\u5173"}`, on: game2.refillEnabled, col: CYAN }
     ];
-    if (game2.mode === "endless") chips.push({ id: "seed", label: `\u79CD\u5B50 ${seedBase2}`, on: !!game2.customSeed, col: M2 });
+    if (game2.mode === "endless") chips.push({ id: "seed", label: `\u79CD\u5B50 ${seedBase2}`, on: !!game2.customSeed, col: MAG });
     if (game2.mode === "practice") {
       const map = game2.practiceMaps[game2.practice.map] || game2.practiceMaps[0];
       chips.push(
-        { id: "practiceMap", label: `\u5730\u5F62 ${map.label}`, on: false, col: C2 },
-        { id: "practiceWeapon", label: `\u6B66\u5668 ${WEAPONS[game2.practice.weapon]?.name || game2.practice.weapon}`, on: false, col: M2 },
-        { id: "practiceEnemy", label: `\u654C\u4EBA ${ENEMY_NAMES[game2.practice.enemy] || game2.practice.enemy}`, on: false, col: "#F7CF16" }
+        { id: "practiceMap", label: `\u5730\u5F62 ${map.label}`, on: false, col: CYAN },
+        { id: "practiceWeapon", label: `\u6B66\u5668 ${WEAPONS[game2.practice.weapon]?.name || game2.practice.weapon}`, on: false, col: MAG },
+        { id: "practiceEnemy", label: `\u654C\u4EBA ${ENEMY_NAMES[game2.practice.enemy] || game2.practice.enemy}`, on: false, col: YELLOW }
       );
     }
-    chips.push({ id: "codex", label: `\u56FE\u9274 ${counts.weapons}/${counts.weaponTotal}\xB7${counts.enemies}/${counts.enemyTotal}`, on: game2.codexOpen, col: "#4A44A0" });
+    chips.push(
+      { id: "theme", label: `\u98CE\u683C ${currentTheme().label}`, on: currentTheme().id !== "light", col: YELLOW },
+      { id: "codex", label: `\u56FE\u9274 ${counts.weapons}/${counts.weaponTotal}\xB7${counts.enemies}/${counts.enemyTotal}`, on: game2.codexOpen, col: VIOLET }
+    );
     g.font = `600 ${fs}px ${MONO}`;
     track(g, 0.14);
     const widths = chips.map((c) => Math.round(g.measureText(c.label).width) + pad * 2);
@@ -8812,7 +8954,7 @@
         g.globalCompositeOperation = "source-over";
         g.fillStyle = chip.col;
         bar(g, x, y, w, h, true);
-        g.fillStyle = PAPER3;
+        g.fillStyle = PAPER;
         g.textAlign = "center";
         g.fillText(chip.label, x + w / 2, y + h - Math.round(5.5 * k));
         g.restore();
@@ -8838,21 +8980,21 @@
     const ch = 580 * k;
     g.save();
     g.globalAlpha = 0.94;
-    g.fillStyle = PAPER3;
+    g.fillStyle = PAPER;
     g.fillRect(cx - cw / 2, cy - 200 * k, cw, ch);
     g.restore();
     g.save();
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     g.textAlign = "center";
     const markW = 88 * k;
     drawPlateMark(g, cx - markW / 2, cy - 166 * k, markW);
     const split = (3 + Math.sin(t * 0.9) * 2.6) * k;
     g.font = `600 ${Math.min(132 * k, W * 0.17)}px ${MONO}`;
-    [[C2, 1, 0], [M2, -0.5, 0.866], ["#F7CF16", -0.5, -0.866]].forEach(([col, ox, oy]) => {
+    [[CYAN, 1, 0], [MAG, -0.5, 0.866], [YELLOW, -0.5, -0.866]].forEach(([col, ox, oy]) => {
       g.fillStyle = col;
       g.fillText("404", cx + ox * split, cy + 30 * k + oy * split);
     });
-    g.fillStyle = INK3;
+    g.fillStyle = INK;
     g.font = `600 ${13 * k}px ${MONO}`;
     g.fillText("\u9875\u9762\u672A\u627E\u5230", cx, cy + 62 * k);
     g.fillStyle = ink(0.55);
@@ -8868,7 +9010,7 @@
     track(g, 0);
     drawModes(g, game2, cx, cy + 166 * k, k);
     drawOptions(g, game2, cx, cy + 208 * k, k);
-    g.fillStyle = M2;
+    g.fillStyle = MAG;
     g.font = `600 ${15 * k}px ${MONO}`;
     g.globalAlpha = 0.55 + 0.45 * Math.sin(t * 4);
     g.fillText(touch2 ? "\u8F7B\u89E6\u5F00\u59CB" : "\u70B9\u51FB\u5F00\u59CB", cx, cy + 236 * k);
@@ -8886,9 +9028,9 @@
     g.font = `400 11px ${MONO}`;
     const w = Math.min(g.measureText(line).width + 40, W - 42);
     g.globalAlpha = 0.92 * a;
-    g.fillStyle = PAPER3;
+    g.fillStyle = PAPER;
     g.fillRect(W / 2 - w / 2, H - 88, w, 26);
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     g.globalAlpha = a;
     g.fillStyle = ink(0.7);
     g.fillText(line, W / 2, H - 70, w - 24);
@@ -8896,15 +9038,15 @@
   }
   function drawPause(g, game2, W, H) {
     const cx = W / 2, cy = H / 2;
-    const cw = Math.min(360, W - 42), ch = 170;
+    const cw = Math.min(390, W - 42), ch = 208;
     const x = cx - cw / 2, y = cy - ch / 2;
     g.save();
     g.globalAlpha = 0.94;
-    g.fillStyle = PAPER3;
+    g.fillStyle = PAPER;
     g.fillRect(x, y, cw, ch);
     g.restore();
     g.save();
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     g.textAlign = "center";
     g.strokeStyle = ink(0.32);
     g.lineWidth = 1;
@@ -8912,7 +9054,7 @@
     bracket(g, x + cw - 9, y + 9, -1, 1, 9);
     bracket(g, x + 9, y + ch - 9, 1, -1, 9);
     bracket(g, x + cw - 9, y + ch - 9, -1, -1, 9);
-    g.fillStyle = INK3;
+    g.fillStyle = INK;
     g.font = `600 ${T_CODE}px ${MONO}`;
     track(g, 0.08);
     g.fillText("\u5DF2\u6682\u505C", cx, y + 42);
@@ -8921,8 +9063,9 @@
     g.fillText(game2.refillEnabled ? "R \u8865\u5F39\u5DF2\u5F00\u542F" : "R \u8865\u5F39\u5DF2\u5173\u95ED", cx, y + 64);
     const bw = 132, bh = 26, gap = 14, by = y + 92;
     const buttons = [
-      { id: "resume", label: "\u7EE7\u7EED\u6E38\u620F", x: cx - bw - gap / 2, y: by, w: bw, h: bh, col: C2 },
-      { id: "menu", label: "\u8FD4\u56DE\u4E3B\u83DC\u5355", x: cx + gap / 2, y: by, w: bw, h: bh, col: M2 }
+      { id: "resume", label: "\u7EE7\u7EED\u6E38\u620F", x: cx - bw - gap / 2, y: by, w: bw, h: bh, col: CYAN },
+      { id: "menu", label: "\u8FD4\u56DE\u4E3B\u83DC\u5355", x: cx + gap / 2, y: by, w: bw, h: bh, col: MAG },
+      { id: "theme", label: `\u98CE\u683C\uFF1A${currentTheme().label}`, x: cx - bw / 2, y: by + 38, w: bw, h: bh, col: YELLOW }
     ];
     game2.ui.pauseOptions = buttons;
     for (const b of buttons) {
@@ -8936,7 +9079,7 @@
     g.fillStyle = ink(0.42);
     g.font = `400 9px ${MONO}`;
     track(g, 0.1);
-    g.fillText("ESC \u7EE7\u7EED \xB7 \u70B9\u51FB\u6309\u94AE\u9009\u62E9", cx, y + 144);
+    g.fillText("ESC \u7EE7\u7EED \xB7 \u70B9\u51FB\u6309\u94AE\u9009\u62E9", cx, y + 182);
     track(g, 0);
     g.restore();
   }
@@ -8947,24 +9090,24 @@
     const cw = Math.min(720, W - 60);
     g.save();
     g.globalAlpha = 0.95;
-    g.fillStyle = PAPER3;
+    g.fillStyle = PAPER;
     g.fillRect(cx - cw / 2, cy - 170, cw, 500);
     g.restore();
     g.save();
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     g.textAlign = "center";
     g.font = `600 ${Math.min(150, W * 0.17)}px ${MONO}`;
-    [["#12A3DA", 1, 0], ["#EC0A63", -0.5, 0.866], ["#F7CF16", -0.5, -0.866]].forEach(([col, ox, oy]) => {
+    [[CYAN, 1, 0], [MAG, -0.5, 0.866], [YELLOW, -0.5, -0.866]].forEach(([col, ox, oy]) => {
       g.fillStyle = col;
       g.fillText("200", cx + ox * split, cy - 40 + oy * split);
     });
-    g.fillStyle = INK3;
+    g.fillStyle = INK;
     g.font = `600 20px ${MONO}`;
     g.fillText("\u6B63\u5E38", cx, cy - 4);
     g.font = `400 12px ${MONO}`;
-    g.fillStyle = "rgba(22,21,19,0.62)";
+    g.fillStyle = ink(0.62);
     g.fillText("\u9875\u9762\u5DF2\u6062\u590D\u3002204 \u4E2A\u969C\u788D\u5DF2\u6E05\u9664\u3002", cx, cy + 26);
-    g.fillStyle = INK3;
+    g.fillStyle = INK;
     g.font = `600 14px ${MONO}`;
     g.fillText(`${clock(game2.runT)}   \xB7   \u5F97\u5206 ${game2.score}   \xB7   \u6700\u4F73\u8FDE\u51FB \xD7${game2.bestCombo}`, cx, cy + 58);
     const pb = game2.best;
@@ -8978,7 +9121,7 @@
       );
     }
     if (game2.claimError) {
-      g.fillStyle = M2;
+      g.fillStyle = MAG;
       g.font = `600 10px ${MONO}`;
       track(g, 0.12);
       g.fillText(String(game2.claimError).toUpperCase(), cx, cy + 134);
@@ -8991,7 +9134,7 @@
       track(g, 0);
     } else if (game2.claimed) {
       const r = game2.claimRank;
-      g.fillStyle = INK3;
+      g.fillStyle = INK;
       g.font = `600 13px ${MONO}`;
       track(g, 0.1);
       g.fillText(
@@ -9009,7 +9152,7 @@
     g.restore();
     const lockW = 68;
     g.save();
-    g.globalCompositeOperation = "multiply";
+    g.globalCompositeOperation = printMode();
     drawLockup(g, cx - lockW / 2, cy + 216, lockW, ink(0.72));
     g.fillStyle = ink(0.42);
     g.font = `400 9px ${MONO}`;
@@ -9020,8 +9163,6 @@
 
   // overprint/src/touch.js
   init_util();
-  var INK4 = "#161513";
-  var M3 = "#EC0A63";
   var MONO2 = '"IBM Plex Mono", ui-monospace, Menlo, monospace';
   var STICK_R = 58;
   var DEAD = 12;
@@ -9164,31 +9305,31 @@
       layout();
       const s = t.scale;
       ctx2.save();
-      ctx2.globalCompositeOperation = "multiply";
+      ctx2.globalCompositeOperation = printMode();
       ctx2.lineWidth = 1.6;
       ctx2.textAlign = "center";
       ctx2.textBaseline = "middle";
       for (const b of t.buttons) {
         ctx2.globalCompositeOperation = "source-over";
         ctx2.globalAlpha = 0.82;
-        ctx2.fillStyle = "#EFECE3";
+        ctx2.fillStyle = PAPER;
         ctx2.beginPath();
         ctx2.arc(b.x, b.y, b.r, 0, TAU);
         ctx2.fill();
-        ctx2.globalCompositeOperation = "multiply";
+        ctx2.globalCompositeOperation = printMode();
         if (b.press > 0) {
           ctx2.globalAlpha = 0.55 * b.press;
-          ctx2.fillStyle = M3;
+          ctx2.fillStyle = MAG;
           ctx2.beginPath();
           ctx2.arc(b.x, b.y, b.r, 0, TAU);
           ctx2.fill();
         }
         ctx2.globalAlpha = b.press > 0 ? 1 : 0.62;
-        ctx2.strokeStyle = INK4;
+        ctx2.strokeStyle = INK;
         ctx2.beginPath();
         ctx2.arc(b.x, b.y, b.r, 0, TAU);
         ctx2.stroke();
-        ctx2.fillStyle = INK4;
+        ctx2.fillStyle = INK;
         ctx2.font = `600 ${Math.round(10 * s)}px ${MONO2}`;
         ctx2.fillText(b.label, b.x, b.y);
       }
@@ -9227,17 +9368,18 @@
         ctx2.arc(st.ox + dx, st.oy + dy, 19, 0, TAU);
         ctx2.fill();
       };
-      stick(t.move, INK4, false);
-      stick(t.aim, M3, true);
+      stick(t.move, INK, false);
+      stick(t.aim, MAG, true);
       ctx2.restore();
     };
     return t;
   }
 
   // overprint/src/main.js
-  var BUILD_ID = "184180";
+  var BUILD_ID = "184181";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
+  applyThemeToDocument();
   var canvas = document.getElementById("c");
   var renderer = createRenderer(canvas);
   var game = createGame(renderer);
@@ -9497,6 +9639,7 @@
       for (const p of game.ui.pauseOptions || []) {
         if (x < p.x || x > p.x + p.w || y < p.y || y > p.y + p.h) continue;
         if (p.id === "resume") game.togglePause();
+        if (p.id === "theme") cycleTheme();
         if (p.id === "menu" && game.returnToMenu) {
           game.returnToMenu();
           loadStandings(true);
@@ -9537,6 +9680,7 @@
     for (const o of game.ui.options || []) {
       if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) {
         if (o.id === "refill") game.toggleRefill();
+        if (o.id === "theme") cycleTheme();
         if (o.id === "codex") game.toggleCodex();
         if (o.id === "practiceMap") game.cyclePracticeMap();
         if (o.id === "practiceWeapon") game.cyclePracticeWeapon();

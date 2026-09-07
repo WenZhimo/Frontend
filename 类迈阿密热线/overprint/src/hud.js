@@ -1,16 +1,14 @@
 import { TAU, clamp } from './util.js';
 import { WEAPONS, MAX_DASH, DASH_CD } from './entities.js';
-import { drawPlateMark, drawLockup, ink, CYAN } from './brand.js';
+import {
+  drawPlateMark, drawLockup, ink, paper, printMode, currentTheme,
+  CYAN as C, MAG as M, YELLOW as Y, GREEN, VIOLET, RED, INK, PAPER,
+} from './brand.js';
 import { clock } from './board.js';
 import { playerId, playerName } from './net.js';
 import { bar, gauge, tickScale, starMark, ring, dashRing, registerMark, bracket, rule, magazine } from './micro.js';
 
-const INK = '#161513';
-const M = '#EC0A63';
-const C = '#12A3DA';
 const MONO = '"IBM Plex Mono", ui-monospace, Menlo, monospace';
-
-const PAPER = '#EFECE3';
 
 // HUD sits on a clean slip of paper so it never fights the hatch underneath
 function card(g, x, y, w, h) {
@@ -26,7 +24,7 @@ function card(g, x, y, w, h) {
 export function drawFurniture(g, W, H) {
   const m = 16;
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   g.strokeStyle = ink(0.36);
   g.lineWidth = 1;
   bracket(g, m, m, 1, 1, 11);
@@ -155,7 +153,7 @@ function drawChain(g, game, x, y, w) {
 
   // and the clock you are racing, on the slab's own bottom edge
   gauge(g, x + 12, y + CHAIN_H - 14, w - 24, BAR,
-        clamp(game.ui.chain, 0, 1), hot ? 'rgba(239,236,227,.34)' : ink(0.22), fg);
+        clamp(game.ui.chain, 0, 1), hot ? paper(0.34) : ink(0.22), fg);
 
   // every kill also strikes a tick off the top edge, so the block reads as
   // being hit rather than merely counting
@@ -182,7 +180,7 @@ function drawDefenseHud(g, game, W) {
   game.ui.defenseShopPanel = { x, y, w, h };
   card(g, x, y, w, h);
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   g.textAlign = 'left';
   g.textBaseline = 'alphabetic';
   g.fillStyle = INK;
@@ -240,13 +238,13 @@ function drawDefenseHud(g, game, W) {
   const weapon = WEAPONS[shop.weapon]?.name || shop.weapon;
   const items = [
     { slot: 1, label: `武器 ${weapon}`, cost: shop.costs.weapon, col: M, can: shop.can.weapon },
-    { slot: 2, label: '刷新物品', cost: shop.costs.refresh, col: '#F7CF16', can: shop.can.refresh },
-    { slot: 3, label: '补充子弹', cost: shop.costs.refill, col: '#00A651', can: shop.can.refill },
-    { slot: 4, label: '恢复生命', cost: shop.costs.heal, col: '#E40808', can: shop.can.heal },
+    { slot: 2, label: '刷新物品', cost: shop.costs.refresh, col: Y, can: shop.can.refresh },
+    { slot: 3, label: '补充子弹', cost: shop.costs.refill, col: GREEN, can: shop.can.refill },
+    { slot: 4, label: '恢复生命', cost: shop.costs.heal, col: RED, can: shop.can.heal },
     { slot: 5, label: '最大生命', cost: shop.costs.hp, col: C, can: shop.can.hp },
-    { slot: 6, label: '攻击速度', cost: shop.costs.attack, col: '#4A44A0', can: shop.can.attack },
-    { slot: 7, label: '冲刺槽', cost: shop.costs.dash, col: '#F7CF16', can: shop.can.dash },
-    { slot: 8, label: '冲刺恢复', cost: shop.costs.recover, col: '#00A651', can: shop.can.recover },
+    { slot: 6, label: '攻击速度', cost: shop.costs.attack, col: VIOLET, can: shop.can.attack },
+    { slot: 7, label: '冲刺槽', cost: shop.costs.dash, col: Y, can: shop.can.dash },
+    { slot: 8, label: '冲刺恢复', cost: shop.costs.recover, col: GREEN, can: shop.can.recover },
     { slot: 9, label: '子弹时间', cost: shop.costs.slow, col: INK, can: shop.can.slow },
   ];
   const bx = x + 14, bw = w - 28, bh = 20;
@@ -295,7 +293,7 @@ function drawKatanaDash(g, game, W) {
   const pct = clamp(p.katanaT / p.katanaMax, 0, 1);
   card(g, x, y, w, h);
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   g.textAlign = 'left';
   g.textBaseline = 'alphabetic';
   g.fillStyle = INK;
@@ -313,14 +311,14 @@ function drawPlayerStatuses(g, game, H) {
   const rows = [];
   if (p.infectT > 0) rows.push({ label: `感染 ${Math.ceil(p.infectT)}s`, col: '#7AC943' });
   if (p.madT > 0) rows.push({ label: `疯狂 ${Math.ceil(p.madT)}s`, col: M });
-  if (p.iframes > 1) rows.push({ label: `无敌 ${Math.ceil(p.iframes)}s`, col: '#12A3DA' });
+  if (p.iframes > 1) rows.push({ label: `无敌 ${Math.ceil(p.iframes)}s`, col: C });
   if (!rows.length) return;
   const x = 22 - PAD * 0.7, w = 208 + PAD;
   const h = 12 + rows.length * 16;
   const y = H - 126 - h;
   card(g, x, y, w, h);
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   g.textAlign = 'left';
   g.textBaseline = 'alphabetic';
   g.font = `600 ${T_MICRO}px ${MONO}`;
@@ -342,7 +340,7 @@ export function drawHud(g, game, W, H) {
   card(g, SX - PAD * 0.7, SY - 10, SW + PAD, 94);
 
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   g.lineWidth = 1;
   g.textBaseline = 'alphabetic';
   g.textAlign = 'left';
@@ -409,7 +407,7 @@ export function drawHud(g, game, W, H) {
   card(g, WX - PAD * 0.7, WY - 12, WW + PAD, 96);
 
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   g.lineWidth = 1;
   g.textAlign = 'left';
   g.textBaseline = 'alphabetic';
@@ -500,7 +498,7 @@ export function drawHud(g, game, W, H) {
     g.globalAlpha = a * 0.93;
     g.fillStyle = PAPER;
     g.fillRect(W / 2 - bw / 2, H / 2 - 116, bw, 38);
-    g.globalCompositeOperation = 'multiply';
+    g.globalCompositeOperation = printMode();
     g.globalAlpha = a;
     g.lineWidth = 1;
     g.strokeStyle = ink(0.35);
@@ -515,7 +513,7 @@ export function drawHud(g, game, W, H) {
 
   if (game.flash > 0) {
     g.save();
-    g.globalCompositeOperation = 'multiply';
+    g.globalCompositeOperation = printMode();
     g.globalAlpha = game.flash * 0.5;
     g.fillStyle = M;
     g.fillRect(0, 0, W, H);
@@ -764,7 +762,7 @@ export function drawCodexPopup(g, game, W, H) {
   g.restore();
 
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   g.strokeStyle = ink(0.36);
   bracket(g, x + 12, y + 12, 1, 1, 12);
   bracket(g, x + cw - 12, y + 12, -1, 1, 12);
@@ -1016,10 +1014,13 @@ function drawOptions(g, game, cx, y, k) {
     chips.push(
       { id: 'practiceMap', label: `地形 ${map.label}`, on: false, col: C },
       { id: 'practiceWeapon', label: `武器 ${WEAPONS[game.practice.weapon]?.name || game.practice.weapon}`, on: false, col: M },
-      { id: 'practiceEnemy', label: `敌人 ${ENEMY_NAMES[game.practice.enemy] || game.practice.enemy}`, on: false, col: '#F7CF16' },
+      { id: 'practiceEnemy', label: `敌人 ${ENEMY_NAMES[game.practice.enemy] || game.practice.enemy}`, on: false, col: Y },
     );
   }
-  chips.push({ id: 'codex', label: `图鉴 ${counts.weapons}/${counts.weaponTotal}·${counts.enemies}/${counts.enemyTotal}`, on: game.codexOpen, col: '#4A44A0' });
+  chips.push(
+    { id: 'theme', label: `风格 ${currentTheme().label}`, on: currentTheme().id !== 'light', col: Y },
+    { id: 'codex', label: `图鉴 ${counts.weapons}/${counts.weaponTotal}·${counts.enemies}/${counts.enemyTotal}`, on: game.codexOpen, col: VIOLET },
+  );
   g.font = `600 ${fs}px ${MONO}`;
   track(g, 0.14);
   const widths = chips.map((c) => Math.round(g.measureText(c.label).width) + pad * 2);
@@ -1068,7 +1069,7 @@ export function drawTitle(g, game, W, H) {
   g.restore();
 
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   g.textAlign = 'center';
 
   const markW = 88 * k;
@@ -1076,7 +1077,7 @@ export function drawTitle(g, game, W, H) {
 
   const split = (3 + Math.sin(t * 0.9) * 2.6) * k;
   g.font = `600 ${Math.min(132 * k, W * 0.17)}px ${MONO}`;
-  [[C, 1, 0], [M, -0.5, 0.866], ['#F7CF16', -0.5, -0.866]].forEach(([col, ox, oy]) => {
+  [[C, 1, 0], [M, -0.5, 0.866], [Y, -0.5, -0.866]].forEach(([col, ox, oy]) => {
     g.fillStyle = col;
     g.fillText('404', cx + ox * split, cy + 30 * k + oy * split);
   });
@@ -1130,7 +1131,7 @@ export function drawLegend(g, game, W, H) {
   g.globalAlpha = 0.92 * a;
   g.fillStyle = PAPER;
   g.fillRect(W / 2 - w / 2, H - 88, w, 26);
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   g.globalAlpha = a;
   g.fillStyle = ink(0.7);
   g.fillText(line, W / 2, H - 70, w - 24);
@@ -1139,7 +1140,7 @@ export function drawLegend(g, game, W, H) {
 
 export function drawPause(g, game, W, H) {
   const cx = W / 2, cy = H / 2;
-  const cw = Math.min(360, W - 42), ch = 170;
+  const cw = Math.min(390, W - 42), ch = 208;
   const x = cx - cw / 2, y = cy - ch / 2;
   g.save();
   g.globalAlpha = 0.94;
@@ -1148,7 +1149,7 @@ export function drawPause(g, game, W, H) {
   g.restore();
 
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   g.textAlign = 'center';
   g.strokeStyle = ink(0.32);
   g.lineWidth = 1;
@@ -1168,6 +1169,7 @@ export function drawPause(g, game, W, H) {
   const buttons = [
     { id: 'resume', label: '继续游戏', x: cx - bw - gap / 2, y: by, w: bw, h: bh, col: C },
     { id: 'menu', label: '返回主菜单', x: cx + gap / 2, y: by, w: bw, h: bh, col: M },
+    { id: 'theme', label: `风格：${currentTheme().label}`, x: cx - bw / 2, y: by + 38, w: bw, h: bh, col: Y },
   ];
   game.ui.pauseOptions = buttons;
   for (const b of buttons) {
@@ -1181,7 +1183,7 @@ export function drawPause(g, game, W, H) {
   g.fillStyle = ink(0.42);
   g.font = `400 9px ${MONO}`;
   track(g, 0.1);
-  g.fillText('ESC 继续 · 点击按钮选择', cx, y + 144);
+  g.fillText('ESC 继续 · 点击按钮选择', cx, y + 182);
   track(g, 0);
   g.restore();
 }
@@ -1198,10 +1200,10 @@ export function drawWin(g, game, W, H) {
   g.restore();
 
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   g.textAlign = 'center';
   g.font = `600 ${Math.min(150, W * 0.17)}px ${MONO}`;
-  [['#12A3DA', 1, 0], ['#EC0A63', -0.5, 0.866], ['#F7CF16', -0.5, -0.866]].forEach(([col, ox, oy]) => {
+  [[C, 1, 0], [M, -0.5, 0.866], [Y, -0.5, -0.866]].forEach(([col, ox, oy]) => {
     g.fillStyle = col;
     g.fillText('200', cx + ox * split, cy - 40 + oy * split);
   });
@@ -1209,7 +1211,7 @@ export function drawWin(g, game, W, H) {
   g.font = `600 20px ${MONO}`;
   g.fillText('正常', cx, cy - 4);
   g.font = `400 12px ${MONO}`;
-  g.fillStyle = 'rgba(22,21,19,0.62)';
+  g.fillStyle = ink(0.62);
   g.fillText('页面已恢复。204 个障碍已清除。', cx, cy + 26);
   g.fillStyle = INK;
   g.font = `600 14px ${MONO}`;
@@ -1263,7 +1265,7 @@ export function drawWin(g, game, W, H) {
   // the real lockup — plate mark over wordmark, the way the brand kit draws it
   const lockW = 68;
   g.save();
-  g.globalCompositeOperation = 'multiply';
+  g.globalCompositeOperation = printMode();
   drawLockup(g, cx - lockW / 2, cy + 216, lockW, ink(0.72));
   g.fillStyle = ink(0.42);
   g.font = `400 9px ${MONO}`;

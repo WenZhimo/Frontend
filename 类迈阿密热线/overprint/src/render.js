@@ -1,17 +1,15 @@
 import { TAU, clamp, lerp } from './util.js';
 import { TILE, T_FLOOR, T_WALL, T_FURNITURE, T_WINDOW, T_DOOR } from './level.js';
-import { drawStar, starPath, ink, CYAN, MAG, YELLOW } from './brand.js';
+import { drawStar, starPath, ink, printMode, currentTheme, CYAN as C, MAG as M, YELLOW as Y, PAPER, INK } from './brand.js';
+export { PAPER, INK } from './brand.js';
 import { ENEMY_DEF, WEAPONS, S_DOWN, S_DEAD, S_CHASE, S_SEARCH, armourArc } from './entities.js';
 
 // Framing is responsive: the short edge of the screen always shows about the
 // same slice of world, so a phone in portrait is not looking through a keyhole.
 export let ZOOM = 1.6;
-export const PAPER = '#EFECE3';
-export const INK = '#161513';
-const C = '#12A3DA', M = '#EC0A63', Y = '#F7CF16';
 // three plates at 120° — overlapped they multiply to black, split apart they
 // fringe exactly like a misregistered press sheet.
-const PLATES = [
+const processPlates = () => [
   [C, 1, 0],
   [M, -0.5, 0.866],
   [Y, -0.5, -0.866],
@@ -201,8 +199,8 @@ export function createRenderer(canvas) {
   // draw() is called three times, once per process colour, offset by `split`.
   function plates(split, draw) {
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
-    for (const [col, ox, oy] of PLATES) {
+    ctx.globalCompositeOperation = printMode();
+    for (const [col, ox, oy] of processPlates()) {
       ctx.save();
       ctx.translate(ox * split, oy * split);
       ctx.fillStyle = col;
@@ -367,7 +365,7 @@ export function createRenderer(canvas) {
   function drawFireZones(game) {
     if (!game.fireZones || !game.fireZones.length) return;
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     for (const z of game.fireZones) {
       const live = clamp(1 - z.t / z.dur, 0, 1);
       if (live <= 0) continue;
@@ -407,7 +405,7 @@ export function createRenderer(canvas) {
 
   function drawMadMarkers(game) {
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     for (const e of game.pools.enemies) {
       if (!e.alive || e.state === S_DEAD || e.state === S_DOWN) continue;
       const def = ENEMY_DEF[e.type];
@@ -476,7 +474,7 @@ export function createRenderer(canvas) {
     const sy = p.y + Math.sin(p.aim) * 19;
     const end = traceBulletPath(game, sx, sy, p.aim, 3200);
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     ctx.strokeStyle = '#E40808';
     ctx.lineCap = 'square';
     ctx.globalAlpha = 0.18 + 0.08 * Math.sin(game.time * 14);
@@ -504,7 +502,7 @@ export function createRenderer(canvas) {
     if (!pv || !pv.points || pv.points.length < 2 || game.state !== 'play') return;
     const tint = WEAPONS[pv.kind]?.tint || M;
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     ctx.lineCap = 'square';
     if (pv.rangeMode && pv.maxRange && pv.originX != null) {
       ctx.globalAlpha = 0.11 + pv.charge * 0.08;
@@ -587,7 +585,7 @@ export function createRenderer(canvas) {
     const bw = 52, bh = 5;
     const bx = p.x - bw / 2, by = p.y - 35;
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     ctx.strokeStyle = tint;
     ctx.fillStyle = tint;
     ctx.globalAlpha = 0.26;
@@ -638,7 +636,7 @@ export function createRenderer(canvas) {
     if (!arrows.length) return;
     const r = 68;
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     ctx.fillStyle = M;
     ctx.strokeStyle = M;
     ctx.lineWidth = 1.4;
@@ -771,7 +769,7 @@ export function createRenderer(canvas) {
     const w = WEAPONS[kind];
     if (!w || !w.tint) return;
     g.save();
-    g.globalCompositeOperation = 'multiply';
+    g.globalCompositeOperation = printMode();
     g.globalAlpha = alpha;
     g.fillStyle = w.tint;
     g.strokeStyle = w.tint;
@@ -803,7 +801,7 @@ export function createRenderer(canvas) {
   function drawDeployables(game) {
     const smg = WEAPONS.smg;
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     for (const d of game.pools.deploys || []) {
       if (!d.alive) continue;
       const pct = clamp(d.ammo / smg.ammo, 0, 1);
@@ -851,7 +849,7 @@ export function createRenderer(canvas) {
     const w = WEAPONS[p.weapon];
     if (!p.alive || !w || !w.defense) return;
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     ctx.strokeStyle = w.tint || C;
     ctx.globalAlpha = p.blockFlash > 0 ? 0.95 : 0.58;
     ctx.lineWidth = p.blockFlash > 0 ? 5 : 3;
@@ -874,7 +872,7 @@ export function createRenderer(canvas) {
   function drawSleepers(game) {
     const t = game.time;
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     ctx.fillStyle = INK;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
@@ -970,19 +968,19 @@ export function createRenderer(canvas) {
     ctx.save();
     ctx.clip(wall);
     ctx.lineWidth = 1 / ZOOM;
-    ctx.strokeStyle = CYAN;
+    ctx.strokeStyle = C;
     ctx.beginPath();
     for (let gxp = Math.floor(x0 / GRID) * GRID; gxp <= x1; gxp += GRID) {
       ctx.moveTo(gxp, y0); ctx.lineTo(gxp, y1);
     }
     ctx.stroke();
-    ctx.strokeStyle = MAG;
+    ctx.strokeStyle = M;
     ctx.beginPath();
     for (let gyp = Math.floor(y0 / GRID) * GRID; gyp <= y1; gyp += GRID) {
       ctx.moveTo(x0, gyp); ctx.lineTo(x1, gyp);
     }
     ctx.stroke();
-    ctx.strokeStyle = YELLOW;
+    ctx.strokeStyle = Y;
     ctx.lineWidth = 1.4 / ZOOM;
     ctx.beginPath();
     const arm = 7;
@@ -1107,7 +1105,7 @@ export function createRenderer(canvas) {
 
     if (stainCanvas) {
       ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalCompositeOperation = printMode();
       ctx.globalAlpha = 0.85;
       ctx.drawImage(stainCanvas, 0, 0, stainCanvas.width / STAIN_SS, stainCanvas.height / STAIN_SS);
       ctx.restore();
@@ -1118,7 +1116,7 @@ export function createRenderer(canvas) {
       const ex = game.level.exit;
       const open = game.enemiesLeft === 0;
       ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalCompositeOperation = printMode();
       ctx.strokeStyle = open ? M : ink(0.28);
       ctx.lineWidth = open ? 3 : 1.6;
       const pulse = open ? 1 + Math.sin(game.time * 4) * 0.09 : 1;
@@ -1143,7 +1141,7 @@ export function createRenderer(canvas) {
     // Sight display mirrors the AI: full range inside the cone, clipped by
     // sight blockers, plus the short omnidirectional close-detection radius.
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     const rayReach = (e, a, reach) => {
       for (let st = 12; st < reach; st += 8) {
         if (game.level.sightBlockedAt(e.x + Math.cos(a) * st, e.y + Math.sin(a) * st)) return st;
@@ -1194,7 +1192,7 @@ export function createRenderer(canvas) {
 
     // noise rings
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     for (const n of game.noiseRings) {
       ctx.strokeStyle = n.col || C;
       ctx.globalAlpha = clamp(1 - n.t / n.dur, 0, 1) * 0.7;
@@ -1209,7 +1207,7 @@ export function createRenderer(canvas) {
     // leaf, thinner, and printed light so it reads as something you can see
     // through. The jambs stay solid: the frame is real, the glass is not.
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     for (const win of game.level.windows) {
       if (win.broken) continue;
       const x = win.gx * TILE, y = win.gy * TILE;
@@ -1239,7 +1237,7 @@ export function createRenderer(canvas) {
 
     // doors swing on the tile edge; a slammed one shows the shock ring
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     for (const d of game.level.doors) {
       const a = d.open * 1.32;
       const hinge = d.hinge || -1;
@@ -1274,7 +1272,7 @@ export function createRenderer(canvas) {
     // spent brass on the floor, still vector
     if (landed.length) {
       ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalCompositeOperation = printMode();
       for (const c of landed) {
         ctx.save();
         ctx.translate(c.x, c.y);
@@ -1346,7 +1344,7 @@ export function createRenderer(canvas) {
     });
 
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     ctx.lineWidth = 1.7;
     for (const b of game.pools.bullets) {
       if (!b.alive || !isDartWeapon(b.weapon)) continue;
@@ -1374,7 +1372,7 @@ export function createRenderer(canvas) {
     ctx.restore();
 
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     for (const e of game.pools.enemies) {
       if (!e.alive || e.blockFlash <= 0) continue;
       const def = ENEMY_DEF[e.type];
@@ -1391,7 +1389,7 @@ export function createRenderer(canvas) {
 
     // particles
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = printMode();
     for (const p of game.particles) {
       ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
       ctx.fillStyle = p.col;
@@ -1414,7 +1412,7 @@ export function createRenderer(canvas) {
     // muzzle flash: a four-point burst, brightest across the bore
     if (game.flashes.length) {
       ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalCompositeOperation = printMode();
       for (const f of game.flashes) {
         const k = 1 - clamp(f.t / f.dur, 0, 1);
         const L = (16 + 16 * f.size) * k, Wd = (5 + 4 * f.size) * k;
@@ -1440,7 +1438,7 @@ export function createRenderer(canvas) {
       const w = WEAPONS[p.weapon];
       const t = 1 - game.player.swing / 0.16;
       ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalCompositeOperation = printMode();
       ctx.strokeStyle = M;
       ctx.lineWidth = 3.5 * (1 - t) + 1;
       ctx.beginPath();
@@ -1455,7 +1453,7 @@ export function createRenderer(canvas) {
     if (game.player.trail.length > 1) {
       const dashWeapon = WEAPONS[game.player.weapon] || WEAPONS.katana;
       ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalCompositeOperation = printMode();
       ctx.strokeStyle = game.player.katanaT > 0 ? (dashWeapon.tint || M) : C;
       ctx.lineWidth = game.player.katanaT > 0 ? 8 : 6;
       ctx.globalAlpha = game.player.katanaT > 0 ? 0.54 : 0.45;
@@ -1480,7 +1478,7 @@ export function createRenderer(canvas) {
         const a = Math.atan2(dy, dx);
         const r = 54 + Math.sin(game.time * 4) * 3;
         ctx.save();
-        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalCompositeOperation = printMode();
         ctx.globalAlpha = fade;
         ctx.translate(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r);
         ctx.rotate(a);
@@ -1499,7 +1497,7 @@ export function createRenderer(canvas) {
         ctx.restore();
 
         ctx.save();
-        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalCompositeOperation = printMode();
         ctx.globalAlpha = fade * 0.8;
         ctx.fillStyle = M;
         ctx.font = '600 9px "IBM Plex Mono", ui-monospace, monospace';
@@ -1513,8 +1511,8 @@ export function createRenderer(canvas) {
 
     // grain over everything
     ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.globalAlpha = 0.55;
+    ctx.globalCompositeOperation = printMode();
+    ctx.globalAlpha = currentTheme().grainAlpha ?? 0.55;
     ctx.fillStyle = grainPat;
     ctx.translate(-((cam.x * ZOOM) % 180), -((cam.y * ZOOM) % 180));
     ctx.fillRect(0, 0, W + 180, H + 180);
