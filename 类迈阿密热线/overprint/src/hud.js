@@ -61,7 +61,7 @@ const ENEMY_NAMES = {
 
 const CODEX_WEAPON_ORDER = [
   'knife', 'bat', 'katana', 'quixote', 'pistol', 'revolver', 'smg', 'shotgun', 'ripper', 'grenade', 'frag',
-  'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'virusExtract',
+  'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'virusExtract', 'madVirusExtract', 'tameVirusExtract',
   'disguise', 'sniper', 'laser', 'butcher', 'shield',
 ];
 const CODEX_ENEMY_ORDER = ['strawman', 'thug', 'gunner', 'hound', 'patroller', 'shield'];
@@ -89,6 +89,8 @@ const WEAPON_DESC = {
   madExtract: '副手涂层：主手攻击附带疯狂；主手使用会让自己暂时失控。',
   tameExtract: '副手涂层：主手攻击附带驯化；主手使用对自己无效。',
   virusExtract: '副手涂层：主手攻击附带感染；主手使用会感染自己。',
+  madVirusExtract: '病毒混合提取液：主手攻击附带疯狂，并让目标继续传播感染。',
+  tameVirusExtract: '病毒混合提取液：主手攻击附带驯化，被驯服友军继续传染。',
   disguise: '暗杀用枪，降低被识破的压力。',
   sniper: '超高速穿透弹，红外线标出弹道。',
   laser: '可反弹能量弹，适合拐角。',
@@ -403,8 +405,8 @@ export function drawHud(g, game, W, H) {
   // — so the panel keeps its shape while the device inside it changes.
   const w = WEAPONS[p.weapon];
   const off = WEAPONS[p.offhandWeapon] || WEAPONS.fists;
-  const WX = 22, WY = H - 110, WW = 208;
-  card(g, WX - PAD * 0.7, WY - 12, WW + PAD, 96);
+  const WX = 22, WY = H - 126, WW = 208;
+  card(g, WX - PAD * 0.7, WY - 12, WW + PAD, 112);
 
   g.save();
   g.globalCompositeOperation = printMode();
@@ -486,6 +488,21 @@ export function drawHud(g, game, W, H) {
     track(g, 0);
     g.textAlign = 'left';
   }
+
+  const bagCap = Array.isArray(p.backpack) ? p.backpack.length : 5;
+  const bagCount = game.backpackCount ? game.backpackCount() : 0;
+  const reserve = w.feed && w.feed !== 'none'
+    ? (game.refillEnabled ? '∞' : String(game.reserveAmmo ? game.reserveAmmo(p.weapon) : ((p.magazine || {})[p.weapon] || 0)))
+    : '-';
+  g.fillStyle = ink(0.48);
+  g.font = `400 ${T_MICRO}px ${MONO}`;
+  track(g, 0.08);
+  g.textAlign = 'left';
+  g.fillText(`B 背包 ${bagCount}/${bagCap}`, WX, WY + 88);
+  g.textAlign = 'right';
+  g.fillText(`备用 ${reserve}`, WX + WW, WY + 88);
+  g.textAlign = 'left';
+  track(g, 0);
   g.restore();
 
   // ---- banner -------------------------------------------------------------
@@ -628,6 +645,8 @@ function codexWeaponShape(g, kind) {
     case 'madExtract':
     case 'tameExtract':
     case 'virusExtract':
+    case 'madVirusExtract':
+    case 'tameVirusExtract':
       g.lineWidth = 2.2;
       g.strokeRect(-8, -12, 16, 24);
       g.fillRect(-5, -18, 10, 6);
@@ -735,6 +754,182 @@ function drawCodexEntry(g, x, y, w, kind, seen, enemy) {
   g.beginPath();
   g.moveTo(x, y + 39.5); g.lineTo(x + w, y + 39.5);
   g.stroke();
+  g.restore();
+}
+
+function backpackSlot(game, id) {
+  const p = game.player;
+  if (id === 'main') return { weapon: p.weapon, ammo: p.ammo };
+  if (id === 'offhand') return { weapon: p.offhandWeapon, ammo: p.offhandAmmo };
+  const m = /^bag(\d+)$/.exec(id || '');
+  if (m) return p.backpack?.[Number(m[1])] || { weapon: 'fists', ammo: 0 };
+  return { weapon: 'fists', ammo: 0 };
+}
+
+function drawBackpackSlot(g, game, hit, title) {
+  const slot = backpackSlot(game, hit.id);
+  const wpn = WEAPONS[slot.weapon] || WEAPONS.fists;
+  const tint = wpn.tint || ink(0.36);
+  const selected = game.backpackSelection === hit.id;
+  g.save();
+  g.globalCompositeOperation = printMode();
+  g.strokeStyle = selected ? M : ink(0.28);
+  g.lineWidth = selected ? 2 : 1;
+  bar(g, hit.x, hit.y, hit.w, hit.h);
+  if (selected) {
+    g.globalAlpha = 0.08;
+    g.fillStyle = M;
+    g.fillRect(hit.x, hit.y, hit.w, hit.h);
+    g.globalAlpha = 1;
+  }
+  g.fillStyle = ink(0.48);
+  g.font = `400 8px ${MONO}`;
+  track(g, 0.1);
+  g.fillText(title, hit.x + 8, hit.y + 14);
+  track(g, 0);
+
+  g.save();
+  g.translate(hit.x + 26, hit.y + hit.h / 2 + 6);
+  g.scale(0.46, 0.46);
+  g.fillStyle = tint;
+  g.strokeStyle = tint;
+  codexWeaponShape(g, slot.weapon);
+  g.restore();
+
+  g.fillStyle = wpn === WEAPONS.fists ? ink(0.34) : INK;
+  g.font = `600 10px ${MONO}`;
+  track(g, 0.06);
+  const name = wpn === WEAPONS.fists ? '空' : wpn.name;
+  g.fillText(name, hit.x + 55, hit.y + 34, hit.w - 64);
+  track(g, 0);
+  g.fillStyle = ink(0.46);
+  g.font = `400 8.5px ${MONO}`;
+  const ammo = wpn.feed && wpn.feed !== 'none' ? `${slot.ammo || 0}/${wpn.ammo}` : (wpn.defense ? '格挡' : '');
+  const role = hit.id === 'offhand' ? '副手/联动' : hit.id === 'main' ? '主手' : '背包';
+  g.fillText(`${role}${ammo ? ` · ${ammo}` : ''}`, hit.x + 55, hit.y + 51, hit.w - 64);
+  g.restore();
+}
+
+export function drawBackpackPopup(g, game, W, H) {
+  if (!game.backpackOpen) return;
+  const p = game.player;
+  const cx = W / 2, cy = H / 2;
+  const cw = Math.min(700, W - 90);
+  const ch = Math.min(450, H - 70);
+  const x = cx - cw / 2, y = cy - ch / 2;
+  const close = { x: x + cw - 88, y: y + 20, w: 62, h: 24 };
+  const drop = { x: x + cw - 108, y: y + ch - 44, w: 82, h: 24 };
+  game.ui.backpackPanel = { x, y, w: cw, h: ch };
+  game.ui.backpackClose = close;
+  game.ui.backpackDrop = drop;
+  game.ui.backpackSlots = [];
+
+  g.save();
+  g.globalAlpha = 0.30;
+  g.fillStyle = INK;
+  g.fillRect(0, 0, W, H);
+  g.restore();
+
+  g.save();
+  g.globalAlpha = 0.97;
+  g.fillStyle = PAPER;
+  g.fillRect(x, y, cw, ch);
+  g.restore();
+
+  g.save();
+  g.globalCompositeOperation = printMode();
+  g.strokeStyle = ink(0.36);
+  g.lineWidth = 1;
+  bracket(g, x + 12, y + 12, 1, 1, 12);
+  bracket(g, x + cw - 12, y + 12, -1, 1, 12);
+  bracket(g, x + 12, y + ch - 12, 1, -1, 12);
+  bracket(g, x + cw - 12, y + ch - 12, -1, -1, 12);
+
+  g.textAlign = 'left';
+  g.fillStyle = INK;
+  g.font = `600 24px ${MONO}`;
+  track(g, 0.08);
+  g.fillText('背包', x + 34, y + 48);
+  track(g, 0);
+  g.font = `400 10px ${MONO}`;
+  g.fillStyle = ink(0.52);
+  g.fillText('点击两个槽位交换；病毒 + 任意提取液会合成为病毒提取液', x + 112, y + 46, cw - 230);
+
+  g.strokeStyle = ink(0.34);
+  bar(g, close.x, close.y, close.w, close.h);
+  g.fillStyle = M;
+  g.textAlign = 'center';
+  g.font = `600 10px ${MONO}`;
+  track(g, 0.12);
+  g.fillText('关闭', close.x + close.w / 2, close.y + 16);
+  track(g, 0);
+
+  const left = x + 34;
+  const top = y + 80;
+  const wide = (cw - 82) / 2;
+  const slotH = 68;
+  const main = { id: 'main', x: left, y: top, w: wide - 8, h: slotH };
+  const off = { id: 'offhand', x: left + wide + 8, y: top, w: wide - 8, h: slotH };
+  game.ui.backpackSlots.push(main, off);
+  drawBackpackSlot(g, game, main, '主手');
+  drawBackpackSlot(g, game, off, '副手');
+
+  const bagTop = top + 94;
+  const gap = 10;
+  const bagW = Math.floor((cw - 68 - gap * 4) / 5);
+  for (let i = 0; i < 5; i++) {
+    const hit = { id: `bag${i}`, x: left + i * (bagW + gap), y: bagTop, w: bagW, h: slotH };
+    game.ui.backpackSlots.push(hit);
+    drawBackpackSlot(g, game, hit, `背包 ${i + 1}`);
+  }
+
+  g.textAlign = 'left';
+  g.fillStyle = ink(0.55);
+  g.font = `600 10px ${MONO}`;
+  track(g, 0.12);
+  g.fillText('备用弹匣', left, bagTop + slotH + 34);
+  track(g, 0);
+  const reserves = Object.entries(p.magazine || {})
+    .filter(([, n]) => Number(n) > 0)
+    .sort((a, b) => (WEAPONS[a[0]]?.name || a[0]).localeCompare(WEAPONS[b[0]]?.name || b[0], 'zh-Hans-CN'))
+    .slice(0, 9);
+  const active = WEAPONS[p.weapon];
+  if (game.refillEnabled && active?.feed && active.feed !== 'none') {
+    const existing = reserves.findIndex(([kind]) => kind === p.weapon);
+    if (existing >= 0) reserves.splice(existing, 1);
+    reserves.unshift([p.weapon, Infinity]);
+  }
+  if (!reserves.length) {
+    g.fillStyle = ink(0.40);
+    g.font = `400 9px ${MONO}`;
+    g.fillText('空。经过有弹药的武器会自动收纳；非补弹模式下 R 会消耗这里的弹药。', left, bagTop + slotH + 56, cw - 190);
+  } else {
+    g.font = `400 9px ${MONO}`;
+    reserves.forEach(([kind, amount], i) => {
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const wpn = WEAPONS[kind] || WEAPONS.fists;
+      g.fillStyle = wpn.tint || INK;
+      const text = `${wpn.name} ${amount === Infinity ? '∞' : amount}/100`;
+      g.fillText(text, left + col * 188, bagTop + slotH + 56 + row * 16, 176);
+    });
+  }
+
+  g.strokeStyle = game.backpackSelection ? RED : ink(0.22);
+  bar(g, drop.x, drop.y, drop.w, drop.h);
+  g.fillStyle = game.backpackSelection ? RED : ink(0.34);
+  g.textAlign = 'center';
+  g.font = `600 10px ${MONO}`;
+  track(g, 0.12);
+  g.fillText('丢弃所选', drop.x + drop.w / 2, drop.y + 16);
+  track(g, 0);
+
+  g.fillStyle = ink(0.38);
+  g.font = `400 9px ${MONO}`;
+  g.textAlign = 'right';
+  track(g, 0.08);
+  g.fillText('B / ESC 关闭 · 选中槽位后可点击丢弃', x + cw - 34, y + ch - 20);
+  track(g, 0);
   g.restore();
 }
 
@@ -1091,7 +1286,7 @@ export function drawTitle(g, game, W, H) {
 
   const help = touch
     ? ['左摇杆移动 · 右摇杆瞄准/攻击', '按钮：冲刺 · 投掷', 'ESC 暂停 · 开启后可按 R 补弹']
-    : ['WASD 移动 · 鼠标瞄准 · 点击攻击', 'Space 冲刺 · E 切换主副手 · 长按 Q/右键投掷武器', '手雷类长按攻击扩大范围并选择落点 · R 补弹 · ESC 暂停'];
+    : ['WASD 移动 · 鼠标瞄准 · 点击攻击', 'Space 冲刺 · E 切换主副手 · B 背包 · 长按 Q/右键投掷武器', '手雷类长按攻击扩大范围并选择落点 · R 装填备用弹匣 · ESC 暂停'];
   g.font = `400 ${9 * k}px ${MONO}`;
   g.fillStyle = ink(0.5);
   track(g, 0.08);
@@ -1122,8 +1317,8 @@ export function drawLegend(g, game, W, H) {
   const line = touch
     ? '左摇杆移动   ·   右摇杆转向，推到底攻击'
     : game.mode === 'defense'
-      ? '防守：T/点击商店，数字键购买，E 切换主副手，ENTER 或按钮结束休息'
-      : 'WASD 移动   ·   鼠标瞄准   ·   点击攻击   ·   E 切换主副手   ·   Space 冲刺   ·   长按 Q/右键蓄力投掷   ·   R 补弹   ·   ESC 暂停';
+      ? '防守：T/点击商店，数字键购买，B 背包，E 切换主副手，ENTER 或按钮结束休息'
+      : 'WASD 移动   ·   鼠标瞄准   ·   点击攻击   ·   E 切换主副手   ·   B 背包   ·   Space 冲刺   ·   长按 Q/右键蓄力投掷   ·   R 装填   ·   ESC 暂停';
   g.save();
   g.textAlign = 'center';
   g.font = `400 11px ${MONO}`;

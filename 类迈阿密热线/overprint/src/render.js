@@ -796,6 +796,12 @@ export function createRenderer(canvas) {
       const hy = p.y + Math.sin(p.aim) * 11 + Math.cos(p.aim) * 7;
       drawWeapon(ctx, hx, hy, p.aim, p.weapon);
     }
+    if (p.alive && p.offhandWeapon === 'shield' && p.weapon !== 'shield') {
+      const back = p.aim + Math.PI;
+      const hx = p.x + Math.cos(back) * 10 - Math.sin(back) * 6;
+      const hy = p.y + Math.sin(back) * 10 + Math.cos(back) * 6;
+      drawWeapon(ctx, hx, hy, back, p.offhandWeapon, 0.58);
+    }
   }
 
   function drawDeployables(game) {
@@ -846,24 +852,29 @@ export function createRenderer(canvas) {
 
   function drawPlayerShield(game) {
     const p = game.player;
-    const w = WEAPONS[p.weapon];
-    if (!p.alive || !w || !w.defense) return;
+    if (!p.alive) return;
     ctx.save();
     ctx.globalCompositeOperation = printMode();
-    ctx.strokeStyle = w.tint || C;
-    ctx.globalAlpha = p.blockFlash > 0 ? 0.95 : 0.58;
-    ctx.lineWidth = p.blockFlash > 0 ? 5 : 3;
-    const arc = w.shieldArc || 1.28;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 24, p.aim - arc, p.aim + arc);
-    ctx.stroke();
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = w.tint || C;
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.arc(p.x, p.y, 31, p.aim - arc, p.aim + arc);
-    ctx.closePath();
-    ctx.fill();
+    const drawArc = (weapon, face, alphaMul = 1) => {
+      const w = WEAPONS[weapon];
+      if (!w?.defense) return;
+      ctx.strokeStyle = w.tint || C;
+      ctx.globalAlpha = (p.blockFlash > 0 ? 0.95 : 0.58) * alphaMul;
+      ctx.lineWidth = p.blockFlash > 0 ? 5 : 3;
+      const arc = w.shieldArc || 1.28;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 24, face - arc, face + arc);
+      ctx.stroke();
+      ctx.globalAlpha = 0.18 * alphaMul;
+      ctx.fillStyle = w.tint || C;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.arc(p.x, p.y, 31, face - arc, face + arc);
+      ctx.closePath();
+      ctx.fill();
+    };
+    drawArc(p.weapon, p.aim, 1);
+    drawArc(p.offhandWeapon, p.aim + Math.PI, p.weapon === 'shield' ? 0.36 : 0.72);
     ctx.restore();
   }
 

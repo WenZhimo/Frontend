@@ -2,14 +2,14 @@ import { createRenderer } from './render.js';
 import { REC } from './dev.js';
 import { online, fetchBoard, submitRun, playerName, setPlayerName } from './net.js';
 import { createGame } from './game.js';
-import { drawHud, drawTitle, drawWin, drawFurniture, drawLegend, drawPause, drawCodexPopup } from './hud.js';
+import { drawHud, drawTitle, drawWin, drawFurniture, drawLegend, drawPause, drawCodexPopup, drawBackpackPopup } from './hud.js';
 import { createTouch } from './touch.js';
 import { initAudio, setMuted, isMuted } from './audio.js';
 import { applyThemeToDocument, cycleTheme } from './brand.js';
 
 // Bumped on every edit and printed in the corner. If the number on screen is
 // not the number the server reports, you are looking at a cached page.
-export const BUILD_ID = '184181';
+export const BUILD_ID = '184182';
 console.log('[overprint] build', BUILD_ID);
 if (window.buildTitle) window.buildTitle('版本 ' + BUILD_ID);
 applyThemeToDocument();
@@ -34,6 +34,11 @@ const KEYMAP = {
 };
 
 addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && !e.repeat && game.backpackOpen) {
+    e.preventDefault();
+    game.toggleBackpack(false);
+    return;
+  }
   if (e.code === 'Escape' && !e.repeat && game.codexOpen) {
     e.preventDefault();
     game.toggleCodex();
@@ -47,6 +52,15 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && game.state === 'play') {
     e.preventDefault();
     game.refillAmmo();
+    return;
+  }
+  if (e.code === 'KeyB' && !e.repeat && game.state === 'play' && !game.paused) {
+    e.preventDefault();
+    game.toggleBackpack();
+    return;
+  }
+  if (game.backpackOpen && e.code !== 'KeyM') {
+    e.preventDefault();
     return;
   }
   if (e.code === 'KeyT' && !e.repeat && game.state === 'play' && game.mode === 'defense' && !game.paused) {
@@ -255,6 +269,28 @@ function hitTab(x, y) {
     if (inClose || !inPanel) game.toggleCodex();
     return true;
   }
+  if (game.backpackOpen) {
+    const close = game.ui.backpackClose;
+    const drop = game.ui.backpackDrop;
+    const panel = game.ui.backpackPanel;
+    const inClose = close && x >= close.x && x <= close.x + close.w && y >= close.y && y <= close.y + close.h;
+    const inDrop = drop && x >= drop.x && x <= drop.x + drop.w && y >= drop.y && y <= drop.y + drop.h;
+    const inPanel = panel && x >= panel.x && x <= panel.x + panel.w && y >= panel.y && y <= panel.y + panel.h;
+    if (inClose || !inPanel) {
+      game.toggleBackpack(false);
+      return true;
+    }
+    if (inDrop) {
+      game.dropBackpackSelection?.();
+      return true;
+    }
+    for (const slot of game.ui.backpackSlots || []) {
+      if (x < slot.x || x > slot.x + slot.w || y < slot.y || y > slot.y + slot.h) continue;
+      game.clickBackpackSlot?.(slot.id);
+      return true;
+    }
+    return true;
+  }
   if (game.paused) {
     for (const p of game.ui.pauseOptions || []) {
       if (x < p.x || x > p.x + p.w || y < p.y || y > p.y + p.h) continue;
@@ -350,7 +386,7 @@ let last = performance.now();
 function frame(now) {
   const rdt = Math.min(0.05, (now - last) / 1000) * REC.speed;
   last = now;
-  if (!game.paused) {
+  if (!game.paused && !game.backpackOpen) {
     touch.apply(rdt);
     acc = Math.min(acc + rdt, FIXED * MAX_STEPS);
     while (acc >= FIXED) { game.step(FIXED); acc -= FIXED; }
@@ -370,6 +406,7 @@ function frame(now) {
     if (game.paused) drawPause(g, game, renderer.W, renderer.H);
   }
   if (game.codexOpen) drawCodexPopup(g, game, renderer.W, renderer.H);
+  if (game.backpackOpen) drawBackpackPopup(g, game, renderer.W, renderer.H);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

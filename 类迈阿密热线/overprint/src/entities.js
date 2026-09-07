@@ -47,7 +47,9 @@ export const WEAPONS = {
   copySauce:{ name: '复制蘸料',  feed: 'stack',  tint: '#00D6FF', melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, copySauce: true, noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
   madExtract:{ name: '疯狂提取液', feed: 'stack', tint: '#7AC943', melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: 'mad', noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
   tameExtract:{ name: '驯化提取液', feed: 'stack', tint: '#8A2BE2', melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: 'tame', noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
-  virusExtract:{ name: '病毒提取液', feed: 'stack', tint: '#7AC943', melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: 'virus', noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+  virusExtract:{ name: '病毒提取液', feed: 'stack', tint: '#7AC943', melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: 'virus', contagious: true, noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+  madVirusExtract:{ name: '疯狂病毒提取液', feed: 'stack', tint: '#39D98A', melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: 'mad', contagious: true, noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+  tameVirusExtract:{ name: '驯化病毒提取液', feed: 'stack', tint: '#9A7CFF', melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: 'tame', contagious: true, noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
   shield:   { name: '盾牌',      feed: 'none',   tint: '#12A3DA', melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, defense: true, shieldArc: 1.34, durability: 5, throwSpeed: 760, throwLethal: false },
 };
 
@@ -133,11 +135,11 @@ export function makePools() {
       state: S_DEAD, deadAngle: 0, t: 0, armour: 0, segs: 0, layers: 0, shieldHp: 0,
       shieldSeg: 0, friendly: false, contagious: false, wave: 0,
     })),
-    bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, statusEffect: null, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
-    pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: 'pistol', ammo: 0, angle: 0 })),
-    thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: 'pistol', ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, statusEffect: null, shrapnelEffect: null, noPickup: false })),
-    deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: 'sentry', x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, hp: 0, friendly: true, spin: 0, target: null })),
-    drones: mk(MAX_DRONES, () => ({ alive: false, kind: 'drone', x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, hp: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0 })),
+    bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, statusEffect: null, contagiousEffect: false, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
+    pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: 'pistol', ammo: 0, angle: 0, magTaken: false })),
+    thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: 'pistol', ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, statusEffect: null, contagiousEffect: false, shrapnelEffect: null, shrapnelContagious: false, noPickup: false })),
+    deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: 'sentry', x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, hp: 0, friendly: true, spin: 0, target: null, statusEffect: null, contagiousEffect: false })),
+    drones: mk(MAX_DRONES, () => ({ alive: false, kind: 'drone', x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, hp: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0, statusEffect: null, contagiousEffect: false })),
   };
 }
 

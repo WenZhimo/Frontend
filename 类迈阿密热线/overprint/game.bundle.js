@@ -952,11 +952,11 @@
         contagious: false,
         wave: 0
       })),
-      bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, statusEffect: null, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
-      pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: "pistol", ammo: 0, angle: 0 })),
-      thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: "pistol", ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, statusEffect: null, shrapnelEffect: null, noPickup: false })),
-      deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: "sentry", x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, hp: 0, friendly: true, spin: 0, target: null })),
-      drones: mk(MAX_DRONES, () => ({ alive: false, kind: "drone", x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, hp: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0 }))
+      bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, statusEffect: null, contagiousEffect: false, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
+      pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: "pistol", ammo: 0, angle: 0, magTaken: false })),
+      thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: "pistol", ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, statusEffect: null, contagiousEffect: false, shrapnelEffect: null, shrapnelContagious: false, noPickup: false })),
+      deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: "sentry", x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, hp: 0, friendly: true, spin: 0, target: null, statusEffect: null, contagiousEffect: false })),
+      drones: mk(MAX_DRONES, () => ({ alive: false, kind: "drone", x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, hp: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0, statusEffect: null, contagiousEffect: false }))
     };
   }
   function spawnFrom(pool) {
@@ -1419,7 +1419,9 @@
         copySauce: { name: "\u590D\u5236\u8638\u6599", feed: "stack", tint: "#00D6FF", melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, copySauce: true, noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
         madExtract: { name: "\u75AF\u72C2\u63D0\u53D6\u6DB2", feed: "stack", tint: "#7AC943", melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: "mad", noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
         tameExtract: { name: "\u9A6F\u5316\u63D0\u53D6\u6DB2", feed: "stack", tint: "#8A2BE2", melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: "tame", noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
-        virusExtract: { name: "\u75C5\u6BD2\u63D0\u53D6\u6DB2", feed: "stack", tint: "#7AC943", melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: "virus", noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+        virusExtract: { name: "\u75C5\u6BD2\u63D0\u53D6\u6DB2", feed: "stack", tint: "#7AC943", melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: "virus", contagious: true, noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+        madVirusExtract: { name: "\u75AF\u72C2\u75C5\u6BD2\u63D0\u53D6\u6DB2", feed: "stack", tint: "#39D98A", melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: "mad", contagious: true, noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
+        tameVirusExtract: { name: "\u9A6F\u5316\u75C5\u6BD2\u63D0\u53D6\u6DB2", feed: "stack", tint: "#9A7CFF", melee: false, rate: 0.34, ammo: 1, noise: 0, kick: 0, extract: true, extractEffect: "tame", contagious: true, noThrow: true, silent: true, throwLethal: false, enemyUsable: false },
         shield: { name: "\u76FE\u724C", feed: "none", tint: "#12A3DA", melee: false, rate: 0, ammo: 0, noise: 0, kick: 0, defense: true, shieldArc: 1.34, durability: 5, throwSpeed: 760, throwLethal: false }
       };
       ENEMY_DEF = {
@@ -2492,6 +2494,12 @@
         const hy = p.y + Math.sin(p.aim) * 11 + Math.cos(p.aim) * 7;
         drawWeapon(ctx2, hx, hy, p.aim, p.weapon);
       }
+      if (p.alive && p.offhandWeapon === "shield" && p.weapon !== "shield") {
+        const back = p.aim + Math.PI;
+        const hx = p.x + Math.cos(back) * 10 - Math.sin(back) * 6;
+        const hy = p.y + Math.sin(back) * 10 + Math.cos(back) * 6;
+        drawWeapon(ctx2, hx, hy, back, p.offhandWeapon, 0.58);
+      }
     }
     function drawDeployables(game2) {
       const smg = WEAPONS.smg;
@@ -2555,24 +2563,29 @@
     }
     function drawPlayerShield(game2) {
       const p = game2.player;
-      const w = WEAPONS[p.weapon];
-      if (!p.alive || !w || !w.defense) return;
+      if (!p.alive) return;
       ctx2.save();
       ctx2.globalCompositeOperation = printMode();
-      ctx2.strokeStyle = w.tint || CYAN;
-      ctx2.globalAlpha = p.blockFlash > 0 ? 0.95 : 0.58;
-      ctx2.lineWidth = p.blockFlash > 0 ? 5 : 3;
-      const arc = w.shieldArc || 1.28;
-      ctx2.beginPath();
-      ctx2.arc(p.x, p.y, 24, p.aim - arc, p.aim + arc);
-      ctx2.stroke();
-      ctx2.globalAlpha = 0.18;
-      ctx2.fillStyle = w.tint || CYAN;
-      ctx2.beginPath();
-      ctx2.moveTo(p.x, p.y);
-      ctx2.arc(p.x, p.y, 31, p.aim - arc, p.aim + arc);
-      ctx2.closePath();
-      ctx2.fill();
+      const drawArc = (weapon, face, alphaMul = 1) => {
+        const w = WEAPONS[weapon];
+        if (!w?.defense) return;
+        ctx2.strokeStyle = w.tint || CYAN;
+        ctx2.globalAlpha = (p.blockFlash > 0 ? 0.95 : 0.58) * alphaMul;
+        ctx2.lineWidth = p.blockFlash > 0 ? 5 : 3;
+        const arc = w.shieldArc || 1.28;
+        ctx2.beginPath();
+        ctx2.arc(p.x, p.y, 24, face - arc, face + arc);
+        ctx2.stroke();
+        ctx2.globalAlpha = 0.18 * alphaMul;
+        ctx2.fillStyle = w.tint || CYAN;
+        ctx2.beginPath();
+        ctx2.moveTo(p.x, p.y);
+        ctx2.arc(p.x, p.y, 31, face - arc, face + arc);
+        ctx2.closePath();
+        ctx2.fill();
+      };
+      drawArc(p.weapon, p.aim, 1);
+      drawArc(p.offhandWeapon, p.aim + Math.PI, p.weapon === "shield" ? 0.36 : 0.72);
       ctx2.restore();
     }
     function drawSleepers(game2) {
@@ -3672,7 +3685,7 @@
   };
 
   // overprint/src/game.js
-  var WEAPON_KEYS = ["fists", "knife", "bat", "katana", "quixote", "pistol", "revolver", "smg", "shotgun", "ripper", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "virus", "copySauce", "madExtract", "tameExtract", "virusExtract", "disguise", "sniper", "laser", "butcher", "shield"];
+  var WEAPON_KEYS = ["fists", "knife", "bat", "katana", "quixote", "pistol", "revolver", "smg", "shotgun", "ripper", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "virus", "copySauce", "madExtract", "tameExtract", "virusExtract", "madVirusExtract", "tameVirusExtract", "disguise", "sniper", "laser", "butcher", "shield"];
   var CODEX_WEAPON_KEYS = WEAPON_KEYS.filter((k) => k !== "fists");
   var ENEMY_KEYS = ["strawman", "thug", "gunner", "hound", "patroller", "shield"];
   var PRACTICE_MAPS = [
@@ -3681,9 +3694,11 @@
     { id: "lanes", label: "\u957F\u5ECA" }
   ];
   var PRACTICE_ENEMIES = ["strawman", "thug", "gunner", "hound", "patroller", "shield"];
-  var PRACTICE_WEAPONS = ["pistol", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "virus", "copySauce", "madExtract", "tameExtract", "virusExtract", "disguise", "sniper", "laser", "butcher", "shield", "katana", "quixote", "knife", "bat"];
-  var DEFENSE_SHOP_WEAPONS = ["pistol", "shield", "katana", "quixote", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "virus", "copySauce", "shield", "molotov", "dart", "tameDart", "sniper", "laser", "butcher", "shield"];
+  var PRACTICE_WEAPONS = ["pistol", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "virus", "copySauce", "madExtract", "tameExtract", "virusExtract", "madVirusExtract", "tameVirusExtract", "disguise", "sniper", "laser", "butcher", "shield", "katana", "quixote", "knife", "bat"];
+  var DEFENSE_SHOP_WEAPONS = ["pistol", "shield", "katana", "quixote", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "virus", "copySauce", "madExtract", "tameExtract", "shield", "molotov", "dart", "tameDart", "sniper", "laser", "butcher", "shield"];
   var CODEX_KEY = "overprint.codex";
+  var BACKPACK_CAPACITY = 5;
+  var MAGAZINE_CAPACITY = 100;
   var SLOW = {
     dash: { dur: 0.17, scale: 0.34 },
     throw: { dur: 0.34, scale: 0.2 },
@@ -3781,6 +3796,8 @@
       renderer: renderer2,
       state: "title",
       paused: false,
+      backpackOpen: false,
+      backpackSelection: null,
       mode: localStorage.getItem("overprint.mode") || "endless",
       refillEnabled: localStorage.getItem("overprint.refill") === "1",
       time: 0,
@@ -3871,7 +3888,12 @@
         defenseShopButton: null,
         defenseShopOptions: [],
         defenseRestButton: null,
-        defenseShopPanel: null
+        defenseShopPanel: null,
+        backpackPanel: null,
+        backpackClose: null,
+        backpackDrop: null,
+        backpackCraft: null,
+        backpackSlots: []
       },
       reducedMotion: typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches,
       tutorialT: 0,
@@ -3909,6 +3931,8 @@
         ammo: 0,
         offhandWeapon: "fists",
         offhandAmmo: 0,
+        backpack: [],
+        magazine: {},
         attackCd: 0,
         swing: 0,
         burnT: 0,
@@ -4051,6 +4075,7 @@
     }
     const EFFECT_WEAPON = { mad: "dart", tame: "tameDart", virus: "virus" };
     const EFFECT_EXTRACT = { mad: "madExtract", tame: "tameExtract", virus: "virusExtract" };
+    const VIRUS_MIX_EXTRACT = { madExtract: "madVirusExtract", tameExtract: "tameVirusExtract", virusExtract: "virusExtract" };
     const EFFECT_TINT = { mad: "#7AC943", tame: "#8A2BE2", virus: "#7AC943" };
     const SUPPORT_HP = { sentry: 3, drone: 1 };
     const SUPPORT_RADIUS = { sentry: 17, drone: 11 };
@@ -4067,6 +4092,19 @@
       const w = WEAPONS[kind];
       return w && w.statusEffect ? w.statusEffect : null;
     }
+    function weaponAttackProfile(kind) {
+      const w = WEAPONS[kind];
+      if (!w) return { effect: null, contagious: false };
+      const effect = w.statusEffect || null;
+      return { effect, contagious: !!w.contagious || effect === "virus" };
+    }
+    function extractAttackProfile(kind) {
+      const w = WEAPONS[kind];
+      if (w?.extract && w.extractEffect) {
+        return { effect: w.extractEffect, contagious: !!w.contagious || w.extractEffect === "virus" };
+      }
+      return weaponAttackProfile(kind);
+    }
     function enemyCanUseWeapon(kind) {
       const w = WEAPONS[kind];
       return !!(w && kind !== "fists" && w.enemyUsable !== false && !w.lobbed && !w.offhandOnly && !w.passive && !w.extract && !w.copySauce);
@@ -4077,21 +4115,38 @@
     function effectWeaponKey(effect) {
       return EFFECT_WEAPON[effect] || null;
     }
-    function activeAttackEffect(actor, weaponKey, surface = "direct") {
-      const base = weaponStatusEffect(weaponKey);
+    function activeAttackProfile(actor, weaponKey, surface = "direct") {
+      const base = weaponAttackProfile(weaponKey);
       if (actor === game2.player) {
         const off = WEAPONS[game2.player.offhandWeapon];
-        if (off?.extract && off.extractEffect) return off.extractEffect;
+        if (off?.extract && off.extractEffect) return extractAttackProfile(game2.player.offhandWeapon);
         const side = weaponStatusEffect(game2.player.offhandWeapon);
-        if (surface === "shrapnel" && weaponKey === "frag" && (side === "mad" || side === "tame")) return side;
+        if (surface === "shrapnel" && weaponKey === "frag" && (side === "mad" || side === "tame")) {
+          return weaponAttackProfile(game2.player.offhandWeapon);
+        }
+        if (game2.player.offhandWeapon === "virus" && base.effect && base.effect !== "virus") {
+          return { effect: base.effect, contagious: true };
+        }
       }
       return base;
     }
-    function applyAttackEffectToEnemy(e, effect, x, y, source = game2.player) {
-      if (!effect || !e.alive || e.state === S_DEAD) return false;
-      if (effect === "tame") return convertEnemy(e, x, y, WEAPONS.tameDart.tameDur || 8.5);
-      if (effect === "mad") return maddenEnemy(e, WEAPONS.dart.mad || 7.2, x, y);
-      if (effect === "virus") return infectEnemy(e, 20, source === game2.player || !!source?.friendly);
+    function activeAttackEffect(actor, weaponKey, surface = "direct") {
+      return activeAttackProfile(actor, weaponKey, surface).effect;
+    }
+    function applyAttackEffectToEnemy(e, effect, x, y, source = game2.player, opts = {}) {
+      if (!effect && !opts.contagious || !e.alive || e.state === S_DEAD) return false;
+      const byPlayer = source === game2.player || !!source?.friendly || !!opts.byPlayer;
+      if (effect === "tame") return convertEnemy(e, x, y, WEAPONS.tameDart.tameDur || 8.5, !!opts.contagious);
+      if (effect === "mad") {
+        const ok = maddenEnemy(e, WEAPONS.dart.mad || 7.2, x, y);
+        if (ok && opts.contagious) {
+          e.contagious = true;
+          e.infectByPlayer = byPlayer;
+          infectEnemy(e, 20, byPlayer);
+        }
+        return ok;
+      }
+      if (effect === "virus" || opts.contagious) return infectEnemy(e, 20, byPlayer);
       return false;
     }
     function infectEnemy(e, seconds = 20, byPlayer = true) {
@@ -4322,16 +4377,28 @@
     function actorFacing(actor) {
       return actor === game2.player ? actor.aim : actor.angle;
     }
-    function heldShieldBlocks(actor, fromX, fromY) {
-      const w = WEAPONS[actor?.weapon];
-      if (!actor || !actor.alive || !w || !w.defense) return false;
-      if (actor.state === S_DOWN || actor.state === S_DEAD) return false;
-      if (actor !== game2.player && (actor.heldShieldHp || 0) <= 0) return false;
+    function heldShieldFace(actor, fromX, fromY) {
+      if (!actor || !actor.alive) return null;
+      if (actor.state === S_DOWN || actor.state === S_DEAD) return null;
       const a = Math.atan2(fromY - actor.y, fromX - actor.x);
-      return Math.abs(angDelta(actorFacing(actor), a)) <= (w.shieldArc || 1.28);
+      const face = actorFacing(actor);
+      const main = WEAPONS[actor.weapon];
+      if (main?.defense) {
+        if (actor !== game2.player && (actor.heldShieldHp || 0) <= 0) return null;
+        if (Math.abs(angDelta(face, a)) <= (main.shieldArc || 1.28)) return face;
+      }
+      if (actor === game2.player) {
+        const off = WEAPONS[actor.offhandWeapon];
+        const back = face + Math.PI;
+        if (off?.defense && Math.abs(angDelta(back, a)) <= (off.shieldArc || 1.28)) return back;
+      }
+      return null;
+    }
+    function heldShieldBlocks(actor, fromX, fromY) {
+      return heldShieldFace(actor, fromX, fromY) != null;
     }
     function blockOnHeldShield(actor, fromX, fromY, hard = false) {
-      const face = actorFacing(actor);
+      const face = heldShieldFace(actor, fromX, fromY) ?? actorFacing(actor);
       const r = actor === game2.player ? 19 : (ENEMY_DEF[actor.type]?.r || 11) + 9;
       const sx = actor.x + Math.cos(face) * r;
       const sy = actor.y + Math.sin(face) * r;
@@ -4355,7 +4422,7 @@
     }
     game2.heldShieldBlocks = heldShieldBlocks;
     game2.blockOnHeldShield = blockOnHeldShield;
-    function sprayShrapnel(x, y, w, byEnemy, statusEffect = null) {
+    function sprayShrapnel(x, y, w, byEnemy, statusEffect = null, contagiousEffect = false) {
       const n = w.shrapnel || 0;
       if (!n) return;
       const step2 = TAU / n;
@@ -4381,12 +4448,15 @@
         b.throughWalls = false;
         b.wallPierced = 0;
         b.statusEffect = statusEffect || null;
+        b.contagiousEffect = !!contagiousEffect;
         b.weapon = statusEffect ? effectWeaponKey(statusEffect) : null;
         b.projectile = null;
         b.explosive = false;
+        b.ricochet = false;
+        b.bounces = 0;
       }
     }
-    function explodeAt(x, y, weaponKey, byEnemy = false, effectScale = 1, statusEffect = null, shrapnelEffect = statusEffect) {
+    function explodeAt(x, y, weaponKey, byEnemy = false, effectScale = 1, statusEffect = null, shrapnelEffect = statusEffect, contagiousEffect = false, shrapnelContagious = contagiousEffect) {
       const w = WEAPONS[weaponKey] || WEAPONS.grenade;
       if (w.virusCloud && !statusEffect) {
         infectAt(x, y, weaponKey, byEnemy, effectScale);
@@ -4436,8 +4506,8 @@
           damageShield(e, Math.max(1, Math.round((w.shieldDmg || 3) * falloff)), true, x, y);
           if (shieldBlocks(e, x, y)) continue;
         }
-        if (statusEffect) {
-          applyAttackEffectToEnemy(e, statusEffect, x, y, byEnemy ? null : game2.player);
+        if (statusEffect || contagiousEffect) {
+          applyAttackEffectToEnemy(e, statusEffect, x, y, byEnemy ? null : game2.player, { contagious: contagiousEffect });
           continue;
         }
         if (d <= radius * (w.blastKill || 0.75) || e.state === S_DOWN) {
@@ -4455,7 +4525,7 @@
           else game2.killPlayer();
         }
       }
-      sprayShrapnel(x, y, w, byEnemy, shrapnelEffect);
+      sprayShrapnel(x, y, w, byEnemy, shrapnelEffect, shrapnelContagious);
     }
     function panicFire(e, chance) {
       const w = WEAPONS[e.weapon];
@@ -4539,10 +4609,20 @@
         infectAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
         return;
       }
-      if (w.deploy) deployAt(t.x, t.y, w.deploy, t.friendly !== false);
+      if (w.deploy) deployAt(t.x, t.y, w.deploy, t.friendly !== false, t.statusEffect || null, !!t.contagiousEffect);
       else if (w.flashbang) flashAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
       else if (w.fire) igniteAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
-      else explodeAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1, t.statusEffect || null, t.shrapnelEffect || t.statusEffect || null);
+      else explodeAt(
+        t.x,
+        t.y,
+        t.kind,
+        t.friendly === false,
+        t.effectScale || 1,
+        t.statusEffect || null,
+        t.shrapnelEffect || t.statusEffect || null,
+        !!t.contagiousEffect,
+        !!t.shrapnelContagious || !!t.contagiousEffect
+      );
     }
     function supportPointClear(x, y, r = 8) {
       return !game2.level.solidAt(x, y) && !game2.level.solidAt(x + r, y) && !game2.level.solidAt(x - r, y) && !game2.level.solidAt(x, y + r) && !game2.level.solidAt(x, y - r);
@@ -4580,7 +4660,7 @@
       game2.pickupWrite = (game2.pickupWrite + 1) % pool.length;
       return slot;
     }
-    function placePickup(x, y, kind, ammo = 0, angle = rnd() * TAU) {
+    function placePickup(x, y, kind, ammo = 0, angle = rnd() * TAU, magTaken = false) {
       const k = pickupSlot();
       if (!k) return false;
       k.alive = true;
@@ -4589,9 +4669,10 @@
       k.kind = kind;
       k.ammo = ammo;
       k.angle = angle;
+      k.magTaken = !!magTaken;
       return true;
     }
-    function deployAt(x, y, deployKind, friendly = true) {
+    function deployAt(x, y, deployKind, friendly = true, statusEffect = null, contagiousEffect = false) {
       const key2 = deployKind === "drones" ? "dronePack" : "sentryPack";
       const w = WEAPONS[key2] || WEAPONS.sentryPack;
       const center = nearestSupportPoint(x, y, 9, { x: game2.player.x, y: game2.player.y });
@@ -4621,6 +4702,8 @@
           slot.spin = rnd() * TAU;
           slot.kamikaze = false;
           slot.blastT = 0;
+          slot.statusEffect = statusEffect || null;
+          slot.contagiousEffect = !!contagiousEffect;
         }
         game2.banner = "\u6BD2\u8702\u65E0\u4EBA\u673A\u90E8\u7F72";
       } else {
@@ -4639,6 +4722,8 @@
         slot.friendly = friendly;
         slot.spin = 0;
         slot.target = null;
+        slot.statusEffect = statusEffect || null;
+        slot.contagiousEffect = !!contagiousEffect;
         game2.banner = "\u54E8\u6212\u673A\u67AA\u90E8\u7F72";
       }
       game2.bannerT = 0.65;
@@ -5088,6 +5173,55 @@
         ammo: w.melee ? 0 : clamp(Number(ammo) || 0, 0, w.ammo || 0)
       };
     }
+    const emptySlot = () => ({ weapon: "fists", ammo: 0 });
+    function normalizeBackpack(p = game2.player) {
+      if (!Array.isArray(p.backpack)) p.backpack = [];
+      p.backpack = p.backpack.slice(0, BACKPACK_CAPACITY).map((slot) => storedSlot(slot?.weapon, slot?.ammo));
+      while (p.backpack.length < BACKPACK_CAPACITY) p.backpack.push(emptySlot());
+      if (!p.magazine || typeof p.magazine !== "object") p.magazine = {};
+      return p.backpack;
+    }
+    function magazineCapacity(kind) {
+      const w = WEAPONS[kind];
+      return w && !w.melee && w.ammo > 0 ? MAGAZINE_CAPACITY : 0;
+    }
+    function reserveAmmo(kind) {
+      const p = game2.player;
+      const cap = magazineCapacity(kind);
+      if (!cap) return 0;
+      if (!p.magazine || typeof p.magazine !== "object") p.magazine = {};
+      return clamp(Number(p.magazine[kind]) || 0, 0, cap);
+    }
+    function addReserveAmmo(kind, amount) {
+      const p = game2.player;
+      const cap = magazineCapacity(kind);
+      const n = Math.max(0, Math.floor(Number(amount) || 0));
+      if (!cap || n <= 0) return 0;
+      if (!p.magazine || typeof p.magazine !== "object") p.magazine = {};
+      const prev = reserveAmmo(kind);
+      const next = Math.min(cap, prev + n);
+      p.magazine[kind] = next;
+      return next - prev;
+    }
+    function consumeReserveAmmo(kind, amount) {
+      const p = game2.player;
+      const cap = magazineCapacity(kind);
+      const n = Math.max(0, Math.floor(Number(amount) || 0));
+      if (!cap || n <= 0) return 0;
+      const prev = reserveAmmo(kind);
+      const used = Math.min(prev, n);
+      p.magazine[kind] = prev - used;
+      return used;
+    }
+    function collectPickupAmmo(k) {
+      if (!k || k.magTaken) return 0;
+      const got = addReserveAmmo(k.kind, k.ammo || 0);
+      if (got > 0) {
+        k.ammo = Math.max(0, (k.ammo || 0) - got);
+        if (k.ammo <= 0) k.magTaken = true;
+      }
+      return got;
+    }
     function setMainSlot(p, kind, ammo = 0) {
       const slot = storedSlot(kind, ammo);
       p.weapon = slot.weapon;
@@ -5102,6 +5236,152 @@
       if (slot.weapon !== "fists") game2.recordWeapon(slot.weapon);
       return slot.weapon !== "fists";
     }
+    function addToBackpack(p, kind, ammo = 0) {
+      const slot = storedSlot(kind, ammo);
+      if (slot.weapon === "fists") return false;
+      const bag = normalizeBackpack(p);
+      const idx = bag.findIndex((item) => item.weapon === "fists");
+      if (idx < 0) return false;
+      bag[idx] = slot;
+      game2.recordWeapon(slot.weapon);
+      return true;
+    }
+    function storeOrDropPlayerSlot(p, kind, ammo, angle = p.aim + Math.PI) {
+      if (!kind || kind === "fists") return true;
+      if (addToBackpack(p, kind, ammo)) return true;
+      return dropReplacedWeapon(p, kind, ammo, angle);
+    }
+    function slotById(p, id) {
+      normalizeBackpack(p);
+      if (id === "main") return storedSlot(p.weapon, p.ammo);
+      if (id === "offhand") return storedSlot(p.offhandWeapon, p.offhandAmmo);
+      const m = /^bag(\d+)$/.exec(id || "");
+      if (m) return storedSlot(p.backpack[Number(m[1])]?.weapon, p.backpack[Number(m[1])]?.ammo);
+      return emptySlot();
+    }
+    function setSlotById(p, id, slot) {
+      const next = storedSlot(slot?.weapon, slot?.ammo);
+      normalizeBackpack(p);
+      if (id === "main") return setMainSlot(p, next.weapon, next.ammo);
+      if (id === "offhand") return setOffhandSlot(p, next.weapon, next.ammo);
+      const m = /^bag(\d+)$/.exec(id || "");
+      if (m) {
+        const idx = Number(m[1]);
+        if (idx < 0 || idx >= BACKPACK_CAPACITY) return false;
+        p.backpack[idx] = next;
+        if (next.weapon !== "fists") game2.recordWeapon(next.weapon);
+        return next.weapon !== "fists";
+      }
+      return false;
+    }
+    function backpackCount(p = game2.player) {
+      return normalizeBackpack(p).reduce((n, slot) => n + (slot.weapon !== "fists" ? 1 : 0), 0);
+    }
+    function slotCanHold(id, slot) {
+      const w = WEAPONS[slot?.weapon];
+      return !(id === "main" && w?.offhandOnly);
+    }
+    function mixedVirusExtract(a, b) {
+      if (a === "virus" && VIRUS_MIX_EXTRACT[b]) return VIRUS_MIX_EXTRACT[b];
+      if (b === "virus" && VIRUS_MIX_EXTRACT[a]) return VIRUS_MIX_EXTRACT[a];
+      return null;
+    }
+    function tryCraftSlots(aId, bId) {
+      if (!aId || !bId || aId === bId) return false;
+      const p = game2.player;
+      const a = slotById(p, aId);
+      const b = slotById(p, bId);
+      const result = mixedVirusExtract(a.weapon, b.weapon);
+      if (!result) return false;
+      const aIsVirus = a.weapon === "virus";
+      const keepId = aIsVirus ? bId : aId;
+      const clearId = aIsVirus ? aId : bId;
+      if (!slotCanHold(keepId, storedSlot(result, WEAPONS[result]?.ammo || 1))) return false;
+      setSlotById(p, keepId, storedSlot(result, WEAPONS[result]?.ammo || 1));
+      setSlotById(p, clearId, emptySlot());
+      game2.backpackSelection = null;
+      game2.floorLoadout = stashPlayerWeapon() || game2.floorLoadout;
+      game2.banner = `\u5408\u6210\uFF1A${WEAPONS[result].name}`;
+      game2.bannerT = 0.8;
+      burst(p.x, p.y, 18, 150, WEAPONS[result].tint || EFFECT_TINT.virus, 2.4, 0.45);
+      sfx.status();
+      return true;
+    }
+    function swapSlots(aId, bId) {
+      if (!aId || !bId || aId === bId) return false;
+      const p = game2.player;
+      const a = slotById(p, aId);
+      const b = slotById(p, bId);
+      if (!slotCanHold(aId, b) || !slotCanHold(bId, a)) {
+        game2.banner = "\u8BE5\u69FD\u4F4D\u4E0D\u80FD\u88C5\u5907";
+        game2.bannerT = 0.65;
+        sfx.empty();
+        return false;
+      }
+      setSlotById(p, aId, b);
+      setSlotById(p, bId, a);
+      game2.backpackSelection = null;
+      game2.floorLoadout = stashPlayerWeapon() || game2.floorLoadout;
+      game2.banner = "\u88C5\u5907\u5DF2\u66F4\u6362";
+      game2.bannerT = 0.55;
+      sfx.pickup();
+      return true;
+    }
+    game2.backpackCount = () => backpackCount();
+    game2.reserveAmmo = reserveAmmo;
+    game2.magazineCapacity = magazineCapacity;
+    game2.toggleBackpack = function(force = null) {
+      if (game2.state !== "play" || game2.paused) return false;
+      const next = force == null ? !game2.backpackOpen : !!force;
+      if (game2.backpackOpen === next) return false;
+      game2.backpackOpen = next;
+      game2.backpackSelection = null;
+      clearLiveInput();
+      setTimeScale(next ? 0 : game2.worldScale || 1);
+      game2.banner = next ? "\u80CC\u5305" : "\u7EE7\u7EED";
+      game2.bannerT = next ? 0.45 : 0.35;
+      sfx.status();
+      return true;
+    };
+    game2.clickBackpackSlot = function(id) {
+      if (!game2.backpackOpen) return false;
+      if (!game2.backpackSelection) {
+        game2.backpackSelection = id;
+        sfx.status();
+        return true;
+      }
+      if (game2.backpackSelection === id) {
+        game2.backpackSelection = null;
+        sfx.status();
+        return true;
+      }
+      if (tryCraftSlots(game2.backpackSelection, id)) return true;
+      return swapSlots(game2.backpackSelection, id);
+    };
+    game2.dropBackpackSelection = function() {
+      if (!game2.backpackOpen || !game2.backpackSelection) return false;
+      const p = game2.player;
+      const slot = slotById(p, game2.backpackSelection);
+      if (slot.weapon === "fists" || !canDropWeapon(slot.weapon)) {
+        game2.banner = "\u6CA1\u6709\u53EF\u4E22\u5F03\u88C5\u5907";
+        game2.bannerT = 0.55;
+        sfx.empty();
+        return false;
+      }
+      if (!placeDroppedFromPlayer(p, slot.weapon, slot.ammo, p.aim + Math.PI)) {
+        game2.banner = "\u65E0\u6CD5\u4E22\u5F03";
+        game2.bannerT = 0.55;
+        sfx.empty();
+        return false;
+      }
+      setSlotById(p, game2.backpackSelection, emptySlot());
+      game2.floorLoadout = stashPlayerWeapon() || game2.floorLoadout;
+      game2.banner = `\u4E22\u5F03 ${WEAPONS[slot.weapon].name}`;
+      game2.bannerT = 0.65;
+      game2.backpackSelection = null;
+      sfx.pickup();
+      return true;
+    };
     function playerHasOffhand(kind) {
       return game2.player.offhandWeapon === kind;
     }
@@ -5118,53 +5398,69 @@
           const x = p.x + Math.cos(a) * range;
           const y = p.y + Math.sin(a) * range;
           if (dist(p.x, p.y, x, y) < 22 || !supportPointClear(x, y, 7)) continue;
-          return placePickup(x, y, kind, ammo, angle);
+          return placePickup(x, y, kind, ammo, angle, true);
         }
       }
       const pos = nearestSupportPoint(p.x + Math.cos(angle) * 34, p.y + Math.sin(angle) * 34, 7, { x: p.x, y: p.y });
-      return placePickup(pos.x, pos.y, kind, ammo, angle);
+      return placePickup(pos.x, pos.y, kind, ammo, angle, true);
     }
     function dropReplacedWeapon(p, kind, ammo, angle = p.aim + Math.PI) {
       if (!canDropWeapon(kind)) return false;
-      return placePickup(p.x, p.y, kind, ammo, angle);
+      return placePickup(p.x, p.y, kind, ammo, angle, true);
     }
     function givePlayerWeapon(p, kind, ammo = WEAPONS[kind]?.ammo || 0, replaceOffhand = false) {
       const w = WEAPONS[kind];
       if (!w || kind === "fists") return false;
       if (w.offhandOnly) {
-        if (p.offhandWeapon !== "fists" && !replaceOffhand) return false;
+        if (p.offhandWeapon !== "fists" && !replaceOffhand) return addToBackpack(p, kind, ammo);
         if (p.offhandWeapon === kind) return setOffhandSlot(p, kind, ammo);
-        if (p.offhandWeapon !== "fists") dropReplacedWeapon(p, p.offhandWeapon, p.offhandAmmo);
+        if (p.offhandWeapon !== "fists") storeOrDropPlayerSlot(p, p.offhandWeapon, p.offhandAmmo);
         return setOffhandSlot(p, kind, ammo);
       }
       if (p.weapon === "fists") return setMainSlot(p, kind, ammo);
       if (p.offhandWeapon === "fists") return setOffhandSlot(p, kind, ammo);
-      if (!replaceOffhand) return false;
+      if (!replaceOffhand) return addToBackpack(p, kind, ammo);
       if (p.offhandWeapon === kind) return setOffhandSlot(p, kind, ammo);
-      dropReplacedWeapon(p, p.offhandWeapon, p.offhandAmmo);
+      storeOrDropPlayerSlot(p, p.offhandWeapon, p.offhandAmmo);
       return setOffhandSlot(p, kind, ammo);
     }
     function stashPlayerWeapon() {
       const p = game2.player;
       const w = WEAPONS[p.weapon];
       const ow = WEAPONS[p.offhandWeapon];
-      if ((!w || p.weapon === "fists") && (!ow || p.offhandWeapon === "fists")) return null;
+      const bag = normalizeBackpack(p).filter((slot) => slot.weapon !== "fists");
+      const magazine2 = Object.fromEntries(Object.entries(p.magazine || {}).map(([kind, amount]) => [kind, clamp(Number(amount) || 0, 0, magazineCapacity(kind) || MAGAZINE_CAPACITY)]).filter(([, amount]) => amount > 0));
+      if ((!w || p.weapon === "fists") && (!ow || p.offhandWeapon === "fists") && !bag.length && !Object.keys(magazine2).length) return null;
       return {
         weapon: w && p.weapon !== "fists" ? p.weapon : "fists",
         ammo: w && !w.melee ? clamp(p.ammo || 0, 0, w.ammo || 0) : 0,
         offhand: ow && p.offhandWeapon !== "fists" ? p.offhandWeapon : "fists",
-        offAmmo: ow && !ow.melee ? clamp(p.offhandAmmo || 0, 0, ow.ammo || 0) : 0
+        offAmmo: ow && !ow.melee ? clamp(p.offhandAmmo || 0, 0, ow.ammo || 0) : 0,
+        backpack: bag,
+        magazine: magazine2
       };
     }
     function equipPlayerWeapon(p, carried) {
       setMainSlot(p, "fists", 0);
       setOffhandSlot(p, "fists", 0);
+      p.backpack = [];
+      p.magazine = {};
+      normalizeBackpack(p);
       if (!carried) return;
       const main = carried.weapon || "fists";
       const offhand = carried.offhand || carried.sideWeapon || "fists";
       if (WEAPONS[main]?.offhandOnly) setOffhandSlot(p, main, carried.ammo);
       else setMainSlot(p, main, carried.ammo);
       if (offhand !== "fists") setOffhandSlot(p, offhand, carried.offAmmo ?? carried.sideAmmo);
+      if (Array.isArray(carried.backpack)) {
+        for (const slot of carried.backpack) addToBackpack(p, slot?.weapon, slot?.ammo);
+      }
+      if (carried.magazine && typeof carried.magazine === "object") {
+        for (const [kind, amount] of Object.entries(carried.magazine)) {
+          const cap = magazineCapacity(kind);
+          if (cap) p.magazine[kind] = clamp(Number(amount) || 0, 0, cap);
+        }
+      }
     }
     function choosePreviewSeed() {
       const next = previewRunSeed();
@@ -5201,6 +5497,10 @@
       const next = !!paused;
       if (game2.paused === next) return false;
       game2.paused = next;
+      if (next) {
+        game2.backpackOpen = false;
+        game2.backpackSelection = null;
+      }
       clearLiveInput();
       setTimeScale(next ? 0 : game2.worldScale || 1);
       game2.banner = next ? null : "\u7EE7\u7EED";
@@ -5214,6 +5514,8 @@
     game2.returnToMenu = function() {
       clearLiveInput();
       game2.paused = false;
+      game2.backpackOpen = false;
+      game2.backpackSelection = null;
       game2.codexOpen = false;
       game2.banner = null;
       game2.bannerT = 0;
@@ -5229,15 +5531,9 @@
       return game2.refillEnabled;
     };
     game2.refillAmmo = function() {
-      if (game2.state !== "play" || game2.paused) return false;
+      if (game2.state !== "play" || game2.paused || game2.backpackOpen) return false;
       const p = game2.player;
       const w = WEAPONS[p.weapon];
-      if (!game2.refillEnabled) {
-        game2.banner = "R \u8865\u5F39\u5DF2\u5173\u95ED";
-        game2.bannerT = 0.65;
-        sfx.empty();
-        return false;
-      }
       if (!p.alive || !w || w.melee || w.ammo <= 0) {
         game2.banner = "\u5F53\u524D\u6B66\u5668\u4E0D\u80FD\u8865\u5F39";
         game2.bannerT = 0.65;
@@ -5250,10 +5546,21 @@
         sfx.empty();
         return false;
       }
-      p.ammo = w.ammo;
+      if (game2.refillEnabled) {
+        p.ammo = w.ammo;
+      } else {
+        const used = consumeReserveAmmo(p.weapon, w.ammo - p.ammo);
+        if (used <= 0) {
+          game2.banner = `${w.name} \u5907\u7528\u5F39\u5323\u4E3A\u7A7A`;
+          game2.bannerT = 0.65;
+          sfx.empty();
+          return false;
+        }
+        p.ammo += used;
+      }
       p.attackCd = Math.min(p.attackCd, 0.08);
       game2.floorLoadout = stashPlayerWeapon() || game2.floorLoadout;
-      game2.banner = `${w.name} \u5DF2\u8865\u6EE1`;
+      game2.banner = game2.refillEnabled ? `${w.name} \u5DF2\u8865\u6EE1` : `${w.name} \u5DF2\u88C5\u586B ${p.ammo}/${w.ammo} \xB7 \u5907\u7528 ${reserveAmmo(p.weapon)}`;
       game2.bannerT = 0.65;
       sfx.pickup();
       return true;
@@ -5261,7 +5568,9 @@
     function canRefillPlayerAmmo() {
       const p = game2.player;
       const w = WEAPONS[p.weapon];
-      return !!(p.alive && w && !w.melee && w.ammo > 0 && p.ammo < w.ammo);
+      if (!p.alive || !w || w.melee || w.ammo <= 0) return false;
+      if (game2.refillEnabled) return p.ammo < w.ammo;
+      return p.ammo < w.ammo || reserveAmmo(p.weapon) < magazineCapacity(p.weapon);
     }
     function addCorpse(e) {
       const pool = game2.pools.corpses || [];
@@ -5406,6 +5715,7 @@
         k.kind = s.kind;
         k.ammo = WEAPONS[s.kind].ammo;
         k.angle = rnd() * TAU;
+        k.magTaken = false;
       }
       const p = game2.player;
       p.x = level.spawn.x;
@@ -5449,6 +5759,8 @@
       if (nextFloor) game2.floor++;
       game2.floorLoadout = carried;
       game2.paused = false;
+      game2.backpackOpen = false;
+      game2.backpackSelection = null;
       const diff = REC.floor ? Math.min(game2.floor, REC.floor) : game2.floor;
       let level;
       if (game2.mode === "practice") {
@@ -5472,6 +5784,8 @@
     function restartFloor() {
       renderer2.clearStains();
       game2.paused = false;
+      game2.backpackOpen = false;
+      game2.backpackSelection = null;
       const restartLoadout = game2.mode === "defense" ? stashPlayerWeapon() || game2.floorLoadout : game2.floorLoadout;
       if (game2.mode === "defense") {
         game2.score = 0;
@@ -5779,7 +6093,8 @@
       const w = WEAPONS[kind];
       if (!w) return 0;
       const shots = Math.max(1, Math.ceil((w.ammo || 1) / 2));
-      const statusEffect = activeAttackEffect(p, kind, "direct");
+      const profile = activeAttackProfile(p, kind, "direct");
+      const statusEffect = profile.effect;
       const base = p.aim;
       for (let shot = 0; shot < shots; shot++) {
         const fan = shots > 1 ? (shot - (shots - 1) / 2) / (shots - 1) : 0;
@@ -5805,6 +6120,7 @@
           b.owner = null;
           b.near = 0;
           b.statusEffect = statusEffect || null;
+          b.contagiousEffect = !!profile.contagious;
           b.weapon = kind;
           b.projectile = null;
           b.explosive = false;
@@ -5904,11 +6220,11 @@
       return true;
     }
     game2.maddenEnemy = maddenEnemy;
-    function convertEnemy(e, x, y, seconds = WEAPONS.tameDart.tameDur || 8.5) {
+    function convertEnemy(e, x, y, seconds = WEAPONS.tameDart.tameDur || 8.5, contagious = false) {
       if (!e.alive || e.state === S_DEAD || e.friendly) return false;
       e.friendly = true;
       e.converted = true;
-      e.contagious = playerHasOffhand("virus");
+      e.contagious = !!contagious || playerHasOffhand("virus");
       e.madT = 0;
       e.tameT = Math.max(e.tameT || 0, seconds || 0);
       clearEnemyInfection(e);
@@ -6089,10 +6405,11 @@
       game2.raiseAlarm(e.lkx, e.lky);
       sfx.alert();
     };
-    function launchProjectile(actor, angle, weaponKey, friendly, statusEffect = null) {
+    function launchProjectile(actor, angle, weaponKey, friendly, profile = null) {
       const w = WEAPONS[weaponKey];
       const b = spawnFrom(game2.pools.bullets);
       if (!b) return null;
+      const attack = profile && typeof profile === "object" ? profile : { effect: profile || weaponStatusEffect(weaponKey), contagious: false };
       const sp = friendly ? w.speed : w.eSpeed || w.speed;
       b.alive = true;
       b.x = actor.x + Math.cos(angle) * 18;
@@ -6110,7 +6427,8 @@
       b.owner = actor === game2.player ? null : actor;
       b.throughWalls = !!w.throughWalls;
       b.wallPierced = 0;
-      b.statusEffect = statusEffect || weaponStatusEffect(weaponKey);
+      b.statusEffect = attack.effect || weaponStatusEffect(weaponKey);
+      b.contagiousEffect = !!attack.contagious;
       b.weapon = weaponKey;
       b.projectile = w.projectile || null;
       b.explosive = !!w.projectile;
@@ -6157,6 +6475,7 @@
         b.wallPierced = 0;
         b.owner = e;
         b.statusEffect = weaponStatusEffect(e.weapon);
+        b.contagiousEffect = false;
         b.weapon = e.weapon;
         b.projectile = null;
         b.explosive = false;
@@ -6209,7 +6528,10 @@
       const base = Math.atan2(ty - unit.y, tx - unit.x);
       const a = base + (rnd() - 0.5) * (smg.spread || 0.08);
       unit.angle = base;
-      const b = launchProjectile(unit, a, "smg", !!unit.friendly);
+      const b = launchProjectile(unit, a, "smg", !!unit.friendly, {
+        effect: unit.statusEffect || null,
+        contagious: !!unit.contagiousEffect
+      });
       if (!b) return false;
       b.owner = null;
       unit.ammo--;
@@ -6267,7 +6589,7 @@
         d.alive = false;
         d.kamikaze = false;
         d.blastT = 0;
-        explodeAt(d.x, d.y, "grenade", d.friendly === false, 0.5);
+        explodeAt(d.x, d.y, "grenade", d.friendly === false, 0.5, d.statusEffect || null, d.statusEffect || null, !!d.contagiousEffect, !!d.contagiousEffect);
       }
       for (const d of game2.pools.drones || []) {
         if (!d.alive) continue;
@@ -6370,7 +6692,8 @@
     game2.updateDeploys = updateDeploys;
     function doAttack(actor, weaponKey) {
       const w = WEAPONS[weaponKey];
-      const statusEffect = activeAttackEffect(actor, weaponKey, "direct");
+      const profile = activeAttackProfile(actor, weaponKey, "direct");
+      const statusEffect = profile.effect;
       if (w.melee) {
         sfx.swing();
         let hit = false;
@@ -6390,7 +6713,7 @@
             continue;
           }
           hit = true;
-          if (statusEffect) applyAttackEffectToEnemy(e, statusEffect, actor.x, actor.y, actor);
+          if (statusEffect || profile.contagious) applyAttackEffectToEnemy(e, statusEffect, actor.x, actor.y, actor, { contagious: profile.contagious });
           else if (w.lethal || e.state === S_DOWN) killEnemy(e, 1, Math.cos(a), Math.sin(a));
           else knockdown(e, Math.cos(a), Math.sin(a));
         }
@@ -6406,7 +6729,7 @@
         return true;
       }
       if (w.projectile) {
-        launchProjectile(actor, actor.aim, weaponKey, actor === game2.player, statusEffect);
+        launchProjectile(actor, actor.aim, weaponKey, actor === game2.player, profile);
         const mx2 = actor.x + Math.cos(actor.aim) * 19, my2 = actor.y + Math.sin(actor.aim) * 19;
         if (!w.silent) {
           game2.flashes.push({ x: mx2, y: my2, a: actor.aim, t: 0, dur: 0.11, size: 1.25 });
@@ -6440,6 +6763,7 @@
         b.owner = null;
         b.near = 0;
         b.statusEffect = statusEffect || null;
+        b.contagiousEffect = !!profile.contagious;
         b.weapon = weaponKey;
         b.projectile = null;
         b.explosive = false;
@@ -6469,6 +6793,12 @@
       const sideEffect = weaponStatusEffect(p.offhandWeapon);
       const extract = extractKeyForEffect(sideEffect);
       p.attackCd = (w.rate || 0.34) * (game2.playerStats.attackRate || 1);
+      if (p.ammo <= 0) {
+        game2.banner = `${w.name} \u4E3A\u7A7A`;
+        game2.bannerT = 0.65;
+        sfx.empty();
+        return false;
+      }
       if (!extract) {
         game2.banner = "\u526F\u624B\u6CA1\u6709\u53EF\u590D\u5236\u6548\u679C";
         game2.bannerT = 0.75;
@@ -6488,11 +6818,17 @@
       const w = WEAPONS[p.weapon];
       const effect = w.extractEffect;
       p.attackCd = (w.rate || 0.34) * (game2.playerStats.attackRate || 1);
-      p.ammo = Math.max(0, (p.ammo || 1) - 1);
+      if (p.ammo <= 0) {
+        game2.banner = `${w.name} \u4E3A\u7A7A`;
+        game2.bannerT = 0.65;
+        sfx.empty();
+        return false;
+      }
+      p.ammo = Math.max(0, p.ammo - 1);
       applyStatusEffectToPlayer(effect, 5.8);
       burst(p.x, p.y, 16, 160, w.tint || "#7AC943", 2.3, 0.5);
       sfx.status();
-      if (p.ammo <= 0) setMainSlot(p, "fists", 0);
+      if (p.ammo <= 0 && !game2.refillEnabled && reserveAmmo(p.weapon) <= 0) setMainSlot(p, "fists", 0);
       if (game2.mode === "defense") game2.floorLoadout = stashPlayerWeapon();
       return true;
     }
@@ -6543,7 +6879,7 @@
       p.attackCd = w.rate * (game2.playerStats.attackRate || 1);
       p.ammo--;
       spawnThrown(p, p.weapon, p.ammo, charge);
-      if (p.ammo <= 0 && !game2.refillEnabled) {
+      if (p.ammo <= 0 && !game2.refillEnabled && reserveAmmo(p.weapon) <= 0) {
         p.weapon = "fists";
         p.ammo = 0;
       }
@@ -6556,8 +6892,10 @@
       const w = WEAPONS[kind] || WEAPONS.pistol;
       const lobbed = !!w.lobbed;
       const st = lobbed ? throwStats(charge) : { charge: 0, power: 1, effectScale: 1 };
-      const statusEffect = activeAttackEffect(actor, kind, lobbed ? "direct" : "thrown");
-      const shrapnelEffect = lobbed && kind === "frag" ? activeAttackEffect(actor, kind, "shrapnel") : null;
+      const profile = activeAttackProfile(actor, kind, lobbed ? "direct" : "thrown");
+      const shrapnelProfile = lobbed && kind === "frag" ? activeAttackProfile(actor, kind, "shrapnel") : { effect: null, contagious: false };
+      const statusEffect = profile.effect;
+      const shrapnelEffect = shrapnelProfile.effect;
       t.alive = true;
       t.kind = kind;
       t.ammo = ammo;
@@ -6588,9 +6926,11 @@
       }
       t.charge = st.charge;
       t.power = st.power;
-      t.effectScale = 1;
+      t.effectScale = st.effectScale || 1;
       t.statusEffect = statusEffect || null;
+      t.contagiousEffect = !!profile.contagious;
       t.shrapnelEffect = shrapnelEffect || null;
+      t.shrapnelContagious = !!shrapnelProfile.contagious;
       t.friendly = actor === game2.player;
       t.noPickup = !!w.noPickup;
       if (!w.silent) sfx.throwIt();
@@ -6602,6 +6942,7 @@
       if (!t) return false;
       const w = WEAPONS.sawblade;
       const sp = w.throwSpeed || 980;
+      const profile = activeAttackProfile(actor, "sawblade", "derived");
       t.alive = true;
       t.x = actor.x + Math.cos(actor.aim) * 18;
       t.y = actor.y + Math.sin(actor.aim) * 18;
@@ -6617,8 +6958,10 @@
       t.charge = 0;
       t.power = 1;
       t.effectScale = 1;
-      t.statusEffect = null;
+      t.statusEffect = profile.effect || null;
+      t.contagiousEffect = !!profile.contagious;
       t.shrapnelEffect = null;
+      t.shrapnelContagious = false;
       t.friendly = actor === game2.player;
       t.noPickup = true;
       burst(t.x, t.y, 6, 150, w.tint || "#161513", 1.8, 0.24);
@@ -6908,12 +7251,22 @@
       for (const k of game2.pools.pickups) {
         if (!k.alive) continue;
         if (dist(p.x, p.y, k.x, k.y) < 20) {
+          const ammoGot = collectPickupAmmo(k);
           const took = givePlayerWeapon(p, k.kind, k.ammo, false);
-          if (!took) continue;
+          if (!took) {
+            if (ammoGot > 0) {
+              game2.floorLoadout = stashPlayerWeapon() || game2.floorLoadout;
+              game2.banner = `\u5907\u7528\u5F39\u5323 +${ammoGot} \xB7 ${WEAPONS[k.kind]?.name || k.kind}`;
+              game2.bannerT = 0.55;
+              sfx.pickup();
+            }
+            continue;
+          }
           k.alive = false;
           if (game2.mode === "defense") game2.floorLoadout = stashPlayerWeapon();
           const got = WEAPONS[k.kind];
-          game2.banner = got?.offhandOnly || p.offhandWeapon === k.kind ? `\u526F\u624B ${got.name}` : `\u62FE\u53D6 ${got?.name || k.kind}`;
+          const ammoText = ammoGot > 0 ? ` \xB7 \u5907\u7528 +${ammoGot}` : "";
+          game2.banner = (got?.offhandOnly || p.offhandWeapon === k.kind ? `\u526F\u624B ${got.name}` : `\u62FE\u53D6 ${got?.name || k.kind}`) + ammoText;
           game2.bannerT = 0.55;
           sfx.pickup();
           break;
@@ -6925,7 +7278,7 @@
       const weaponKey = b.weapon || "rocket";
       const byEnemy = !b.friendly || !!(b.owner && b.owner.friendly);
       b.alive = false;
-      explodeAt(b.x, b.y, weaponKey, byEnemy, 1, b.statusEffect || null);
+      explodeAt(b.x, b.y, weaponKey, byEnemy, 1, b.statusEffect || null, b.statusEffect || null, !!b.contagiousEffect, !!b.contagiousEffect);
     }
     function ricochetBullet(b, px, py, sx, sy) {
       if (!b.ricochet || b.bounces <= 0) return false;
@@ -7072,6 +7425,7 @@
             if (dist(b.x, b.y, e.x, e.y) > ENEMY_DEF[e.type].r + 3) continue;
             const bw = WEAPONS[b.weapon] || null;
             const statusEffect = b.statusEffect || weaponStatusEffect(b.weapon);
+            const contagiousEffect = !!b.contagiousEffect;
             const fx = b.x - b.vx * 0.02, fy = b.y - b.vy * 0.02;
             const sp = Math.hypot(b.vx, b.vy) || 1;
             const byOtherSide = !b.friendly || !!(b.owner && b.owner.friendly);
@@ -7098,12 +7452,12 @@
               stop = true;
               break;
             }
-            if (bw && bw.rail && !statusEffect) {
+            if (bw && bw.rail && !statusEffect && !contagiousEffect) {
               killEnemy(e, 1.25, b.vx / sp, b.vy / sp, byOtherSide, b.owner);
               continue;
             }
             if (shieldBlocks(e, fx, fy)) {
-              if (statusEffect) {
+              if (statusEffect || contagiousEffect) {
                 burst(fx, fy, 3, 70, bw?.tint || EFFECT_TINT[statusEffect] || "#7AC943", 1.4, 0.22);
                 b.alive = false;
                 stop = true;
@@ -7126,8 +7480,8 @@
               stop = true;
               break;
             }
-            if (statusEffect) {
-              applyAttackEffectToEnemy(e, statusEffect, b.x, b.y, b.owner || (b.friendly ? game2.player : null));
+            if (statusEffect || contagiousEffect) {
+              applyAttackEffectToEnemy(e, statusEffect, b.x, b.y, b.owner || (b.friendly ? game2.player : null), { contagious: contagiousEffect });
               b.alive = false;
               stop = true;
               break;
@@ -7246,7 +7600,7 @@
                 break;
               }
               const l = Math.hypot(t.vx, t.vy) || 1;
-              if (t.statusEffect) applyAttackEffectToEnemy(e, t.statusEffect, t.x, t.y, t.friendly ? game2.player : null);
+              if (t.statusEffect || t.contagiousEffect) applyAttackEffectToEnemy(e, t.statusEffect, t.x, t.y, t.friendly ? game2.player : null, { contagious: !!t.contagiousEffect });
               else if (lethal) killEnemy(e, 1, t.vx / l, t.vy / l);
               else if (e.state !== S_DOWN) knockdown(e, t.vx / l, t.vy / l);
               else continue;
@@ -7362,8 +7716,9 @@
         if (!shop.can.refill) return deny(w && !w.melee && w.ammo > 0 ? `${w.name} \u5DF2\u6EE1\u5F39` : "\u5F53\u524D\u6B66\u5668\u4E0D\u80FD\u8865\u5F39");
         if (!spend(shop.costs.refill)) return false;
         p.ammo = w.ammo;
+        if (!game2.refillEnabled) addReserveAmmo(p.weapon, magazineCapacity(p.weapon));
         game2.floorLoadout = stashPlayerWeapon();
-        game2.banner = `${w.name} \u5F39\u836F\u8865\u6EE1`;
+        game2.banner = game2.refillEnabled ? `${w.name} \u5F39\u836F\u8865\u6EE1` : `${w.name} \u5F39\u836F\u8865\u6EE1 \xB7 \u5907\u7528 ${reserveAmmo(p.weapon)}`;
       } else if (slot === 4) {
         if (!shop.can.heal) return deny("\u751F\u547D\u5DF2\u6EE1");
         if (!spend(shop.costs.heal)) return false;
@@ -7490,7 +7845,7 @@
       }
     }
     function step(rdt) {
-      if (game2.paused) {
+      if (game2.paused || game2.backpackOpen) {
         setTimeScale(0);
         return;
       }
@@ -7975,6 +8330,8 @@
     "madExtract",
     "tameExtract",
     "virusExtract",
+    "madVirusExtract",
+    "tameVirusExtract",
     "disguise",
     "sniper",
     "laser",
@@ -8006,6 +8363,8 @@
     madExtract: "\u526F\u624B\u6D82\u5C42\uFF1A\u4E3B\u624B\u653B\u51FB\u9644\u5E26\u75AF\u72C2\uFF1B\u4E3B\u624B\u4F7F\u7528\u4F1A\u8BA9\u81EA\u5DF1\u6682\u65F6\u5931\u63A7\u3002",
     tameExtract: "\u526F\u624B\u6D82\u5C42\uFF1A\u4E3B\u624B\u653B\u51FB\u9644\u5E26\u9A6F\u5316\uFF1B\u4E3B\u624B\u4F7F\u7528\u5BF9\u81EA\u5DF1\u65E0\u6548\u3002",
     virusExtract: "\u526F\u624B\u6D82\u5C42\uFF1A\u4E3B\u624B\u653B\u51FB\u9644\u5E26\u611F\u67D3\uFF1B\u4E3B\u624B\u4F7F\u7528\u4F1A\u611F\u67D3\u81EA\u5DF1\u3002",
+    madVirusExtract: "\u75C5\u6BD2\u6DF7\u5408\u63D0\u53D6\u6DB2\uFF1A\u4E3B\u624B\u653B\u51FB\u9644\u5E26\u75AF\u72C2\uFF0C\u5E76\u8BA9\u76EE\u6807\u7EE7\u7EED\u4F20\u64AD\u611F\u67D3\u3002",
+    tameVirusExtract: "\u75C5\u6BD2\u6DF7\u5408\u63D0\u53D6\u6DB2\uFF1A\u4E3B\u624B\u653B\u51FB\u9644\u5E26\u9A6F\u5316\uFF0C\u88AB\u9A6F\u670D\u53CB\u519B\u7EE7\u7EED\u4F20\u67D3\u3002",
     disguise: "\u6697\u6740\u7528\u67AA\uFF0C\u964D\u4F4E\u88AB\u8BC6\u7834\u7684\u538B\u529B\u3002",
     sniper: "\u8D85\u9AD8\u901F\u7A7F\u900F\u5F39\uFF0C\u7EA2\u5916\u7EBF\u6807\u51FA\u5F39\u9053\u3002",
     laser: "\u53EF\u53CD\u5F39\u80FD\u91CF\u5F39\uFF0C\u9002\u5408\u62D0\u89D2\u3002",
@@ -8285,8 +8644,8 @@
     drawPlayerStatuses(g, game2, H);
     const w = WEAPONS[p.weapon];
     const off = WEAPONS[p.offhandWeapon] || WEAPONS.fists;
-    const WX = 22, WY = H - 110, WW = 208;
-    card(g, WX - PAD * 0.7, WY - 12, WW + PAD, 96);
+    const WX = 22, WY = H - 126, WW = 208;
+    card(g, WX - PAD * 0.7, WY - 12, WW + PAD, 112);
     g.save();
     g.globalCompositeOperation = printMode();
     g.lineWidth = 1;
@@ -8355,6 +8714,18 @@
       track(g, 0);
       g.textAlign = "left";
     }
+    const bagCap = Array.isArray(p.backpack) ? p.backpack.length : 5;
+    const bagCount = game2.backpackCount ? game2.backpackCount() : 0;
+    const reserve = w.feed && w.feed !== "none" ? game2.refillEnabled ? "\u221E" : String(game2.reserveAmmo ? game2.reserveAmmo(p.weapon) : (p.magazine || {})[p.weapon] || 0) : "-";
+    g.fillStyle = ink(0.48);
+    g.font = `400 ${T_MICRO}px ${MONO}`;
+    track(g, 0.08);
+    g.textAlign = "left";
+    g.fillText(`B \u80CC\u5305 ${bagCount}/${bagCap}`, WX, WY + 88);
+    g.textAlign = "right";
+    g.fillText(`\u5907\u7528 ${reserve}`, WX + WW, WY + 88);
+    g.textAlign = "left";
+    track(g, 0);
     g.restore();
     if (game2.bannerT > 0 && game2.banner) {
       const a = clamp(game2.bannerT, 0, 1);
@@ -8566,6 +8937,8 @@
       case "madExtract":
       case "tameExtract":
       case "virusExtract":
+      case "madVirusExtract":
+      case "tameVirusExtract":
         g.lineWidth = 2.2;
         g.strokeRect(-8, -12, 16, 24);
         g.fillRect(-5, -18, 10, 6);
@@ -8702,6 +9075,164 @@
     g.moveTo(x, y + 39.5);
     g.lineTo(x + w, y + 39.5);
     g.stroke();
+    g.restore();
+  }
+  function backpackSlot(game2, id) {
+    const p = game2.player;
+    if (id === "main") return { weapon: p.weapon, ammo: p.ammo };
+    if (id === "offhand") return { weapon: p.offhandWeapon, ammo: p.offhandAmmo };
+    const m = /^bag(\d+)$/.exec(id || "");
+    if (m) return p.backpack?.[Number(m[1])] || { weapon: "fists", ammo: 0 };
+    return { weapon: "fists", ammo: 0 };
+  }
+  function drawBackpackSlot(g, game2, hit, title) {
+    const slot = backpackSlot(game2, hit.id);
+    const wpn = WEAPONS[slot.weapon] || WEAPONS.fists;
+    const tint = wpn.tint || ink(0.36);
+    const selected = game2.backpackSelection === hit.id;
+    g.save();
+    g.globalCompositeOperation = printMode();
+    g.strokeStyle = selected ? MAG : ink(0.28);
+    g.lineWidth = selected ? 2 : 1;
+    bar(g, hit.x, hit.y, hit.w, hit.h);
+    if (selected) {
+      g.globalAlpha = 0.08;
+      g.fillStyle = MAG;
+      g.fillRect(hit.x, hit.y, hit.w, hit.h);
+      g.globalAlpha = 1;
+    }
+    g.fillStyle = ink(0.48);
+    g.font = `400 8px ${MONO}`;
+    track(g, 0.1);
+    g.fillText(title, hit.x + 8, hit.y + 14);
+    track(g, 0);
+    g.save();
+    g.translate(hit.x + 26, hit.y + hit.h / 2 + 6);
+    g.scale(0.46, 0.46);
+    g.fillStyle = tint;
+    g.strokeStyle = tint;
+    codexWeaponShape(g, slot.weapon);
+    g.restore();
+    g.fillStyle = wpn === WEAPONS.fists ? ink(0.34) : INK;
+    g.font = `600 10px ${MONO}`;
+    track(g, 0.06);
+    const name = wpn === WEAPONS.fists ? "\u7A7A" : wpn.name;
+    g.fillText(name, hit.x + 55, hit.y + 34, hit.w - 64);
+    track(g, 0);
+    g.fillStyle = ink(0.46);
+    g.font = `400 8.5px ${MONO}`;
+    const ammo = wpn.feed && wpn.feed !== "none" ? `${slot.ammo || 0}/${wpn.ammo}` : wpn.defense ? "\u683C\u6321" : "";
+    const role = hit.id === "offhand" ? "\u526F\u624B/\u8054\u52A8" : hit.id === "main" ? "\u4E3B\u624B" : "\u80CC\u5305";
+    g.fillText(`${role}${ammo ? ` \xB7 ${ammo}` : ""}`, hit.x + 55, hit.y + 51, hit.w - 64);
+    g.restore();
+  }
+  function drawBackpackPopup(g, game2, W, H) {
+    if (!game2.backpackOpen) return;
+    const p = game2.player;
+    const cx = W / 2, cy = H / 2;
+    const cw = Math.min(700, W - 90);
+    const ch = Math.min(450, H - 70);
+    const x = cx - cw / 2, y = cy - ch / 2;
+    const close = { x: x + cw - 88, y: y + 20, w: 62, h: 24 };
+    const drop = { x: x + cw - 108, y: y + ch - 44, w: 82, h: 24 };
+    game2.ui.backpackPanel = { x, y, w: cw, h: ch };
+    game2.ui.backpackClose = close;
+    game2.ui.backpackDrop = drop;
+    game2.ui.backpackSlots = [];
+    g.save();
+    g.globalAlpha = 0.3;
+    g.fillStyle = INK;
+    g.fillRect(0, 0, W, H);
+    g.restore();
+    g.save();
+    g.globalAlpha = 0.97;
+    g.fillStyle = PAPER;
+    g.fillRect(x, y, cw, ch);
+    g.restore();
+    g.save();
+    g.globalCompositeOperation = printMode();
+    g.strokeStyle = ink(0.36);
+    g.lineWidth = 1;
+    bracket(g, x + 12, y + 12, 1, 1, 12);
+    bracket(g, x + cw - 12, y + 12, -1, 1, 12);
+    bracket(g, x + 12, y + ch - 12, 1, -1, 12);
+    bracket(g, x + cw - 12, y + ch - 12, -1, -1, 12);
+    g.textAlign = "left";
+    g.fillStyle = INK;
+    g.font = `600 24px ${MONO}`;
+    track(g, 0.08);
+    g.fillText("\u80CC\u5305", x + 34, y + 48);
+    track(g, 0);
+    g.font = `400 10px ${MONO}`;
+    g.fillStyle = ink(0.52);
+    g.fillText("\u70B9\u51FB\u4E24\u4E2A\u69FD\u4F4D\u4EA4\u6362\uFF1B\u75C5\u6BD2 + \u4EFB\u610F\u63D0\u53D6\u6DB2\u4F1A\u5408\u6210\u4E3A\u75C5\u6BD2\u63D0\u53D6\u6DB2", x + 112, y + 46, cw - 230);
+    g.strokeStyle = ink(0.34);
+    bar(g, close.x, close.y, close.w, close.h);
+    g.fillStyle = MAG;
+    g.textAlign = "center";
+    g.font = `600 10px ${MONO}`;
+    track(g, 0.12);
+    g.fillText("\u5173\u95ED", close.x + close.w / 2, close.y + 16);
+    track(g, 0);
+    const left = x + 34;
+    const top = y + 80;
+    const wide = (cw - 82) / 2;
+    const slotH = 68;
+    const main = { id: "main", x: left, y: top, w: wide - 8, h: slotH };
+    const off = { id: "offhand", x: left + wide + 8, y: top, w: wide - 8, h: slotH };
+    game2.ui.backpackSlots.push(main, off);
+    drawBackpackSlot(g, game2, main, "\u4E3B\u624B");
+    drawBackpackSlot(g, game2, off, "\u526F\u624B");
+    const bagTop = top + 94;
+    const gap = 10;
+    const bagW = Math.floor((cw - 68 - gap * 4) / 5);
+    for (let i = 0; i < 5; i++) {
+      const hit = { id: `bag${i}`, x: left + i * (bagW + gap), y: bagTop, w: bagW, h: slotH };
+      game2.ui.backpackSlots.push(hit);
+      drawBackpackSlot(g, game2, hit, `\u80CC\u5305 ${i + 1}`);
+    }
+    g.textAlign = "left";
+    g.fillStyle = ink(0.55);
+    g.font = `600 10px ${MONO}`;
+    track(g, 0.12);
+    g.fillText("\u5907\u7528\u5F39\u5323", left, bagTop + slotH + 34);
+    track(g, 0);
+    const reserves = Object.entries(p.magazine || {}).filter(([, n]) => Number(n) > 0).sort((a, b) => (WEAPONS[a[0]]?.name || a[0]).localeCompare(WEAPONS[b[0]]?.name || b[0], "zh-Hans-CN")).slice(0, 9);
+    const active = WEAPONS[p.weapon];
+    if (game2.refillEnabled && active?.feed && active.feed !== "none") {
+      const existing = reserves.findIndex(([kind]) => kind === p.weapon);
+      if (existing >= 0) reserves.splice(existing, 1);
+      reserves.unshift([p.weapon, Infinity]);
+    }
+    if (!reserves.length) {
+      g.fillStyle = ink(0.4);
+      g.font = `400 9px ${MONO}`;
+      g.fillText("\u7A7A\u3002\u7ECF\u8FC7\u6709\u5F39\u836F\u7684\u6B66\u5668\u4F1A\u81EA\u52A8\u6536\u7EB3\uFF1B\u975E\u8865\u5F39\u6A21\u5F0F\u4E0B R \u4F1A\u6D88\u8017\u8FD9\u91CC\u7684\u5F39\u836F\u3002", left, bagTop + slotH + 56, cw - 190);
+    } else {
+      g.font = `400 9px ${MONO}`;
+      reserves.forEach(([kind, amount], i) => {
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        const wpn = WEAPONS[kind] || WEAPONS.fists;
+        g.fillStyle = wpn.tint || INK;
+        const text = `${wpn.name} ${amount === Infinity ? "\u221E" : amount}/100`;
+        g.fillText(text, left + col * 188, bagTop + slotH + 56 + row * 16, 176);
+      });
+    }
+    g.strokeStyle = game2.backpackSelection ? RED : ink(0.22);
+    bar(g, drop.x, drop.y, drop.w, drop.h);
+    g.fillStyle = game2.backpackSelection ? RED : ink(0.34);
+    g.textAlign = "center";
+    g.font = `600 10px ${MONO}`;
+    track(g, 0.12);
+    g.fillText("\u4E22\u5F03\u6240\u9009", drop.x + drop.w / 2, drop.y + 16);
+    track(g, 0);
+    g.fillStyle = ink(0.38);
+    g.font = `400 9px ${MONO}`;
+    g.textAlign = "right";
+    track(g, 0.08);
+    g.fillText("B / ESC \u5173\u95ED \xB7 \u9009\u4E2D\u69FD\u4F4D\u540E\u53EF\u70B9\u51FB\u4E22\u5F03", x + cw - 34, y + ch - 20);
+    track(g, 0);
     g.restore();
   }
   function drawCodexPopup(g, game2, W, H) {
@@ -9000,7 +9531,7 @@
     g.fillStyle = ink(0.55);
     g.font = `400 ${11.5 * k}px ${MONO}`;
     g.fillText("\u6709 404 \u4E2A\u969C\u788D\u6321\u5728\u8DEF\u4E0A\u3002\u6E05\u7406\u5B83\u4EEC\u3002", cx, cy + 82 * k);
-    const help = touch2 ? ["\u5DE6\u6447\u6746\u79FB\u52A8 \xB7 \u53F3\u6447\u6746\u7784\u51C6/\u653B\u51FB", "\u6309\u94AE\uFF1A\u51B2\u523A \xB7 \u6295\u63B7", "ESC \u6682\u505C \xB7 \u5F00\u542F\u540E\u53EF\u6309 R \u8865\u5F39"] : ["WASD \u79FB\u52A8 \xB7 \u9F20\u6807\u7784\u51C6 \xB7 \u70B9\u51FB\u653B\u51FB", "Space \u51B2\u523A \xB7 E \u5207\u6362\u4E3B\u526F\u624B \xB7 \u957F\u6309 Q/\u53F3\u952E\u6295\u63B7\u6B66\u5668", "\u624B\u96F7\u7C7B\u957F\u6309\u653B\u51FB\u6269\u5927\u8303\u56F4\u5E76\u9009\u62E9\u843D\u70B9 \xB7 R \u8865\u5F39 \xB7 ESC \u6682\u505C"];
+    const help = touch2 ? ["\u5DE6\u6447\u6746\u79FB\u52A8 \xB7 \u53F3\u6447\u6746\u7784\u51C6/\u653B\u51FB", "\u6309\u94AE\uFF1A\u51B2\u523A \xB7 \u6295\u63B7", "ESC \u6682\u505C \xB7 \u5F00\u542F\u540E\u53EF\u6309 R \u8865\u5F39"] : ["WASD \u79FB\u52A8 \xB7 \u9F20\u6807\u7784\u51C6 \xB7 \u70B9\u51FB\u653B\u51FB", "Space \u51B2\u523A \xB7 E \u5207\u6362\u4E3B\u526F\u624B \xB7 B \u80CC\u5305 \xB7 \u957F\u6309 Q/\u53F3\u952E\u6295\u63B7\u6B66\u5668", "\u624B\u96F7\u7C7B\u957F\u6309\u653B\u51FB\u6269\u5927\u8303\u56F4\u5E76\u9009\u62E9\u843D\u70B9 \xB7 R \u88C5\u586B\u5907\u7528\u5F39\u5323 \xB7 ESC \u6682\u505C"];
     g.font = `400 ${9 * k}px ${MONO}`;
     g.fillStyle = ink(0.5);
     track(g, 0.08);
@@ -9022,7 +9553,7 @@
     if (!game2.tutorialT || game2.tutorialT <= 0) return;
     const a = clamp(game2.tutorialT / 1.2, 0, 1);
     const touch2 = game2.touch && game2.touch.enabled;
-    const line = touch2 ? "\u5DE6\u6447\u6746\u79FB\u52A8   \xB7   \u53F3\u6447\u6746\u8F6C\u5411\uFF0C\u63A8\u5230\u5E95\u653B\u51FB" : game2.mode === "defense" ? "\u9632\u5B88\uFF1AT/\u70B9\u51FB\u5546\u5E97\uFF0C\u6570\u5B57\u952E\u8D2D\u4E70\uFF0CE \u5207\u6362\u4E3B\u526F\u624B\uFF0CENTER \u6216\u6309\u94AE\u7ED3\u675F\u4F11\u606F" : "WASD \u79FB\u52A8   \xB7   \u9F20\u6807\u7784\u51C6   \xB7   \u70B9\u51FB\u653B\u51FB   \xB7   E \u5207\u6362\u4E3B\u526F\u624B   \xB7   Space \u51B2\u523A   \xB7   \u957F\u6309 Q/\u53F3\u952E\u84C4\u529B\u6295\u63B7   \xB7   R \u8865\u5F39   \xB7   ESC \u6682\u505C";
+    const line = touch2 ? "\u5DE6\u6447\u6746\u79FB\u52A8   \xB7   \u53F3\u6447\u6746\u8F6C\u5411\uFF0C\u63A8\u5230\u5E95\u653B\u51FB" : game2.mode === "defense" ? "\u9632\u5B88\uFF1AT/\u70B9\u51FB\u5546\u5E97\uFF0C\u6570\u5B57\u952E\u8D2D\u4E70\uFF0CB \u80CC\u5305\uFF0CE \u5207\u6362\u4E3B\u526F\u624B\uFF0CENTER \u6216\u6309\u94AE\u7ED3\u675F\u4F11\u606F" : "WASD \u79FB\u52A8   \xB7   \u9F20\u6807\u7784\u51C6   \xB7   \u70B9\u51FB\u653B\u51FB   \xB7   E \u5207\u6362\u4E3B\u526F\u624B   \xB7   B \u80CC\u5305   \xB7   Space \u51B2\u523A   \xB7   \u957F\u6309 Q/\u53F3\u952E\u84C4\u529B\u6295\u63B7   \xB7   R \u88C5\u586B   \xB7   ESC \u6682\u505C";
     g.save();
     g.textAlign = "center";
     g.font = `400 11px ${MONO}`;
@@ -9376,7 +9907,7 @@
   }
 
   // overprint/src/main.js
-  var BUILD_ID = "184181";
+  var BUILD_ID = "184182";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
   applyThemeToDocument();
@@ -9401,6 +9932,11 @@
     ArrowRight: "right"
   };
   addEventListener("keydown", (e) => {
+    if (e.code === "Escape" && !e.repeat && game.backpackOpen) {
+      e.preventDefault();
+      game.toggleBackpack(false);
+      return;
+    }
     if (e.code === "Escape" && !e.repeat && game.codexOpen) {
       e.preventDefault();
       game.toggleCodex();
@@ -9414,6 +9950,15 @@
     if (e.code === "KeyR" && game.state === "play") {
       e.preventDefault();
       game.refillAmmo();
+      return;
+    }
+    if (e.code === "KeyB" && !e.repeat && game.state === "play" && !game.paused) {
+      e.preventDefault();
+      game.toggleBackpack();
+      return;
+    }
+    if (game.backpackOpen && e.code !== "KeyM") {
+      e.preventDefault();
       return;
     }
     if (e.code === "KeyT" && !e.repeat && game.state === "play" && game.mode === "defense" && !game.paused) {
@@ -9635,6 +10180,28 @@
       if (inClose || !inPanel) game.toggleCodex();
       return true;
     }
+    if (game.backpackOpen) {
+      const close = game.ui.backpackClose;
+      const drop = game.ui.backpackDrop;
+      const panel = game.ui.backpackPanel;
+      const inClose = close && x >= close.x && x <= close.x + close.w && y >= close.y && y <= close.y + close.h;
+      const inDrop = drop && x >= drop.x && x <= drop.x + drop.w && y >= drop.y && y <= drop.y + drop.h;
+      const inPanel = panel && x >= panel.x && x <= panel.x + panel.w && y >= panel.y && y <= panel.y + panel.h;
+      if (inClose || !inPanel) {
+        game.toggleBackpack(false);
+        return true;
+      }
+      if (inDrop) {
+        game.dropBackpackSelection?.();
+        return true;
+      }
+      for (const slot of game.ui.backpackSlots || []) {
+        if (x < slot.x || x > slot.x + slot.w || y < slot.y || y > slot.y + slot.h) continue;
+        game.clickBackpackSlot?.(slot.id);
+        return true;
+      }
+      return true;
+    }
     if (game.paused) {
       for (const p of game.ui.pauseOptions || []) {
         if (x < p.x || x > p.x + p.w || y < p.y || y > p.y + p.h) continue;
@@ -9720,7 +10287,7 @@
   function frame(now) {
     const rdt = Math.min(0.05, (now - last) / 1e3) * REC.speed;
     last = now;
-    if (!game.paused) {
+    if (!game.paused && !game.backpackOpen) {
       touch.apply(rdt);
       acc = Math.min(acc + rdt, FIXED * MAX_STEPS);
       while (acc >= FIXED) {
@@ -9747,6 +10314,7 @@
       if (game.paused) drawPause(g, game, renderer.W, renderer.H);
     }
     if (game.codexOpen) drawCodexPopup(g, game, renderer.W, renderer.H);
+    if (game.backpackOpen) drawBackpackPopup(g, game, renderer.W, renderer.H);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

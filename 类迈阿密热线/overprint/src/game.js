@@ -13,7 +13,7 @@ import { initAudio, sfx, setTimeScale } from './audio.js';
 import { YELLOW } from './brand.js';
 import { ZOOM } from './render.js';
 
-const WEAPON_KEYS = ['fists', 'knife', 'bat', 'katana', 'quixote', 'pistol', 'revolver', 'smg', 'shotgun', 'ripper', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'virusExtract', 'disguise', 'sniper', 'laser', 'butcher', 'shield'];
+const WEAPON_KEYS = ['fists', 'knife', 'bat', 'katana', 'quixote', 'pistol', 'revolver', 'smg', 'shotgun', 'ripper', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'virusExtract', 'madVirusExtract', 'tameVirusExtract', 'disguise', 'sniper', 'laser', 'butcher', 'shield'];
 const CODEX_WEAPON_KEYS = WEAPON_KEYS.filter((k) => k !== 'fists');
 const ENEMY_KEYS = ['strawman', 'thug', 'gunner', 'hound', 'patroller', 'shield'];
 const PRACTICE_MAPS = [
@@ -22,9 +22,11 @@ const PRACTICE_MAPS = [
   { id: 'lanes', label: '长廊' },
 ];
 const PRACTICE_ENEMIES = ['strawman', 'thug', 'gunner', 'hound', 'patroller', 'shield'];
-const PRACTICE_WEAPONS = ['pistol', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'virusExtract', 'disguise', 'sniper', 'laser', 'butcher', 'shield', 'katana', 'quixote', 'knife', 'bat'];
-const DEFENSE_SHOP_WEAPONS = ['pistol', 'shield', 'katana', 'quixote', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'virus', 'copySauce', 'shield', 'molotov', 'dart', 'tameDart', 'sniper', 'laser', 'butcher', 'shield'];
+const PRACTICE_WEAPONS = ['pistol', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'virusExtract', 'madVirusExtract', 'tameVirusExtract', 'disguise', 'sniper', 'laser', 'butcher', 'shield', 'katana', 'quixote', 'knife', 'bat'];
+const DEFENSE_SHOP_WEAPONS = ['pistol', 'shield', 'katana', 'quixote', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'shield', 'molotov', 'dart', 'tameDart', 'sniper', 'laser', 'butcher', 'shield'];
 const CODEX_KEY = 'overprint.codex';
+const BACKPACK_CAPACITY = 5;
+const MAGAZINE_CAPACITY = 100;
 
 // Slow motion is punctuation, not a stance. It fires on moments worth watching,
 // and a lockout after each one keeps a busy fight from turning into a crawl.
@@ -123,6 +125,8 @@ export function createGame(renderer) {
     renderer,
     state: 'title',
     paused: false,
+    backpackOpen: false,
+    backpackSelection: null,
     mode: localStorage.getItem('overprint.mode') || 'endless',
     refillEnabled: localStorage.getItem('overprint.refill') === '1',
     time: 0,
@@ -169,7 +173,8 @@ export function createGame(renderer) {
     ui: { gauge: 0, gaugeV: 0, chain: 0, chainV: 0, code: 404, codeV: 0,
           chainPunch: 0, chainOpen: 0, chainOpenV: 0, tabs: [], options: [],
           pauseOptions: [], codexClose: null, codexPanel: null, codexScroll: null,
-          defenseShopButton: null, defenseShopOptions: [], defenseRestButton: null, defenseShopPanel: null },
+          defenseShopButton: null, defenseShopOptions: [], defenseRestButton: null, defenseShopPanel: null,
+          backpackPanel: null, backpackClose: null, backpackDrop: null, backpackCraft: null, backpackSlots: [] },
     reducedMotion: typeof matchMedia === 'function'
       && matchMedia('(prefers-reduced-motion: reduce)').matches,
     tutorialT: 0, didMove: false, didAttack: false,
@@ -183,6 +188,7 @@ export function createGame(renderer) {
     player: {
       x: 0, y: 0, vx: 0, vy: 0, aim: 0, alive: true,
       weapon: 'fists', ammo: 0, offhandWeapon: 'fists', offhandAmmo: 0,
+      backpack: [], magazine: {},
       attackCd: 0, swing: 0, burnT: 0, infectT: 0, madT: 0, madDirT: 0, madDirA: 0,
       sawCd: 0, blockFlash: 0, swapCd: 0,
       hp: 1, maxHp: 1, iframes: 0,
@@ -298,6 +304,7 @@ export function createGame(renderer) {
 
   const EFFECT_WEAPON = { mad: 'dart', tame: 'tameDart', virus: 'virus' };
   const EFFECT_EXTRACT = { mad: 'madExtract', tame: 'tameExtract', virus: 'virusExtract' };
+  const VIRUS_MIX_EXTRACT = { madExtract: 'madVirusExtract', tameExtract: 'tameVirusExtract', virusExtract: 'virusExtract' };
   const EFFECT_TINT = { mad: '#7AC943', tame: '#8A2BE2', virus: '#7AC943' };
   const SUPPORT_HP = { sentry: 3, drone: 1 };
   const SUPPORT_RADIUS = { sentry: 17, drone: 11 };
@@ -319,6 +326,21 @@ export function createGame(renderer) {
     return w && w.statusEffect ? w.statusEffect : null;
   }
 
+  function weaponAttackProfile(kind) {
+    const w = WEAPONS[kind];
+    if (!w) return { effect: null, contagious: false };
+    const effect = w.statusEffect || null;
+    return { effect, contagious: !!w.contagious || effect === 'virus' };
+  }
+
+  function extractAttackProfile(kind) {
+    const w = WEAPONS[kind];
+    if (w?.extract && w.extractEffect) {
+      return { effect: w.extractEffect, contagious: !!w.contagious || w.extractEffect === 'virus' };
+    }
+    return weaponAttackProfile(kind);
+  }
+
   function enemyCanUseWeapon(kind) {
     const w = WEAPONS[kind];
     return !!(w && kind !== 'fists' && w.enemyUsable !== false
@@ -333,22 +355,40 @@ export function createGame(renderer) {
     return EFFECT_WEAPON[effect] || null;
   }
 
-  function activeAttackEffect(actor, weaponKey, surface = 'direct') {
-    const base = weaponStatusEffect(weaponKey);
+  function activeAttackProfile(actor, weaponKey, surface = 'direct') {
+    const base = weaponAttackProfile(weaponKey);
     if (actor === game.player) {
       const off = WEAPONS[game.player.offhandWeapon];
-      if (off?.extract && off.extractEffect) return off.extractEffect;
+      if (off?.extract && off.extractEffect) return extractAttackProfile(game.player.offhandWeapon);
       const side = weaponStatusEffect(game.player.offhandWeapon);
-      if (surface === 'shrapnel' && weaponKey === 'frag' && (side === 'mad' || side === 'tame')) return side;
+      if (surface === 'shrapnel' && weaponKey === 'frag' && (side === 'mad' || side === 'tame')) {
+        return weaponAttackProfile(game.player.offhandWeapon);
+      }
+      if (game.player.offhandWeapon === 'virus' && base.effect && base.effect !== 'virus') {
+        return { effect: base.effect, contagious: true };
+      }
     }
     return base;
   }
 
-  function applyAttackEffectToEnemy(e, effect, x, y, source = game.player) {
-    if (!effect || !e.alive || e.state === S_DEAD) return false;
-    if (effect === 'tame') return convertEnemy(e, x, y, WEAPONS.tameDart.tameDur || 8.5);
-    if (effect === 'mad') return maddenEnemy(e, WEAPONS.dart.mad || 7.2, x, y);
-    if (effect === 'virus') return infectEnemy(e, 20, source === game.player || !!source?.friendly);
+  function activeAttackEffect(actor, weaponKey, surface = 'direct') {
+    return activeAttackProfile(actor, weaponKey, surface).effect;
+  }
+
+  function applyAttackEffectToEnemy(e, effect, x, y, source = game.player, opts = {}) {
+    if ((!effect && !opts.contagious) || !e.alive || e.state === S_DEAD) return false;
+    const byPlayer = source === game.player || !!source?.friendly || !!opts.byPlayer;
+    if (effect === 'tame') return convertEnemy(e, x, y, WEAPONS.tameDart.tameDur || 8.5, !!opts.contagious);
+    if (effect === 'mad') {
+      const ok = maddenEnemy(e, WEAPONS.dart.mad || 7.2, x, y);
+      if (ok && opts.contagious) {
+        e.contagious = true;
+        e.infectByPlayer = byPlayer;
+        infectEnemy(e, 20, byPlayer);
+      }
+      return ok;
+    }
+    if (effect === 'virus' || opts.contagious) return infectEnemy(e, 20, byPlayer);
     return false;
   }
 
@@ -603,17 +643,30 @@ export function createGame(renderer) {
     return actor === game.player ? actor.aim : actor.angle;
   }
 
-  function heldShieldBlocks(actor, fromX, fromY) {
-    const w = WEAPONS[actor?.weapon];
-    if (!actor || !actor.alive || !w || !w.defense) return false;
-    if (actor.state === S_DOWN || actor.state === S_DEAD) return false;
-    if (actor !== game.player && (actor.heldShieldHp || 0) <= 0) return false;
+  function heldShieldFace(actor, fromX, fromY) {
+    if (!actor || !actor.alive) return null;
+    if (actor.state === S_DOWN || actor.state === S_DEAD) return null;
     const a = Math.atan2(fromY - actor.y, fromX - actor.x);
-    return Math.abs(angDelta(actorFacing(actor), a)) <= (w.shieldArc || 1.28);
+    const face = actorFacing(actor);
+    const main = WEAPONS[actor.weapon];
+    if (main?.defense) {
+      if (actor !== game.player && (actor.heldShieldHp || 0) <= 0) return null;
+      if (Math.abs(angDelta(face, a)) <= (main.shieldArc || 1.28)) return face;
+    }
+    if (actor === game.player) {
+      const off = WEAPONS[actor.offhandWeapon];
+      const back = face + Math.PI;
+      if (off?.defense && Math.abs(angDelta(back, a)) <= (off.shieldArc || 1.28)) return back;
+    }
+    return null;
+  }
+
+  function heldShieldBlocks(actor, fromX, fromY) {
+    return heldShieldFace(actor, fromX, fromY) != null;
   }
 
   function blockOnHeldShield(actor, fromX, fromY, hard = false) {
-    const face = actorFacing(actor);
+    const face = heldShieldFace(actor, fromX, fromY) ?? actorFacing(actor);
     const r = actor === game.player ? 19 : (ENEMY_DEF[actor.type]?.r || 11) + 9;
     const sx = actor.x + Math.cos(face) * r;
     const sy = actor.y + Math.sin(face) * r;
@@ -638,7 +691,7 @@ export function createGame(renderer) {
   game.heldShieldBlocks = heldShieldBlocks;
   game.blockOnHeldShield = blockOnHeldShield;
 
-  function sprayShrapnel(x, y, w, byEnemy, statusEffect = null) {
+  function sprayShrapnel(x, y, w, byEnemy, statusEffect = null, contagiousEffect = false) {
     const n = w.shrapnel || 0;
     if (!n) return;
     const step = TAU / n;
@@ -656,12 +709,18 @@ export function createGame(renderer) {
       b.throughDoors = false; b.hitDoor = null; b.owner = null;
       b.throughWalls = false; b.wallPierced = 0;
       b.statusEffect = statusEffect || null;
+      b.contagiousEffect = !!contagiousEffect;
       b.weapon = statusEffect ? effectWeaponKey(statusEffect) : null;
       b.projectile = null; b.explosive = false;
+      b.ricochet = false; b.bounces = 0;
     }
   }
 
-  function explodeAt(x, y, weaponKey, byEnemy = false, effectScale = 1, statusEffect = null, shrapnelEffect = statusEffect) {
+  function explodeAt(
+    x, y, weaponKey, byEnemy = false, effectScale = 1,
+    statusEffect = null, shrapnelEffect = statusEffect,
+    contagiousEffect = false, shrapnelContagious = contagiousEffect,
+  ) {
     const w = WEAPONS[weaponKey] || WEAPONS.grenade;
     if (w.virusCloud && !statusEffect) {
       infectAt(x, y, weaponKey, byEnemy, effectScale);
@@ -714,8 +773,8 @@ export function createGame(renderer) {
         damageShield(e, Math.max(1, Math.round((w.shieldDmg || 3) * falloff)), true, x, y);
         if (shieldBlocks(e, x, y)) continue;
       }
-      if (statusEffect) {
-        applyAttackEffectToEnemy(e, statusEffect, x, y, byEnemy ? null : game.player);
+      if (statusEffect || contagiousEffect) {
+        applyAttackEffectToEnemy(e, statusEffect, x, y, byEnemy ? null : game.player, { contagious: contagiousEffect });
         continue;
       }
       if (d <= radius * (w.blastKill || 0.75) || e.state === S_DOWN) {
@@ -735,7 +794,7 @@ export function createGame(renderer) {
       }
     }
 
-    sprayShrapnel(x, y, w, byEnemy, shrapnelEffect);
+    sprayShrapnel(x, y, w, byEnemy, shrapnelEffect, shrapnelContagious);
   }
 
   function panicFire(e, chance) {
@@ -824,10 +883,14 @@ export function createGame(renderer) {
       infectAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
       return;
     }
-    if (w.deploy) deployAt(t.x, t.y, w.deploy, t.friendly !== false);
+    if (w.deploy) deployAt(t.x, t.y, w.deploy, t.friendly !== false, t.statusEffect || null, !!t.contagiousEffect);
     else if (w.flashbang) flashAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
     else if (w.fire) igniteAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1);
-    else explodeAt(t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1, t.statusEffect || null, t.shrapnelEffect || t.statusEffect || null);
+    else explodeAt(
+      t.x, t.y, t.kind, t.friendly === false, t.effectScale || 1,
+      t.statusEffect || null, t.shrapnelEffect || t.statusEffect || null,
+      !!t.contagiousEffect, !!t.shrapnelContagious || !!t.contagiousEffect,
+    );
   }
 
   function supportPointClear(x, y, r = 8) {
@@ -874,7 +937,7 @@ export function createGame(renderer) {
     return slot;
   }
 
-  function placePickup(x, y, kind, ammo = 0, angle = rnd() * TAU) {
+  function placePickup(x, y, kind, ammo = 0, angle = rnd() * TAU, magTaken = false) {
     const k = pickupSlot();
     if (!k) return false;
     k.alive = true;
@@ -883,10 +946,11 @@ export function createGame(renderer) {
     k.kind = kind;
     k.ammo = ammo;
     k.angle = angle;
+    k.magTaken = !!magTaken;
     return true;
   }
 
-  function deployAt(x, y, deployKind, friendly = true) {
+  function deployAt(x, y, deployKind, friendly = true, statusEffect = null, contagiousEffect = false) {
     const key = deployKind === 'drones' ? 'dronePack' : 'sentryPack';
     const w = WEAPONS[key] || WEAPONS.sentryPack;
     const center = nearestSupportPoint(x, y, 9, { x: game.player.x, y: game.player.y });
@@ -912,6 +976,8 @@ export function createGame(renderer) {
         slot.spin = rnd() * TAU;
         slot.kamikaze = false;
         slot.blastT = 0;
+        slot.statusEffect = statusEffect || null;
+        slot.contagiousEffect = !!contagiousEffect;
       }
       game.banner = '毒蜂无人机部署';
     } else {
@@ -929,6 +995,8 @@ export function createGame(renderer) {
       slot.friendly = friendly;
       slot.spin = 0;
       slot.target = null;
+      slot.statusEffect = statusEffect || null;
+      slot.contagiousEffect = !!contagiousEffect;
       game.banner = '哨戒机枪部署';
     }
     game.bannerT = 0.65;
@@ -1373,6 +1441,62 @@ export function createGame(renderer) {
     };
   }
 
+  const emptySlot = () => ({ weapon: 'fists', ammo: 0 });
+
+  function normalizeBackpack(p = game.player) {
+    if (!Array.isArray(p.backpack)) p.backpack = [];
+    p.backpack = p.backpack.slice(0, BACKPACK_CAPACITY).map((slot) => storedSlot(slot?.weapon, slot?.ammo));
+    while (p.backpack.length < BACKPACK_CAPACITY) p.backpack.push(emptySlot());
+    if (!p.magazine || typeof p.magazine !== 'object') p.magazine = {};
+    return p.backpack;
+  }
+
+  function magazineCapacity(kind) {
+    const w = WEAPONS[kind];
+    return w && !w.melee && w.ammo > 0 ? MAGAZINE_CAPACITY : 0;
+  }
+
+  function reserveAmmo(kind) {
+    const p = game.player;
+    const cap = magazineCapacity(kind);
+    if (!cap) return 0;
+    if (!p.magazine || typeof p.magazine !== 'object') p.magazine = {};
+    return clamp(Number(p.magazine[kind]) || 0, 0, cap);
+  }
+
+  function addReserveAmmo(kind, amount) {
+    const p = game.player;
+    const cap = magazineCapacity(kind);
+    const n = Math.max(0, Math.floor(Number(amount) || 0));
+    if (!cap || n <= 0) return 0;
+    if (!p.magazine || typeof p.magazine !== 'object') p.magazine = {};
+    const prev = reserveAmmo(kind);
+    const next = Math.min(cap, prev + n);
+    p.magazine[kind] = next;
+    return next - prev;
+  }
+
+  function consumeReserveAmmo(kind, amount) {
+    const p = game.player;
+    const cap = magazineCapacity(kind);
+    const n = Math.max(0, Math.floor(Number(amount) || 0));
+    if (!cap || n <= 0) return 0;
+    const prev = reserveAmmo(kind);
+    const used = Math.min(prev, n);
+    p.magazine[kind] = prev - used;
+    return used;
+  }
+
+  function collectPickupAmmo(k) {
+    if (!k || k.magTaken) return 0;
+    const got = addReserveAmmo(k.kind, k.ammo || 0);
+    if (got > 0) {
+      k.ammo = Math.max(0, (k.ammo || 0) - got);
+      if (k.ammo <= 0) k.magTaken = true;
+    }
+    return got;
+  }
+
   function setMainSlot(p, kind, ammo = 0) {
     const slot = storedSlot(kind, ammo);
     p.weapon = slot.weapon;
@@ -1388,6 +1512,165 @@ export function createGame(renderer) {
     if (slot.weapon !== 'fists') game.recordWeapon(slot.weapon);
     return slot.weapon !== 'fists';
   }
+
+  function addToBackpack(p, kind, ammo = 0) {
+    const slot = storedSlot(kind, ammo);
+    if (slot.weapon === 'fists') return false;
+    const bag = normalizeBackpack(p);
+    const idx = bag.findIndex((item) => item.weapon === 'fists');
+    if (idx < 0) return false;
+    bag[idx] = slot;
+    game.recordWeapon(slot.weapon);
+    return true;
+  }
+
+  function storeOrDropPlayerSlot(p, kind, ammo, angle = p.aim + Math.PI) {
+    if (!kind || kind === 'fists') return true;
+    if (addToBackpack(p, kind, ammo)) return true;
+    return dropReplacedWeapon(p, kind, ammo, angle);
+  }
+
+  function slotById(p, id) {
+    normalizeBackpack(p);
+    if (id === 'main') return storedSlot(p.weapon, p.ammo);
+    if (id === 'offhand') return storedSlot(p.offhandWeapon, p.offhandAmmo);
+    const m = /^bag(\d+)$/.exec(id || '');
+    if (m) return storedSlot(p.backpack[Number(m[1])]?.weapon, p.backpack[Number(m[1])]?.ammo);
+    return emptySlot();
+  }
+
+  function setSlotById(p, id, slot) {
+    const next = storedSlot(slot?.weapon, slot?.ammo);
+    normalizeBackpack(p);
+    if (id === 'main') return setMainSlot(p, next.weapon, next.ammo);
+    if (id === 'offhand') return setOffhandSlot(p, next.weapon, next.ammo);
+    const m = /^bag(\d+)$/.exec(id || '');
+    if (m) {
+      const idx = Number(m[1]);
+      if (idx < 0 || idx >= BACKPACK_CAPACITY) return false;
+      p.backpack[idx] = next;
+      if (next.weapon !== 'fists') game.recordWeapon(next.weapon);
+      return next.weapon !== 'fists';
+    }
+    return false;
+  }
+
+  function backpackCount(p = game.player) {
+    return normalizeBackpack(p).reduce((n, slot) => n + (slot.weapon !== 'fists' ? 1 : 0), 0);
+  }
+
+  function slotCanHold(id, slot) {
+    const w = WEAPONS[slot?.weapon];
+    return !(id === 'main' && w?.offhandOnly);
+  }
+
+  function mixedVirusExtract(a, b) {
+    if (a === 'virus' && VIRUS_MIX_EXTRACT[b]) return VIRUS_MIX_EXTRACT[b];
+    if (b === 'virus' && VIRUS_MIX_EXTRACT[a]) return VIRUS_MIX_EXTRACT[a];
+    return null;
+  }
+
+  function tryCraftSlots(aId, bId) {
+    if (!aId || !bId || aId === bId) return false;
+    const p = game.player;
+    const a = slotById(p, aId);
+    const b = slotById(p, bId);
+    const result = mixedVirusExtract(a.weapon, b.weapon);
+    if (!result) return false;
+    const aIsVirus = a.weapon === 'virus';
+    const keepId = aIsVirus ? bId : aId;
+    const clearId = aIsVirus ? aId : bId;
+    if (!slotCanHold(keepId, storedSlot(result, WEAPONS[result]?.ammo || 1))) return false;
+    setSlotById(p, keepId, storedSlot(result, WEAPONS[result]?.ammo || 1));
+    setSlotById(p, clearId, emptySlot());
+    game.backpackSelection = null;
+    game.floorLoadout = stashPlayerWeapon() || game.floorLoadout;
+    game.banner = `合成：${WEAPONS[result].name}`;
+    game.bannerT = 0.8;
+    burst(p.x, p.y, 18, 150, WEAPONS[result].tint || EFFECT_TINT.virus, 2.4, 0.45);
+    sfx.status();
+    return true;
+  }
+
+  function swapSlots(aId, bId) {
+    if (!aId || !bId || aId === bId) return false;
+    const p = game.player;
+    const a = slotById(p, aId);
+    const b = slotById(p, bId);
+    if (!slotCanHold(aId, b) || !slotCanHold(bId, a)) {
+      game.banner = '该槽位不能装备';
+      game.bannerT = 0.65;
+      sfx.empty();
+      return false;
+    }
+    setSlotById(p, aId, b);
+    setSlotById(p, bId, a);
+    game.backpackSelection = null;
+    game.floorLoadout = stashPlayerWeapon() || game.floorLoadout;
+    game.banner = '装备已更换';
+    game.bannerT = 0.55;
+    sfx.pickup();
+    return true;
+  }
+
+  game.backpackCount = () => backpackCount();
+  game.reserveAmmo = reserveAmmo;
+  game.magazineCapacity = magazineCapacity;
+
+  game.toggleBackpack = function (force = null) {
+    if (game.state !== 'play' || game.paused) return false;
+    const next = force == null ? !game.backpackOpen : !!force;
+    if (game.backpackOpen === next) return false;
+    game.backpackOpen = next;
+    game.backpackSelection = null;
+    clearLiveInput();
+    setTimeScale(next ? 0 : game.worldScale || 1);
+    game.banner = next ? '背包' : '继续';
+    game.bannerT = next ? 0.45 : 0.35;
+    sfx.status();
+    return true;
+  };
+
+  game.clickBackpackSlot = function (id) {
+    if (!game.backpackOpen) return false;
+    if (!game.backpackSelection) {
+      game.backpackSelection = id;
+      sfx.status();
+      return true;
+    }
+    if (game.backpackSelection === id) {
+      game.backpackSelection = null;
+      sfx.status();
+      return true;
+    }
+    if (tryCraftSlots(game.backpackSelection, id)) return true;
+    return swapSlots(game.backpackSelection, id);
+  };
+
+  game.dropBackpackSelection = function () {
+    if (!game.backpackOpen || !game.backpackSelection) return false;
+    const p = game.player;
+    const slot = slotById(p, game.backpackSelection);
+    if (slot.weapon === 'fists' || !canDropWeapon(slot.weapon)) {
+      game.banner = '没有可丢弃装备';
+      game.bannerT = 0.55;
+      sfx.empty();
+      return false;
+    }
+    if (!placeDroppedFromPlayer(p, slot.weapon, slot.ammo, p.aim + Math.PI)) {
+      game.banner = '无法丢弃';
+      game.bannerT = 0.55;
+      sfx.empty();
+      return false;
+    }
+    setSlotById(p, game.backpackSelection, emptySlot());
+    game.floorLoadout = stashPlayerWeapon() || game.floorLoadout;
+    game.banner = `丢弃 ${WEAPONS[slot.weapon].name}`;
+    game.bannerT = 0.65;
+    game.backpackSelection = null;
+    sfx.pickup();
+    return true;
+  };
 
   function playerHasOffhand(kind) {
     return game.player.offhandWeapon === kind;
@@ -1407,32 +1690,32 @@ export function createGame(renderer) {
         const x = p.x + Math.cos(a) * range;
         const y = p.y + Math.sin(a) * range;
         if (dist(p.x, p.y, x, y) < 22 || !supportPointClear(x, y, 7)) continue;
-        return placePickup(x, y, kind, ammo, angle);
+        return placePickup(x, y, kind, ammo, angle, true);
       }
     }
     const pos = nearestSupportPoint(p.x + Math.cos(angle) * 34, p.y + Math.sin(angle) * 34, 7, { x: p.x, y: p.y });
-    return placePickup(pos.x, pos.y, kind, ammo, angle);
+    return placePickup(pos.x, pos.y, kind, ammo, angle, true);
   }
 
   function dropReplacedWeapon(p, kind, ammo, angle = p.aim + Math.PI) {
     if (!canDropWeapon(kind)) return false;
-    return placePickup(p.x, p.y, kind, ammo, angle);
+    return placePickup(p.x, p.y, kind, ammo, angle, true);
   }
 
   function givePlayerWeapon(p, kind, ammo = WEAPONS[kind]?.ammo || 0, replaceOffhand = false) {
     const w = WEAPONS[kind];
     if (!w || kind === 'fists') return false;
     if (w.offhandOnly) {
-      if (p.offhandWeapon !== 'fists' && !replaceOffhand) return false;
+      if (p.offhandWeapon !== 'fists' && !replaceOffhand) return addToBackpack(p, kind, ammo);
       if (p.offhandWeapon === kind) return setOffhandSlot(p, kind, ammo);
-      if (p.offhandWeapon !== 'fists') dropReplacedWeapon(p, p.offhandWeapon, p.offhandAmmo);
+      if (p.offhandWeapon !== 'fists') storeOrDropPlayerSlot(p, p.offhandWeapon, p.offhandAmmo);
       return setOffhandSlot(p, kind, ammo);
     }
     if (p.weapon === 'fists') return setMainSlot(p, kind, ammo);
     if (p.offhandWeapon === 'fists') return setOffhandSlot(p, kind, ammo);
-    if (!replaceOffhand) return false;
+    if (!replaceOffhand) return addToBackpack(p, kind, ammo);
     if (p.offhandWeapon === kind) return setOffhandSlot(p, kind, ammo);
-    dropReplacedWeapon(p, p.offhandWeapon, p.offhandAmmo);
+    storeOrDropPlayerSlot(p, p.offhandWeapon, p.offhandAmmo);
     return setOffhandSlot(p, kind, ammo);
   }
 
@@ -1440,24 +1723,42 @@ export function createGame(renderer) {
     const p = game.player;
     const w = WEAPONS[p.weapon];
     const ow = WEAPONS[p.offhandWeapon];
-    if ((!w || p.weapon === 'fists') && (!ow || p.offhandWeapon === 'fists')) return null;
+    const bag = normalizeBackpack(p).filter((slot) => slot.weapon !== 'fists');
+    const magazine = Object.fromEntries(Object.entries(p.magazine || {})
+      .map(([kind, amount]) => [kind, clamp(Number(amount) || 0, 0, magazineCapacity(kind) || MAGAZINE_CAPACITY)])
+      .filter(([, amount]) => amount > 0));
+    if ((!w || p.weapon === 'fists') && (!ow || p.offhandWeapon === 'fists') && !bag.length && !Object.keys(magazine).length) return null;
     return {
       weapon: w && p.weapon !== 'fists' ? p.weapon : 'fists',
       ammo: w && !w.melee ? clamp(p.ammo || 0, 0, w.ammo || 0) : 0,
       offhand: ow && p.offhandWeapon !== 'fists' ? p.offhandWeapon : 'fists',
       offAmmo: ow && !ow.melee ? clamp(p.offhandAmmo || 0, 0, ow.ammo || 0) : 0,
+      backpack: bag,
+      magazine,
     };
   }
 
   function equipPlayerWeapon(p, carried) {
     setMainSlot(p, 'fists', 0);
     setOffhandSlot(p, 'fists', 0);
+    p.backpack = [];
+    p.magazine = {};
+    normalizeBackpack(p);
     if (!carried) return;
     const main = carried.weapon || 'fists';
     const offhand = carried.offhand || carried.sideWeapon || 'fists';
     if (WEAPONS[main]?.offhandOnly) setOffhandSlot(p, main, carried.ammo);
     else setMainSlot(p, main, carried.ammo);
     if (offhand !== 'fists') setOffhandSlot(p, offhand, carried.offAmmo ?? carried.sideAmmo);
+    if (Array.isArray(carried.backpack)) {
+      for (const slot of carried.backpack) addToBackpack(p, slot?.weapon, slot?.ammo);
+    }
+    if (carried.magazine && typeof carried.magazine === 'object') {
+      for (const [kind, amount] of Object.entries(carried.magazine)) {
+        const cap = magazineCapacity(kind);
+        if (cap) p.magazine[kind] = clamp(Number(amount) || 0, 0, cap);
+      }
+    }
   }
 
   function choosePreviewSeed() {
@@ -1495,6 +1796,10 @@ export function createGame(renderer) {
     const next = !!paused;
     if (game.paused === next) return false;
     game.paused = next;
+    if (next) {
+      game.backpackOpen = false;
+      game.backpackSelection = null;
+    }
     clearLiveInput();
     setTimeScale(next ? 0 : game.worldScale || 1);
     game.banner = next ? null : '继续';
@@ -1510,6 +1815,8 @@ export function createGame(renderer) {
   game.returnToMenu = function () {
     clearLiveInput();
     game.paused = false;
+    game.backpackOpen = false;
+    game.backpackSelection = null;
     game.codexOpen = false;
     game.banner = null;
     game.bannerT = 0;
@@ -1527,15 +1834,9 @@ export function createGame(renderer) {
   };
 
   game.refillAmmo = function () {
-    if (game.state !== 'play' || game.paused) return false;
+    if (game.state !== 'play' || game.paused || game.backpackOpen) return false;
     const p = game.player;
     const w = WEAPONS[p.weapon];
-    if (!game.refillEnabled) {
-      game.banner = 'R 补弹已关闭';
-      game.bannerT = 0.65;
-      sfx.empty();
-      return false;
-    }
     if (!p.alive || !w || w.melee || w.ammo <= 0) {
       game.banner = '当前武器不能补弹';
       game.bannerT = 0.65;
@@ -1548,10 +1849,23 @@ export function createGame(renderer) {
       sfx.empty();
       return false;
     }
-    p.ammo = w.ammo;
+    if (game.refillEnabled) {
+      p.ammo = w.ammo;
+    } else {
+      const used = consumeReserveAmmo(p.weapon, w.ammo - p.ammo);
+      if (used <= 0) {
+        game.banner = `${w.name} 备用弹匣为空`;
+        game.bannerT = 0.65;
+        sfx.empty();
+        return false;
+      }
+      p.ammo += used;
+    }
     p.attackCd = Math.min(p.attackCd, 0.08);
     game.floorLoadout = stashPlayerWeapon() || game.floorLoadout;
-    game.banner = `${w.name} 已补满`;
+    game.banner = game.refillEnabled
+      ? `${w.name} 已补满`
+      : `${w.name} 已装填 ${p.ammo}/${w.ammo} · 备用 ${reserveAmmo(p.weapon)}`;
     game.bannerT = 0.65;
     sfx.pickup();
     return true;
@@ -1560,7 +1874,9 @@ export function createGame(renderer) {
   function canRefillPlayerAmmo() {
     const p = game.player;
     const w = WEAPONS[p.weapon];
-    return !!(p.alive && w && !w.melee && w.ammo > 0 && p.ammo < w.ammo);
+    if (!p.alive || !w || w.melee || w.ammo <= 0) return false;
+    if (game.refillEnabled) return p.ammo < w.ammo;
+    return p.ammo < w.ammo || reserveAmmo(p.weapon) < magazineCapacity(p.weapon);
   }
 
   function addCorpse(e) {
@@ -1672,6 +1988,7 @@ export function createGame(renderer) {
       if (!k) break;
       k.alive = true; k.x = s.x; k.y = s.y; k.kind = s.kind;
       k.ammo = WEAPONS[s.kind].ammo; k.angle = rnd() * TAU;
+      k.magTaken = false;
     }
     const p = game.player;
     p.x = level.spawn.x; p.y = level.spawn.y;
@@ -1704,6 +2021,8 @@ export function createGame(renderer) {
     if (nextFloor) game.floor++;
     game.floorLoadout = carried;
     game.paused = false;
+    game.backpackOpen = false;
+    game.backpackSelection = null;
     // the recording build pins difficulty to the hardest floor a run reaches
     const diff = REC.floor ? Math.min(game.floor, REC.floor) : game.floor;
     let level;
@@ -1732,6 +2051,8 @@ export function createGame(renderer) {
   function restartFloor() {
     renderer.clearStains();
     game.paused = false;
+    game.backpackOpen = false;
+    game.backpackSelection = null;
     const restartLoadout = game.mode === 'defense'
       ? (stashPlayerWeapon() || game.floorLoadout)
       : game.floorLoadout;
@@ -2044,7 +2365,8 @@ export function createGame(renderer) {
     const w = WEAPONS[kind];
     if (!w) return 0;
     const shots = Math.max(1, Math.ceil((w.ammo || 1) / 2));
-    const statusEffect = activeAttackEffect(p, kind, 'direct');
+    const profile = activeAttackProfile(p, kind, 'direct');
+    const statusEffect = profile.effect;
     const base = p.aim;
     for (let shot = 0; shot < shots; shot++) {
       const fan = shots > 1 ? (shot - (shots - 1) / 2) / (shots - 1) : 0;
@@ -2064,6 +2386,7 @@ export function createGame(renderer) {
         b.throughWalls = !!w.throughWalls; b.wallPierced = 0;
         b.owner = null; b.near = 0;
         b.statusEffect = statusEffect || null;
+        b.contagiousEffect = !!profile.contagious;
         b.weapon = kind; b.projectile = null; b.explosive = false;
         b.ricochet = !!w.ricochet; b.bounces = w.bounces || 0;
       }
@@ -2161,11 +2484,11 @@ export function createGame(renderer) {
   }
   game.maddenEnemy = maddenEnemy;
 
-  function convertEnemy(e, x, y, seconds = WEAPONS.tameDart.tameDur || 8.5) {
+  function convertEnemy(e, x, y, seconds = WEAPONS.tameDart.tameDur || 8.5, contagious = false) {
     if (!e.alive || e.state === S_DEAD || e.friendly) return false;
     e.friendly = true;
     e.converted = true;
-    e.contagious = playerHasOffhand('virus');
+    e.contagious = !!contagious || playerHasOffhand('virus');
     e.madT = 0;
     e.tameT = Math.max(e.tameT || 0, seconds || 0);
     clearEnemyInfection(e);
@@ -2347,10 +2670,13 @@ export function createGame(renderer) {
     sfx.alert();
   };
 
-  function launchProjectile(actor, angle, weaponKey, friendly, statusEffect = null) {
+  function launchProjectile(actor, angle, weaponKey, friendly, profile = null) {
     const w = WEAPONS[weaponKey];
     const b = spawnFrom(game.pools.bullets);
     if (!b) return null;
+    const attack = profile && typeof profile === 'object'
+      ? profile
+      : { effect: profile || weaponStatusEffect(weaponKey), contagious: false };
     const sp = friendly ? w.speed : (w.eSpeed || w.speed);
     b.alive = true;
     b.x = actor.x + Math.cos(angle) * 18; b.y = actor.y + Math.sin(angle) * 18;
@@ -2360,7 +2686,8 @@ export function createGame(renderer) {
     b.armourPierce = w.armourPierce || 0;
     b.throughDoors = !!w.throughDoors; b.hitDoor = null; b.owner = actor === game.player ? null : actor;
     b.throughWalls = !!w.throughWalls; b.wallPierced = 0;
-    b.statusEffect = statusEffect || weaponStatusEffect(weaponKey);
+    b.statusEffect = attack.effect || weaponStatusEffect(weaponKey);
+    b.contagiousEffect = !!attack.contagious;
     b.weapon = weaponKey; b.projectile = w.projectile || null; b.explosive = !!w.projectile;
     b.ricochet = !!w.ricochet; b.bounces = w.bounces || 0;
     return b;
@@ -2398,6 +2725,7 @@ export function createGame(renderer) {
       b.throughWalls = !!w.throughWalls; b.wallPierced = 0;
       b.owner = e;
       b.statusEffect = weaponStatusEffect(e.weapon);
+      b.contagiousEffect = false;
       b.weapon = e.weapon; b.projectile = null; b.explosive = false;
       b.ricochet = !!w.ricochet; b.bounces = w.bounces || 0;
     }
@@ -2449,7 +2777,10 @@ export function createGame(renderer) {
     const base = Math.atan2(ty - unit.y, tx - unit.x);
     const a = base + (rnd() - 0.5) * (smg.spread || 0.08);
     unit.angle = base;
-    const b = launchProjectile(unit, a, 'smg', !!unit.friendly);
+    const b = launchProjectile(unit, a, 'smg', !!unit.friendly, {
+      effect: unit.statusEffect || null,
+      contagious: !!unit.contagiousEffect,
+    });
     if (!b) return false;
     b.owner = null;
     unit.ammo--;
@@ -2511,7 +2842,7 @@ export function createGame(renderer) {
       d.alive = false;
       d.kamikaze = false;
       d.blastT = 0;
-      explodeAt(d.x, d.y, 'grenade', d.friendly === false, 0.5);
+      explodeAt(d.x, d.y, 'grenade', d.friendly === false, 0.5, d.statusEffect || null, d.statusEffect || null, !!d.contagiousEffect, !!d.contagiousEffect);
     }
 
     for (const d of game.pools.drones || []) {
@@ -2614,7 +2945,8 @@ export function createGame(renderer) {
   // one attack routine for every armed thing on the board
   function doAttack(actor, weaponKey) {
     const w = WEAPONS[weaponKey];
-    const statusEffect = activeAttackEffect(actor, weaponKey, 'direct');
+    const profile = activeAttackProfile(actor, weaponKey, 'direct');
+    const statusEffect = profile.effect;
     if (w.melee) {
       sfx.swing();
       let hit = false;
@@ -2634,7 +2966,7 @@ export function createGame(renderer) {
           continue;
         }
         hit = true;
-        if (statusEffect) applyAttackEffectToEnemy(e, statusEffect, actor.x, actor.y, actor);
+        if (statusEffect || profile.contagious) applyAttackEffectToEnemy(e, statusEffect, actor.x, actor.y, actor, { contagious: profile.contagious });
         else if (w.lethal || e.state === S_DOWN) killEnemy(e, 1, Math.cos(a), Math.sin(a));
         else knockdown(e, Math.cos(a), Math.sin(a));
       }
@@ -2650,7 +2982,7 @@ export function createGame(renderer) {
       return true;
     }
     if (w.projectile) {
-      launchProjectile(actor, actor.aim, weaponKey, actor === game.player, statusEffect);
+      launchProjectile(actor, actor.aim, weaponKey, actor === game.player, profile);
       const mx = actor.x + Math.cos(actor.aim) * 19, my = actor.y + Math.sin(actor.aim) * 19;
       if (!w.silent) {
         game.flashes.push({ x: mx, y: my, a: actor.aim, t: 0, dur: 0.11, size: 1.25 });
@@ -2678,6 +3010,7 @@ export function createGame(renderer) {
       b.throughWalls = !!w.throughWalls; b.wallPierced = 0;
       b.owner = null; b.near = 0;
       b.statusEffect = statusEffect || null;
+      b.contagiousEffect = !!profile.contagious;
       b.weapon = weaponKey; b.projectile = null; b.explosive = false;
       b.ricochet = !!w.ricochet; b.bounces = w.bounces || 0;
     }
@@ -2706,6 +3039,12 @@ export function createGame(renderer) {
     const sideEffect = weaponStatusEffect(p.offhandWeapon);
     const extract = extractKeyForEffect(sideEffect);
     p.attackCd = (w.rate || 0.34) * (game.playerStats.attackRate || 1);
+    if (p.ammo <= 0) {
+      game.banner = `${w.name} 为空`;
+      game.bannerT = 0.65;
+      sfx.empty();
+      return false;
+    }
     if (!extract) {
       game.banner = '副手没有可复制效果';
       game.bannerT = 0.75;
@@ -2726,11 +3065,17 @@ export function createGame(renderer) {
     const w = WEAPONS[p.weapon];
     const effect = w.extractEffect;
     p.attackCd = (w.rate || 0.34) * (game.playerStats.attackRate || 1);
-    p.ammo = Math.max(0, (p.ammo || 1) - 1);
+    if (p.ammo <= 0) {
+      game.banner = `${w.name} 为空`;
+      game.bannerT = 0.65;
+      sfx.empty();
+      return false;
+    }
+    p.ammo = Math.max(0, p.ammo - 1);
     applyStatusEffectToPlayer(effect, 5.8);
     burst(p.x, p.y, 16, 160, w.tint || '#7AC943', 2.3, 0.5);
     sfx.status();
-    if (p.ammo <= 0) setMainSlot(p, 'fists', 0);
+    if (p.ammo <= 0 && !game.refillEnabled && reserveAmmo(p.weapon) <= 0) setMainSlot(p, 'fists', 0);
     if (game.mode === 'defense') game.floorLoadout = stashPlayerWeapon();
     return true;
   }
@@ -2775,7 +3120,7 @@ export function createGame(renderer) {
     p.attackCd = w.rate * (game.playerStats.attackRate || 1);
     p.ammo--;
     spawnThrown(p, p.weapon, p.ammo, charge);
-    if (p.ammo <= 0 && !game.refillEnabled) { p.weapon = 'fists'; p.ammo = 0; }
+    if (p.ammo <= 0 && !game.refillEnabled && reserveAmmo(p.weapon) <= 0) { p.weapon = 'fists'; p.ammo = 0; }
     if (game.mode === 'defense') game.floorLoadout = stashPlayerWeapon();
     return true;
   }
@@ -2786,10 +3131,12 @@ export function createGame(renderer) {
     const w = WEAPONS[kind] || WEAPONS.pistol;
     const lobbed = !!w.lobbed;
     const st = lobbed ? throwStats(charge) : { charge: 0, power: 1, effectScale: 1 };
-    const statusEffect = activeAttackEffect(actor, kind, lobbed ? 'direct' : 'thrown');
-    const shrapnelEffect = lobbed && kind === 'frag'
-      ? activeAttackEffect(actor, kind, 'shrapnel')
-      : null;
+    const profile = activeAttackProfile(actor, kind, lobbed ? 'direct' : 'thrown');
+    const shrapnelProfile = lobbed && kind === 'frag'
+      ? activeAttackProfile(actor, kind, 'shrapnel')
+      : { effect: null, contagious: false };
+    const statusEffect = profile.effect;
+    const shrapnelEffect = shrapnelProfile.effect;
     t.alive = true;
     t.kind = kind; t.ammo = ammo; t.spin = 0;
     if (lobbed) {
@@ -2808,9 +3155,11 @@ export function createGame(renderer) {
       t.life = w.blade ? (w.life || 14) : 1.6; t.maxLife = t.life;
       t.targetX = NaN; t.targetY = NaN;
     }
-    t.charge = st.charge; t.power = st.power; t.effectScale = 1;
+    t.charge = st.charge; t.power = st.power; t.effectScale = st.effectScale || 1;
     t.statusEffect = statusEffect || null;
+    t.contagiousEffect = !!profile.contagious;
     t.shrapnelEffect = shrapnelEffect || null;
+    t.shrapnelContagious = !!shrapnelProfile.contagious;
     t.friendly = actor === game.player;
     t.noPickup = !!w.noPickup;
     if (!w.silent) sfx.throwIt();
@@ -2823,12 +3172,16 @@ export function createGame(renderer) {
     if (!t) return false;
     const w = WEAPONS.sawblade;
     const sp = w.throwSpeed || 980;
+    const profile = activeAttackProfile(actor, 'sawblade', 'derived');
     t.alive = true;
     t.x = actor.x + Math.cos(actor.aim) * 18; t.y = actor.y + Math.sin(actor.aim) * 18;
     t.vx = Math.cos(actor.aim) * sp; t.vy = Math.sin(actor.aim) * sp;
     t.kind = 'sawblade'; t.ammo = 0; t.spin = actor.aim; t.life = w.life || 14;
     t.maxLife = t.life; t.targetX = NaN; t.targetY = NaN;
-    t.charge = 0; t.power = 1; t.effectScale = 1; t.statusEffect = null; t.shrapnelEffect = null; t.friendly = actor === game.player;
+    t.charge = 0; t.power = 1; t.effectScale = 1;
+    t.statusEffect = profile.effect || null; t.contagiousEffect = !!profile.contagious;
+    t.shrapnelEffect = null; t.shrapnelContagious = false;
+    t.friendly = actor === game.player;
     t.noPickup = true;
     burst(t.x, t.y, 6, 150, w.tint || '#161513', 1.8, 0.24);
     sfx.throwIt();
@@ -3094,12 +3447,22 @@ export function createGame(renderer) {
     for (const k of game.pools.pickups) {
       if (!k.alive) continue;
       if (dist(p.x, p.y, k.x, k.y) < 20) {
+        const ammoGot = collectPickupAmmo(k);
         const took = givePlayerWeapon(p, k.kind, k.ammo, false);
-        if (!took) continue;
+        if (!took) {
+          if (ammoGot > 0) {
+            game.floorLoadout = stashPlayerWeapon() || game.floorLoadout;
+            game.banner = `备用弹匣 +${ammoGot} · ${WEAPONS[k.kind]?.name || k.kind}`;
+            game.bannerT = 0.55;
+            sfx.pickup();
+          }
+          continue;
+        }
         k.alive = false;
         if (game.mode === 'defense') game.floorLoadout = stashPlayerWeapon();
         const got = WEAPONS[k.kind];
-        game.banner = got?.offhandOnly || p.offhandWeapon === k.kind ? `副手 ${got.name}` : `拾取 ${got?.name || k.kind}`;
+        const ammoText = ammoGot > 0 ? ` · 备用 +${ammoGot}` : '';
+        game.banner = (got?.offhandOnly || p.offhandWeapon === k.kind ? `副手 ${got.name}` : `拾取 ${got?.name || k.kind}`) + ammoText;
         game.bannerT = 0.55;
         sfx.pickup();
         break;
@@ -3112,7 +3475,7 @@ export function createGame(renderer) {
     const weaponKey = b.weapon || 'rocket';
     const byEnemy = !b.friendly || !!(b.owner && b.owner.friendly);
     b.alive = false;
-    explodeAt(b.x, b.y, weaponKey, byEnemy, 1, b.statusEffect || null);
+    explodeAt(b.x, b.y, weaponKey, byEnemy, 1, b.statusEffect || null, b.statusEffect || null, !!b.contagiousEffect, !!b.contagiousEffect);
   }
 
   function ricochetBullet(b, px, py, sx, sy) {
@@ -3261,6 +3624,7 @@ export function createGame(renderer) {
           if (dist(b.x, b.y, e.x, e.y) > ENEMY_DEF[e.type].r + 3) continue;
           const bw = WEAPONS[b.weapon] || null;
           const statusEffect = b.statusEffect || weaponStatusEffect(b.weapon);
+          const contagiousEffect = !!b.contagiousEffect;
           const fx = b.x - b.vx * 0.02, fy = b.y - b.vy * 0.02;
           const sp = Math.hypot(b.vx, b.vy) || 1;
           const byOtherSide = !b.friendly || !!(b.owner && b.owner.friendly);
@@ -3277,12 +3641,12 @@ export function createGame(renderer) {
             detonateBullet(b); stop = true; break;
           }
           if (b.explosive) { detonateBullet(b); stop = true; break; }
-          if (bw && bw.rail && !statusEffect) {
+          if (bw && bw.rail && !statusEffect && !contagiousEffect) {
             killEnemy(e, 1.25, b.vx / sp, b.vy / sp, byOtherSide, b.owner);
             continue;
           }
           if (shieldBlocks(e, fx, fy)) {
-            if (statusEffect) {
+            if (statusEffect || contagiousEffect) {
               burst(fx, fy, 3, 70, bw?.tint || EFFECT_TINT[statusEffect] || '#7AC943', 1.4, 0.22);
               b.alive = false; stop = true; break;
             }
@@ -3306,8 +3670,8 @@ export function createGame(renderer) {
             b.alive = false; stop = true;
             break;
           }
-          if (statusEffect) {
-            applyAttackEffectToEnemy(e, statusEffect, b.x, b.y, b.owner || (b.friendly ? game.player : null));
+          if (statusEffect || contagiousEffect) {
+            applyAttackEffectToEnemy(e, statusEffect, b.x, b.y, b.owner || (b.friendly ? game.player : null), { contagious: contagiousEffect });
             b.alive = false; stop = true;
             break;
           }
@@ -3407,7 +3771,7 @@ export function createGame(renderer) {
               hit = true; break;
             }
             const l = Math.hypot(t.vx, t.vy) || 1;
-            if (t.statusEffect) applyAttackEffectToEnemy(e, t.statusEffect, t.x, t.y, t.friendly ? game.player : null);
+            if (t.statusEffect || t.contagiousEffect) applyAttackEffectToEnemy(e, t.statusEffect, t.x, t.y, t.friendly ? game.player : null, { contagious: !!t.contagiousEffect });
             else if (lethal) killEnemy(e, 1, t.vx / l, t.vy / l);
             else if (e.state !== S_DOWN) knockdown(e, t.vx / l, t.vy / l);
             else continue;
@@ -3522,8 +3886,11 @@ export function createGame(renderer) {
       if (!shop.can.refill) return deny(w && !w.melee && w.ammo > 0 ? `${w.name} 已满弹` : '当前武器不能补弹');
       if (!spend(shop.costs.refill)) return false;
       p.ammo = w.ammo;
+      if (!game.refillEnabled) addReserveAmmo(p.weapon, magazineCapacity(p.weapon));
       game.floorLoadout = stashPlayerWeapon();
-      game.banner = `${w.name} 弹药补满`;
+      game.banner = game.refillEnabled
+        ? `${w.name} 弹药补满`
+        : `${w.name} 弹药补满 · 备用 ${reserveAmmo(p.weapon)}`;
     } else if (slot === 4) {
       if (!shop.can.heal) return deny('生命已满');
       if (!spend(shop.costs.heal)) return false;
@@ -3655,7 +4022,7 @@ export function createGame(renderer) {
 
   // -------------------------------------------------------------------------
   function step(rdt) {
-    if (game.paused) {
+    if (game.paused || game.backpackOpen) {
       setTimeScale(0);
       return;
     }
