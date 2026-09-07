@@ -953,7 +953,7 @@
         wave: 0
       })),
       bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, statusEffect: null, contagiousEffect: false, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
-      pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: "pistol", ammo: 0, angle: 0, magTaken: false })),
+      pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: "pistol", ammo: 0, angle: 0, magTaken: false, pickupDelay: 0, requireLeave: false })),
       thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: "pistol", ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, statusEffect: null, contagiousEffect: false, shrapnelEffect: null, shrapnelContagious: false, noPickup: false })),
       deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: "sentry", x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, hp: 0, friendly: true, spin: 0, target: null, statusEffect: null, contagiousEffect: false })),
       drones: mk(MAX_DRONES, () => ({ alive: false, kind: "drone", x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, hp: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0, statusEffect: null, contagiousEffect: false }))
@@ -3699,6 +3699,8 @@
   var CODEX_KEY = "overprint.codex";
   var BACKPACK_CAPACITY = 5;
   var MAGAZINE_CAPACITY = 100;
+  var PICKUP_RADIUS = 20;
+  var PLAYER_DROP_RELEASE_RADIUS = 24;
   var SLOW = {
     dash: { dur: 0.17, scale: 0.34 },
     throw: { dur: 0.34, scale: 0.2 },
@@ -4660,9 +4662,9 @@
       game2.pickupWrite = (game2.pickupWrite + 1) % pool.length;
       return slot;
     }
-    function placePickup(x, y, kind, ammo = 0, angle = rnd() * TAU, magTaken = false) {
+    function placePickup(x, y, kind, ammo = 0, angle = rnd() * TAU, magTaken = false, pickupDelay = 0, requireLeave = false) {
       const k = pickupSlot();
-      if (!k) return false;
+      if (!k) return null;
       k.alive = true;
       k.x = x;
       k.y = y;
@@ -4670,7 +4672,9 @@
       k.ammo = ammo;
       k.angle = angle;
       k.magTaken = !!magTaken;
-      return true;
+      k.pickupDelay = Math.max(0, Number(pickupDelay) || 0);
+      k.requireLeave = !!requireLeave;
+      return k;
     }
     function deployAt(x, y, deployKind, friendly = true, statusEffect = null, contagiousEffect = false) {
       const key2 = deployKind === "drones" ? "dronePack" : "sentryPack";
@@ -5368,7 +5372,7 @@
         sfx.empty();
         return false;
       }
-      if (!placeDroppedFromPlayer(p, slot.weapon, slot.ammo, p.aim + Math.PI)) {
+      if (!placeDroppedFromPlayer(p, slot.weapon, slot.ammo, p.aim)) {
         game2.banner = "\u65E0\u6CD5\u4E22\u5F03";
         game2.bannerT = 0.55;
         sfx.empty();
@@ -5398,15 +5402,15 @@
           const x = p.x + Math.cos(a) * range;
           const y = p.y + Math.sin(a) * range;
           if (dist(p.x, p.y, x, y) < 22 || !supportPointClear(x, y, 7)) continue;
-          return placePickup(x, y, kind, ammo, angle, true);
+          return !!placePickup(x, y, kind, ammo, angle, true, 0.35, true);
         }
       }
       const pos = nearestSupportPoint(p.x + Math.cos(angle) * 34, p.y + Math.sin(angle) * 34, 7, { x: p.x, y: p.y });
-      return placePickup(pos.x, pos.y, kind, ammo, angle, true);
+      return !!placePickup(pos.x, pos.y, kind, ammo, angle, true, 0.35, true);
     }
     function dropReplacedWeapon(p, kind, ammo, angle = p.aim + Math.PI) {
       if (!canDropWeapon(kind)) return false;
-      return placePickup(p.x, p.y, kind, ammo, angle, true);
+      return !!placePickup(p.x, p.y, kind, ammo, angle, true, 0.35, true);
     }
     function givePlayerWeapon(p, kind, ammo = WEAPONS[kind]?.ammo || 0, replaceOffhand = false) {
       const w = WEAPONS[kind];
@@ -5716,6 +5720,8 @@
         k.ammo = WEAPONS[s.kind].ammo;
         k.angle = rnd() * TAU;
         k.magTaken = false;
+        k.pickupDelay = 0;
+        k.requireLeave = false;
       }
       const p = game2.player;
       p.x = level.spawn.x;
@@ -7250,7 +7256,11 @@
       }
       for (const k of game2.pools.pickups) {
         if (!k.alive) continue;
-        if (dist(p.x, p.y, k.x, k.y) < 20) {
+        const pd = dist(p.x, p.y, k.x, k.y);
+        if (k.pickupDelay > 0) k.pickupDelay = Math.max(0, k.pickupDelay - dt);
+        if (k.requireLeave && pd > PLAYER_DROP_RELEASE_RADIUS) k.requireLeave = false;
+        if (pd < PICKUP_RADIUS) {
+          if (k.pickupDelay > 0 || k.requireLeave) continue;
           const ammoGot = collectPickupAmmo(k);
           const took = givePlayerWeapon(p, k.kind, k.ammo, false);
           if (!took) {
@@ -9907,7 +9917,7 @@
   }
 
   // overprint/src/main.js
-  var BUILD_ID = "184182";
+  var BUILD_ID = "184183";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
   applyThemeToDocument();

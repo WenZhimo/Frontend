@@ -9,7 +9,7 @@ import { applyThemeToDocument, cycleTheme } from './brand.js';
 
 // Bumped on every edit and printed in the corner. If the number on screen is
 // not the number the server reports, you are looking at a cached page.
-export const BUILD_ID = '184182';
+export const BUILD_ID = '184183';
 console.log('[overprint] build', BUILD_ID);
 if (window.buildTitle) window.buildTitle('版本 ' + BUILD_ID);
 applyThemeToDocument();

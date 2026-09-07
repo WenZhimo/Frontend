@@ -136,7 +136,7 @@ export function makePools() {
       shieldSeg: 0, friendly: false, contagious: false, wave: 0,
     })),
     bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, statusEffect: null, contagiousEffect: false, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
-    pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: 'pistol', ammo: 0, angle: 0, magTaken: false })),
+    pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: 'pistol', ammo: 0, angle: 0, magTaken: false, pickupDelay: 0, requireLeave: false })),
     thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: 'pistol', ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, statusEffect: null, contagiousEffect: false, shrapnelEffect: null, shrapnelContagious: false, noPickup: false })),
     deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: 'sentry', x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, hp: 0, friendly: true, spin: 0, target: null, statusEffect: null, contagiousEffect: false })),
     drones: mk(MAX_DRONES, () => ({ alive: false, kind: 'drone', x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, hp: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0, statusEffect: null, contagiousEffect: false })),

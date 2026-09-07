@@ -27,6 +27,8 @@ const DEFENSE_SHOP_WEAPONS = ['pistol', 'shield', 'katana', 'quixote', 'smg', 'r
 const CODEX_KEY = 'overprint.codex';
 const BACKPACK_CAPACITY = 5;
 const MAGAZINE_CAPACITY = 100;
+const PICKUP_RADIUS = 20;
+const PLAYER_DROP_RELEASE_RADIUS = 24;
 
 // Slow motion is punctuation, not a stance. It fires on moments worth watching,
 // and a lockout after each one keeps a busy fight from turning into a crawl.
@@ -937,9 +939,9 @@ export function createGame(renderer) {
     return slot;
   }
 
-  function placePickup(x, y, kind, ammo = 0, angle = rnd() * TAU, magTaken = false) {
+  function placePickup(x, y, kind, ammo = 0, angle = rnd() * TAU, magTaken = false, pickupDelay = 0, requireLeave = false) {
     const k = pickupSlot();
-    if (!k) return false;
+    if (!k) return null;
     k.alive = true;
     k.x = x;
     k.y = y;
@@ -947,7 +949,9 @@ export function createGame(renderer) {
     k.ammo = ammo;
     k.angle = angle;
     k.magTaken = !!magTaken;
-    return true;
+    k.pickupDelay = Math.max(0, Number(pickupDelay) || 0);
+    k.requireLeave = !!requireLeave;
+    return k;
   }
 
   function deployAt(x, y, deployKind, friendly = true, statusEffect = null, contagiousEffect = false) {
@@ -1657,7 +1661,7 @@ export function createGame(renderer) {
       sfx.empty();
       return false;
     }
-    if (!placeDroppedFromPlayer(p, slot.weapon, slot.ammo, p.aim + Math.PI)) {
+    if (!placeDroppedFromPlayer(p, slot.weapon, slot.ammo, p.aim)) {
       game.banner = '无法丢弃';
       game.bannerT = 0.55;
       sfx.empty();
@@ -1690,16 +1694,16 @@ export function createGame(renderer) {
         const x = p.x + Math.cos(a) * range;
         const y = p.y + Math.sin(a) * range;
         if (dist(p.x, p.y, x, y) < 22 || !supportPointClear(x, y, 7)) continue;
-        return placePickup(x, y, kind, ammo, angle, true);
+        return !!placePickup(x, y, kind, ammo, angle, true, 0.35, true);
       }
     }
     const pos = nearestSupportPoint(p.x + Math.cos(angle) * 34, p.y + Math.sin(angle) * 34, 7, { x: p.x, y: p.y });
-    return placePickup(pos.x, pos.y, kind, ammo, angle, true);
+    return !!placePickup(pos.x, pos.y, kind, ammo, angle, true, 0.35, true);
   }
 
   function dropReplacedWeapon(p, kind, ammo, angle = p.aim + Math.PI) {
     if (!canDropWeapon(kind)) return false;
-    return placePickup(p.x, p.y, kind, ammo, angle, true);
+    return !!placePickup(p.x, p.y, kind, ammo, angle, true, 0.35, true);
   }
 
   function givePlayerWeapon(p, kind, ammo = WEAPONS[kind]?.ammo || 0, replaceOffhand = false) {
@@ -1989,6 +1993,8 @@ export function createGame(renderer) {
       k.alive = true; k.x = s.x; k.y = s.y; k.kind = s.kind;
       k.ammo = WEAPONS[s.kind].ammo; k.angle = rnd() * TAU;
       k.magTaken = false;
+      k.pickupDelay = 0;
+      k.requireLeave = false;
     }
     const p = game.player;
     p.x = level.spawn.x; p.y = level.spawn.y;
@@ -3446,7 +3452,11 @@ export function createGame(renderer) {
     if ((manualFire || autoMadFire) && !currentHeld.lobbed && !currentHeld.katana && !currentHeld.lance && p.katanaT <= 0) { playerAttack(); game.didAttack = true; }
     for (const k of game.pools.pickups) {
       if (!k.alive) continue;
-      if (dist(p.x, p.y, k.x, k.y) < 20) {
+      const pd = dist(p.x, p.y, k.x, k.y);
+      if (k.pickupDelay > 0) k.pickupDelay = Math.max(0, k.pickupDelay - dt);
+      if (k.requireLeave && pd > PLAYER_DROP_RELEASE_RADIUS) k.requireLeave = false;
+      if (pd < PICKUP_RADIUS) {
+        if (k.pickupDelay > 0 || k.requireLeave) continue;
         const ammoGot = collectPickupAmmo(k);
         const took = givePlayerWeapon(p, k.kind, k.ammo, false);
         if (!took) {
