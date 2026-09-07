@@ -49,11 +49,6 @@ addEventListener('keydown', (e) => {
     game.togglePause();
     return;
   }
-  if (e.code === 'KeyR' && game.state === 'play') {
-    e.preventDefault();
-    game.refillAmmo();
-    return;
-  }
   if (e.code === 'KeyB' && !e.repeat && game.state === 'play' && !game.paused) {
     e.preventDefault();
     game.toggleBackpack();

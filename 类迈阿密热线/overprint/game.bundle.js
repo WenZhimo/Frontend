@@ -5529,11 +5529,31 @@
     game2.toggleRefill = function() {
       game2.refillEnabled = !game2.refillEnabled;
       localStorage.setItem("overprint.refill", game2.refillEnabled ? "1" : "0");
-      game2.banner = `R \u8865\u5F39 ${game2.refillEnabled ? "\u5F00\u542F" : "\u5173\u95ED"}`;
+      game2.banner = `\u8865\u5F39\u6A21\u5F0F ${game2.refillEnabled ? "\u5F00\u542F" : "\u5173\u95ED"}`;
       game2.bannerT = 0.8;
       if (game2.state === "play") sfx.status();
       return game2.refillEnabled;
     };
+    function autoReloadPlayerWeapon(p = game2.player) {
+      const w = WEAPONS[p.weapon];
+      if (!p.alive || !w || w.melee || w.ammo <= 0) return false;
+      if (p.ammo > 0) return true;
+      if (game2.refillEnabled) {
+        p.ammo = w.ammo;
+        game2.banner = `${w.name} \u81EA\u52A8\u8865\u6EE1`;
+        game2.bannerT = 0.5;
+        game2.floorLoadout = stashPlayerWeapon() || game2.floorLoadout;
+        return true;
+      }
+      const used = consumeReserveAmmo(p.weapon, w.ammo);
+      if (used <= 0) return false;
+      p.ammo = used;
+      game2.floorLoadout = stashPlayerWeapon() || game2.floorLoadout;
+      game2.banner = `${w.name} \u81EA\u52A8\u88C5\u586B ${p.ammo}/${w.ammo} \xB7 \u5907\u7528 ${reserveAmmo(p.weapon)}`;
+      game2.bannerT = 0.65;
+      sfx.pickup();
+      return true;
+    }
     game2.refillAmmo = function() {
       if (game2.state !== "play" || game2.paused || game2.backpackOpen) return false;
       const p = game2.player;
@@ -5573,7 +5593,7 @@
       const p = game2.player;
       const w = WEAPONS[p.weapon];
       if (!p.alive || !w || w.melee || w.ammo <= 0) return false;
-      if (game2.refillEnabled) return p.ammo < w.ammo;
+      if (game2.refillEnabled) return false;
       return p.ammo < w.ammo || reserveAmmo(p.weapon) < magazineCapacity(p.weapon);
     }
     function addCorpse(e) {
@@ -6799,7 +6819,7 @@
       const sideEffect = weaponStatusEffect(p.offhandWeapon);
       const extract = extractKeyForEffect(sideEffect);
       p.attackCd = (w.rate || 0.34) * (game2.playerStats.attackRate || 1);
-      if (p.ammo <= 0) {
+      if (p.ammo <= 0 && !autoReloadPlayerWeapon(p)) {
         game2.banner = `${w.name} \u4E3A\u7A7A`;
         game2.bannerT = 0.65;
         sfx.empty();
@@ -6824,7 +6844,7 @@
       const w = WEAPONS[p.weapon];
       const effect = w.extractEffect;
       p.attackCd = (w.rate || 0.34) * (game2.playerStats.attackRate || 1);
-      if (p.ammo <= 0) {
+      if (p.ammo <= 0 && !autoReloadPlayerWeapon(p)) {
         game2.banner = `${w.name} \u4E3A\u7A7A`;
         game2.bannerT = 0.65;
         sfx.empty();
@@ -6861,7 +6881,7 @@
         throwLobbedFromHand(0);
         return;
       }
-      if (p.ammo <= 0) {
+      if (p.ammo <= 0 && !autoReloadPlayerWeapon(p)) {
         p.attackCd = 0.18;
         sfx.empty();
         return;
@@ -6877,7 +6897,7 @@
       const p = game2.player;
       const w = WEAPONS[p.weapon];
       if (!w || !w.lobbed || p.attackCd > 0) return false;
-      if (p.ammo <= 0) {
+      if (p.ammo <= 0 && !autoReloadPlayerWeapon(p)) {
         p.attackCd = 0.18;
         sfx.empty();
         return false;
@@ -9217,7 +9237,7 @@
     if (!reserves.length) {
       g.fillStyle = ink(0.4);
       g.font = `400 9px ${MONO}`;
-      g.fillText("\u7A7A\u3002\u7ECF\u8FC7\u6709\u5F39\u836F\u7684\u6B66\u5668\u4F1A\u81EA\u52A8\u6536\u7EB3\uFF1B\u975E\u8865\u5F39\u6A21\u5F0F\u4E0B R \u4F1A\u6D88\u8017\u8FD9\u91CC\u7684\u5F39\u836F\u3002", left, bagTop + slotH + 56, cw - 190);
+      g.fillText("\u7A7A\u3002\u7ECF\u8FC7\u6709\u5F39\u836F\u7684\u6B66\u5668\u4F1A\u81EA\u52A8\u6536\u7EB3\uFF1B\u5F39\u836F\u8017\u5C3D\u540E\u4E0B\u4E00\u6B21\u653B\u51FB\u4F1A\u81EA\u52A8\u88C5\u586B\u3002", left, bagTop + slotH + 56, cw - 190);
     } else {
       g.font = `400 9px ${MONO}`;
       reserves.forEach(([kind, amount], i) => {
@@ -9467,7 +9487,7 @@
     const seedBase2 = String(game2.seedBase || "").slice(0, 18) || "\u4ECA\u5929";
     const counts = game2.codexCounts ? game2.codexCounts() : { weapons: 0, weaponTotal: 0, enemies: 0, enemyTotal: 0 };
     const chips = [
-      { id: "refill", label: `R \u8865\u5F39 ${game2.refillEnabled ? "\u5F00" : "\u5173"}`, on: game2.refillEnabled, col: CYAN }
+      { id: "refill", label: `\u8865\u5F39\u6A21\u5F0F ${game2.refillEnabled ? "\u5F00" : "\u5173"}`, on: game2.refillEnabled, col: CYAN }
     ];
     if (game2.mode === "endless") chips.push({ id: "seed", label: `\u79CD\u5B50 ${seedBase2}`, on: !!game2.customSeed, col: MAG });
     if (game2.mode === "practice") {
@@ -9541,7 +9561,7 @@
     g.fillStyle = ink(0.55);
     g.font = `400 ${11.5 * k}px ${MONO}`;
     g.fillText("\u6709 404 \u4E2A\u969C\u788D\u6321\u5728\u8DEF\u4E0A\u3002\u6E05\u7406\u5B83\u4EEC\u3002", cx, cy + 82 * k);
-    const help = touch2 ? ["\u5DE6\u6447\u6746\u79FB\u52A8 \xB7 \u53F3\u6447\u6746\u7784\u51C6/\u653B\u51FB", "\u6309\u94AE\uFF1A\u51B2\u523A \xB7 \u6295\u63B7", "ESC \u6682\u505C \xB7 \u5F00\u542F\u540E\u53EF\u6309 R \u8865\u5F39"] : ["WASD \u79FB\u52A8 \xB7 \u9F20\u6807\u7784\u51C6 \xB7 \u70B9\u51FB\u653B\u51FB", "Space \u51B2\u523A \xB7 E \u5207\u6362\u4E3B\u526F\u624B \xB7 B \u80CC\u5305 \xB7 \u957F\u6309 Q/\u53F3\u952E\u6295\u63B7\u6B66\u5668", "\u624B\u96F7\u7C7B\u957F\u6309\u653B\u51FB\u6269\u5927\u8303\u56F4\u5E76\u9009\u62E9\u843D\u70B9 \xB7 R \u88C5\u586B\u5907\u7528\u5F39\u5323 \xB7 ESC \u6682\u505C"];
+    const help = touch2 ? ["\u5DE6\u6447\u6746\u79FB\u52A8 \xB7 \u53F3\u6447\u6746\u7784\u51C6/\u653B\u51FB", "\u6309\u94AE\uFF1A\u51B2\u523A \xB7 \u6295\u63B7", "\u5F39\u836F\u8017\u5C3D\u540E\u81EA\u52A8\u88C5\u586B \xB7 ESC \u6682\u505C"] : ["WASD \u79FB\u52A8 \xB7 \u9F20\u6807\u7784\u51C6 \xB7 \u70B9\u51FB\u653B\u51FB", "Space \u51B2\u523A \xB7 E \u5207\u6362\u4E3B\u526F\u624B \xB7 B \u80CC\u5305 \xB7 \u957F\u6309 Q/\u53F3\u952E\u6295\u63B7\u6B66\u5668", "\u624B\u96F7\u7C7B\u957F\u6309\u653B\u51FB\u6269\u5927\u8303\u56F4\u5E76\u9009\u62E9\u843D\u70B9 \xB7 \u7A7A\u5F39\u653B\u51FB\u81EA\u52A8\u88C5\u586B \xB7 ESC \u6682\u505C"];
     g.font = `400 ${9 * k}px ${MONO}`;
     g.fillStyle = ink(0.5);
     track(g, 0.08);
@@ -9563,7 +9583,7 @@
     if (!game2.tutorialT || game2.tutorialT <= 0) return;
     const a = clamp(game2.tutorialT / 1.2, 0, 1);
     const touch2 = game2.touch && game2.touch.enabled;
-    const line = touch2 ? "\u5DE6\u6447\u6746\u79FB\u52A8   \xB7   \u53F3\u6447\u6746\u8F6C\u5411\uFF0C\u63A8\u5230\u5E95\u653B\u51FB" : game2.mode === "defense" ? "\u9632\u5B88\uFF1AT/\u70B9\u51FB\u5546\u5E97\uFF0C\u6570\u5B57\u952E\u8D2D\u4E70\uFF0CB \u80CC\u5305\uFF0CE \u5207\u6362\u4E3B\u526F\u624B\uFF0CENTER \u6216\u6309\u94AE\u7ED3\u675F\u4F11\u606F" : "WASD \u79FB\u52A8   \xB7   \u9F20\u6807\u7784\u51C6   \xB7   \u70B9\u51FB\u653B\u51FB   \xB7   E \u5207\u6362\u4E3B\u526F\u624B   \xB7   B \u80CC\u5305   \xB7   Space \u51B2\u523A   \xB7   \u957F\u6309 Q/\u53F3\u952E\u84C4\u529B\u6295\u63B7   \xB7   R \u88C5\u586B   \xB7   ESC \u6682\u505C";
+    const line = touch2 ? "\u5DE6\u6447\u6746\u79FB\u52A8   \xB7   \u53F3\u6447\u6746\u8F6C\u5411\uFF0C\u63A8\u5230\u5E95\u653B\u51FB" : game2.mode === "defense" ? "\u9632\u5B88\uFF1AT/\u70B9\u51FB\u5546\u5E97\uFF0C\u6570\u5B57\u952E\u8D2D\u4E70\uFF0CB \u80CC\u5305\uFF0CE \u5207\u6362\u4E3B\u526F\u624B\uFF0CENTER \u6216\u6309\u94AE\u7ED3\u675F\u4F11\u606F" : "WASD \u79FB\u52A8   \xB7   \u9F20\u6807\u7784\u51C6   \xB7   \u70B9\u51FB\u653B\u51FB   \xB7   E \u5207\u6362\u4E3B\u526F\u624B   \xB7   B \u80CC\u5305   \xB7   Space \u51B2\u523A   \xB7   \u957F\u6309 Q/\u53F3\u952E\u84C4\u529B\u6295\u63B7   \xB7   \u7A7A\u5F39\u81EA\u52A8\u88C5\u586B   \xB7   ESC \u6682\u505C";
     g.save();
     g.textAlign = "center";
     g.font = `400 11px ${MONO}`;
@@ -9601,7 +9621,7 @@
     g.fillText("\u5DF2\u6682\u505C", cx, y + 42);
     g.font = `400 ${T_LABEL}px ${MONO}`;
     g.fillStyle = ink(0.55);
-    g.fillText(game2.refillEnabled ? "R \u8865\u5F39\u5DF2\u5F00\u542F" : "R \u8865\u5F39\u5DF2\u5173\u95ED", cx, y + 64);
+    g.fillText(game2.refillEnabled ? "\u8865\u5F39\u6A21\u5F0F\u5DF2\u5F00\u542F\uFF1A\u5F39\u836F\u65E0\u9650" : "\u8865\u5F39\u6A21\u5F0F\u5DF2\u5173\u95ED\uFF1A\u6D88\u8017\u5907\u7528\u5F39\u5323", cx, y + 64);
     const bw = 132, bh = 26, gap = 14, by = y + 92;
     const buttons = [
       { id: "resume", label: "\u7EE7\u7EED\u6E38\u620F", x: cx - bw - gap / 2, y: by, w: bw, h: bh, col: CYAN },
@@ -9955,11 +9975,6 @@
     if (e.code === "Escape" && !e.repeat && game.state === "play") {
       e.preventDefault();
       game.togglePause();
-      return;
-    }
-    if (e.code === "KeyR" && game.state === "play") {
-      e.preventDefault();
-      game.refillAmmo();
       return;
     }
     if (e.code === "KeyB" && !e.repeat && game.state === "play" && !game.paused) {

@@ -1831,11 +1831,32 @@ export function createGame(renderer) {
   game.toggleRefill = function () {
     game.refillEnabled = !game.refillEnabled;
     localStorage.setItem('overprint.refill', game.refillEnabled ? '1' : '0');
-    game.banner = `R 补弹 ${game.refillEnabled ? '开启' : '关闭'}`;
+    game.banner = `补弹模式 ${game.refillEnabled ? '开启' : '关闭'}`;
     game.bannerT = 0.8;
     if (game.state === 'play') sfx.status();
     return game.refillEnabled;
   };
+
+  function autoReloadPlayerWeapon(p = game.player) {
+    const w = WEAPONS[p.weapon];
+    if (!p.alive || !w || w.melee || w.ammo <= 0) return false;
+    if (p.ammo > 0) return true;
+    if (game.refillEnabled) {
+      p.ammo = w.ammo;
+      game.banner = `${w.name} 自动补满`;
+      game.bannerT = 0.5;
+      game.floorLoadout = stashPlayerWeapon() || game.floorLoadout;
+      return true;
+    }
+    const used = consumeReserveAmmo(p.weapon, w.ammo);
+    if (used <= 0) return false;
+    p.ammo = used;
+    game.floorLoadout = stashPlayerWeapon() || game.floorLoadout;
+    game.banner = `${w.name} 自动装填 ${p.ammo}/${w.ammo} · 备用 ${reserveAmmo(p.weapon)}`;
+    game.bannerT = 0.65;
+    sfx.pickup();
+    return true;
+  }
 
   game.refillAmmo = function () {
     if (game.state !== 'play' || game.paused || game.backpackOpen) return false;
@@ -1879,7 +1900,7 @@ export function createGame(renderer) {
     const p = game.player;
     const w = WEAPONS[p.weapon];
     if (!p.alive || !w || w.melee || w.ammo <= 0) return false;
-    if (game.refillEnabled) return p.ammo < w.ammo;
+    if (game.refillEnabled) return false;
     return p.ammo < w.ammo || reserveAmmo(p.weapon) < magazineCapacity(p.weapon);
   }
 
@@ -3045,7 +3066,7 @@ export function createGame(renderer) {
     const sideEffect = weaponStatusEffect(p.offhandWeapon);
     const extract = extractKeyForEffect(sideEffect);
     p.attackCd = (w.rate || 0.34) * (game.playerStats.attackRate || 1);
-    if (p.ammo <= 0) {
+    if (p.ammo <= 0 && !autoReloadPlayerWeapon(p)) {
       game.banner = `${w.name} 为空`;
       game.bannerT = 0.65;
       sfx.empty();
@@ -3071,7 +3092,7 @@ export function createGame(renderer) {
     const w = WEAPONS[p.weapon];
     const effect = w.extractEffect;
     p.attackCd = (w.rate || 0.34) * (game.playerStats.attackRate || 1);
-    if (p.ammo <= 0) {
+    if (p.ammo <= 0 && !autoReloadPlayerWeapon(p)) {
       game.banner = `${w.name} 为空`;
       game.bannerT = 0.65;
       sfx.empty();
@@ -3109,7 +3130,7 @@ export function createGame(renderer) {
       throwLobbedFromHand(0);
       return;
     }
-    if (p.ammo <= 0) { p.attackCd = 0.18; sfx.empty(); return; }
+    if (p.ammo <= 0 && !autoReloadPlayerWeapon(p)) { p.attackCd = 0.18; sfx.empty(); return; }
     p.attackCd = w.rate * rateScale;
     p.ammo--;
     doAttack(p, p.weapon);
@@ -3122,7 +3143,7 @@ export function createGame(renderer) {
     const p = game.player;
     const w = WEAPONS[p.weapon];
     if (!w || !w.lobbed || p.attackCd > 0) return false;
-    if (p.ammo <= 0) { p.attackCd = 0.18; sfx.empty(); return false; }
+    if (p.ammo <= 0 && !autoReloadPlayerWeapon(p)) { p.attackCd = 0.18; sfx.empty(); return false; }
     p.attackCd = w.rate * (game.playerStats.attackRate || 1);
     p.ammo--;
     spawnThrown(p, p.weapon, p.ammo, charge);

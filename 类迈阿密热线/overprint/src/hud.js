@@ -902,7 +902,7 @@ export function drawBackpackPopup(g, game, W, H) {
   if (!reserves.length) {
     g.fillStyle = ink(0.40);
     g.font = `400 9px ${MONO}`;
-    g.fillText('空。经过有弹药的武器会自动收纳；非补弹模式下 R 会消耗这里的弹药。', left, bagTop + slotH + 56, cw - 190);
+    g.fillText('空。经过有弹药的武器会自动收纳；弹药耗尽后下一次攻击会自动装填。', left, bagTop + slotH + 56, cw - 190);
   } else {
     g.font = `400 9px ${MONO}`;
     reserves.forEach(([kind, amount], i) => {
@@ -1201,7 +1201,7 @@ function drawOptions(g, game, cx, y, k) {
   const seedBase = String(game.seedBase || '').slice(0, 18) || '今天';
   const counts = game.codexCounts ? game.codexCounts() : { weapons: 0, weaponTotal: 0, enemies: 0, enemyTotal: 0 };
   const chips = [
-    { id: 'refill', label: `R 补弹 ${game.refillEnabled ? '开' : '关'}`, on: game.refillEnabled, col: C },
+    { id: 'refill', label: `补弹模式 ${game.refillEnabled ? '开' : '关'}`, on: game.refillEnabled, col: C },
   ];
   if (game.mode === 'endless') chips.push({ id: 'seed', label: `种子 ${seedBase}`, on: !!game.customSeed, col: M });
   if (game.mode === 'practice') {
@@ -1285,8 +1285,8 @@ export function drawTitle(g, game, W, H) {
   g.fillText('有 404 个障碍挡在路上。清理它们。', cx, cy + 82 * k);
 
   const help = touch
-    ? ['左摇杆移动 · 右摇杆瞄准/攻击', '按钮：冲刺 · 投掷', 'ESC 暂停 · 开启后可按 R 补弹']
-    : ['WASD 移动 · 鼠标瞄准 · 点击攻击', 'Space 冲刺 · E 切换主副手 · B 背包 · 长按 Q/右键投掷武器', '手雷类长按攻击扩大范围并选择落点 · R 装填备用弹匣 · ESC 暂停'];
+    ? ['左摇杆移动 · 右摇杆瞄准/攻击', '按钮：冲刺 · 投掷', '弹药耗尽后自动装填 · ESC 暂停']
+    : ['WASD 移动 · 鼠标瞄准 · 点击攻击', 'Space 冲刺 · E 切换主副手 · B 背包 · 长按 Q/右键投掷武器', '手雷类长按攻击扩大范围并选择落点 · 空弹攻击自动装填 · ESC 暂停'];
   g.font = `400 ${9 * k}px ${MONO}`;
   g.fillStyle = ink(0.5);
   track(g, 0.08);
@@ -1318,7 +1318,7 @@ export function drawLegend(g, game, W, H) {
     ? '左摇杆移动   ·   右摇杆转向，推到底攻击'
     : game.mode === 'defense'
       ? '防守：T/点击商店，数字键购买，B 背包，E 切换主副手，ENTER 或按钮结束休息'
-      : 'WASD 移动   ·   鼠标瞄准   ·   点击攻击   ·   E 切换主副手   ·   B 背包   ·   Space 冲刺   ·   长按 Q/右键蓄力投掷   ·   R 装填   ·   ESC 暂停';
+      : 'WASD 移动   ·   鼠标瞄准   ·   点击攻击   ·   E 切换主副手   ·   B 背包   ·   Space 冲刺   ·   长按 Q/右键蓄力投掷   ·   空弹自动装填   ·   ESC 暂停';
   g.save();
   g.textAlign = 'center';
   g.font = `400 11px ${MONO}`;
@@ -1358,7 +1358,7 @@ export function drawPause(g, game, W, H) {
   g.fillText('已暂停', cx, y + 42);
   g.font = `400 ${T_LABEL}px ${MONO}`;
   g.fillStyle = ink(0.55);
-  g.fillText(game.refillEnabled ? 'R 补弹已开启' : 'R 补弹已关闭', cx, y + 64);
+  g.fillText(game.refillEnabled ? '补弹模式已开启：弹药无限' : '补弹模式已关闭：消耗备用弹匣', cx, y + 64);
 
   const bw = 132, bh = 26, gap = 14, by = y + 92;
   const buttons = [
