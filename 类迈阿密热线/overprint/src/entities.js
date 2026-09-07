@@ -136,8 +136,8 @@ export function makePools() {
     bullets: mk(MAX_BULLETS, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, friendly: false, pierce: 0, near: 0, weapon: null, statusEffect: null, projectile: null, explosive: false, ricochet: false, bounces: 0, throughWalls: false })),
     pickups: mk(MAX_PICKUPS, () => ({ alive: false, x: 0, y: 0, kind: 'pistol', ammo: 0, angle: 0 })),
     thrown: mk(MAX_THROWN, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: 'pistol', ammo: 0, spin: 0, life: 0, maxLife: 0, targetX: NaN, targetY: NaN, friendly: true, charge: 0, power: 1, effectScale: 1, statusEffect: null, shrapnelEffect: null, noPickup: false })),
-    deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: 'sentry', x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, friendly: true, spin: 0, target: null })),
-    drones: mk(MAX_DRONES, () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0 })),
+    deploys: mk(MAX_DEPLOYS, () => ({ alive: false, kind: 'sentry', x: 0, y: 0, angle: 0, ammo: 0, fireTimer: 0, reload: 0, life: 0, hp: 0, friendly: true, spin: 0, target: null })),
+    drones: mk(MAX_DRONES, () => ({ alive: false, kind: 'drone', x: 0, y: 0, vx: 0, vy: 0, angle: 0, ammo: 0, fireTimer: 0, life: 0, hp: 0, friendly: true, target: null, navX: 0, navY: 0, navT: 0, spin: 0, kamikaze: false, blastT: 0 })),
   };
 }
 
@@ -515,6 +515,7 @@ export function updateEnemy(game, e, dt) {
   const victim = target && target.enemy && target.enemy.alive && target.enemy.state !== S_DEAD
     ? target.enemy
     : null;
+  const support = target && target.support && target.support.alive ? target.support : null;
   if (victim && e.state === S_CHASE && w.melee && e.attackTimer <= 0) {
     const vd = ENEMY_DEF[victim.type];
     if (dist(e.x, e.y, victim.x, victim.y) < def.r + vd.r + 7) {
@@ -531,6 +532,14 @@ export function updateEnemy(game, e, dt) {
       } else {
         game.knockdownEnemy(victim, Math.cos(a), Math.sin(a));
       }
+    }
+  } else if (support && e.state === S_CHASE && w.melee && e.attackTimer <= 0) {
+    const r = target.r || 12;
+    if (dist(e.x, e.y, support.x, support.y) < def.r + r + 7) {
+      e.attackTimer = meleeCooldown;
+      const heavy = w.lethal || e.type === 'hound';
+      game.damageSupport?.(support, heavy ? 99 : 1, e);
+      e.stagger = Math.max(e.stagger || 0, 0.08);
     }
   } else if (!e.friendly && !game.playerDisguised?.() && p.alive && e.state === S_CHASE && w.melee && e.attackTimer <= 0) {
     if (dist(e.x, e.y, p.x, p.y) < def.r + 11) {

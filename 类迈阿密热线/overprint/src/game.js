@@ -299,6 +299,20 @@ export function createGame(renderer) {
   const EFFECT_WEAPON = { mad: 'dart', tame: 'tameDart', virus: 'virus' };
   const EFFECT_EXTRACT = { mad: 'madExtract', tame: 'tameExtract', virus: 'virusExtract' };
   const EFFECT_TINT = { mad: '#7AC943', tame: '#8A2BE2', virus: '#7AC943' };
+  const SUPPORT_HP = { sentry: 3, drone: 1 };
+  const SUPPORT_RADIUS = { sentry: 17, drone: 11 };
+
+  function supportKindFor(unit) {
+    return unit?.kind === 'sentry' ? 'sentry' : 'drone';
+  }
+
+  function supportRadius(kind) {
+    return SUPPORT_RADIUS[kind] || SUPPORT_RADIUS.drone;
+  }
+
+  function supportTint(kind) {
+    return (kind === 'sentry' ? WEAPONS.sentryPack : WEAPONS.dronePack).tint;
+  }
 
   function weaponStatusEffect(kind) {
     const w = WEAPONS[kind];
@@ -884,12 +898,14 @@ export function createGame(renderer) {
         const a = i * TAU / count + rnd() * 0.28;
         const p0 = nearestSupportPoint(center.x + Math.cos(a) * 24, center.y + Math.sin(a) * 24, 6, center);
         slot.alive = true;
+        slot.kind = 'drone';
         slot.x = p0.x; slot.y = p0.y;
         slot.vx = Math.cos(a) * 24; slot.vy = Math.sin(a) * 24;
         slot.angle = a;
         slot.ammo = w.droneAmmo || 3;
         slot.fireTimer = 0.18 + i * 0.07;
         slot.life = 44;
+        slot.hp = SUPPORT_HP.drone;
         slot.friendly = friendly;
         slot.target = null;
         slot.navX = Math.cos(a); slot.navY = Math.sin(a); slot.navT = 0;
@@ -909,6 +925,7 @@ export function createGame(renderer) {
       slot.fireTimer = 0.22;
       slot.reload = 0;
       slot.life = 62;
+      slot.hp = SUPPORT_HP.sentry;
       slot.friendly = friendly;
       slot.spin = 0;
       slot.target = null;
@@ -921,6 +938,37 @@ export function createGame(renderer) {
     return true;
   }
   game.deployAt = deployAt;
+
+  function destroySupport(unit, source = null) {
+    if (!unit || !unit.alive) return false;
+    const kind = supportKindFor(unit);
+    unit.alive = false;
+    unit.hp = 0;
+    unit.target = null;
+    unit.kamikaze = false;
+    unit.blastT = 0;
+    const tint = supportTint(kind);
+    const hard = kind === 'sentry';
+    burst(unit.x, unit.y, hard ? 16 : 9, hard ? 210 : 150, tint, hard ? 2.6 : 2.0, 0.42);
+    burst(unit.x, unit.y, hard ? 7 : 4, hard ? 130 : 90, '#161513', hard ? 2.0 : 1.5, 0.32);
+    shake(hard ? 4 : 2);
+    sfx.splinter();
+    if (source && source.friendly === false) noise(unit.x, unit.y, hard ? 150 : 80, tint);
+    return true;
+  }
+
+  function damageSupport(unit, amount = 1, source = null) {
+    if (!unit || !unit.alive) return false;
+    const kind = supportKindFor(unit);
+    const hp = unit.hp > 0 ? unit.hp : SUPPORT_HP[kind];
+    unit.hp = Math.max(0, hp - Math.max(1, amount || 1));
+    unit.fireTimer = Math.max(unit.fireTimer || 0, 0.12);
+    burst(unit.x, unit.y, kind === 'sentry' ? 6 : 4, kind === 'sentry' ? 120 : 80, supportTint(kind), 1.5, 0.22);
+    if (unit.hp <= 0) return destroySupport(unit, source);
+    sfx.block();
+    return true;
+  }
+  game.damageSupport = damageSupport;
 
   // whatever they were holding hits the floor with them
   // Shields come apart plate by plate, and the plate that breaks is the one you
@@ -1239,8 +1287,29 @@ export function createGame(renderer) {
     return game.state === 'play' && game.player.alive && !!(w && w.disguise);
   };
 
-  function targetSnapshot(unit, enemy = null, alive = true) {
-    return { alive, x: unit.x, y: unit.y, vx: unit.vx || 0, vy: unit.vy || 0, enemy };
+  function targetSnapshot(unit, enemy = null, alive = true, support = null, supportKind = null) {
+    return {
+      alive, x: unit.x, y: unit.y, vx: unit.vx || 0, vy: unit.vy || 0,
+      enemy, support, supportKind, r: support ? supportRadius(supportKind) : 0,
+    };
+  }
+
+  function supportSnapshot(unit, kind) {
+    return targetSnapshot(unit, null, !!unit.alive, unit, kind);
+  }
+
+  function addSupportTargets(out, source, includeSameSide = false) {
+    const side = !!source.friendly;
+    for (const d of game.pools.deploys || []) {
+      if (!d.alive) continue;
+      if (!includeSameSide && !!d.friendly === side) continue;
+      out.push(supportSnapshot(d, 'sentry'));
+    }
+    for (const d of game.pools.drones || []) {
+      if (!d.alive) continue;
+      if (!includeSameSide && !!d.friendly === side) continue;
+      out.push(supportSnapshot(d, 'drone'));
+    }
   }
 
   game.enemyTargets = function (e) {
@@ -1255,6 +1324,7 @@ export function createGame(renderer) {
       if (!!o.friendly === !!e.friendly) continue;
       out.push(targetSnapshot(o, o));
     }
+    addSupportTargets(out, e);
     return out;
   };
 
@@ -1269,6 +1339,7 @@ export function createGame(renderer) {
       if (o === e || !o.alive || o.state === S_DEAD) continue;
       out.push(targetSnapshot(o, o));
     }
+    addSupportTargets(out, e, true);
     return out;
   };
 
@@ -3082,6 +3153,46 @@ export function createGame(renderer) {
     return { x, y, dp, fromX: fromPrev ? px : b.x, fromY: fromPrev ? py : b.y };
   }
 
+  function bulletUnitContact(b, px, py, unit) {
+    const sx = b.x - px, sy = b.y - py;
+    const l2 = sx * sx + sy * sy;
+    const t = l2 > 1e-6 ? clamp(((unit.x - px) * sx + (unit.y - py) * sy) / l2, 0, 1) : 1;
+    const x = px + sx * t, y = py + sy * t;
+    return { x, y, dp: dist(x, y, unit.x, unit.y) };
+  }
+
+  function bulletHitsSupport(b, px, py, unit, kind) {
+    if (!unit.alive || !!unit.friendly === !!b.friendly) return false;
+    const hit = bulletUnitContact(b, px, py, unit);
+    if (hit.dp > supportRadius(kind)) return false;
+    const bw = WEAPONS[b.weapon] || null;
+    if (b.explosive) {
+      b.x = hit.x; b.y = hit.y;
+      damageSupport(unit, 99, b.owner || null);
+      detonateBullet(b);
+      return true;
+    }
+    damageSupport(unit, bw?.rail ? 99 : 1, b.owner || null);
+    if (bw?.rail || b.pierce > 0) {
+      if (b.pierce > 0) b.pierce--;
+      return false;
+    }
+    b.alive = false;
+    return true;
+  }
+
+  function supportHitByBullet(b, px, py) {
+    for (const d of game.pools.deploys || []) {
+      if (bulletHitsSupport(b, px, py, d, 'sentry')) return true;
+      if (!b.alive) return true;
+    }
+    for (const d of game.pools.drones || []) {
+      if (bulletHitsSupport(b, px, py, d, 'drone')) return true;
+      if (!b.alive) return true;
+    }
+    return false;
+  }
+
   function blockBulletOnPlayerShield(b) {
     const p = game.player;
     b.alive = false;
@@ -3206,6 +3317,7 @@ export function createGame(renderer) {
           break;
         }
         if (stop) break;
+        if (supportHitByBullet(b, px, py)) break;
 
         if (!b.friendly) {
           if (game.player.alive) {
