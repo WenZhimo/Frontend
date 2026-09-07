@@ -4964,7 +4964,7 @@
     }
     function canDropWeapon(kind) {
       const w = WEAPONS[kind];
-      return !!w && kind !== "fists" && !w.passive && !w.extract && !w.offhandOnly;
+      return !!w && kind !== "fists" && !w.noPickup;
     }
     function placeDroppedFromPlayer(p, kind, ammo, angle = p.aim) {
       const offsets = [0, 0.55, -0.55, Math.PI];
@@ -9235,7 +9235,7 @@
   }
 
   // overprint/src/main.js
-  var BUILD_ID = "184179";
+  var BUILD_ID = "184180";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
   var canvas = document.getElementById("c");

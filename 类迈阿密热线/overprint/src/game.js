@@ -1395,7 +1395,7 @@ export function createGame(renderer) {
 
   function canDropWeapon(kind) {
     const w = WEAPONS[kind];
-    return !!w && kind !== 'fists' && !w.passive && !w.extract && !w.offhandOnly;
+    return !!w && kind !== 'fists' && !w.noPickup;
   }
 
   function placeDroppedFromPlayer(p, kind, ammo, angle = p.aim) {
