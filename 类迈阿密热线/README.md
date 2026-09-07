@@ -8,6 +8,8 @@
 
 直接用浏览器打开根目录的 `index.html` 即可游玩，不需要启动服务器。
 
+游玩链接：[https://wenzhimo.github.io/Frontend/%E7%B1%BB%E8%BF%88%E9%98%BF%E5%AF%86%E7%83%AD%E7%BA%BF/index.html](https://wenzhimo.github.io/Frontend/%E7%B1%BB%E8%BF%88%E9%98%BF%E5%AF%86%E7%83%AD%E7%BA%BF/index.html)
+
 项目入口：
 
 - `index.html`：静态页面入口。
