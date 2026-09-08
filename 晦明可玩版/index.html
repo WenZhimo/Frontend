@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>晦明 Huì Míng - 可玩版</title>
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body data-theme="paper">
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="kicker">Huì Míng / 5x5 Card Duel</p>
+          <h1>晦明</h1>
+          <p class="intro">两人热座对弈。暗置与明置不断转换，率先集齐任意一种花色 6 张即胜。</p>
+        </div>
+        <div class="hero-actions" aria-label="游戏操作">
+          <label class="theme-picker">
+            <span>风格</span>
+            <select id="themeSelect" aria-label="切换页面风格">
+              <option value="paper">纸面</option>
+              <option value="dark">暗黑</option>
+              <option value="ink">墨印</option>
+              <option value="jade">翠玉</option>
+            </select>
+          </label>
+          <button id="newGameBtn" class="ghost-button" type="button">新局</button>
+        </div>
+      </section>
+
+      <section class="tabletop" aria-label="晦明游戏桌">
+        <aside class="player-panel" id="playerA"></aside>
+
+        <section class="board-zone">
+          <div class="status-card">
+            <div>
+              <p id="phaseLabel" class="phase-label">开局</p>
+              <h2 id="turnTitle">明方行动</h2>
+            </div>
+            <p id="hintText" class="hint-text"></p>
+          </div>
+
+          <div id="placementPanel" class="placement-panel" hidden>
+            <div class="placement-head">
+              <strong>放牌模式</strong>
+              <button id="cancelPlaceBtn" class="tiny-button" type="button">取消</button>
+            </div>
+            <p>先选择一张自己的手牌，再点一个空位。放牌不会立刻结束回合，之后仍需取牌。</p>
+            <div id="placementHand" class="placement-hand"></div>
+            <div class="side-choice" role="radiogroup" aria-label="选择放置明暗">
+              <label><input type="radio" name="placeSide" value="down" checked> 暗置</label>
+              <label><input type="radio" name="placeSide" value="up"> 明置</label>
+            </div>
+          </div>
+
+          <div id="refillPanel" class="placement-panel refill-panel" hidden>
+            <div class="placement-head">
+              <strong>续局摆牌</strong>
+              <span id="refillCount"></span>
+            </div>
+            <p>双方轮流把手牌放回空位，可自选明置或暗置。全部放回后进入下一轮。</p>
+            <div id="refillHand" class="placement-hand"></div>
+            <div class="side-choice" role="radiogroup" aria-label="选择续局摆牌明暗">
+              <label><input type="radio" name="refillSide" value="down" checked> 暗置</label>
+              <label><input type="radio" name="refillSide" value="up"> 明置</label>
+            </div>
+          </div>
+
+          <div id="board" class="board" aria-label="5x5 牌阵"></div>
+
+          <div class="control-row">
+            <button id="placeBtn" class="primary-button" type="button">放牌</button>
+            <button id="passBtn" class="ghost-button" type="button">遮屏交接</button>
+          </div>
+        </section>
+
+        <aside class="player-panel" id="playerB"></aside>
+      </section>
+
+      <section class="lower-grid">
+        <article class="rules-card">
+          <h2>规则速览</h2>
+          <ul>
+            <li>开局 25 张牌暗置，中心固定 Joker，其余四花色各 6 张随机排布。</li>
+            <li>回合内可取走一张明置牌；若拥有“暗取”能力，也可取走一张暗置非 Joker 牌。</li>
+            <li>取牌后翻动其上下左右四邻；空位不翻。Joker 只能明置时取走，可充当任意花色。</li>
+            <li>每人每局一次常规放牌：必须先放牌，再取牌。只剩一张且无人获胜时进入续局摆牌。</li>
+          </ul>
+        </article>
+
+        <article class="log-card">
+          <div class="log-head">
+            <h2>对局记录</h2>
+            <button id="clearLogBtn" class="tiny-button" type="button">清空</button>
+          </div>
+          <ol id="logList" class="log-list"></ol>
+        </article>
+      </section>
+    </main>
+
+    <div id="handoffOverlay" class="handoff-overlay" hidden>
+      <div class="handoff-card">
+        <p>请交给</p>
+        <h2 id="handoffName">下一位玩家</h2>
+        <button id="startTurnBtn" class="primary-button" type="button">开始回合</button>
+      </div>
+    </div>
+
+    <div id="gameOverOverlay" class="handoff-overlay" hidden>
+      <div class="handoff-card result-card">
+        <p id="resultKicker">对局结束</p>
+        <h2 id="resultTitle"></h2>
+        <p id="resultDetail"></p>
+        <button id="resultNewGameBtn" class="primary-button" type="button">再来一局</button>
+      </div>
+    </div>
+
+    <script src="./game.js"></script>
+  </body>
+</html>

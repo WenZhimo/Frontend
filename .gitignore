@@ -14,5 +14,3 @@ SNAKE_AI/snake_models/exports/pc/checkpoints/best.json
 asset/song/*.flac
 *.flac
 
-# Generated/debug outputs
-随机世界地图/_debug_*/
