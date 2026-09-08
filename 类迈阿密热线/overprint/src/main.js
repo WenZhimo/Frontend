@@ -9,7 +9,7 @@ import { applyThemeToDocument, cycleTheme } from './brand.js';
 
 // Bumped on every edit and printed in the corner. If the number on screen is
 // not the number the server reports, you are looking at a cached page.
-export const BUILD_ID = '184183';
+export const BUILD_ID = '184184';
 console.log('[overprint] build', BUILD_ID);
 if (window.buildTitle) window.buildTitle('版本 ' + BUILD_ID);
 applyThemeToDocument();
@@ -58,6 +58,11 @@ addEventListener('keydown', (e) => {
     e.preventDefault();
     return;
   }
+  if (e.code === 'KeyT' && !e.repeat && game.state === 'play' && game.mode === 'practice' && !game.paused) {
+    e.preventDefault();
+    game.togglePracticeTools?.();
+    return;
+  }
   if (e.code === 'KeyT' && !e.repeat && game.state === 'play' && game.mode === 'defense' && !game.paused) {
     e.preventDefault();
     game.toggleDefenseShop?.();
@@ -69,6 +74,11 @@ addEventListener('keydown', (e) => {
     return;
   }
   if (game.paused && e.code !== 'KeyM') {
+    e.preventDefault();
+    return;
+  }
+  if (game.state === 'play' && game.mode === 'practice' && game.practice?.toolsOpen && /^Digit[1-6]$/.test(e.code)) {
+    game.usePracticeTool?.(Number(e.code.slice(5)));
     e.preventDefault();
     return;
   }
@@ -298,6 +308,22 @@ function hitTab(x, y) {
       return true;
     }
     return false;
+  }
+  if (game.state === 'play' && game.mode === 'practice') {
+    const toggle = game.ui.practiceToolsButton;
+    if (toggle && x >= toggle.x && x <= toggle.x + toggle.w && y >= toggle.y && y <= toggle.y + toggle.h) {
+      game.togglePracticeTools?.();
+      return true;
+    }
+    if (game.practice?.toolsOpen) {
+      for (const item of game.ui.practiceToolsOptions || []) {
+        if (x < item.x || x > item.x + item.w || y < item.y || y > item.y + item.h) continue;
+        game.usePracticeTool?.(item.slot);
+        return true;
+      }
+      const panel = game.ui.practiceToolsPanel;
+      if (panel && x >= panel.x && x <= panel.x + panel.w && y >= panel.y && y <= panel.y + panel.h) return true;
+    }
   }
   if (game.state === 'play' && game.mode === 'defense') {
     const d = game.defense || {};

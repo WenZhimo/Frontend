@@ -287,6 +287,86 @@ function drawDefenseHud(g, game, W) {
   g.restore();
 }
 
+function drawPracticeHud(g, game, W) {
+  if (game.mode !== 'practice' || game.state !== 'play') return;
+  const p = game.player;
+  const pr = game.practice || {};
+  game.ui.practiceToolsButton = null;
+  game.ui.practiceToolsOptions = [];
+  game.ui.practiceToolsPanel = null;
+
+  const opened = !!pr.toolsOpen;
+  const x = W - 326, y = 22, w = 304, h = opened ? 214 : 104;
+  game.ui.practiceToolsPanel = { x, y, w, h };
+  card(g, x, y, w, h);
+  g.save();
+  g.globalCompositeOperation = printMode();
+  g.textAlign = 'left';
+  g.textBaseline = 'alphabetic';
+
+  g.fillStyle = INK;
+  g.font = `600 ${T_LABEL}px ${MONO}`;
+  g.fillText('练习工具', x + 14, y + 20);
+
+  const btn = { x: x + w - 78, y: y + 9, w: 62, h: 22 };
+  game.ui.practiceToolsButton = btn;
+  g.strokeStyle = M;
+  bar(g, btn.x, btn.y, btn.w, btn.h);
+  g.fillStyle = M;
+  g.textAlign = 'center';
+  g.font = `600 ${T_MICRO}px ${MONO}`;
+  track(g, 0.12);
+  g.fillText(opened ? '收起' : '工具', btn.x + btn.w / 2, btn.y + 15);
+  track(g, 0);
+  g.textAlign = 'left';
+
+  const weapon = WEAPONS[p.weapon]?.name || p.weapon;
+  const weaponList = game.practiceWeapons || [];
+  const weaponIndex = weaponList.indexOf(pr.weapon);
+  const nextWeaponKey = weaponList[(weaponIndex + 1 + weaponList.length) % weaponList.length] || pr.weapon;
+  const nextWeapon = WEAPONS[nextWeaponKey]?.name || nextWeaponKey;
+  const enemy = ENEMY_NAMES[pr.enemy] || pr.enemy;
+  const enemyList = game.practiceEnemies || [];
+  const enemyIndex = enemyList.indexOf(pr.enemy);
+  const nextEnemyKey = enemyList[(enemyIndex + 1 + enemyList.length) % enemyList.length] || pr.enemy;
+  const nextEnemy = ENEMY_NAMES[nextEnemyKey] || nextEnemyKey;
+  g.fillStyle = ink(0.52);
+  g.font = `400 ${T_MICRO}px ${MONO}`;
+  track(g, 0.08);
+  g.fillText(`当前 ${weapon}   目标 ${enemy}`, x + 14, y + 42);
+  g.fillText(`下一武器 ${nextWeapon}   无敌 ${pr.invincible ? '开' : '关'}`, x + 14, y + 58);
+  g.fillStyle = C;
+  g.fillText(opened ? '数字键 1-6 或点击项目。' : '按 T 打开：换武器 / 刷怪 / 无敌', x + 14, y + 78);
+
+  if (!opened) {
+    g.restore();
+    return;
+  }
+
+  const items = [
+    { slot: 1, label: `切换武器：${nextWeapon}`, col: M },
+    { slot: 2, label: `切换敌人：${nextEnemy}`, col: Y },
+    { slot: 3, label: '刷新一组目标', col: C },
+    { slot: 4, label: '生成一个目标', col: GREEN },
+    { slot: 5, label: `无敌：${pr.invincible ? '开' : '关'}`, col: RED },
+    { slot: 6, label: '补满生命/弹药', col: VIOLET },
+  ];
+  const bx = x + 14, bw = w - 28, bh = 20;
+  items.forEach((item, i) => {
+    const by = y + 101 + i * 19;
+    const hit = { slot: item.slot, x: bx, y: by - 13, w: bw, h: bh };
+    game.ui.practiceToolsOptions.push(hit);
+    g.strokeStyle = item.col;
+    bar(g, hit.x, hit.y, hit.w, hit.h);
+    g.fillStyle = item.col;
+    g.font = `600 ${T_MICRO}px ${MONO}`;
+    track(g, 0.08);
+    g.fillText(`${item.slot} ${item.label}`, bx + 8, by);
+    track(g, 0);
+  });
+  g.restore();
+}
+
 function drawKatanaDash(g, game, W) {
   const p = game.player;
   if (!p.alive || !(p.katanaT > 0) || !(p.katanaMax > 0)) return;
@@ -313,6 +393,7 @@ function drawPlayerStatuses(g, game, H) {
   const rows = [];
   if (p.infectT > 0) rows.push({ label: `感染 ${Math.ceil(p.infectT)}s`, col: '#7AC943' });
   if (p.madT > 0) rows.push({ label: `疯狂 ${Math.ceil(p.madT)}s`, col: M });
+  if (game.mode === 'practice' && game.practice?.invincible) rows.push({ label: '练习无敌', col: C });
   if (p.iframes > 1) rows.push({ label: `无敌 ${Math.ceil(p.iframes)}s`, col: C });
   if (!rows.length) return;
   const x = 22 - PAD * 0.7, w = 208 + PAD;
@@ -396,6 +477,7 @@ export function drawHud(g, game, W, H) {
 
   drawChain(g, game, SX - PAD * 0.7, SY - 10 + 94 + 7, SW + PAD);
   drawDefenseHud(g, game, W);
+  drawPracticeHud(g, game, W);
   drawKatanaDash(g, game, W);
   drawPlayerStatuses(g, game, H);
 
@@ -1318,7 +1400,9 @@ export function drawLegend(g, game, W, H) {
     ? '左摇杆移动   ·   右摇杆转向，推到底攻击'
     : game.mode === 'defense'
       ? '防守：T/点击商店，数字键购买，B 背包，E 切换主副手，ENTER 或按钮结束休息'
-      : 'WASD 移动   ·   鼠标瞄准   ·   点击攻击   ·   E 切换主副手   ·   B 背包   ·   Space 冲刺   ·   长按 Q/右键蓄力投掷   ·   空弹自动装填   ·   ESC 暂停';
+      : game.mode === 'practice'
+        ? '练习：T/点击工具，1-6 换武器、刷怪、无敌、补满   ·   WASD 移动   ·   鼠标攻击   ·   ESC 暂停'
+        : 'WASD 移动   ·   鼠标瞄准   ·   点击攻击   ·   E 切换主副手   ·   B 背包   ·   Space 冲刺   ·   长按 Q/右键蓄力投掷   ·   空弹自动装填   ·   ESC 暂停';
   g.save();
   g.textAlign = 'center';
   g.font = `400 11px ${MONO}`;

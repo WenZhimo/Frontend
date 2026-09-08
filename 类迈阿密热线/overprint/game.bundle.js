@@ -3693,6 +3693,14 @@
     { id: "cover", label: "\u63A9\u4F53\u623F" },
     { id: "lanes", label: "\u957F\u5ECA" }
   ];
+  var ENEMY_NAMES = {
+    strawman: "\u7A3B\u8349\u4EBA",
+    thug: "\u66B4\u5F92",
+    gunner: "\u67AA\u624B",
+    hound: "\u730E\u72AC",
+    patroller: "\u5DE1\u903B\u8005",
+    shield: "\u91CD\u76FE"
+  };
   var PRACTICE_ENEMIES = ["strawman", "thug", "gunner", "hound", "patroller", "shield"];
   var PRACTICE_WEAPONS = ["pistol", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "molotov", "dart", "tameDart", "virus", "copySauce", "madExtract", "tameExtract", "virusExtract", "madVirusExtract", "tameVirusExtract", "disguise", "sniper", "laser", "butcher", "shield", "katana", "quixote", "knife", "bat"];
   var DEFENSE_SHOP_WEAPONS = ["pistol", "shield", "katana", "quixote", "smg", "ripper", "shotgun", "grenade", "frag", "flash", "sentryPack", "dronePack", "rocket", "virus", "copySauce", "madExtract", "tameExtract", "shield", "molotov", "dart", "tameDart", "sniper", "laser", "butcher", "shield"];
@@ -3832,7 +3840,7 @@
       practiceMaps: PRACTICE_MAPS,
       practiceWeapons: PRACTICE_WEAPONS,
       practiceEnemies: PRACTICE_ENEMIES,
-      practice: { map: 0, weapon: "pistol", enemy: "strawman" },
+      practice: { map: 0, weapon: "pistol", enemy: "strawman", toolsOpen: false, invincible: false },
       defense: newDefenseState(),
       codex: loadCodex(),
       codexOpen: false,
@@ -3891,6 +3899,9 @@
         defenseShopOptions: [],
         defenseRestButton: null,
         defenseShopPanel: null,
+        practiceToolsButton: null,
+        practiceToolsOptions: [],
+        practiceToolsPanel: null,
         backpackPanel: null,
         backpackClose: null,
         backpackDrop: null,
@@ -5521,6 +5532,7 @@
       game2.backpackOpen = false;
       game2.backpackSelection = null;
       game2.codexOpen = false;
+      game2.practice.toolsOpen = false;
       game2.banner = null;
       game2.bannerT = 0;
       game2.showTitle();
@@ -5787,6 +5799,7 @@
       game2.paused = false;
       game2.backpackOpen = false;
       game2.backpackSelection = null;
+      game2.practice.toolsOpen = false;
       const diff = REC.floor ? Math.min(game2.floor, REC.floor) : game2.floor;
       let level;
       if (game2.mode === "practice") {
@@ -5812,6 +5825,7 @@
       game2.paused = false;
       game2.backpackOpen = false;
       game2.backpackSelection = null;
+      game2.practice.toolsOpen = false;
       const restartLoadout = game2.mode === "defense" ? stashPlayerWeapon() || game2.floorLoadout : game2.floorLoadout;
       if (game2.mode === "defense") {
         game2.score = 0;
@@ -6402,6 +6416,17 @@
     game2.killPlayer = function(_source = null, force = false) {
       const p = game2.player;
       if (!p.alive || game2.state !== "play") return;
+      if (game2.mode === "practice" && game2.practice.invincible) {
+        p.hp = p.maxHp || 1;
+        p.iframes = Math.max(p.iframes || 0, 0.25);
+        p.burnT = 0;
+        p.infectT = 0;
+        if (game2.bannerT <= 0.05) {
+          game2.banner = "\u7EC3\u4E60\u65E0\u654C";
+          game2.bannerT = 0.35;
+        }
+        return;
+      }
       if (!force && p.iframes > 0) return;
       if (!force && (p.hp || 1) > 1) {
         p.hp--;
@@ -8041,6 +8066,7 @@
       choosePreviewSeed();
       game2.floorLoadout = startingLoadout();
       game2.paused = false;
+      game2.practice.toolsOpen = false;
       startFloor(false);
       game2.state = "title";
       game2.player.alive = false;
@@ -8075,6 +8101,128 @@
       const i = PRACTICE_ENEMIES.indexOf(game2.practice.enemy);
       game2.practice.enemy = PRACTICE_ENEMIES[(i + 1 + PRACTICE_ENEMIES.length) % PRACTICE_ENEMIES.length];
       resetTitlePreview();
+    };
+    function practiceEnemyLoadout(type) {
+      if (type === "gunner") return { weapon: "pistol", armour: 0 };
+      if (type === "shield") return { weapon: "shield", armour: 4 };
+      if (type === "patroller") return { weapon: "pistol", armour: 0 };
+      return { weapon: "fists", armour: 0 };
+    }
+    function practiceEnemyCount(type) {
+      if (type === "strawman") return 5;
+      if (type === "hound") return 4;
+      if (type === "patroller") return 5;
+      return 6;
+    }
+    function practiceSpawnPoint(index = 0) {
+      const lv = game2.level;
+      const points = (lv.spawnPoints && lv.spawnPoints.length ? lv.spawnPoints : lv.enemySpawns) || [];
+      const ahead = {
+        x: game2.player.x + Math.cos(game2.player.aim) * TILE * 5,
+        y: game2.player.y + Math.sin(game2.player.aim) * TILE * 5
+      };
+      const fallback = lv.exit || ahead;
+      const start = Math.floor(game2.time * 7 + index * 3) % Math.max(1, points.length);
+      for (let i = 0; i < points.length; i++) {
+        const p0 = points[(start + i) % points.length];
+        const x = clamp(p0.x + (rnd() - 0.5) * TILE * 0.9, TILE * 1.5, lv.w - TILE * 1.5);
+        const y = clamp(p0.y + (rnd() - 0.5) * TILE * 0.9, TILE * 1.5, lv.h - TILE * 1.5);
+        if (dist(x, y, game2.player.x, game2.player.y) < TILE * 3) continue;
+        if (supportPointClear(x, y, 12)) return { x, y };
+      }
+      return nearestSupportPoint(
+        clamp(fallback.x, TILE * 1.5, lv.w - TILE * 1.5),
+        clamp(fallback.y, TILE * 1.5, lv.h - TILE * 1.5),
+        12,
+        {
+          x: clamp(ahead.x, TILE * 1.5, lv.w - TILE * 1.5),
+          y: clamp(ahead.y, TILE * 1.5, lv.h - TILE * 1.5)
+        }
+      );
+    }
+    function clearPracticeTargets() {
+      for (const e of game2.pools.enemies) {
+        e.alive = false;
+        e.state = S_DEAD;
+      }
+      for (const c of game2.pools.corpses || []) c.alive = false;
+    }
+    function spawnPracticeTargets(count, clearFirst = false) {
+      if (game2.mode !== "practice" || game2.state !== "play") return false;
+      if (clearFirst) clearPracticeTargets();
+      const type = game2.practice.enemy || "strawman";
+      const loadout = practiceEnemyLoadout(type);
+      let made = 0;
+      for (let i = 0; i < count; i++) {
+        const p0 = practiceSpawnPoint(i + made);
+        const e = spawnEnemy({
+          x: p0.x,
+          y: p0.y,
+          type,
+          weapon: loadout.weapon,
+          armour: loadout.armour,
+          angle: Math.atan2(game2.player.y - p0.y, game2.player.x - p0.x)
+        });
+        if (e) made++;
+      }
+      game2.enemiesLeft = hostilesLeft();
+      computeFlow();
+      return made > 0;
+    }
+    game2.togglePracticeTools = function(open = null) {
+      if (game2.mode !== "practice" || game2.state !== "play") return false;
+      game2.practice.toolsOpen = open == null ? !game2.practice.toolsOpen : !!open;
+      game2.banner = game2.practice.toolsOpen ? "\u7EC3\u4E60\u5DE5\u5177\u5DF2\u6253\u5F00" : "\u7EC3\u4E60\u5DE5\u5177\u5DF2\u6536\u8D77";
+      game2.bannerT = 0.55;
+      sfx.status();
+      return game2.practice.toolsOpen;
+    };
+    game2.usePracticeTool = function(slot) {
+      if (game2.mode !== "practice" || game2.state !== "play") return false;
+      const p = game2.player;
+      if (slot === 1) {
+        const i = PRACTICE_WEAPONS.indexOf(game2.practice.weapon);
+        game2.practice.weapon = PRACTICE_WEAPONS[(i + 1 + PRACTICE_WEAPONS.length) % PRACTICE_WEAPONS.length];
+        const loadout = loadoutFor(game2.practice.weapon);
+        setMainSlot(p, loadout.weapon, loadout.ammo);
+        if (loadout.offhand) setOffhandSlot(p, loadout.offhand, loadout.offAmmo || 0);
+        p.attackCd = 0;
+        p.swing = 0;
+        p.sawCd = 0;
+        game2.floorLoadout = stashPlayerWeapon() || game2.floorLoadout;
+        game2.banner = `\u7EC3\u4E60\u6B66\u5668\uFF1A${WEAPONS[p.weapon]?.name || p.weapon}`;
+      } else if (slot === 2) {
+        const i = PRACTICE_ENEMIES.indexOf(game2.practice.enemy);
+        game2.practice.enemy = PRACTICE_ENEMIES[(i + 1 + PRACTICE_ENEMIES.length) % PRACTICE_ENEMIES.length];
+        game2.banner = `\u7EC3\u4E60\u654C\u4EBA\uFF1A${ENEMY_NAMES[game2.practice.enemy] || game2.practice.enemy}`;
+      } else if (slot === 3) {
+        if (!spawnPracticeTargets(practiceEnemyCount(game2.practice.enemy), true)) return false;
+        game2.banner = "\u7EC3\u4E60\u76EE\u6807\u5DF2\u5237\u65B0";
+      } else if (slot === 4) {
+        if (!spawnPracticeTargets(1, false)) return false;
+        game2.banner = "\u751F\u6210\u7EC3\u4E60\u76EE\u6807";
+      } else if (slot === 5) {
+        game2.practice.invincible = !game2.practice.invincible;
+        if (game2.practice.invincible) {
+          p.hp = p.maxHp || 1;
+          p.infectT = 0;
+          p.burnT = 0;
+        }
+        game2.banner = `\u7EC3\u4E60\u65E0\u654C ${game2.practice.invincible ? "\u5F00\u542F" : "\u5173\u95ED"}`;
+      } else if (slot === 6) {
+        const w = WEAPONS[p.weapon];
+        if (w && !w.melee && w.ammo > 0) p.ammo = w.ammo;
+        p.hp = p.maxHp || 1;
+        p.infectT = 0;
+        p.burnT = 0;
+        p.madT = 0;
+        game2.banner = "\u751F\u547D\u4E0E\u5F39\u836F\u5DF2\u8865\u6EE1";
+      } else {
+        return false;
+      }
+      game2.bannerT = 0.75;
+      sfx.pickup();
+      return true;
     };
     game2.toggleCodex = function() {
       game2.codexOpen = !game2.codexOpen;
@@ -8328,7 +8476,7 @@
   var BAR = 7;
   var BAR_TALL = 13;
   var PAD = 14;
-  var ENEMY_NAMES = {
+  var ENEMY_NAMES2 = {
     strawman: "\u7A3B\u8349\u4EBA",
     thug: "\u66B4\u5F92",
     gunner: "\u67AA\u624B",
@@ -8576,6 +8724,79 @@
     track(g, 0);
     g.restore();
   }
+  function drawPracticeHud(g, game2, W) {
+    if (game2.mode !== "practice" || game2.state !== "play") return;
+    const p = game2.player;
+    const pr = game2.practice || {};
+    game2.ui.practiceToolsButton = null;
+    game2.ui.practiceToolsOptions = [];
+    game2.ui.practiceToolsPanel = null;
+    const opened = !!pr.toolsOpen;
+    const x = W - 326, y = 22, w = 304, h = opened ? 214 : 104;
+    game2.ui.practiceToolsPanel = { x, y, w, h };
+    card(g, x, y, w, h);
+    g.save();
+    g.globalCompositeOperation = printMode();
+    g.textAlign = "left";
+    g.textBaseline = "alphabetic";
+    g.fillStyle = INK;
+    g.font = `600 ${T_LABEL}px ${MONO}`;
+    g.fillText("\u7EC3\u4E60\u5DE5\u5177", x + 14, y + 20);
+    const btn = { x: x + w - 78, y: y + 9, w: 62, h: 22 };
+    game2.ui.practiceToolsButton = btn;
+    g.strokeStyle = MAG;
+    bar(g, btn.x, btn.y, btn.w, btn.h);
+    g.fillStyle = MAG;
+    g.textAlign = "center";
+    g.font = `600 ${T_MICRO}px ${MONO}`;
+    track(g, 0.12);
+    g.fillText(opened ? "\u6536\u8D77" : "\u5DE5\u5177", btn.x + btn.w / 2, btn.y + 15);
+    track(g, 0);
+    g.textAlign = "left";
+    const weapon = WEAPONS[p.weapon]?.name || p.weapon;
+    const weaponList = game2.practiceWeapons || [];
+    const weaponIndex = weaponList.indexOf(pr.weapon);
+    const nextWeaponKey = weaponList[(weaponIndex + 1 + weaponList.length) % weaponList.length] || pr.weapon;
+    const nextWeapon = WEAPONS[nextWeaponKey]?.name || nextWeaponKey;
+    const enemy = ENEMY_NAMES2[pr.enemy] || pr.enemy;
+    const enemyList = game2.practiceEnemies || [];
+    const enemyIndex = enemyList.indexOf(pr.enemy);
+    const nextEnemyKey = enemyList[(enemyIndex + 1 + enemyList.length) % enemyList.length] || pr.enemy;
+    const nextEnemy = ENEMY_NAMES2[nextEnemyKey] || nextEnemyKey;
+    g.fillStyle = ink(0.52);
+    g.font = `400 ${T_MICRO}px ${MONO}`;
+    track(g, 0.08);
+    g.fillText(`\u5F53\u524D ${weapon}   \u76EE\u6807 ${enemy}`, x + 14, y + 42);
+    g.fillText(`\u4E0B\u4E00\u6B66\u5668 ${nextWeapon}   \u65E0\u654C ${pr.invincible ? "\u5F00" : "\u5173"}`, x + 14, y + 58);
+    g.fillStyle = CYAN;
+    g.fillText(opened ? "\u6570\u5B57\u952E 1-6 \u6216\u70B9\u51FB\u9879\u76EE\u3002" : "\u6309 T \u6253\u5F00\uFF1A\u6362\u6B66\u5668 / \u5237\u602A / \u65E0\u654C", x + 14, y + 78);
+    if (!opened) {
+      g.restore();
+      return;
+    }
+    const items = [
+      { slot: 1, label: `\u5207\u6362\u6B66\u5668\uFF1A${nextWeapon}`, col: MAG },
+      { slot: 2, label: `\u5207\u6362\u654C\u4EBA\uFF1A${nextEnemy}`, col: YELLOW },
+      { slot: 3, label: "\u5237\u65B0\u4E00\u7EC4\u76EE\u6807", col: CYAN },
+      { slot: 4, label: "\u751F\u6210\u4E00\u4E2A\u76EE\u6807", col: GREEN },
+      { slot: 5, label: `\u65E0\u654C\uFF1A${pr.invincible ? "\u5F00" : "\u5173"}`, col: RED },
+      { slot: 6, label: "\u8865\u6EE1\u751F\u547D/\u5F39\u836F", col: VIOLET }
+    ];
+    const bx = x + 14, bw = w - 28, bh = 20;
+    items.forEach((item, i) => {
+      const by = y + 101 + i * 19;
+      const hit = { slot: item.slot, x: bx, y: by - 13, w: bw, h: bh };
+      game2.ui.practiceToolsOptions.push(hit);
+      g.strokeStyle = item.col;
+      bar(g, hit.x, hit.y, hit.w, hit.h);
+      g.fillStyle = item.col;
+      g.font = `600 ${T_MICRO}px ${MONO}`;
+      track(g, 0.08);
+      g.fillText(`${item.slot} ${item.label}`, bx + 8, by);
+      track(g, 0);
+    });
+    g.restore();
+  }
   function drawKatanaDash(g, game2, W) {
     const p = game2.player;
     if (!p.alive || !(p.katanaT > 0) || !(p.katanaMax > 0)) return;
@@ -8601,6 +8822,7 @@
     const rows = [];
     if (p.infectT > 0) rows.push({ label: `\u611F\u67D3 ${Math.ceil(p.infectT)}s`, col: "#7AC943" });
     if (p.madT > 0) rows.push({ label: `\u75AF\u72C2 ${Math.ceil(p.madT)}s`, col: MAG });
+    if (game2.mode === "practice" && game2.practice?.invincible) rows.push({ label: "\u7EC3\u4E60\u65E0\u654C", col: CYAN });
     if (p.iframes > 1) rows.push({ label: `\u65E0\u654C ${Math.ceil(p.iframes)}s`, col: CYAN });
     if (!rows.length) return;
     const x = 22 - PAD * 0.7, w = 208 + PAD;
@@ -8670,6 +8892,7 @@
     g.restore();
     drawChain(g, game2, SX - PAD * 0.7, SY - 10 + 94 + 7, SW + PAD);
     drawDefenseHud(g, game2, W);
+    drawPracticeHud(g, game2, W);
     drawKatanaDash(g, game2, W);
     drawPlayerStatuses(g, game2, H);
     const w = WEAPONS[p.weapon];
@@ -9094,7 +9317,7 @@
     g.fillStyle = seen ? INK : ink(0.38);
     g.font = `600 10px ${MONO}`;
     track(g, 0.08);
-    const name = enemy ? ENEMY_NAMES[kind] || kind : WEAPONS[kind]?.name || kind;
+    const name = enemy ? ENEMY_NAMES2[kind] || kind : WEAPONS[kind]?.name || kind;
     g.fillText(`${name}${seen ? "" : " \xB7 \u672A\u8BB0\u5F55"}`, x + 52, y + 15, w - 58);
     track(g, 0);
     g.fillStyle = seen ? ink(0.56) : ink(0.34);
@@ -9366,7 +9589,7 @@
     if (game2.mode === "practice") {
       const map = game2.practiceMaps[game2.practice.map] || game2.practiceMaps[0];
       const weapon = WEAPONS[game2.practice.weapon]?.name || game2.practice.weapon;
-      const enemy = ENEMY_NAMES[game2.practice.enemy] || game2.practice.enemy;
+      const enemy = ENEMY_NAMES2[game2.practice.enemy] || game2.practice.enemy;
       return drawTitleNote(g, cx, y, w, k, "\u7EC3\u4E60\u6A21\u5F0F", [
         `\u5730\u5F62\uFF1A${map.label}   \u6B66\u5668\uFF1A${weapon}`,
         `\u654C\u4EBA\uFF1A${enemy}   \u5305\u542B\u7A3B\u8349\u4EBA\u8BAD\u7EC3\u76EE\u6807`,
@@ -9495,7 +9718,7 @@
       chips.push(
         { id: "practiceMap", label: `\u5730\u5F62 ${map.label}`, on: false, col: CYAN },
         { id: "practiceWeapon", label: `\u6B66\u5668 ${WEAPONS[game2.practice.weapon]?.name || game2.practice.weapon}`, on: false, col: MAG },
-        { id: "practiceEnemy", label: `\u654C\u4EBA ${ENEMY_NAMES[game2.practice.enemy] || game2.practice.enemy}`, on: false, col: YELLOW }
+        { id: "practiceEnemy", label: `\u654C\u4EBA ${ENEMY_NAMES2[game2.practice.enemy] || game2.practice.enemy}`, on: false, col: YELLOW }
       );
     }
     chips.push(
@@ -9583,7 +9806,7 @@
     if (!game2.tutorialT || game2.tutorialT <= 0) return;
     const a = clamp(game2.tutorialT / 1.2, 0, 1);
     const touch2 = game2.touch && game2.touch.enabled;
-    const line = touch2 ? "\u5DE6\u6447\u6746\u79FB\u52A8   \xB7   \u53F3\u6447\u6746\u8F6C\u5411\uFF0C\u63A8\u5230\u5E95\u653B\u51FB" : game2.mode === "defense" ? "\u9632\u5B88\uFF1AT/\u70B9\u51FB\u5546\u5E97\uFF0C\u6570\u5B57\u952E\u8D2D\u4E70\uFF0CB \u80CC\u5305\uFF0CE \u5207\u6362\u4E3B\u526F\u624B\uFF0CENTER \u6216\u6309\u94AE\u7ED3\u675F\u4F11\u606F" : "WASD \u79FB\u52A8   \xB7   \u9F20\u6807\u7784\u51C6   \xB7   \u70B9\u51FB\u653B\u51FB   \xB7   E \u5207\u6362\u4E3B\u526F\u624B   \xB7   B \u80CC\u5305   \xB7   Space \u51B2\u523A   \xB7   \u957F\u6309 Q/\u53F3\u952E\u84C4\u529B\u6295\u63B7   \xB7   \u7A7A\u5F39\u81EA\u52A8\u88C5\u586B   \xB7   ESC \u6682\u505C";
+    const line = touch2 ? "\u5DE6\u6447\u6746\u79FB\u52A8   \xB7   \u53F3\u6447\u6746\u8F6C\u5411\uFF0C\u63A8\u5230\u5E95\u653B\u51FB" : game2.mode === "defense" ? "\u9632\u5B88\uFF1AT/\u70B9\u51FB\u5546\u5E97\uFF0C\u6570\u5B57\u952E\u8D2D\u4E70\uFF0CB \u80CC\u5305\uFF0CE \u5207\u6362\u4E3B\u526F\u624B\uFF0CENTER \u6216\u6309\u94AE\u7ED3\u675F\u4F11\u606F" : game2.mode === "practice" ? "\u7EC3\u4E60\uFF1AT/\u70B9\u51FB\u5DE5\u5177\uFF0C1-6 \u6362\u6B66\u5668\u3001\u5237\u602A\u3001\u65E0\u654C\u3001\u8865\u6EE1   \xB7   WASD \u79FB\u52A8   \xB7   \u9F20\u6807\u653B\u51FB   \xB7   ESC \u6682\u505C" : "WASD \u79FB\u52A8   \xB7   \u9F20\u6807\u7784\u51C6   \xB7   \u70B9\u51FB\u653B\u51FB   \xB7   E \u5207\u6362\u4E3B\u526F\u624B   \xB7   B \u80CC\u5305   \xB7   Space \u51B2\u523A   \xB7   \u957F\u6309 Q/\u53F3\u952E\u84C4\u529B\u6295\u63B7   \xB7   \u7A7A\u5F39\u81EA\u52A8\u88C5\u586B   \xB7   ESC \u6682\u505C";
     g.save();
     g.textAlign = "center";
     g.font = `400 11px ${MONO}`;
@@ -9937,7 +10160,7 @@
   }
 
   // overprint/src/main.js
-  var BUILD_ID = "184183";
+  var BUILD_ID = "184184";
   console.log("[overprint] build", BUILD_ID);
   if (window.buildTitle) window.buildTitle("\u7248\u672C " + BUILD_ID);
   applyThemeToDocument();
@@ -9986,6 +10209,11 @@
       e.preventDefault();
       return;
     }
+    if (e.code === "KeyT" && !e.repeat && game.state === "play" && game.mode === "practice" && !game.paused) {
+      e.preventDefault();
+      game.togglePracticeTools?.();
+      return;
+    }
     if (e.code === "KeyT" && !e.repeat && game.state === "play" && game.mode === "defense" && !game.paused) {
       e.preventDefault();
       game.toggleDefenseShop?.();
@@ -9997,6 +10225,11 @@
       return;
     }
     if (game.paused && e.code !== "KeyM") {
+      e.preventDefault();
+      return;
+    }
+    if (game.state === "play" && game.mode === "practice" && game.practice?.toolsOpen && /^Digit[1-6]$/.test(e.code)) {
+      game.usePracticeTool?.(Number(e.code.slice(5)));
       e.preventDefault();
       return;
     }
@@ -10239,6 +10472,22 @@
         return true;
       }
       return false;
+    }
+    if (game.state === "play" && game.mode === "practice") {
+      const toggle = game.ui.practiceToolsButton;
+      if (toggle && x >= toggle.x && x <= toggle.x + toggle.w && y >= toggle.y && y <= toggle.y + toggle.h) {
+        game.togglePracticeTools?.();
+        return true;
+      }
+      if (game.practice?.toolsOpen) {
+        for (const item of game.ui.practiceToolsOptions || []) {
+          if (x < item.x || x > item.x + item.w || y < item.y || y > item.y + item.h) continue;
+          game.usePracticeTool?.(item.slot);
+          return true;
+        }
+        const panel = game.ui.practiceToolsPanel;
+        if (panel && x >= panel.x && x <= panel.x + panel.w && y >= panel.y && y <= panel.y + panel.h) return true;
+      }
     }
     if (game.state === "play" && game.mode === "defense") {
       const d = game.defense || {};

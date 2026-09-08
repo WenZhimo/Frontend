@@ -21,6 +21,14 @@ const PRACTICE_MAPS = [
   { id: 'cover', label: '掩体房' },
   { id: 'lanes', label: '长廊' },
 ];
+const ENEMY_NAMES = {
+  strawman: '稻草人',
+  thug: '暴徒',
+  gunner: '枪手',
+  hound: '猎犬',
+  patroller: '巡逻者',
+  shield: '重盾',
+};
 const PRACTICE_ENEMIES = ['strawman', 'thug', 'gunner', 'hound', 'patroller', 'shield'];
 const PRACTICE_WEAPONS = ['pistol', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'molotov', 'dart', 'tameDart', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'virusExtract', 'madVirusExtract', 'tameVirusExtract', 'disguise', 'sniper', 'laser', 'butcher', 'shield', 'katana', 'quixote', 'knife', 'bat'];
 const DEFENSE_SHOP_WEAPONS = ['pistol', 'shield', 'katana', 'quixote', 'smg', 'ripper', 'shotgun', 'grenade', 'frag', 'flash', 'sentryPack', 'dronePack', 'rocket', 'virus', 'copySauce', 'madExtract', 'tameExtract', 'shield', 'molotov', 'dart', 'tameDart', 'sniper', 'laser', 'butcher', 'shield'];
@@ -148,7 +156,7 @@ export function createGame(renderer) {
     practiceMaps: PRACTICE_MAPS,
     practiceWeapons: PRACTICE_WEAPONS,
     practiceEnemies: PRACTICE_ENEMIES,
-    practice: { map: 0, weapon: 'pistol', enemy: 'strawman' },
+    practice: { map: 0, weapon: 'pistol', enemy: 'strawman', toolsOpen: false, invincible: false },
     defense: newDefenseState(),
     codex: loadCodex(),
     codexOpen: false,
@@ -176,6 +184,7 @@ export function createGame(renderer) {
           chainPunch: 0, chainOpen: 0, chainOpenV: 0, tabs: [], options: [],
           pauseOptions: [], codexClose: null, codexPanel: null, codexScroll: null,
           defenseShopButton: null, defenseShopOptions: [], defenseRestButton: null, defenseShopPanel: null,
+          practiceToolsButton: null, practiceToolsOptions: [], practiceToolsPanel: null,
           backpackPanel: null, backpackClose: null, backpackDrop: null, backpackCraft: null, backpackSlots: [] },
     reducedMotion: typeof matchMedia === 'function'
       && matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -1822,6 +1831,7 @@ export function createGame(renderer) {
     game.backpackOpen = false;
     game.backpackSelection = null;
     game.codexOpen = false;
+    game.practice.toolsOpen = false;
     game.banner = null;
     game.bannerT = 0;
     game.showTitle();
@@ -2050,6 +2060,7 @@ export function createGame(renderer) {
     game.paused = false;
     game.backpackOpen = false;
     game.backpackSelection = null;
+    game.practice.toolsOpen = false;
     // the recording build pins difficulty to the hardest floor a run reaches
     const diff = REC.floor ? Math.min(game.floor, REC.floor) : game.floor;
     let level;
@@ -2080,6 +2091,7 @@ export function createGame(renderer) {
     game.paused = false;
     game.backpackOpen = false;
     game.backpackSelection = null;
+    game.practice.toolsOpen = false;
     const restartLoadout = game.mode === 'defense'
       ? (stashPlayerWeapon() || game.floorLoadout)
       : game.floorLoadout;
@@ -2665,6 +2677,17 @@ export function createGame(renderer) {
   game.killPlayer = function (_source = null, force = false) {
     const p = game.player;
     if (!p.alive || game.state !== 'play') return;
+    if (game.mode === 'practice' && game.practice.invincible) {
+      p.hp = p.maxHp || 1;
+      p.iframes = Math.max(p.iframes || 0, 0.25);
+      p.burnT = 0;
+      p.infectT = 0;
+      if (game.bannerT <= 0.05) {
+        game.banner = '练习无敌';
+        game.bannerT = 0.35;
+      }
+      return;
+    }
     if (!force && p.iframes > 0) return;
     if (!force && (p.hp || 1) > 1) {
       p.hp--;
@@ -4238,6 +4261,7 @@ export function createGame(renderer) {
     choosePreviewSeed();
     game.floorLoadout = startingLoadout();
     game.paused = false;
+    game.practice.toolsOpen = false;
     startFloor(false);
     game.state = 'title';
     game.player.alive = false;
@@ -4275,6 +4299,126 @@ export function createGame(renderer) {
     const i = PRACTICE_ENEMIES.indexOf(game.practice.enemy);
     game.practice.enemy = PRACTICE_ENEMIES[(i + 1 + PRACTICE_ENEMIES.length) % PRACTICE_ENEMIES.length];
     resetTitlePreview();
+  };
+
+  function practiceEnemyLoadout(type) {
+    if (type === 'gunner') return { weapon: 'pistol', armour: 0 };
+    if (type === 'shield') return { weapon: 'shield', armour: 4 };
+    if (type === 'patroller') return { weapon: 'pistol', armour: 0 };
+    return { weapon: 'fists', armour: 0 };
+  }
+
+  function practiceEnemyCount(type) {
+    if (type === 'strawman') return 5;
+    if (type === 'hound') return 4;
+    if (type === 'patroller') return 5;
+    return 6;
+  }
+
+  function practiceSpawnPoint(index = 0) {
+    const lv = game.level;
+    const points = (lv.spawnPoints && lv.spawnPoints.length ? lv.spawnPoints : lv.enemySpawns) || [];
+    const ahead = {
+      x: game.player.x + Math.cos(game.player.aim) * TILE * 5,
+      y: game.player.y + Math.sin(game.player.aim) * TILE * 5,
+    };
+    const fallback = lv.exit || ahead;
+    const start = Math.floor(game.time * 7 + index * 3) % Math.max(1, points.length);
+    for (let i = 0; i < points.length; i++) {
+      const p0 = points[(start + i) % points.length];
+      const x = clamp(p0.x + (rnd() - 0.5) * TILE * 0.9, TILE * 1.5, lv.w - TILE * 1.5);
+      const y = clamp(p0.y + (rnd() - 0.5) * TILE * 0.9, TILE * 1.5, lv.h - TILE * 1.5);
+      if (dist(x, y, game.player.x, game.player.y) < TILE * 3) continue;
+      if (supportPointClear(x, y, 12)) return { x, y };
+    }
+    return nearestSupportPoint(
+      clamp(fallback.x, TILE * 1.5, lv.w - TILE * 1.5),
+      clamp(fallback.y, TILE * 1.5, lv.h - TILE * 1.5),
+      12,
+      {
+        x: clamp(ahead.x, TILE * 1.5, lv.w - TILE * 1.5),
+        y: clamp(ahead.y, TILE * 1.5, lv.h - TILE * 1.5),
+      },
+    );
+  }
+
+  function clearPracticeTargets() {
+    for (const e of game.pools.enemies) {
+      e.alive = false;
+      e.state = S_DEAD;
+    }
+    for (const c of game.pools.corpses || []) c.alive = false;
+  }
+
+  function spawnPracticeTargets(count, clearFirst = false) {
+    if (game.mode !== 'practice' || game.state !== 'play') return false;
+    if (clearFirst) clearPracticeTargets();
+    const type = game.practice.enemy || 'strawman';
+    const loadout = practiceEnemyLoadout(type);
+    let made = 0;
+    for (let i = 0; i < count; i++) {
+      const p0 = practiceSpawnPoint(i + made);
+      const e = spawnEnemy({
+        x: p0.x, y: p0.y,
+        type,
+        weapon: loadout.weapon,
+        armour: loadout.armour,
+        angle: Math.atan2(game.player.y - p0.y, game.player.x - p0.x),
+      });
+      if (e) made++;
+    }
+    game.enemiesLeft = hostilesLeft();
+    computeFlow();
+    return made > 0;
+  }
+
+  game.togglePracticeTools = function (open = null) {
+    if (game.mode !== 'practice' || game.state !== 'play') return false;
+    game.practice.toolsOpen = open == null ? !game.practice.toolsOpen : !!open;
+    game.banner = game.practice.toolsOpen ? '练习工具已打开' : '练习工具已收起';
+    game.bannerT = 0.55;
+    sfx.status();
+    return game.practice.toolsOpen;
+  };
+
+  game.usePracticeTool = function (slot) {
+    if (game.mode !== 'practice' || game.state !== 'play') return false;
+    const p = game.player;
+    if (slot === 1) {
+      const i = PRACTICE_WEAPONS.indexOf(game.practice.weapon);
+      game.practice.weapon = PRACTICE_WEAPONS[(i + 1 + PRACTICE_WEAPONS.length) % PRACTICE_WEAPONS.length];
+      const loadout = loadoutFor(game.practice.weapon);
+      setMainSlot(p, loadout.weapon, loadout.ammo);
+      if (loadout.offhand) setOffhandSlot(p, loadout.offhand, loadout.offAmmo || 0);
+      p.attackCd = 0; p.swing = 0; p.sawCd = 0;
+      game.floorLoadout = stashPlayerWeapon() || game.floorLoadout;
+      game.banner = `练习武器：${WEAPONS[p.weapon]?.name || p.weapon}`;
+    } else if (slot === 2) {
+      const i = PRACTICE_ENEMIES.indexOf(game.practice.enemy);
+      game.practice.enemy = PRACTICE_ENEMIES[(i + 1 + PRACTICE_ENEMIES.length) % PRACTICE_ENEMIES.length];
+      game.banner = `练习敌人：${ENEMY_NAMES[game.practice.enemy] || game.practice.enemy}`;
+    } else if (slot === 3) {
+      if (!spawnPracticeTargets(practiceEnemyCount(game.practice.enemy), true)) return false;
+      game.banner = '练习目标已刷新';
+    } else if (slot === 4) {
+      if (!spawnPracticeTargets(1, false)) return false;
+      game.banner = '生成练习目标';
+    } else if (slot === 5) {
+      game.practice.invincible = !game.practice.invincible;
+      if (game.practice.invincible) { p.hp = p.maxHp || 1; p.infectT = 0; p.burnT = 0; }
+      game.banner = `练习无敌 ${game.practice.invincible ? '开启' : '关闭'}`;
+    } else if (slot === 6) {
+      const w = WEAPONS[p.weapon];
+      if (w && !w.melee && w.ammo > 0) p.ammo = w.ammo;
+      p.hp = p.maxHp || 1;
+      p.infectT = 0; p.burnT = 0; p.madT = 0;
+      game.banner = '生命与弹药已补满';
+    } else {
+      return false;
+    }
+    game.bannerT = 0.75;
+    sfx.pickup();
+    return true;
   };
 
   game.toggleCodex = function () {
