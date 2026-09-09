@@ -11,6 +11,23 @@ python -m http.server 5173
 
 Open `http://localhost:5173/`.
 
+## Modes
+
+The app has two separate generator surfaces:
+
+- **Original clip mode** keeps the SCP:SL / C.A.S.S.I.E. behavior: it tokenizes text, matches words and phrases against the extracted audio library, optionally adds the duration-matched `BG_4..BG_40` bed, then exports a WAV.
+- **Kokoro TTS mode** sends the full text directly to a browser-side Kokoro model. It does not validate each word against the C.A.S.S.I.E. clip library, so high-frequency words and missing archive terms can be spoken normally.
+
+Kokoro TTS currently exposes these voices:
+
+- `am_michael`
+- `bm_daniel`
+- `am_adam`
+
+The static page loads `kokoro-js` from the jsDelivr ESM CDN and initializes `onnx-community/Kokoro-82M-v1.0-ONNX` with `dtype: "q8"` and `device: "wasm"`. First use needs network access to download the model files; after the browser caches them, later loads are faster. Generated TTS audio is decoded in the browser and exported as WAV, just like the original concatenation mode.
+
+TTS announcement templates use pure text. Fillable official-announcement fields are rendered as normal form controls, highlighted in the preview, and then inserted into the TTS text box as plain editable text.
+
 ## Assets
 
 Primary audio was extracted from:

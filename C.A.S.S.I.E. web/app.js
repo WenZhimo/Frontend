@@ -13,9 +13,22 @@ const state = {
   lastBackgroundClip: null,
   currentSource: null,
   audioContext: null,
+  activeMode: "cassie",
+  tts: {
+    engine: null,
+    voices: [],
+    generatedBuffer: null,
+    generatedBlobUrl: null,
+    generatedDirty: true,
+    modelPromise: null,
+  },
 };
 
 const els = {
+  modeCassie: document.querySelector("#modeCassie"),
+  modeTts: document.querySelector("#modeTts"),
+  cassieWorkspace: document.querySelector("#cassieWorkspace"),
+  ttsWorkspace: document.querySelector("#ttsWorkspace"),
   assetCount: document.querySelector("#assetCount"),
   renderDuration: document.querySelector("#renderDuration"),
   libraryMeta: document.querySelector("#libraryMeta"),
@@ -50,6 +63,22 @@ const els = {
   stopAudio: document.querySelector("#stopAudio"),
   downloadAudio: document.querySelector("#downloadAudio"),
   status: document.querySelector("#status"),
+  ttsInput: document.querySelector("#ttsInput"),
+  ttsTemplate: document.querySelector("#ttsTemplate"),
+  ttsTemplateFields: document.querySelector("#ttsTemplateFields"),
+  ttsTemplatePreview: document.querySelector("#ttsTemplatePreview"),
+  ttsTemplateMeta: document.querySelector("#ttsTemplateMeta"),
+  applyTtsTemplate: document.querySelector("#applyTtsTemplate"),
+  ttsVoice: document.querySelector("#ttsVoice"),
+  ttsModel: document.querySelector("#ttsModel"),
+  loadTtsModel: document.querySelector("#loadTtsModel"),
+  generateTts: document.querySelector("#generateTts"),
+  playTts: document.querySelector("#playTts"),
+  stopTts: document.querySelector("#stopTts"),
+  downloadTts: document.querySelector("#downloadTts"),
+  ttsWaveform: document.querySelector("#ttsWaveform"),
+  ttsRenderDuration: document.querySelector("#ttsRenderDuration"),
+  ttsStatus: document.querySelector("#ttsStatus"),
 };
 
 const textSplitRe = /[ ,.!?\r\n;:\t，。！？；：、]+/g;
@@ -96,6 +125,9 @@ const exactTokenAliases = new Map([
 ]);
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const fmtSeconds = (seconds) => `${seconds.toFixed(2).padStart(5, "0")}s`;
+const KOKORO_IMPORT_URL = "https://cdn.jsdelivr.net/npm/kokoro-js/+esm";
+const KOKORO_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
+const kokoroVoices = ["am_michael", "bm_daniel", "am_adam"];
 const warheadTimeOptions = [
   { value: "120s", label: "120 seconds" },
   { value: "110s", label: "110 seconds" },
@@ -440,6 +472,280 @@ const announcementTemplates = [
   },
 ];
 
+const ttsAnnouncementTemplates = [
+  {
+    id: "tts-mtf-scps-alive",
+    title: "MTF 入场（有 SCP 存活）",
+    template: "Mobile Task Force Unit Epsilon-11 designated {designation} has entered the facility. All remaining personnel are advised to proceed with standard evacuation protocols until an MTF squad reaches your destination. Awaiting re-containment of: {count} SCP subjects.",
+    fields: [
+      { id: "designation", label: "designation", type: "text", value: "Nine-Tailed Fox-3", placeholder: "Nine-Tailed Fox-3" },
+      { id: "count", label: "SCP count", type: "number", value: "3", min: "1", max: "9", step: "1" },
+    ],
+  },
+  {
+    id: "tts-mtf-no-scps",
+    title: "MTF 入场（无 SCP 存活）",
+    template: "Mobile Task Force Unit Epsilon-11 designated {designation} has entered the facility. All remaining personnel are advised to proceed with standard evacuation protocols until an MTF squad reaches your destination. Substantial threat to safety remains within the facility -- exercise caution.",
+    fields: [
+      { id: "designation", label: "designation", type: "text", value: "Nine-Tailed Fox-3", placeholder: "Nine-Tailed Fox-3" },
+    ],
+  },
+  {
+    id: "tts-ntf-backup",
+    title: "Nine-Tailed Fox 后备单位",
+    template: "Nine-Tailed Fox Backup Unit has entered the facility.",
+    fields: [],
+  },
+  {
+    id: "tts-ghostbusters",
+    title: "Ghostbusters 活动公告",
+    template: "Mobile Task Force Unit Epsilon-11 designated Ghostbusters {designation} has entered the facility. All remaining personnel are advised to proceed with standard evacuation protocols until an MTF squad reaches your destination. Awaiting re-containment of: {count} specters.",
+    fields: [
+      { id: "designation", label: "designation", type: "text", value: "Nine-Tailed Fox-3", placeholder: "Nine-Tailed Fox-3" },
+      { id: "count", label: "specter count", type: "number", value: "3", min: "1", max: "9", step: "1" },
+    ],
+  },
+  {
+    id: "tts-tactical-holiday",
+    title: "Tactical Holiday 公告",
+    template: "Tactical Holiday Unit Epsilon-11 designated {designation} has entered the workshop. All remaining elves are advised to seek shelter in the nearest gingerbread house until a unit has festivized the facility. Awaiting recontainment of {count} spoil-sport holiday haters.",
+    fields: [
+      { id: "designation", label: "designation", type: "text", value: "Nine-Tailed Fox-3", placeholder: "Nine-Tailed Fox-3" },
+      { id: "count", label: "count", type: "number", value: "3", min: "1", max: "9", step: "1" },
+    ],
+  },
+  {
+    id: "tts-chaos-standard",
+    title: "Gate A 检测到混沌部队",
+    template: "Attention, all personnel. Detected {number} Chaos Insurgency forces at Gate A. Lethal force authorized.",
+    fields: [
+      { id: "number", label: "number", type: "number", value: "5", min: "1", max: "99", step: "1" },
+    ],
+  },
+  {
+    id: "tts-chaos-mini",
+    title: "Gate A 新增敌对部队",
+    template: "Acquired {number} additional hostile forces at Gate A. Defense model: updated.",
+    fields: [
+      { id: "number", label: "number", type: "number", value: "5", min: "1", max: "99", step: "1" },
+    ],
+  },
+  {
+    id: "tts-terminated-unspecified",
+    title: "SCP 被终止：原因未知",
+    template: "{scp} successfully terminated. Termination cause unspecified.",
+    fields: [
+      { id: "scp", label: "SCP designation", type: "text", value: "SCP-939", placeholder: "SCP-939" },
+    ],
+  },
+  {
+    id: "tts-terminated-by-scp",
+    title: "SCP 被另一个 SCP 终止",
+    template: "{scp} terminated by {killerScp}.",
+    fields: [
+      { id: "scp", label: "terminated SCP", type: "text", value: "SCP-939", placeholder: "SCP-939" },
+      { id: "killerScp", label: "killer SCP", type: "text", value: "SCP-173", placeholder: "SCP-173" },
+    ],
+  },
+  {
+    id: "tts-terminated-auto-security",
+    title: "SCP 被自动安保系统终止",
+    template: "{scp} successfully terminated by Automatic Security System.",
+    fields: [
+      { id: "scp", label: "SCP designation", type: "text", value: "SCP-939", placeholder: "SCP-939" },
+    ],
+  },
+  {
+    id: "tts-terminated-warhead",
+    title: "SCP 被 Alpha Warhead 终止",
+    template: "{scp} successfully terminated by Alpha Warhead.",
+    fields: [
+      { id: "scp", label: "SCP designation", type: "text", value: "SCP-939", placeholder: "SCP-939" },
+    ],
+  },
+  {
+    id: "tts-terminated-marshmallow",
+    title: "SCP 被 Marshmallow Man 终止",
+    template: "{scp} terminated by Marshmallow Man.",
+    fields: [
+      { id: "scp", label: "SCP designation", type: "text", value: "SCP-939", placeholder: "SCP-939" },
+    ],
+  },
+  {
+    id: "tts-contained-science",
+    title: "SCP 被科学人员收容",
+    template: "{scp} contained successfully by Science Personnel.",
+    fields: [
+      { id: "scp", label: "SCP designation", type: "text", value: "SCP-049", placeholder: "SCP-049" },
+    ],
+  },
+  {
+    id: "tts-contained-classd",
+    title: "SCP 被 Class-D 收容",
+    template: "{scp} contained successfully by Class-D Personnel.",
+    fields: [
+      { id: "scp", label: "SCP designation", type: "text", value: "SCP-049", placeholder: "SCP-049" },
+    ],
+  },
+  {
+    id: "tts-contained-chaos",
+    title: "SCP 被混沌分裂者收容",
+    template: "{scp} contained successfully by Chaos Insurgency.",
+    fields: [
+      { id: "scp", label: "SCP designation", type: "text", value: "SCP-049", placeholder: "SCP-049" },
+    ],
+  },
+  {
+    id: "tts-contained-unknown",
+    title: "SCP 被收容：单位未知",
+    template: "{scp} contained successfully. Containment unit unknown.",
+    fields: [
+      { id: "scp", label: "SCP designation", type: "text", value: "SCP-079", placeholder: "SCP-079" },
+    ],
+  },
+  {
+    id: "tts-contained-unit",
+    title: "SCP 被指定单位收容",
+    template: "{scp} contained successfully. Containment Unit {designation}.",
+    fields: [
+      { id: "scp", label: "SCP designation", type: "text", value: "SCP-079", placeholder: "SCP-079" },
+      { id: "designation", label: "containment unit", type: "text", value: "Nine-Tailed Fox", placeholder: "Nine-Tailed Fox" },
+    ],
+  },
+  {
+    id: "tts-lost-decont",
+    title: "SCP 死于净化序列",
+    template: "{scp} lost in Decontamination Sequence.",
+    fields: [
+      { id: "scp", label: "SCP designation", type: "text", value: "SCP-173", placeholder: "SCP-173" },
+    ],
+  },
+  {
+    id: "tts-generator-progress",
+    title: "发电机进度",
+    template: "{current} out of {max} generators activated.",
+    fields: [
+      { id: "current", label: "current", type: "number", value: "1", min: "0", max: "3", step: "1" },
+      { id: "max", label: "max", type: "number", value: "3", min: "1", max: "3", step: "1" },
+    ],
+  },
+  {
+    id: "tts-generator-complete",
+    title: "发电机全部启动",
+    template: "{current} out of {max} generators activated. All generators have been successfully engaged.",
+    fields: [
+      { id: "current", label: "current", type: "number", value: "3", min: "0", max: "3", step: "1" },
+      { id: "max", label: "max", type: "number", value: "3", min: "1", max: "3", step: "1" },
+    ],
+  },
+  {
+    id: "tts-overcharge",
+    title: "过载倒数",
+    template: "Overcharge in 3... 2... 1...",
+    fields: [],
+  },
+  {
+    id: "tts-facility-operational",
+    title: "设施恢复运行",
+    template: "Facility is back in operational mode.",
+    fields: [],
+  },
+  {
+    id: "tts-warhead-start",
+    title: "Alpha Warhead 启动",
+    template: "Emergency detonation sequence activated. The underground section of this facility is set to self-destruct in: T-{time}.",
+    fields: [
+      { id: "time", label: "time", type: "select", value: "90 seconds", options: warheadTimeOptions.map((item) => ({ value: item.label, label: item.label })) },
+    ],
+  },
+  {
+    id: "tts-warhead-cancelled",
+    title: "Alpha Warhead 取消",
+    template: "Detonation sequence cancelled.",
+    fields: [],
+  },
+  {
+    id: "tts-warhead-resume",
+    title: "Alpha Warhead 恢复",
+    template: "Emergency detonation sequence resumed. T-{time}.",
+    fields: [
+      { id: "time", label: "time", type: "select", value: "90 seconds", options: warheadTimeOptions.map((item) => ({ value: item.label, label: item.label })) },
+    ],
+  },
+  {
+    id: "tts-dead-mans-switch",
+    title: "Dead Man's Switch 完整公告",
+    template: "Site recovery failure. Dead Man's Switch activated. The underground section of this facility will self-destruct in: T-{time}.",
+    fields: [
+      { id: "time", label: "time", type: "select", value: "90 seconds", options: warheadTimeOptions.map((item) => ({ value: item.label, label: item.label })) },
+    ],
+  },
+  {
+    id: "tts-decont-15",
+    title: "LCZ 净化：15 分钟",
+    template: "Attention, all personnel. The Light Containment Zone decontamination process will occur in T-15 minutes. All biological substances must be removed in order to avoid destruction.",
+    fields: [],
+  },
+  {
+    id: "tts-decont-10",
+    title: "LCZ 净化：10 分钟",
+    template: "Danger, Light Containment Zone overall decontamination in T-10 minutes.",
+    fields: [],
+  },
+  {
+    id: "tts-decont-5",
+    title: "LCZ 净化：5 分钟",
+    template: "Danger, Light Containment Zone overall decontamination in T-5 minutes.",
+    fields: [],
+  },
+  {
+    id: "tts-decont-1",
+    title: "LCZ 净化：1 分钟",
+    template: "Danger, Light Containment Zone overall decontamination in T-1 minute.",
+    fields: [],
+  },
+  {
+    id: "tts-decont-countdown",
+    title: "LCZ 净化：30 秒倒数",
+    template: "Danger, Light Containment Zone overall decontamination in T-30 seconds. All checkpoint doors have been permanently opened. Please evacuate immediately.",
+    fields: [],
+  },
+  {
+    id: "tts-decont-begun",
+    title: "LCZ 净化：已开始",
+    template: "Light Containment Zone is locked down and ready for decontamination. The removal of organic substances has now begun.",
+    fields: [],
+  },
+  {
+    id: "tts-welcome-site-02",
+    title: "自定义示例：Site-02 欢迎",
+    template: "Hello and welcome to Site-02.",
+    fields: [],
+  },
+  {
+    id: "tts-custom-scp-terminated",
+    title: "自定义示例：SCP 成功终止",
+    template: "{scp} successfully terminated.",
+    fields: [
+      { id: "scp", label: "SCP designation", type: "text", value: "SCP-999", placeholder: "SCP-999" },
+    ],
+  },
+  {
+    id: "tts-hcz-terminal",
+    title: "自定义示例：HCZ 终端警告",
+    template: "Unauthorized user detected at HCZ-{terminal} terminal.",
+    fields: [
+      { id: "terminal", label: "terminal number", type: "text", value: "096", placeholder: "096" },
+    ],
+  },
+  {
+    id: "tts-glados",
+    title: "自定义示例：GLaDOS",
+    template: "Oh, it's you.",
+    fields: [],
+  },
+];
+
 function getAudioContext() {
   if (!state.audioContext) {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -451,6 +757,11 @@ function getAudioContext() {
 function setStatus(message, tone = "normal") {
   els.status.textContent = message;
   els.status.dataset.tone = tone;
+}
+
+function setTtsStatus(message, tone = "normal") {
+  els.ttsStatus.textContent = message;
+  els.ttsStatus.dataset.tone = tone;
 }
 
 function getOptions() {
@@ -470,6 +781,12 @@ function markDirty() {
   state.generatedDirty = true;
   els.downloadAudio.classList.add("is-disabled");
   els.downloadAudio.setAttribute("aria-disabled", "true");
+}
+
+function markTtsDirty() {
+  state.tts.generatedDirty = true;
+  els.downloadTts.classList.add("is-disabled");
+  els.downloadTts.setAttribute("aria-disabled", "true");
 }
 
 function normalizeName(name) {
@@ -832,6 +1149,106 @@ function applyAnnouncementTemplate() {
   applyTextToSentence();
 }
 
+function renderTtsTemplates() {
+  const options = ttsAnnouncementTemplates.map((template) => {
+    const option = document.createElement("option");
+    option.value = template.id;
+    option.textContent = template.title;
+    return option;
+  });
+
+  els.ttsTemplate.replaceChildren(...options);
+  els.ttsTemplateMeta.textContent = `${ttsAnnouncementTemplates.length} 个纯文本模板 · 字段高亮`;
+  renderTtsTemplateFields();
+}
+
+function selectedTtsTemplate() {
+  return ttsAnnouncementTemplates.find((template) => template.id === els.ttsTemplate.value)
+    || ttsAnnouncementTemplates[0];
+}
+
+function renderTtsTemplateFields() {
+  const template = selectedTtsTemplate();
+  const fragment = document.createDocumentFragment();
+
+  template.fields.forEach((field) => {
+    const label = document.createElement("label");
+    const text = document.createElement("span");
+    text.textContent = field.label;
+
+    const control = field.type === "select"
+      ? document.createElement("select")
+      : document.createElement("input");
+    control.dataset.ttsTemplateField = field.id;
+
+    if (field.type === "select") {
+      field.options.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = item.value;
+        option.textContent = item.label;
+        control.appendChild(option);
+      });
+      control.value = field.value;
+    } else {
+      control.type = field.type || "text";
+      control.value = field.value || "";
+      if (field.placeholder) control.placeholder = field.placeholder;
+      if (field.min) control.min = field.min;
+      if (field.max) control.max = field.max;
+      if (field.step) control.step = field.step;
+    }
+
+    control.addEventListener("input", updateTtsTemplatePreview);
+    control.addEventListener("change", updateTtsTemplatePreview);
+    label.append(text, control);
+    fragment.appendChild(label);
+  });
+
+  els.ttsTemplateFields.replaceChildren(fragment);
+  updateTtsTemplatePreview();
+}
+
+function readTtsTemplateValues(template) {
+  const values = {};
+  template.fields.forEach((field) => {
+    const control = els.ttsTemplateFields.querySelector(`[data-tts-template-field="${field.id}"]`);
+    values[field.id] = control?.value ?? field.value ?? "";
+  });
+  return values;
+}
+
+function buildTtsTemplateText(template, values) {
+  return template.template.replace(/\{([A-Za-z0-9_]+)\}/g, (match, id) => fieldValue(values, id, match));
+}
+
+function updateTtsTemplatePreview() {
+  const template = selectedTtsTemplate();
+  const values = readTtsTemplateValues(template);
+  const fragment = document.createDocumentFragment();
+  const parts = template.template.split(/(\{[A-Za-z0-9_]+\})/g);
+
+  parts.forEach((part) => {
+    const match = /^\{([A-Za-z0-9_]+)\}$/.exec(part);
+    if (!match) {
+      fragment.append(document.createTextNode(part));
+      return;
+    }
+
+    const mark = document.createElement("mark");
+    mark.textContent = fieldValue(values, match[1], part);
+    fragment.append(mark);
+  });
+
+  els.ttsTemplatePreview.replaceChildren(fragment);
+}
+
+function applyTtsTemplate() {
+  const template = selectedTtsTemplate();
+  const values = readTtsTemplateValues(template);
+  els.ttsInput.value = buildTtsTemplateText(template, values);
+  markTtsDirty();
+}
+
 async function decodeClip(clip) {
   if (state.decoded.has(clip.file)) {
     return state.decoded.get(clip.file);
@@ -989,30 +1406,7 @@ async function generatePreview() {
   }
 }
 
-async function playAudio() {
-  try {
-    const context = getAudioContext();
-    if (context.state === "suspended") await context.resume();
-    const buffer = state.generatedDirty || !state.generatedBuffer
-      ? await generatePreview()
-      : state.generatedBuffer;
-
-    stopAudio();
-    const source = context.createBufferSource();
-    source.buffer = buffer;
-    source.connect(context.destination);
-    source.onended = () => {
-      if (state.currentSource === source) state.currentSource = null;
-    };
-    state.currentSource = source;
-    source.start();
-    setStatus("正在播放预生成音频。");
-  } catch {
-    // generatePreview already reported the concrete error.
-  }
-}
-
-function stopAudio() {
+function stopCurrentSource() {
   if (state.currentSource) {
     try {
       state.currentSource.stop();
@@ -1022,6 +1416,38 @@ function stopAudio() {
     state.currentSource.disconnect();
     state.currentSource = null;
   }
+}
+
+async function playBuffer(buffer) {
+  const context = getAudioContext();
+  if (context.state === "suspended") await context.resume();
+
+  stopCurrentSource();
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(context.destination);
+  source.onended = () => {
+    if (state.currentSource === source) state.currentSource = null;
+  };
+  state.currentSource = source;
+  source.start();
+}
+
+async function playAudio() {
+  try {
+    const buffer = state.generatedDirty || !state.generatedBuffer
+      ? await generatePreview()
+      : state.generatedBuffer;
+
+    await playBuffer(buffer);
+    setStatus("正在播放预生成音频。");
+  } catch {
+    // generatePreview already reported the concrete error.
+  }
+}
+
+function stopAudio() {
+  stopCurrentSource();
   setStatus("停止播放。");
 }
 
@@ -1032,6 +1458,133 @@ function updateDownload(buffer) {
   els.downloadAudio.href = state.generatedBlobUrl;
   els.downloadAudio.classList.remove("is-disabled");
   els.downloadAudio.setAttribute("aria-disabled", "false");
+}
+
+function updateTtsDownload(buffer) {
+  const wavBlob = new Blob([encodeWav(buffer)], { type: "audio/wav" });
+  if (state.tts.generatedBlobUrl) URL.revokeObjectURL(state.tts.generatedBlobUrl);
+  state.tts.generatedBlobUrl = URL.createObjectURL(wavBlob);
+  els.downloadTts.href = state.tts.generatedBlobUrl;
+  els.downloadTts.classList.remove("is-disabled");
+  els.downloadTts.setAttribute("aria-disabled", "false");
+}
+
+async function loadKokoroModel() {
+  if (state.tts.engine) return state.tts.engine;
+
+  if (!state.tts.modelPromise) {
+    state.tts.modelPromise = (async () => {
+      setTtsStatus("正在加载 Kokoro 82M q8 / WASM 模型，首次运行需要下载模型文件。");
+      const { KokoroTTS } = await import(KOKORO_IMPORT_URL);
+      const engine = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, {
+        dtype: "q8",
+        device: "wasm",
+      });
+      state.tts.engine = engine;
+      const listedVoices = typeof engine.list_voices === "function" ? await engine.list_voices() : [];
+      state.tts.voices = Array.isArray(listedVoices)
+        ? listedVoices
+        : Object.keys(listedVoices || {});
+      const missingVoices = kokoroVoices.filter((voice) => !state.tts.voices.includes(voice));
+      const suffix = missingVoices.length
+        ? ` 未在模型列表中看到：${missingVoices.join(", ")}；仍保留选项，生成时以模型返回为准。`
+        : "";
+      setTtsStatus(`Kokoro 模型已加载，可用音色 ${state.tts.voices.length || "未知"} 个。${suffix}`);
+      return engine;
+    })().catch((error) => {
+      state.tts.modelPromise = null;
+      throw error;
+    });
+  }
+
+  return state.tts.modelPromise;
+}
+
+async function handleLoadTtsModel() {
+  try {
+    setTtsBusy(true);
+    await loadKokoroModel();
+  } catch (error) {
+    setTtsStatus(`Kokoro 模型加载失败：${error.message || error}`, "error");
+  } finally {
+    setTtsBusy(false);
+  }
+}
+
+function normalizeTtsSpeechText(text) {
+  return String(text || "")
+    .replace(/\bSCP\s*[-_#]?\s*(\d+(?:[-_]\d+)*)\b/gi, (_match, digits) => `S C P ${digits.replace(/\D/g, "").split("").join(" ")}`)
+    .replace(/\bHCZ\s*[-_#]?\s*(\d+)/gi, (_match, digits) => `H C Z ${digits.replace(/\D/g, "").split("").join(" ")}`)
+    .replace(/\bLCZ\b/gi, "L C Z")
+    .replace(/\bMTF\b/gi, "M T F")
+    .replace(/\bNTF\b/gi, "N T F")
+    .replace(/\bT\s*[-–—]\s*(\d+)/gi, "T minus $1")
+    .replace(/\bSite\s*[-–—]\s*(\d+)/gi, (_match, digits) => `Site ${digits.split("").join(" ")}`)
+    .replace(/\bC\.?\s*A\.?\s*S\.?\s*S\.?\s*I\.?\s*E\.?\b/gi, "Cassie");
+}
+
+async function audioBufferFromKokoroAudio(audio) {
+  if (audio && typeof audio.toBlob === "function") {
+    const blob = await audio.toBlob();
+    const arrayBuffer = await blob.arrayBuffer();
+    return getAudioContext().decodeAudioData(arrayBuffer.slice(0));
+  }
+
+  const samples = audio?.audio || audio?.data || audio?.samples;
+  if (samples && typeof samples.length === "number") {
+    const sampleRate = audio.sampling_rate || audio.sample_rate || audio.sampleRate || 24000;
+    const buffer = getAudioContext().createBuffer(1, samples.length, sampleRate);
+    buffer.getChannelData(0).set(samples);
+    return buffer;
+  }
+
+  throw new Error("Kokoro 返回了无法识别的音频对象");
+}
+
+async function generateTtsPreview() {
+  try {
+    setTtsBusy(true);
+    const rawText = els.ttsInput.value.trim();
+    if (!rawText) throw new Error("TTS 文本为空");
+
+    const engine = await loadKokoroModel();
+    const voice = els.ttsVoice.value || kokoroVoices[0];
+    const speechText = normalizeTtsSpeechText(rawText);
+    setTtsStatus(`正在使用 ${voice} 生成 TTS。`);
+    const audio = await engine.generate(speechText, { voice });
+    const buffer = await audioBufferFromKokoroAudio(audio);
+
+    state.tts.generatedBuffer = buffer;
+    state.tts.generatedDirty = false;
+    updateTtsDownload(buffer);
+    drawTtsWaveform(buffer);
+    els.ttsRenderDuration.textContent = fmtSeconds(buffer.duration);
+    setTtsStatus(`TTS 生成完成：${voice}，${fmtSeconds(buffer.duration)}。`);
+    return buffer;
+  } catch (error) {
+    setTtsStatus(error.message || String(error), "error");
+    throw error;
+  } finally {
+    setTtsBusy(false);
+  }
+}
+
+async function playTtsAudio() {
+  try {
+    const buffer = state.tts.generatedDirty || !state.tts.generatedBuffer
+      ? await generateTtsPreview()
+      : state.tts.generatedBuffer;
+
+    await playBuffer(buffer);
+    setTtsStatus("正在播放 Kokoro TTS 音频。");
+  } catch {
+    // generateTtsPreview already reported the concrete error.
+  }
+}
+
+function stopTtsAudio() {
+  stopCurrentSource();
+  setTtsStatus("停止播放。");
 }
 
 function encodeWav(buffer) {
@@ -1076,8 +1629,8 @@ function writeString(view, offset, text) {
   }
 }
 
-function drawEmptyWaveform() {
-  const canvas = els.waveform;
+function drawEmptyWaveformFor(canvas) {
+  if (!canvas) return;
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#111418";
@@ -1089,8 +1642,8 @@ function drawEmptyWaveform() {
   ctx.stroke();
 }
 
-function drawWaveform(buffer) {
-  const canvas = els.waveform;
+function drawWaveformFor(canvas, buffer, color = "#6ee7d8") {
+  if (!canvas || !buffer) return;
   const ctx = canvas.getContext("2d");
   const data = buffer.getChannelData(0);
   const step = Math.max(1, Math.floor(data.length / canvas.width));
@@ -1109,7 +1662,7 @@ function drawWaveform(buffer) {
     ctx.stroke();
   }
 
-  ctx.strokeStyle = "#6ee7d8";
+  ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.beginPath();
   for (let x = 0; x < canvas.width; x += 1) {
@@ -1127,10 +1680,60 @@ function drawWaveform(buffer) {
   ctx.stroke();
 }
 
+function drawEmptyWaveform() {
+  drawEmptyWaveformFor(els.waveform);
+}
+
+function drawTtsEmptyWaveform() {
+  drawEmptyWaveformFor(els.ttsWaveform);
+}
+
+function drawWaveform(buffer) {
+  drawWaveformFor(els.waveform, buffer);
+}
+
+function drawTtsWaveform(buffer) {
+  drawWaveformFor(els.ttsWaveform, buffer, "#e6b450");
+}
+
 function setBusy(isBusy) {
   [els.generatePreview, els.playAudio, els.applyText, els.applyTemplate, els.reloadAssets].forEach((el) => {
     el.disabled = isBusy;
   });
+}
+
+function setTtsBusy(isBusy) {
+  [
+    els.loadTtsModel,
+    els.generateTts,
+    els.playTts,
+    els.stopTts,
+    els.applyTtsTemplate,
+    els.ttsVoice,
+    els.ttsTemplate,
+    els.ttsInput,
+  ].forEach((el) => {
+    if (el) el.disabled = isBusy;
+  });
+
+  els.ttsTemplateFields.querySelectorAll("input, select, textarea, button").forEach((control) => {
+    control.disabled = isBusy;
+  });
+}
+
+function switchMode(mode) {
+  const nextMode = mode === "tts" ? "tts" : "cassie";
+  state.activeMode = nextMode;
+  stopCurrentSource();
+
+  els.cassieWorkspace.classList.toggle("is-hidden", nextMode !== "cassie");
+  els.ttsWorkspace.classList.toggle("is-hidden", nextMode !== "tts");
+
+  els.modeCassie.classList.toggle("is-active", nextMode === "cassie");
+  els.modeTts.classList.toggle("is-active", nextMode === "tts");
+  els.modeCassie.setAttribute("aria-pressed", String(nextMode === "cassie"));
+  els.modeTts.setAttribute("aria-pressed", String(nextMode === "tts"));
+  document.body.dataset.mode = nextMode;
 }
 
 function escapeHtml(value) {
@@ -1142,12 +1745,22 @@ function escapeHtml(value) {
 }
 
 function bindEvents() {
+  els.modeCassie.addEventListener("click", () => switchMode("cassie"));
+  els.modeTts.addEventListener("click", () => switchMode("tts"));
   els.reloadAssets.addEventListener("click", loadManifest);
   els.wordSearch.addEventListener("input", renderWordList);
   els.clearSentence.addEventListener("click", clearSentence);
   els.applyText.addEventListener("click", applyTextToSentence);
   els.announcementTemplate.addEventListener("change", renderTemplateFields);
   els.applyTemplate.addEventListener("click", applyAnnouncementTemplate);
+  els.ttsTemplate.addEventListener("change", renderTtsTemplateFields);
+  els.applyTtsTemplate.addEventListener("click", applyTtsTemplate);
+  els.ttsInput.addEventListener("input", markTtsDirty);
+  els.ttsVoice.addEventListener("change", markTtsDirty);
+  els.loadTtsModel.addEventListener("click", handleLoadTtsModel);
+  els.generateTts.addEventListener("click", generateTtsPreview);
+  els.playTts.addEventListener("click", playTtsAudio);
+  els.stopTts.addEventListener("click", stopTtsAudio);
   els.sampleOne.addEventListener("click", () => {
     els.textInput.value = "SCP-999 contained successfully";
     applyTextToSentence();
@@ -1188,8 +1801,11 @@ function bindEvents() {
 }
 
 renderAnnouncementTemplates();
+renderTtsTemplates();
 bindEvents();
 drawEmptyWaveform();
+drawTtsEmptyWaveform();
+switchMode("cassie");
 loadManifest().catch((error) => {
   const extra = location.protocol === "file:"
     ? "请通过本地 HTTP 服务打开，例如 python -m http.server 5173。"

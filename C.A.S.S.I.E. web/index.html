@@ -14,13 +14,19 @@
           <h1>C.A.S.S.I.E Web Sentence Builder</h1>
           <p>Local SCP:SL voice concatenation lab</p>
         </div>
-        <div class="asset-meter" aria-live="polite">
-          <span id="assetCount">Loading assets</span>
-          <span id="renderDuration">00.00s</span>
+        <div class="topbar-tools">
+          <div class="mode-switch" role="group" aria-label="Generator mode">
+            <button id="modeCassie" class="mode-button is-active" type="button" aria-pressed="true">原版拼接</button>
+            <button id="modeTts" class="mode-button" type="button" aria-pressed="false">Kokoro TTS</button>
+          </div>
+          <div class="asset-meter" aria-live="polite">
+            <span id="assetCount">Loading assets</span>
+            <span id="renderDuration">00.00s</span>
+          </div>
         </div>
       </header>
 
-      <section class="workspace" aria-label="CASSIE generator workspace">
+      <section id="cassieWorkspace" class="workspace" aria-label="CASSIE generator workspace">
         <section class="panel library-panel" aria-labelledby="libraryTitle">
           <div class="panel-heading">
             <div>
@@ -145,6 +151,79 @@
           </div>
 
           <div id="status" class="status" role="status" aria-live="polite">初始化中</div>
+        </section>
+      </section>
+
+      <section id="ttsWorkspace" class="workspace tts-workspace is-hidden" aria-label="Kokoro TTS generator workspace">
+        <section class="panel tts-script-panel" aria-labelledby="ttsScriptTitle">
+          <div class="panel-heading">
+            <div>
+              <h2 id="ttsScriptTitle">TTS 文本</h2>
+              <span>纯文本生成，不逐词匹配 C.A.S.S.I.E. 词库</span>
+            </div>
+          </div>
+
+          <label class="sentence-input">
+            <span>播报文本</span>
+            <textarea id="ttsInput" rows="7" spellcheck="false">Mobile Task Force Unit Epsilon-11 designated Nine-Tailed Fox-3 has entered the facility. Awaiting re-containment of: 3 SCP subjects.</textarea>
+          </label>
+
+          <section class="template-builder" aria-labelledby="ttsTemplateTitle">
+            <div class="template-head">
+              <div>
+                <h3 id="ttsTemplateTitle">官方通报模板</h3>
+                <span id="ttsTemplateMeta">纯文本模板 · 高亮可填字段</span>
+              </div>
+            </div>
+
+            <label class="template-select">
+              <span>公告类型</span>
+              <select id="ttsTemplate"></select>
+            </label>
+
+            <div id="ttsTemplateFields" class="template-fields"></div>
+            <p id="ttsTemplatePreview" class="template-preview tts-template-preview"></p>
+
+            <div class="template-actions">
+              <button id="applyTtsTemplate" type="button">套用到 TTS 文本</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="panel tts-control-panel" aria-labelledby="ttsControlsTitle">
+          <div class="panel-heading">
+            <div>
+              <h2 id="ttsControlsTitle">Kokoro 生成</h2>
+              <span>浏览器端 WASM，本地推理后导出 WAV</span>
+            </div>
+            <span id="ttsRenderDuration" class="panel-stat">00.00s</span>
+          </div>
+
+          <div class="control-grid">
+            <label>
+              <span>音色</span>
+              <select id="ttsVoice">
+                <option value="am_michael">am_michael</option>
+                <option value="bm_daniel">bm_daniel</option>
+                <option value="am_adam">am_adam</option>
+              </select>
+            </label>
+            <label>
+              <span>模型</span>
+              <input id="ttsModel" type="text" value="Kokoro 82M q8 / WASM" disabled>
+            </label>
+          </div>
+
+          <div class="action-row">
+            <button id="loadTtsModel" type="button">加载模型</button>
+            <button id="generateTts" class="primary" type="button">生成 TTS</button>
+            <button id="playTts" type="button">播放</button>
+            <button id="stopTts" class="danger" type="button">停止</button>
+            <a id="downloadTts" class="download-link is-disabled" href="#" download="cassie_kokoro_tts.wav" aria-disabled="true">下载 WAV</a>
+          </div>
+
+          <canvas id="ttsWaveform" width="720" height="160" aria-label="Rendered TTS waveform"></canvas>
+          <div id="ttsStatus" class="status" role="status" aria-live="polite">Kokoro 模型会在首次加载或生成时下载。建议通过本地 HTTP 服务运行。</div>
         </section>
       </section>
     </main>
