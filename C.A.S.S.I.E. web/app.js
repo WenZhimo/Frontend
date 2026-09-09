@@ -108,6 +108,50 @@ const warheadTimeOptions = [
   { value: "40s", label: "40 seconds" },
   { value: "30s", label: "30 seconds" },
 ];
+const officialWikiAnnouncementTemplates = [
+  {
+    id: "official-mtf-scps-alive",
+    title: "官方音频：MTF 入场（有 SCP 存活）",
+    description: "Wiki MP3: full MTF entry announcement with standard evacuation text and awaiting re-containment.",
+    fields: [],
+    build: () => "Official MTF SCPs Alive",
+  },
+  {
+    id: "official-mtf-no-scps",
+    title: "官方音频：MTF 入场（无 SCP 存活）",
+    description: "Wiki MP3: full MTF entry announcement with standard evacuation text and caution line.",
+    fields: [],
+    build: () => "Official MTF No SCPs Alive",
+  },
+  {
+    id: "official-ghostbusters",
+    title: "官方音频：Ghostbusters 活动公告",
+    description: "Wiki MP3: Halloween 2021 / 2023 Ghostbusters MTF announcement.",
+    fields: [],
+    build: () => "Official MTF Ghostbusters",
+  },
+  {
+    id: "official-tactical-holiday",
+    title: "官方音频：Tactical Holiday 公告",
+    description: "Wiki MP3: December 25th-31st Tactical Holiday Unit announcement.",
+    fields: [],
+    build: () => "Official Tactical Holiday MTF",
+  },
+  {
+    id: "official-dead-mans-switch",
+    title: "官方音频：Dead Man's Switch 完整公告",
+    description: "Wiki MP3: full Site Recovery Failure / Dead Man's Switch announcement.",
+    fields: [],
+    build: () => "Official Dead Mans Switch",
+  },
+  {
+    id: "official-glados",
+    title: "官方音频：GLaDOS 自定义示例",
+    description: "Wiki MP3: custom announcement example #4, \"Oh, it's you.\"",
+    fields: [],
+    build: () => "Official GLaDOS CASSIE",
+  },
+];
 const announcementTemplates = [
   {
     id: "mtf-entry",
@@ -350,6 +394,7 @@ const announcementTemplates = [
     fields: [],
     build: () => "dms_ann",
   },
+  ...officialWikiAnnouncementTemplates,
   {
     id: "chaos-detected",
     title: "Gate A 检测到混沌部队",

@@ -25,10 +25,18 @@ That file is a custom `.NET BinaryReader` archive:
 
 Extracted files live in `assets/audio/cassie-data/`. The app manifest lives at `assets/audio/manifest.json`.
 
+Official wiki MP3 samples are also mirrored into `assets/audio/wiki-announcements/`. These are full rendered announcement examples from the wiki, so they are useful for exact playback of missing-word announcements, but they cannot replace fill-in templates when the player wants a different SCP number, unit designation, or count.
+
 To decode another copy:
 
 ```powershell
 python tools\extract-cassie-data.py "C:\Users\LENOVO\Downloads\CASSIE-1.2.0\cassie.data" "assets\audio\cassie-data"
+```
+
+To refresh the official wiki MP3 mirrors and manifest entries:
+
+```powershell
+python tools\import-wiki-audio.py
 ```
 
 ## Announcement templates
@@ -41,7 +49,7 @@ Template subtitles were checked against:
 
 The wiki revision checked here was last edited on 2026-09-08 and includes both in-game announcements and suggested/custom announcement examples.
 
-The in-page template builder includes official fixed-format announcements that can be fully produced by the extracted audio library:
+The in-page template builder includes fill-in official announcements that can be produced by the extracted audio library:
 
 - MTF / NTF entry announcements, including entry + re-containment count and entry + `All SCPs secured` variants.
 - Awaiting re-containment count announcements.
@@ -51,7 +59,11 @@ The in-page template builder includes official fixed-format announcements that c
 - Overcharge, Facility operational, LCZ decontamination, Alpha Warhead start/cancel/resume with time selection, Dead Man's Switch, and Chaos Insurgency Gate A announcements.
 - Custom-announcement examples from the wiki that can be fully voiced locally: `Hello and welcome to Site-02.`, `SCP-999 successfully terminated.`, and `Unauthorized user detected at HCZ-096 terminal.`
 
-Some wiki announcements are not exposed as full fill-in templates yet because the local audio archive is missing required words:
+The template builder also includes official wiki MP3 one-click templates for full announcements that cannot be rebuilt word-by-word from the local archive:
+
+- MTF entry with SCPs alive, MTF entry with no SCPs alive, Ghostbusters, Tactical Holiday, full Dead Man's Switch, and the GLaDOS custom example.
+
+Some wiki announcements are still not exposed as full fill-in templates because the local audio archive is missing required words:
 
 - Full standard MTF evacuation sentence: missing `advised`, `protocols`, `reaches`, and `destination`; the `No SCPs Alive` variant also lacks `safety`, `remains`, `within`, and `exercise`.
 - Ghostbusters announcement: missing `ghostbusters` and `specters`.
