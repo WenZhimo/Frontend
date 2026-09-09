@@ -24,7 +24,7 @@ if "%PYTHON_CMD%"=="" (
   exit /b 1
 )
 
-echo Starting C.A.S.S.I.E Web Sentence Builder...
+echo Starting C.A.S.S.I.E. Web Sentence Builder...
 echo.
 echo URL: http://%HOST%:%PORT%/
 echo Press Ctrl+C to stop the server.

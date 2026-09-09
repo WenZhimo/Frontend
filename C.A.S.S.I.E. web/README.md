@@ -1,6 +1,6 @@
-# C.A.S.S.I.E Web Sentence Builder
+# C.A.S.S.I.E. Web Sentence Builder
 
-Static browser port of the C.A.S.S.I.E sentence builder. It concatenates locally extracted SCP: Secret Laboratory voice clips with Web Audio and exports a generated WAV file.
+Static browser port of the C.A.S.S.I.E. sentence builder. It concatenates locally extracted SCP: Secret Laboratory voice clips with Web Audio and exports a generated WAV file.
 
 ## Run
 
@@ -25,6 +25,8 @@ Kokoro TTS currently exposes these voices:
 - `am_adam`
 
 The static page loads `kokoro-js` from the jsDelivr ESM CDN and initializes `onnx-community/Kokoro-82M-v1.0-ONNX` with `dtype: "q8"` and `device: "wasm"`. First use needs network access to download the model files; after the browser caches them, later loads are faster. Generated TTS audio is decoded in the browser and exported as WAV, just like the original concatenation mode.
+
+TTS mode keeps the original processing controls: gap, overlap, voice delay, speed, pitch, and tail reverb. The text is split into sentence/line segments, Kokoro generates each segment, and the Web Audio post-processor applies the selected timing, resampling, pitch, and reverb settings before WAV export.
 
 TTS announcement templates use pure text. Fillable official-announcement fields are rendered as normal form controls, highlighted in the preview, and then inserted into the TTS text box as plain editable text.
 

@@ -71,6 +71,12 @@ const els = {
   applyTtsTemplate: document.querySelector("#applyTtsTemplate"),
   ttsVoice: document.querySelector("#ttsVoice"),
   ttsModel: document.querySelector("#ttsModel"),
+  ttsGapMs: document.querySelector("#ttsGapMs"),
+  ttsOverlapMs: document.querySelector("#ttsOverlapMs"),
+  ttsVoiceDelayMs: document.querySelector("#ttsVoiceDelayMs"),
+  ttsSpeedPercent: document.querySelector("#ttsSpeedPercent"),
+  ttsPitchSemitones: document.querySelector("#ttsPitchSemitones"),
+  ttsReverbLevel: document.querySelector("#ttsReverbLevel"),
   loadTtsModel: document.querySelector("#loadTtsModel"),
   generateTts: document.querySelector("#generateTts"),
   playTts: document.querySelector("#playTts"),
@@ -123,6 +129,10 @@ const exactTokenAliases = new Map([
   ["re-containment", "recontainment"],
   ["mtfu", "_mtfu"],
 ]);
+const phraseClipAliases = [
+  { phrase: "detonation sequence cancelled", clipName: "cancelled" },
+  { phrase: "detonation sequence canceled", clipName: "cancelled" },
+];
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const fmtSeconds = (seconds) => `${seconds.toFixed(2).padStart(5, "0")}s`;
 const KOKORO_IMPORT_URL = "https://cdn.jsdelivr.net/npm/kokoro-js/+esm";
@@ -777,6 +787,17 @@ function getOptions() {
   };
 }
 
+function getTtsOptions() {
+  return {
+    gapMs: clamp(Number(els.ttsGapMs.value) || 0, 0, 5000),
+    overlapMs: clamp(Number(els.ttsOverlapMs.value) || 0, 0, 5000),
+    voiceDelayMs: clamp(Number(els.ttsVoiceDelayMs.value) || 0, 0, 20000),
+    speedPercent: clamp(Number(els.ttsSpeedPercent.value) || 100, 10, 400),
+    pitchSemitones: clamp(Number(els.ttsPitchSemitones.value) || 0, -24, 24),
+    reverbLevel: clamp(Number(els.ttsReverbLevel.value) || 0, 0, 120),
+  };
+}
+
 function markDirty() {
   state.generatedDirty = true;
   els.downloadAudio.classList.add("is-disabled");
@@ -867,8 +888,20 @@ function startsWithVowelSound(token) {
   return vowelSoundTokens.has(normalized) || /^[aeiou]/.test(normalized);
 }
 
-function resolveClipForToken(token, nextToken, byName) {
+function shouldUseHiddenLetterClip(token, previousToken) {
+  const raw = String(token || "").trim();
+  const normalized = normalizeName(raw);
+  if (!/^[a-z]$/.test(normalized)) return false;
+  return /^[A-Z]$/.test(raw) || normalizeName(previousToken) === "gate";
+}
+
+function resolveClipForToken(token, nextToken, byName, previousToken) {
   const normalized = normalizeName(token);
+  if (shouldUseHiddenLetterClip(token, previousToken)) {
+    const letterClip = byName.get(`_${normalized}`);
+    if (letterClip) return letterClip;
+  }
+
   if (normalized === "the") {
     const variantName = startsWithVowelSound(nextToken) ? "the_vowel" : "the_consonant";
     return byName.get(variantName);
@@ -899,9 +932,28 @@ function buildTextLookup() {
       };
     })
     .filter((candidate) => candidate.tokenCounts.length > 0)
+    .concat(buildPhraseAliasCandidates(byName))
     .sort((a, b) => b.sortTokenCount - a.sortTokenCount);
 
   return { byName, phraseCandidates };
+}
+
+function buildPhraseAliasCandidates(byName) {
+  return phraseClipAliases
+    .map(({ phrase, clipName }) => {
+      const key = normalizePhraseKey(phrase);
+      const clip = byName.get(normalizeName(clipName));
+      const tokenCount = key.split(" ").filter(Boolean).length;
+      return clip && tokenCount > 1
+        ? {
+          clip,
+          keys: new Set([key, normalizeCanonicalPhraseKey(phrase)]),
+          tokenCounts: [tokenCount],
+          sortTokenCount: tokenCount,
+        }
+        : null;
+    })
+    .filter(Boolean);
 }
 
 function isPhraseCandidate(clip) {
@@ -1056,7 +1108,7 @@ function applyTextToSentence() {
     }
 
     const token = tokens[index];
-    const clip = resolveClipForToken(token, tokens[index + 1], byName);
+    const clip = resolveClipForToken(token, tokens[index + 1], byName, tokens[index - 1]);
     if (clip) picked.push(clip);
     else missing.push(token);
     index += 1;
@@ -1469,6 +1521,18 @@ function updateTtsDownload(buffer) {
   els.downloadTts.setAttribute("aria-disabled", "false");
 }
 
+function normalizeKokoroVoiceList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter((voice) => typeof voice === "string");
+  if (value instanceof Map) return [...value.keys()].filter((voice) => typeof voice === "string");
+  if (typeof value === "object") {
+    const nestedVoices = value.voices || value.voiceIds || value.voice_ids || value.names;
+    if (nestedVoices) return normalizeKokoroVoiceList(nestedVoices);
+    return Object.keys(value).filter((voice) => /^[a-z]{2}_[a-z0-9_]+$/i.test(voice));
+  }
+  return [];
+}
+
 async function loadKokoroModel() {
   if (state.tts.engine) return state.tts.engine;
 
@@ -1482,14 +1546,16 @@ async function loadKokoroModel() {
       });
       state.tts.engine = engine;
       const listedVoices = typeof engine.list_voices === "function" ? await engine.list_voices() : [];
-      state.tts.voices = Array.isArray(listedVoices)
-        ? listedVoices
-        : Object.keys(listedVoices || {});
-      const missingVoices = kokoroVoices.filter((voice) => !state.tts.voices.includes(voice));
-      const suffix = missingVoices.length
-        ? ` 未在模型列表中看到：${missingVoices.join(", ")}；仍保留选项，生成时以模型返回为准。`
-        : "";
-      setTtsStatus(`Kokoro 模型已加载，可用音色 ${state.tts.voices.length || "未知"} 个。${suffix}`);
+      state.tts.voices = normalizeKokoroVoiceList(listedVoices);
+      if (state.tts.voices.length > 0) {
+        const missingVoices = kokoroVoices.filter((voice) => !state.tts.voices.includes(voice));
+        const suffix = missingVoices.length
+          ? ` 未在模型列表中看到：${missingVoices.join(", ")}；仍保留选项，生成时以模型返回为准。`
+          : ` 当前页面启用：${kokoroVoices.join(", ")}。`;
+        setTtsStatus(`Kokoro 模型已加载，可用音色 ${state.tts.voices.length} 个。${suffix}`);
+      } else {
+        setTtsStatus(`Kokoro 模型已加载。当前页面启用：${kokoroVoices.join(", ")}。`);
+      }
       return engine;
     })().catch((error) => {
       state.tts.modelPromise = null;
@@ -1523,6 +1589,24 @@ function normalizeTtsSpeechText(text) {
     .replace(/\bC\.?\s*A\.?\s*S\.?\s*S\.?\s*I\.?\s*E\.?\b/gi, "Cassie");
 }
 
+function splitTtsSpeechSegments(text) {
+  const paragraphs = String(text || "")
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  const segments = [];
+  paragraphs.forEach((paragraph) => {
+    const sentenceParts = paragraph.match(/[^.!?。！？]+(?:[.!?。！？]+|$)/g) || [paragraph];
+    sentenceParts
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((part) => segments.push(part));
+  });
+
+  return segments.length > 0 ? segments : [];
+}
+
 async function audioBufferFromKokoroAudio(audio) {
   if (audio && typeof audio.toBlob === "function") {
     const blob = await audio.toBlob();
@@ -1541,6 +1625,36 @@ async function audioBufferFromKokoroAudio(audio) {
   throw new Error("Kokoro 返回了无法识别的音频对象");
 }
 
+async function renderTtsPostProcessedBuffer(rawBuffers, options) {
+  if (rawBuffers.length === 0) throw new Error("TTS 文本为空");
+
+  const resampleFactor = Math.max(0.1, options.speedPercent / 100) * Math.pow(2, options.pitchSemitones / 12);
+  const effectiveGap = Math.max(0, options.gapMs - options.overlapMs) / 1000;
+  const sampleRate = 44100;
+  const outputChannels = Math.max(...rawBuffers.map((buffer) => buffer.numberOfChannels), 1);
+
+  let totalSeconds = options.voiceDelayMs / 1000;
+  rawBuffers.forEach((buffer, index) => {
+    totalSeconds += buffer.duration / resampleFactor;
+    if (index !== rawBuffers.length - 1) totalSeconds += effectiveGap;
+  });
+
+  const offline = createOfflineContext(outputChannels, Math.ceil(Math.max(0.25, totalSeconds) * sampleRate), sampleRate);
+  let cursor = options.voiceDelayMs / 1000;
+  rawBuffers.forEach((buffer, index) => {
+    const source = offline.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = resampleFactor;
+    source.connect(offline.destination);
+    source.start(cursor);
+    cursor += buffer.duration / resampleFactor;
+    if (index !== rawBuffers.length - 1) cursor += effectiveGap;
+  });
+
+  const dryBuffer = await offline.startRendering();
+  return applyReverbTail(dryBuffer, options.reverbLevel);
+}
+
 async function generateTtsPreview() {
   try {
     setTtsBusy(true);
@@ -1548,18 +1662,24 @@ async function generateTtsPreview() {
     if (!rawText) throw new Error("TTS 文本为空");
 
     const engine = await loadKokoroModel();
+    const options = getTtsOptions();
     const voice = els.ttsVoice.value || kokoroVoices[0];
     const speechText = normalizeTtsSpeechText(rawText);
-    setTtsStatus(`正在使用 ${voice} 生成 TTS。`);
-    const audio = await engine.generate(speechText, { voice });
-    const buffer = await audioBufferFromKokoroAudio(audio);
+    const speechSegments = splitTtsSpeechSegments(speechText);
+    setTtsStatus(`正在使用 ${voice} 生成 ${speechSegments.length} 个 TTS 句段。`);
+    const rawBuffers = [];
+    for (const segment of speechSegments) {
+      const audio = await engine.generate(segment, { voice });
+      rawBuffers.push(await audioBufferFromKokoroAudio(audio));
+    }
+    const buffer = await renderTtsPostProcessedBuffer(rawBuffers, options);
 
     state.tts.generatedBuffer = buffer;
     state.tts.generatedDirty = false;
     updateTtsDownload(buffer);
     drawTtsWaveform(buffer);
     els.ttsRenderDuration.textContent = fmtSeconds(buffer.duration);
-    setTtsStatus(`TTS 生成完成：${voice}，${fmtSeconds(buffer.duration)}。`);
+    setTtsStatus(`TTS 生成完成：${voice}，${speechSegments.length} 个句段，${fmtSeconds(buffer.duration)}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
     return buffer;
   } catch (error) {
     setTtsStatus(error.message || String(error), "error");
@@ -1712,6 +1832,12 @@ function setTtsBusy(isBusy) {
     els.ttsVoice,
     els.ttsTemplate,
     els.ttsInput,
+    els.ttsGapMs,
+    els.ttsOverlapMs,
+    els.ttsVoiceDelayMs,
+    els.ttsSpeedPercent,
+    els.ttsPitchSemitones,
+    els.ttsReverbLevel,
   ].forEach((el) => {
     if (el) el.disabled = isBusy;
   });
@@ -1797,6 +1923,18 @@ function bindEvents() {
   ].forEach((control) => {
     control.addEventListener("input", markDirty);
     control.addEventListener("change", markDirty);
+  });
+
+  [
+    els.ttsGapMs,
+    els.ttsOverlapMs,
+    els.ttsVoiceDelayMs,
+    els.ttsSpeedPercent,
+    els.ttsPitchSemitones,
+    els.ttsReverbLevel,
+  ].forEach((control) => {
+    control.addEventListener("input", markTtsDirty);
+    control.addEventListener("change", markTtsDirty);
   });
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract Ogg files from the C.A.S.S.I.E OGGDATA1 archive format."""
+"""Extract Ogg files from the C.A.S.S.I.E. OGGDATA1 archive format."""
 
 from __future__ import annotations
 

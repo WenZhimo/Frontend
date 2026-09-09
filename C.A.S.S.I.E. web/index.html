@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>C.A.S.S.I.E Web Sentence Builder</title>
+    <title>C.A.S.S.I.E. Web Sentence Builder</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="styles.css">
   </head>
@@ -11,7 +11,7 @@
     <main class="app-shell">
       <header class="topbar">
         <div>
-          <h1>C.A.S.S.I.E Web Sentence Builder</h1>
+          <h1>C.A.S.S.I.E. Web Sentence Builder</h1>
           <p>Local SCP:SL voice concatenation lab</p>
         </div>
         <div class="topbar-tools">
@@ -26,7 +26,7 @@
         </div>
       </header>
 
-      <section id="cassieWorkspace" class="workspace" aria-label="CASSIE generator workspace">
+      <section id="cassieWorkspace" class="workspace" aria-label="C.A.S.S.I.E. generator workspace">
         <section class="panel library-panel" aria-labelledby="libraryTitle">
           <div class="panel-heading">
             <div>
@@ -211,6 +211,33 @@
             <label>
               <span>模型</span>
               <input id="ttsModel" type="text" value="Kokoro 82M q8 / WASM" disabled>
+            </label>
+          </div>
+
+          <div class="control-grid tts-effects-grid">
+            <label>
+              <span>间隔 ms</span>
+              <input id="ttsGapMs" type="number" min="0" max="5000" step="5" value="80">
+            </label>
+            <label>
+              <span>提前播放 ms</span>
+              <input id="ttsOverlapMs" type="number" min="0" max="5000" step="5" value="0">
+            </label>
+            <label>
+              <span>语音延迟 ms</span>
+              <input id="ttsVoiceDelayMs" type="number" min="0" max="20000" step="10" value="3000">
+            </label>
+            <label>
+              <span>语速 %</span>
+              <input id="ttsSpeedPercent" type="number" min="10" max="400" step="1" value="100">
+            </label>
+            <label>
+              <span>音高 半音</span>
+              <input id="ttsPitchSemitones" type="number" min="-24" max="24" step="1" value="0">
+            </label>
+            <label>
+              <span>尾音混响</span>
+              <input id="ttsReverbLevel" type="number" min="0" max="120" step="1" value="60">
             </label>
           </div>
 
