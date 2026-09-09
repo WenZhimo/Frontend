@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>C.A.S.S.I.E Web Sentence Builder</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>C.A.S.S.I.E Web Sentence Builder</h1>
+          <p>Local SCP:SL voice concatenation lab</p>
+        </div>
+        <div class="asset-meter" aria-live="polite">
+          <span id="assetCount">Loading assets</span>
+          <span id="renderDuration">00.00s</span>
+        </div>
+      </header>
+
+      <section class="workspace" aria-label="CASSIE generator workspace">
+        <section class="panel library-panel" aria-labelledby="libraryTitle">
+          <div class="panel-heading">
+            <div>
+              <h2 id="libraryTitle">词库</h2>
+              <span id="libraryMeta">正在载入</span>
+            </div>
+            <button id="reloadAssets" class="ghost-button" type="button">刷新</button>
+          </div>
+
+          <label class="search-field">
+            <span>搜索</span>
+            <input id="wordSearch" type="search" autocomplete="off" placeholder="facility / alpha / decont">
+          </label>
+
+          <div class="segmented" role="group" aria-label="Asset category">
+            <button class="segment is-active" data-category="word" type="button">词</button>
+            <button class="segment" data-category="phrase" type="button">公告</button>
+            <button class="segment" data-category="all" type="button">全部</button>
+          </div>
+
+          <div id="wordList" class="word-list" role="listbox" aria-label="Available CASSIE clips"></div>
+        </section>
+
+        <section class="panel sentence-panel" aria-labelledby="sentenceTitle">
+          <div class="panel-heading">
+            <div>
+              <h2 id="sentenceTitle">句子队列</h2>
+              <span id="sentenceMeta">0 clips</span>
+            </div>
+            <button id="clearSentence" class="ghost-button" type="button">清空</button>
+          </div>
+
+          <label class="sentence-input">
+            <span>文本句子</span>
+            <textarea id="textInput" rows="4" spellcheck="false">attention all personnel</textarea>
+          </label>
+
+          <div class="action-row">
+            <button id="applyText" type="button">应用文本</button>
+            <button id="sampleOne" class="ghost-button" type="button">示例一</button>
+            <button id="sampleTwo" class="ghost-button" type="button">示例二</button>
+          </div>
+
+          <section class="template-builder" aria-labelledby="templateTitle">
+            <div class="template-head">
+              <div>
+                <h3 id="templateTitle">固定公告模板</h3>
+                <span id="templateMeta">游戏字幕模板 · 可填空</span>
+              </div>
+            </div>
+
+            <label class="template-select">
+              <span>公告类型</span>
+              <select id="announcementTemplate"></select>
+            </label>
+
+            <div id="templateFields" class="template-fields"></div>
+            <p id="templatePreview" class="template-preview"></p>
+
+            <div class="template-actions">
+              <button id="applyTemplate" type="button">套用模板</button>
+            </div>
+          </section>
+
+          <div id="missingTokens" class="missing-tokens" aria-live="polite"></div>
+          <ol id="sentenceList" class="sentence-list" aria-label="Selected CASSIE clips"></ol>
+        </section>
+
+        <section class="panel controls-panel" aria-labelledby="controlsTitle">
+          <div class="panel-heading">
+            <div>
+              <h2 id="controlsTitle">生成参数</h2>
+              <span>BG_4~BG_40 自动匹配</span>
+            </div>
+          </div>
+
+          <div class="control-grid">
+            <label>
+              <span>间隔 ms</span>
+              <input id="gapMs" type="number" min="0" max="5000" step="5" value="80">
+            </label>
+            <label>
+              <span>提前播放 ms</span>
+              <input id="overlapMs" type="number" min="0" max="5000" step="5" value="0">
+            </label>
+            <label>
+              <span>语音延迟 ms</span>
+              <input id="voiceDelayMs" type="number" min="0" max="20000" step="10" value="3000">
+            </label>
+            <label>
+              <span>语速 %</span>
+              <input id="speedPercent" type="number" min="10" max="400" step="1" value="100">
+            </label>
+            <label>
+              <span>音高 半音</span>
+              <input id="pitchSemitones" type="number" min="-24" max="24" step="1" value="0">
+            </label>
+            <label>
+              <span>尾音混响</span>
+              <input id="reverbLevel" type="number" min="0" max="120" step="1" value="60">
+            </label>
+          </div>
+
+          <label class="toggle-line">
+            <input id="enableBackground" type="checkbox">
+            <span>启用 BG_N 背景提示音</span>
+          </label>
+
+          <label class="range-line">
+            <span>背景音量</span>
+            <input id="backgroundGain" type="range" min="0" max="100" step="1" value="35">
+            <output id="backgroundGainValue">35%</output>
+          </label>
+
+          <canvas id="waveform" width="720" height="160" aria-label="Rendered waveform"></canvas>
+
+          <div class="transport">
+            <button id="generatePreview" type="button">预生成</button>
+            <button id="playAudio" class="primary" type="button">播放</button>
+            <button id="stopAudio" class="danger" type="button">停止</button>
+            <a id="downloadAudio" class="download-link is-disabled" href="#" download="cassie_sentence.wav" aria-disabled="true">下载 WAV</a>
+          </div>
+
+          <div id="status" class="status" role="status" aria-live="polite">初始化中</div>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
