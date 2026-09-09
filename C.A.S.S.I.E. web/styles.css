@@ -90,6 +90,17 @@ button:disabled,
   background: #8af0e5;
 }
 
+#playTts.is-ready {
+  border-color: rgba(230, 180, 80, 0.9);
+  color: #1b1303;
+  background: var(--amber);
+  box-shadow: 0 0 0 3px rgba(230, 180, 80, 0.16);
+}
+
+#playTts.is-ready:hover {
+  background: #f1c979;
+}
+
 .danger {
   border-color: rgba(255, 107, 107, 0.45);
   color: #ffecec;
@@ -505,6 +516,53 @@ select:focus {
 .range-line output {
   color: var(--text);
   font-size: 12px;
+}
+
+.generation-progress {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(17, 20, 24, 0.58);
+}
+
+.progress-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.progress-copy span:last-child {
+  color: var(--text);
+}
+
+progress {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: #15181d;
+}
+
+progress::-webkit-progress-bar {
+  border-radius: 999px;
+  background: #15181d;
+}
+
+progress::-webkit-progress-value {
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--amber));
+}
+
+progress::-moz-progress-bar {
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--amber));
 }
 
 #waveform {

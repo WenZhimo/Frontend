@@ -5,6 +5,7 @@ cd /d "%~dp0"
 
 set "HOST=127.0.0.1"
 set "PORT=5173"
+set "URL=http://%HOST%:%PORT%/"
 set "PYTHON_CMD="
 
 where python >nul 2>nul
@@ -26,9 +27,12 @@ if "%PYTHON_CMD%"=="" (
 
 echo Starting C.A.S.S.I.E. Web Sentence Builder...
 echo.
-echo URL: http://%HOST%:%PORT%/
+echo URL: %URL%
+echo Your default browser will open automatically.
 echo Press Ctrl+C to stop the server.
 echo.
+
+start "" powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Start-Sleep -Milliseconds 800; Start-Process '%URL%'"
 
 %PYTHON_CMD% -m http.server %PORT% --bind %HOST%
 

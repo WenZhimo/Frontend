@@ -1,3 +1,4 @@
+// Application state and DOM bindings
 const state = {
   manifest: null,
   clips: [],
@@ -15,12 +16,18 @@ const state = {
   audioContext: null,
   activeMode: "cassie",
   tts: {
-    engine: null,
+    worker: null,
     voices: [],
+    currentJobId: 0,
+    pendingJob: null,
+    isGenerating: false,
+    timerId: null,
+    timerStartedAt: 0,
+    elapsedMs: 0,
+    lastBackgroundClip: null,
     generatedBuffer: null,
     generatedBlobUrl: null,
     generatedDirty: true,
-    modelPromise: null,
   },
 };
 
@@ -71,22 +78,33 @@ const els = {
   applyTtsTemplate: document.querySelector("#applyTtsTemplate"),
   ttsVoice: document.querySelector("#ttsVoice"),
   ttsModel: document.querySelector("#ttsModel"),
+  ttsBackend: document.querySelector("#ttsBackend"),
+  ttsDtype: document.querySelector("#ttsDtype"),
+  ttsGenerationMode: document.querySelector("#ttsGenerationMode"),
   ttsGapMs: document.querySelector("#ttsGapMs"),
   ttsOverlapMs: document.querySelector("#ttsOverlapMs"),
   ttsVoiceDelayMs: document.querySelector("#ttsVoiceDelayMs"),
   ttsSpeedPercent: document.querySelector("#ttsSpeedPercent"),
   ttsPitchSemitones: document.querySelector("#ttsPitchSemitones"),
   ttsReverbLevel: document.querySelector("#ttsReverbLevel"),
+  ttsEnableBackground: document.querySelector("#ttsEnableBackground"),
+  ttsBackgroundGain: document.querySelector("#ttsBackgroundGain"),
+  ttsBackgroundGainValue: document.querySelector("#ttsBackgroundGainValue"),
   loadTtsModel: document.querySelector("#loadTtsModel"),
   generateTts: document.querySelector("#generateTts"),
   playTts: document.querySelector("#playTts"),
   stopTts: document.querySelector("#stopTts"),
   downloadTts: document.querySelector("#downloadTts"),
+  ttsProgress: document.querySelector("#ttsProgress"),
+  ttsProgressBar: document.querySelector("#ttsProgressBar"),
+  ttsProgressLabel: document.querySelector("#ttsProgressLabel"),
+  ttsProgressCount: document.querySelector("#ttsProgressCount"),
   ttsWaveform: document.querySelector("#ttsWaveform"),
   ttsRenderDuration: document.querySelector("#ttsRenderDuration"),
   ttsStatus: document.querySelector("#ttsStatus"),
 };
 
+// Token normalization and clip alias data
 const textSplitRe = /[ ,.!?\r\n;:\t，。！？；：、]+/g;
 const scpNumberRe = /\bSCP\s*[-_#]?\s*(\d+(?:[-_]\d+)*)\b/gi;
 const phraseSeparatorRe = /[^a-z0-9]+/g;
@@ -135,9 +153,12 @@ const phraseClipAliases = [
 ];
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const fmtSeconds = (seconds) => `${seconds.toFixed(2).padStart(5, "0")}s`;
-const KOKORO_IMPORT_URL = "https://cdn.jsdelivr.net/npm/kokoro-js/+esm";
 const KOKORO_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
 const kokoroVoices = ["am_michael", "bm_daniel", "am_adam"];
+const TTS_WORKER_URL = new URL("./src/tts-worker.js", import.meta.url);
+const TTS_MAX_UNIT_CHARS = 360;
+
+// Official announcement template data
 const warheadTimeOptions = [
   { value: "120s", label: "120 seconds" },
   { value: "110s", label: "110 seconds" },
@@ -756,6 +777,7 @@ const ttsAnnouncementTemplates = [
   },
 ];
 
+// Shared browser and option helpers
 function getAudioContext() {
   if (!state.audioContext) {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -795,6 +817,16 @@ function getTtsOptions() {
     speedPercent: clamp(Number(els.ttsSpeedPercent.value) || 100, 10, 400),
     pitchSemitones: clamp(Number(els.ttsPitchSemitones.value) || 0, -24, 24),
     reverbLevel: clamp(Number(els.ttsReverbLevel.value) || 0, 0, 120),
+    enableBackground: els.ttsEnableBackground.checked,
+    backgroundGain: clamp(Number(els.ttsBackgroundGain.value) || 0, 0, 100) / 100,
+  };
+}
+
+function getTtsModelSettings() {
+  return {
+    modelId: String(els.ttsModel.value || "").trim() || KOKORO_MODEL_ID,
+    device: els.ttsBackend.value || "auto",
+    dtype: els.ttsDtype.value || "auto",
   };
 }
 
@@ -808,8 +840,23 @@ function markTtsDirty() {
   state.tts.generatedDirty = true;
   els.downloadTts.classList.add("is-disabled");
   els.downloadTts.setAttribute("aria-disabled", "true");
+  setTtsReadyState(false);
 }
 
+function reloadTtsModelOnNextUse() {
+  if (state.tts.isGenerating) return;
+  if (state.tts.worker) {
+    state.tts.worker.terminate();
+    state.tts.worker = null;
+  }
+  state.tts.voices = [];
+  state.tts.pendingJob = null;
+  state.tts.currentJobId += 1;
+  setTtsProgress("模型设置已变更", 0, 0);
+  markTtsDirty();
+}
+
+// Original C.A.S.S.I.E. token matching
 function normalizeName(name) {
   return String(name || "").trim().toLowerCase();
 }
@@ -982,6 +1029,7 @@ function findPhraseClip(tokens, startIndex, phraseCandidates) {
   return null;
 }
 
+// Manifest loading and clip browser rendering
 async function loadManifest() {
   setStatus("正在加载本地音频 manifest");
   const response = await fetch("assets/audio/manifest.json", { cache: "no-store" });
@@ -1120,6 +1168,7 @@ function applyTextToSentence() {
   renderSentence();
 }
 
+// Announcement form rendering
 function renderAnnouncementTemplates() {
   const options = announcementTemplates.map((template) => {
     const option = document.createElement("option");
@@ -1301,6 +1350,7 @@ function applyTtsTemplate() {
   markTtsDirty();
 }
 
+// Audio rendering and playback
 async function decodeClip(clip) {
   if (state.decoded.has(clip.file)) {
     return state.decoded.get(clip.file);
@@ -1521,59 +1571,261 @@ function updateTtsDownload(buffer) {
   els.downloadTts.setAttribute("aria-disabled", "false");
 }
 
-function normalizeKokoroVoiceList(value) {
-  if (!value) return [];
-  if (Array.isArray(value)) return value.filter((voice) => typeof voice === "string");
-  if (value instanceof Map) return [...value.keys()].filter((voice) => typeof voice === "string");
-  if (typeof value === "object") {
-    const nestedVoices = value.voices || value.voiceIds || value.voice_ids || value.names;
-    if (nestedVoices) return normalizeKokoroVoiceList(nestedVoices);
-    return Object.keys(value).filter((voice) => /^[a-z]{2}_[a-z0-9_]+$/i.test(voice));
+// Kokoro TTS worker orchestration
+function splitLongTtsUnit(text) {
+  const units = [];
+  let remaining = String(text || "").trim();
+  while (remaining.length > TTS_MAX_UNIT_CHARS) {
+    let cut = remaining.lastIndexOf(" ", TTS_MAX_UNIT_CHARS);
+    if (cut <= 0) cut = TTS_MAX_UNIT_CHARS;
+    const head = remaining.slice(0, cut).trim();
+    if (head) units.push(head);
+    remaining = remaining.slice(cut).trim();
   }
-  return [];
+  if (remaining) units.push(remaining);
+  return units;
 }
 
-async function loadKokoroModel() {
-  if (state.tts.engine) return state.tts.engine;
+function splitTtsSpeechSegments(text) {
+  const paragraphs = String(text || "")
+    .replace(/\r\n?/g, "\n")
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 
-  if (!state.tts.modelPromise) {
-    state.tts.modelPromise = (async () => {
-      setTtsStatus("正在加载 Kokoro 82M q8 / WASM 模型，首次运行需要下载模型文件。");
-      const { KokoroTTS } = await import(KOKORO_IMPORT_URL);
-      const engine = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, {
-        dtype: "q8",
-        device: "wasm",
-      });
-      state.tts.engine = engine;
-      const listedVoices = typeof engine.list_voices === "function" ? await engine.list_voices() : [];
-      state.tts.voices = normalizeKokoroVoiceList(listedVoices);
-      if (state.tts.voices.length > 0) {
-        const missingVoices = kokoroVoices.filter((voice) => !state.tts.voices.includes(voice));
-        const suffix = missingVoices.length
-          ? ` 未在模型列表中看到：${missingVoices.join(", ")}；仍保留选项，生成时以模型返回为准。`
-          : ` 当前页面启用：${kokoroVoices.join(", ")}。`;
-        setTtsStatus(`Kokoro 模型已加载，可用音色 ${state.tts.voices.length} 个。${suffix}`);
+  const segments = [];
+  paragraphs.forEach((paragraph) => {
+    const sentenceParts = paragraph.match(/[^.!?。！？]+(?:[.!?。！？]+|$)/g) || [paragraph];
+    sentenceParts
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .flatMap(splitLongTtsUnit)
+      .forEach((part) => segments.push(part));
+  });
+
+  return segments;
+}
+
+function splitTtsFragmentUnits(text) {
+  const words = String(text || "").match(/[A-Za-z0-9]+/g) || [];
+  return words.filter(Boolean);
+}
+
+function buildTtsUnits(rawText) {
+  const mode = els.ttsGenerationMode.value || "normal";
+  const speechText = normalizeTtsSpeechText(rawText);
+  const unitTexts = mode === "fragment"
+    ? splitTtsFragmentUnits(speechText)
+    : splitTtsSpeechSegments(speechText);
+  return {
+    mode,
+    units: unitTexts.map((text, index) => ({ index, text })),
+  };
+}
+
+function ttsModeLabel(mode) {
+  return mode === "fragment" ? "单词" : "句段";
+}
+
+function setTtsReadyState(isReady) {
+  els.playTts.classList.toggle("is-ready", isReady);
+}
+
+function setTtsProgress(label, done = 0, total = 0, progress = null) {
+  const ratio = progress ?? (total > 0 ? done / total : 0);
+  els.ttsProgressLabel.textContent = label;
+  els.ttsProgressCount.textContent = total > 0 ? `${done} / ${total}` : `${Math.round(clamp(ratio, 0, 1) * 100)}%`;
+  els.ttsProgressBar.value = clamp(ratio, 0, 1);
+}
+
+function startTtsTimer() {
+  if (state.tts.timerId) clearInterval(state.tts.timerId);
+  state.tts.timerStartedAt = performance.now();
+  state.tts.elapsedMs = 0;
+  els.ttsRenderDuration.textContent = fmtSeconds(0);
+  state.tts.timerId = setInterval(() => {
+    state.tts.elapsedMs = performance.now() - state.tts.timerStartedAt;
+    els.ttsRenderDuration.textContent = fmtSeconds(state.tts.elapsedMs / 1000);
+  }, 100);
+}
+
+function stopTtsTimer() {
+  if (state.tts.timerId) {
+    clearInterval(state.tts.timerId);
+    state.tts.timerId = null;
+  }
+  if (state.tts.timerStartedAt) {
+    state.tts.elapsedMs = performance.now() - state.tts.timerStartedAt;
+    els.ttsRenderDuration.textContent = fmtSeconds(state.tts.elapsedMs / 1000);
+  }
+  return state.tts.elapsedMs;
+}
+
+function ensureTtsWorker() {
+  if (state.tts.worker) return state.tts.worker;
+
+  const worker = new Worker(TTS_WORKER_URL, { type: "module" });
+  worker.onmessage = handleTtsWorkerMessage;
+  worker.onerror = (event) => {
+    finishTtsJobWithError(state.tts.currentJobId, new Error(event.message || "TTS worker failed"));
+  };
+  state.tts.worker = worker;
+  return worker;
+}
+
+function formatLoadedStatus(message) {
+  const backend = String(message.backend || "unknown").toUpperCase();
+  const dtype = message.dtype || "auto";
+  const enabledVoices = message.enabledVoices || kokoroVoices;
+  if (message.voices?.length) {
+    const missingVoices = enabledVoices.filter((voice) => !message.voices.includes(voice));
+    const suffix = missingVoices.length
+      ? ` 未在模型列表中看到：${missingVoices.join(", ")}；仍保留选项，生成时以模型返回为准。`
+      : ` 当前页面启用：${enabledVoices.join(", ")}。`;
+    return `Kokoro 模型已加载（${backend} / ${dtype}），可用音色 ${message.voices.length} 个。${suffix}`;
+  }
+  return `Kokoro 模型已加载（${backend} / ${dtype}）。当前页面启用：${enabledVoices.join(", ")}。`;
+}
+
+function resolvePendingTtsJob(jobId, value) {
+  const pending = state.tts.pendingJob;
+  if (pending?.jobId === jobId) {
+    pending.resolve(value);
+    state.tts.pendingJob = null;
+  }
+}
+
+function rejectPendingTtsJob(jobId, error) {
+  const pending = state.tts.pendingJob;
+  if (pending?.jobId === jobId) {
+    pending.reject(error);
+    state.tts.pendingJob = null;
+  }
+}
+
+function resetTtsGenerationUi() {
+  state.tts.isGenerating = false;
+  setTtsBusy(false);
+  els.stopTts.textContent = "停止";
+}
+
+function handleTtsWorkerMessage(event) {
+  const message = event.data || {};
+  if (message.jobId && message.jobId !== state.tts.currentJobId) return;
+
+  switch (message.type) {
+    case "backend": {
+      if (message.stage === "fallback") {
+        setTtsStatus(`WebGPU 加载失败，正在回退到 WASM / ${message.dtype}。`);
       } else {
-        setTtsStatus(`Kokoro 模型已加载。当前页面启用：${kokoroVoices.join(", ")}。`);
+        setTtsStatus(`正在加载 Kokoro 模型（${String(message.backend || "").toUpperCase()} / ${message.dtype}）。`);
       }
-      return engine;
-    })().catch((error) => {
-      state.tts.modelPromise = null;
-      throw error;
-    });
+      break;
+    }
+    case "progress": {
+      if (message.phase === "load") {
+        setTtsProgress("正在下载 / 加载模型", 0, 0, message.progress || 0);
+      } else if (message.phase === "generate") {
+        const label = ttsModeLabel(message.mode);
+        setTtsProgress(`正在生成 ${label}`, message.done || 0, message.total || 0);
+      }
+      break;
+    }
+    case "loaded": {
+      state.tts.voices = message.voices || [];
+      setTtsStatus(formatLoadedStatus(message));
+      const pending = state.tts.pendingJob;
+      if (pending?.kind === "load" && pending.jobId === message.jobId) {
+        setTtsProgress("模型已加载", 1, 1);
+        setTtsBusy(false);
+        resolvePendingTtsJob(message.jobId, message);
+      }
+      break;
+    }
+    case "done": {
+      finishGeneratedTtsJob(message).catch((error) => finishTtsJobWithError(message.jobId, error));
+      break;
+    }
+    case "cancelled": {
+      stopTtsTimer();
+      resetTtsGenerationUi();
+      setTtsReadyState(Boolean(state.tts.generatedBuffer) && !state.tts.generatedDirty);
+      setTtsProgress("已停止生成", message.done || 0, message.total || 0);
+      setTtsStatus("TTS 生成已停止；已保留上一次可播放结果。", "error");
+      rejectPendingTtsJob(message.jobId, new Error("TTS generation cancelled"));
+      break;
+    }
+    case "error": {
+      finishTtsJobWithError(message.jobId, new Error(message.message || "TTS generation failed"));
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+async function finishGeneratedTtsJob(message) {
+  const parts = [...(message.parts || [])].sort((a, b) => a.index - b.index);
+  setTtsProgress("正在后处理音频", parts.length, parts.length);
+  const rawBuffers = [];
+  for (const part of parts) {
+    rawBuffers.push(await getAudioContext().decodeAudioData(part.wav.slice(0)));
   }
 
-  return state.tts.modelPromise;
+  if (message.jobId !== state.tts.currentJobId) return;
+
+  const options = getTtsOptions();
+  const buffer = await renderTtsPostProcessedBuffer(rawBuffers, options);
+  if (message.jobId !== state.tts.currentJobId) return;
+
+  const elapsedMs = stopTtsTimer();
+  state.tts.generatedBuffer = buffer;
+  state.tts.generatedDirty = false;
+  updateTtsDownload(buffer);
+  drawTtsWaveform(buffer);
+  setTtsReadyState(true);
+  resetTtsGenerationUi();
+  setTtsProgress("生成完成，可以播放", parts.length, parts.length);
+
+  const modeLabel = ttsModeLabel(message.mode);
+  const bgLabel = state.tts.lastBackgroundClip ? `，背景 ${state.tts.lastBackgroundClip.name}` : "";
+  setTtsStatus(`TTS 生成完成：${els.ttsVoice.value}，${parts.length} 个${modeLabel}，音频 ${fmtSeconds(buffer.duration)}，耗时 ${fmtSeconds(elapsedMs / 1000)}，后端 ${String(message.backend || "").toUpperCase()} / ${message.dtype}${bgLabel}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
+  resolvePendingTtsJob(message.jobId, buffer);
+}
+
+function finishTtsJobWithError(jobId, error) {
+  stopTtsTimer();
+  resetTtsGenerationUi();
+  setTtsProgress("生成失败", 0, 0);
+  setTtsStatus(error.message || String(error), "error");
+  rejectPendingTtsJob(jobId, error);
+}
+
+function queueTtsWorkerJob(kind, payload) {
+  const jobId = ++state.tts.currentJobId;
+  const promise = new Promise((resolve, reject) => {
+    state.tts.pendingJob = { jobId, kind, resolve, reject };
+  });
+  ensureTtsWorker().postMessage({ ...payload, jobId });
+  return { jobId, promise };
 }
 
 async function handleLoadTtsModel() {
+  if (state.tts.isGenerating) return;
+
+  setTtsReadyState(false);
+  setTtsBusy(true);
+  setTtsProgress("准备加载模型", 0, 0);
+  setTtsStatus("正在准备 Kokoro 模型；自动模式会优先尝试 WebGPU。", "normal");
+  const { promise } = queueTtsWorkerJob("load", {
+    type: "load",
+    settings: getTtsModelSettings(),
+  });
+
   try {
-    setTtsBusy(true);
-    await loadKokoroModel();
-  } catch (error) {
-    setTtsStatus(`Kokoro 模型加载失败：${error.message || error}`, "error");
-  } finally {
-    setTtsBusy(false);
+    await promise;
+  } catch {
+    // The status panel already contains the concrete error.
   }
 }
 
@@ -1589,65 +1841,50 @@ function normalizeTtsSpeechText(text) {
     .replace(/\bC\.?\s*A\.?\s*S\.?\s*S\.?\s*I\.?\s*E\.?\b/gi, "Cassie");
 }
 
-function splitTtsSpeechSegments(text) {
-  const paragraphs = String(text || "")
-    .split(/\n+/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-
-  const segments = [];
-  paragraphs.forEach((paragraph) => {
-    const sentenceParts = paragraph.match(/[^.!?。！？]+(?:[.!?。！？]+|$)/g) || [paragraph];
-    sentenceParts
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .forEach((part) => segments.push(part));
-  });
-
-  return segments.length > 0 ? segments : [];
-}
-
-async function audioBufferFromKokoroAudio(audio) {
-  if (audio && typeof audio.toBlob === "function") {
-    const blob = await audio.toBlob();
-    const arrayBuffer = await blob.arrayBuffer();
-    return getAudioContext().decodeAudioData(arrayBuffer.slice(0));
-  }
-
-  const samples = audio?.audio || audio?.data || audio?.samples;
-  if (samples && typeof samples.length === "number") {
-    const sampleRate = audio.sampling_rate || audio.sample_rate || audio.sampleRate || 24000;
-    const buffer = getAudioContext().createBuffer(1, samples.length, sampleRate);
-    buffer.getChannelData(0).set(samples);
-    return buffer;
-  }
-
-  throw new Error("Kokoro 返回了无法识别的音频对象");
-}
-
 async function renderTtsPostProcessedBuffer(rawBuffers, options) {
   if (rawBuffers.length === 0) throw new Error("TTS 文本为空");
 
-  const resampleFactor = Math.max(0.1, options.speedPercent / 100) * Math.pow(2, options.pitchSemitones / 12);
+  const pitchFactor = Math.pow(2, options.pitchSemitones / 12);
   const effectiveGap = Math.max(0, options.gapMs - options.overlapMs) / 1000;
   const sampleRate = 44100;
-  const outputChannels = Math.max(...rawBuffers.map((buffer) => buffer.numberOfChannels), 1);
+  const speechChannels = Math.max(...rawBuffers.map((buffer) => buffer.numberOfChannels), 1);
 
-  let totalSeconds = options.voiceDelayMs / 1000;
+  let speechEndSeconds = options.voiceDelayMs / 1000;
   rawBuffers.forEach((buffer, index) => {
-    totalSeconds += buffer.duration / resampleFactor;
-    if (index !== rawBuffers.length - 1) totalSeconds += effectiveGap;
+    speechEndSeconds += buffer.duration / pitchFactor;
+    if (index !== rawBuffers.length - 1) speechEndSeconds += effectiveGap;
   });
 
-  const offline = createOfflineContext(outputChannels, Math.ceil(Math.max(0.25, totalSeconds) * sampleRate), sampleRate);
+  let backgroundBuffer = null;
+  state.tts.lastBackgroundClip = null;
+  if (options.enableBackground) {
+    state.tts.lastBackgroundClip = getBackgroundClip(speechEndSeconds);
+    if (state.tts.lastBackgroundClip) {
+      backgroundBuffer = await decodeClip(state.tts.lastBackgroundClip);
+    }
+  }
+
+  const totalSeconds = Math.max(0.25, speechEndSeconds, backgroundBuffer?.duration || 0);
+  const outputChannels = Math.max(speechChannels, backgroundBuffer?.numberOfChannels || 1);
+  const offline = createOfflineContext(outputChannels, Math.ceil(totalSeconds * sampleRate), sampleRate);
+
+  if (backgroundBuffer) {
+    const bgSource = offline.createBufferSource();
+    const bgGain = offline.createGain();
+    bgSource.buffer = backgroundBuffer;
+    bgGain.gain.value = options.backgroundGain;
+    bgSource.connect(bgGain).connect(offline.destination);
+    bgSource.start(0);
+  }
+
   let cursor = options.voiceDelayMs / 1000;
   rawBuffers.forEach((buffer, index) => {
     const source = offline.createBufferSource();
     source.buffer = buffer;
-    source.playbackRate.value = resampleFactor;
+    source.playbackRate.value = pitchFactor;
     source.connect(offline.destination);
     source.start(cursor);
-    cursor += buffer.duration / resampleFactor;
+    cursor += buffer.duration / pitchFactor;
     if (index !== rawBuffers.length - 1) cursor += effectiveGap;
   });
 
@@ -1656,37 +1893,41 @@ async function renderTtsPostProcessedBuffer(rawBuffers, options) {
 }
 
 async function generateTtsPreview() {
-  try {
-    setTtsBusy(true);
-    const rawText = els.ttsInput.value.trim();
-    if (!rawText) throw new Error("TTS 文本为空");
+  if (state.tts.isGenerating) return state.tts.pendingJob?.promise;
 
-    const engine = await loadKokoroModel();
-    const options = getTtsOptions();
-    const voice = els.ttsVoice.value || kokoroVoices[0];
-    const speechText = normalizeTtsSpeechText(rawText);
-    const speechSegments = splitTtsSpeechSegments(speechText);
-    setTtsStatus(`正在使用 ${voice} 生成 ${speechSegments.length} 个 TTS 句段。`);
-    const rawBuffers = [];
-    for (const segment of speechSegments) {
-      const audio = await engine.generate(segment, { voice });
-      rawBuffers.push(await audioBufferFromKokoroAudio(audio));
-    }
-    const buffer = await renderTtsPostProcessedBuffer(rawBuffers, options);
-
-    state.tts.generatedBuffer = buffer;
-    state.tts.generatedDirty = false;
-    updateTtsDownload(buffer);
-    drawTtsWaveform(buffer);
-    els.ttsRenderDuration.textContent = fmtSeconds(buffer.duration);
-    setTtsStatus(`TTS 生成完成：${voice}，${speechSegments.length} 个句段，${fmtSeconds(buffer.duration)}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
-    return buffer;
-  } catch (error) {
-    setTtsStatus(error.message || String(error), "error");
+  const rawText = els.ttsInput.value.trim();
+  if (!rawText) {
+    const error = new Error("TTS 文本为空");
+    setTtsStatus(error.message, "error");
     throw error;
-  } finally {
-    setTtsBusy(false);
   }
+
+  const { mode, units } = buildTtsUnits(rawText);
+  if (units.length === 0) {
+    const error = new Error("TTS 文本没有可生成的句段或单词");
+    setTtsStatus(error.message, "error");
+    throw error;
+  }
+
+  stopCurrentSource();
+  setTtsReadyState(false);
+  state.tts.isGenerating = true;
+  setTtsBusy(true, { allowCancel: true });
+  startTtsTimer();
+  setTtsProgress(`准备生成 ${ttsModeLabel(mode)}`, 0, units.length);
+  setTtsStatus(`正在使用 ${els.ttsVoice.value} 生成 ${units.length} 个${ttsModeLabel(mode)}；自动模式会优先尝试 WebGPU。`);
+
+  const speed = clamp(Number(els.ttsSpeedPercent.value) || 100, 10, 400) / 100;
+  const { promise } = queueTtsWorkerJob("generate", {
+    type: "generate",
+    settings: getTtsModelSettings(),
+    voice: els.ttsVoice.value || kokoroVoices[0],
+    speed,
+    mode,
+    units,
+  });
+
+  return promise;
 }
 
 async function playTtsAudio() {
@@ -1695,6 +1936,7 @@ async function playTtsAudio() {
       ? await generateTtsPreview()
       : state.tts.generatedBuffer;
 
+    if (!buffer) return;
     await playBuffer(buffer);
     setTtsStatus("正在播放 Kokoro TTS 音频。");
   } catch {
@@ -1702,11 +1944,21 @@ async function playTtsAudio() {
   }
 }
 
+function cancelTtsGeneration() {
+  if (!state.tts.isGenerating) return false;
+  ensureTtsWorker().postMessage({ type: "cancel", jobId: state.tts.currentJobId });
+  setTtsStatus("正在停止生成；会在当前句段或单词完成后结束。", "error");
+  setTtsProgress("正在停止生成", 0, 0);
+  return true;
+}
+
 function stopTtsAudio() {
+  if (cancelTtsGeneration()) return;
   stopCurrentSource();
   setTtsStatus("停止播放。");
 }
 
+// Export and waveform drawing
 function encodeWav(buffer) {
   const channels = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
@@ -1816,20 +2068,25 @@ function drawTtsWaveform(buffer) {
   drawWaveformFor(els.ttsWaveform, buffer, "#e6b450");
 }
 
+// UI state and event binding
 function setBusy(isBusy) {
   [els.generatePreview, els.playAudio, els.applyText, els.applyTemplate, els.reloadAssets].forEach((el) => {
     el.disabled = isBusy;
   });
 }
 
-function setTtsBusy(isBusy) {
+function setTtsBusy(isBusy, options = {}) {
+  const allowCancel = Boolean(options.allowCancel);
   [
     els.loadTtsModel,
     els.generateTts,
     els.playTts,
-    els.stopTts,
     els.applyTtsTemplate,
     els.ttsVoice,
+    els.ttsModel,
+    els.ttsBackend,
+    els.ttsDtype,
+    els.ttsGenerationMode,
     els.ttsTemplate,
     els.ttsInput,
     els.ttsGapMs,
@@ -1838,9 +2095,14 @@ function setTtsBusy(isBusy) {
     els.ttsSpeedPercent,
     els.ttsPitchSemitones,
     els.ttsReverbLevel,
+    els.ttsEnableBackground,
+    els.ttsBackgroundGain,
   ].forEach((el) => {
     if (el) el.disabled = isBusy;
   });
+
+  els.stopTts.disabled = isBusy ? !allowCancel : false;
+  els.stopTts.textContent = isBusy && allowCancel ? "停止生成" : "停止";
 
   els.ttsTemplateFields.querySelectorAll("input, select, textarea, button").forEach((control) => {
     control.disabled = isBusy;
@@ -1883,8 +2145,17 @@ function bindEvents() {
   els.applyTtsTemplate.addEventListener("click", applyTtsTemplate);
   els.ttsInput.addEventListener("input", markTtsDirty);
   els.ttsVoice.addEventListener("change", markTtsDirty);
+  els.ttsModel.addEventListener("input", markTtsDirty);
+  els.ttsModel.addEventListener("change", reloadTtsModelOnNextUse);
+  els.ttsBackend.addEventListener("change", reloadTtsModelOnNextUse);
+  els.ttsDtype.addEventListener("change", reloadTtsModelOnNextUse);
+  els.ttsGenerationMode.addEventListener("change", markTtsDirty);
   els.loadTtsModel.addEventListener("click", handleLoadTtsModel);
-  els.generateTts.addEventListener("click", generateTtsPreview);
+  els.generateTts.addEventListener("click", () => {
+    generateTtsPreview().catch(() => {
+      // The TTS status panel already contains the concrete error.
+    });
+  });
   els.playTts.addEventListener("click", playTtsAudio);
   els.stopTts.addEventListener("click", stopTtsAudio);
   els.sampleOne.addEventListener("click", () => {
@@ -1901,6 +2172,10 @@ function bindEvents() {
   els.backgroundGain.addEventListener("input", () => {
     els.backgroundGainValue.textContent = `${els.backgroundGain.value}%`;
     markDirty();
+  });
+  els.ttsBackgroundGain.addEventListener("input", () => {
+    els.ttsBackgroundGainValue.textContent = `${els.ttsBackgroundGain.value}%`;
+    markTtsDirty();
   });
 
   document.querySelectorAll(".segment").forEach((button) => {
@@ -1932,6 +2207,7 @@ function bindEvents() {
     els.ttsSpeedPercent,
     els.ttsPitchSemitones,
     els.ttsReverbLevel,
+    els.ttsEnableBackground,
   ].forEach((control) => {
     control.addEventListener("input", markTtsDirty);
     control.addEventListener("change", markTtsDirty);

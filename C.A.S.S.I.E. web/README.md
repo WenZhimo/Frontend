@@ -4,12 +4,14 @@ Static browser port of the C.A.S.S.I.E. sentence builder. It concatenates locall
 
 ## Run
 
+Double-click `run-local.bat` to start the local static server and open the app in the default browser.
+
 ```powershell
 cd "D:\盒子\HTML\C.A.S.S.I.E. web"
-python -m http.server 5173
+python -m http.server 5173 --bind 127.0.0.1
 ```
 
-Open `http://localhost:5173/`.
+Open `http://127.0.0.1:5173/`.
 
 ## Modes
 
@@ -24,9 +26,9 @@ Kokoro TTS currently exposes these voices:
 - `bm_daniel`
 - `am_adam`
 
-The static page loads `kokoro-js` from the jsDelivr ESM CDN and initializes `onnx-community/Kokoro-82M-v1.0-ONNX` with `dtype: "q8"` and `device: "wasm"`. First use needs network access to download the model files; after the browser caches them, later loads are faster. Generated TTS audio is decoded in the browser and exported as WAV, just like the original concatenation mode.
+The static page loads `kokoro-js` from the jsDelivr ESM CDN inside `src/tts-worker.js`, so model loading and speech generation do not block the main UI thread. The default model is `onnx-community/Kokoro-82M-v1.0-ONNX`, with automatic WebGPU-first loading and WASM fallback. First use needs network access to download the model files; after the browser caches them, later loads are faster. The model ID, backend, and dtype can be edited in the page for custom Kokoro-compatible models.
 
-TTS mode keeps the original processing controls: gap, overlap, voice delay, speed, pitch, and tail reverb. The text is split into sentence/line segments, Kokoro generates each segment, and the Web Audio post-processor applies the selected timing, resampling, pitch, and reverb settings before WAV export.
+TTS mode keeps the original processing controls: gap, overlap, voice delay, speed, pitch, tail reverb, and optional duration-matched `BG_N` background audio. Normal mode splits text into sentence/line segments. Fragment mode generates one word at a time, then stitches the words together to mimic the clipped original C.A.S.S.I.E. cadence. Progress and elapsed time update during generation, and generation can be cancelled between units.
 
 TTS announcement templates use pure text. Fillable official-announcement fields are rendered as normal form controls, highlighted in the preview, and then inserted into the TTS text box as plain editable text.
 
@@ -94,6 +96,7 @@ Some wiki announcements are still not exposed as full fill-in templates because 
 
 - The raw voice clips are dry, but the app defaults to program-style processing: `3000ms` voice delay and `60` tail reverb.
 - Background audio is optional and defaults off.
+- The duplicate-asset cleanup pass found no byte-identical audio files, duplicate manifest entries, or unreferenced `.ogg`/`.mp3`/`.wav` assets, so no audio files were removed.
 - `BG_4` through `BG_40` are selected by the number after `BG_`, which is the noise-bed duration between the leading and trailing prompt sounds.
 - `cassie.data` contains `BG_4..BG_40` except `BG_14`; this project keeps a generated `BG_14.wav` supplement so every duration from 4 to 40 is available.
 - The app selects `BG_N` by `ceil(sentence duration + voice delay)`, clamped to the available `4..40` range, matching the original folder lookup behavior.

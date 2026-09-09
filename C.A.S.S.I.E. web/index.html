@@ -194,7 +194,7 @@
           <div class="panel-heading">
             <div>
               <h2 id="ttsControlsTitle">Kokoro 生成</h2>
-              <span>浏览器端 WASM，本地推理后导出 WAV</span>
+              <span>WebGPU 优先，本地推理后导出 WAV</span>
             </div>
             <span id="ttsRenderDuration" class="panel-stat">00.00s</span>
           </div>
@@ -209,8 +209,33 @@
               </select>
             </label>
             <label>
-              <span>模型</span>
-              <input id="ttsModel" type="text" value="Kokoro 82M q8 / WASM" disabled>
+              <span>模型 ID</span>
+              <input id="ttsModel" type="text" value="onnx-community/Kokoro-82M-v1.0-ONNX" spellcheck="false">
+            </label>
+            <label>
+              <span>推理后端</span>
+              <select id="ttsBackend">
+                <option value="auto">自动：WebGPU 优先</option>
+                <option value="webgpu">强制 WebGPU</option>
+                <option value="wasm">强制 WASM</option>
+              </select>
+            </label>
+            <label>
+              <span>精度</span>
+              <select id="ttsDtype">
+                <option value="auto">自动：WebGPU fp32 / WASM q8</option>
+                <option value="fp32">fp32</option>
+                <option value="fp16">fp16</option>
+                <option value="q8">q8</option>
+                <option value="q4">q4</option>
+              </select>
+            </label>
+            <label>
+              <span>生成模式</span>
+              <select id="ttsGenerationMode">
+                <option value="normal">正常：按句段生成</option>
+                <option value="fragment">碎片：逐词生成并拼接</option>
+              </select>
             </label>
           </div>
 
@@ -241,12 +266,31 @@
             </label>
           </div>
 
+          <label class="toggle-line">
+            <input id="ttsEnableBackground" type="checkbox">
+            <span>启用 BG_N 背景提示音</span>
+          </label>
+
+          <label class="range-line">
+            <span>背景音量</span>
+            <input id="ttsBackgroundGain" type="range" min="0" max="100" step="1" value="35">
+            <output id="ttsBackgroundGainValue">35%</output>
+          </label>
+
           <div class="action-row">
             <button id="loadTtsModel" type="button">加载模型</button>
             <button id="generateTts" class="primary" type="button">生成 TTS</button>
             <button id="playTts" type="button">播放</button>
             <button id="stopTts" class="danger" type="button">停止</button>
             <a id="downloadTts" class="download-link is-disabled" href="#" download="cassie_kokoro_tts.wav" aria-disabled="true">下载 WAV</a>
+          </div>
+
+          <div id="ttsProgress" class="generation-progress" aria-live="polite">
+            <div class="progress-copy">
+              <span id="ttsProgressLabel">待生成</span>
+              <span id="ttsProgressCount">0 / 0</span>
+            </div>
+            <progress id="ttsProgressBar" max="1" value="0"></progress>
           </div>
 
           <canvas id="ttsWaveform" width="720" height="160" aria-label="Rendered TTS waveform"></canvas>
