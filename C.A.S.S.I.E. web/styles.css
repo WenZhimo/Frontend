@@ -561,6 +561,13 @@ button:disabled::before,
   font-size: 24px;
 }
 
+.speech-control-help {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .search-field > span,
 .sentence-input > span,
 .control-grid label > span,

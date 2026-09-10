@@ -83,9 +83,11 @@ test("command syntax demo template exercises every explicit effect without chang
   const template = app.ttsAnnouncementTemplates.find((item) => item.id === "tts-command-syntax-demo");
   assert.ok(template);
   const templateText = app.buildTtsTemplateText(template, {});
-  for (const syntax of ["#{$SLEEP_500}", "#{containm--ent}", "#{brea-a-a-a-ch}", "#{det_detected}", "#{$G_1,G_2,G_3}", "#{#停顿："]) {
+  for (const syntax of ["#{$SLEEP_500}", "#{containm--ent}", "#{brea-a-a-a-ch}", "#{det_detected}", "#{$G_1,G_2,G_3,G_4,G_5,G_6}", "#{#停顿："]) {
     assert.ok(templateText.includes(syntax), syntax);
   }
+  assert.ok(templateText.includes("3 个额外 a，因此卡顿 3 次"));
+  assert.ok(templateText.includes("可用 G_1、G_2、G_3、G_4、G_5、G_6"));
 
   const { units } = app.buildTtsUnits(templateText);
   const controls = units.flatMap((unit) => [...unit.controlsBefore || [], ...unit.controlsAfter || []]);
@@ -131,10 +133,10 @@ for (const mode of ["normal", "fragment"]) {
 test("app loads every requested glitch clip and keeps it as an overlay control", async () => {
   const app = loadApp();
   vm.runInContext("decodeClip = async (clip) => ({ name: clip.name, duration: 0.1, numberOfChannels: 1 });", app.context);
-  const glitch = controls.parseCassieControlCommands("#{$G_1,G_2,G_3}")[0].controlsBefore[0];
+  const glitch = controls.parseCassieControlCommands("#{$G_1,G_2,G_3,G_4,G_5,G_6}")[0].controlsBefore[0];
   const item = await app.prepareControlRenderItem(glitch);
   assert.equal(item.control.type, "glitch-overlay");
-  assert.deepEqual(Array.from(item.buffers, (buffer) => buffer.name.toLowerCase()), ["g1", "g2", "g3"]);
+  assert.deepEqual(Array.from(item.buffers, (buffer) => buffer.name.toLowerCase()), ["g1", "g2", "g3", "g4", "g5", "g6"]);
 });
 
 test("TTS renderer keeps ordering between speech, pauses, and glitch overlays", async () => {

@@ -829,9 +829,9 @@ const ttsAnnouncementTemplates = [
     title: "自定义示例：播报指令示意",
     template: [
       "Attention #{$SLEEP_500} #{#停顿：在 Attention 后插入 500ms 静音} all personnel.",
-      "A #{containm--ent} #{#拖音：拉长 containment 中间的音素} #{brea-a-a-a-ch} #{#卡顿：重复 breach 中的 a 音素} has been #{det_detected} #{#复读：说出 det 后重新完整朗读 detected}.",
+      "A #{containm--ent} #{#拖音：拉长 containment 中间的音素} #{brea-a-a-a-ch} #{#卡顿：在 breach 的 a 处加入 3 个额外 a，因此卡顿 3 次} has been #{det_detected} #{#复读：说出 det 后重新完整朗读 detected}.",
       "All personnel are advised to remain calm and await further instructions.",
-      "#{$G_1,G_2,G_3} #{#故障音覆盖：依次将 G_1、G_2、G_3 叠加到下一段语音} Security systems are now operating under emergency protocols.",
+      "#{$G_1,G_2,G_3,G_4,G_5,G_6} #{#故障音覆盖：可用 G_1、G_2、G_3、G_4、G_5、G_6；本例依次全部叠加到下一段语音} Security systems are now operating under emergency protocols.",
     ].join("\n"),
     fields: [],
   },
@@ -3076,6 +3076,7 @@ function bindSpeechControls() {
       </select></label>
       <label><span data-unit>时长 ms</span><input type="number" aria-label="指令参数" min="0" max="10000" step="10" value="500"></label>
       <button type="button" title="在光标处插入指令" aria-label="在光标处插入指令">+</button>
+      <small class="speech-control-help">可用故障音：G_1、G_2、G_3、G_4、G_5、G_6；可按任意顺序组合或重复。</small>
     `;
     const select = container.querySelector("select");
     const input = container.querySelector("input");
@@ -3086,7 +3087,7 @@ function bindSpeechControls() {
       const usesText = isGlitch || isComment;
       valueLabel.textContent = isGlitch ? "音频序列" : (isComment ? "注释内容" : "时长 ms");
       input.type = usesText ? "text" : "number";
-      input.value = isGlitch ? "G_1,G_2,G_3" : (isComment ? "注释内容" : "500");
+      input.value = isGlitch ? "G_1,G_2,G_3,G_4,G_5,G_6" : (isComment ? "注释内容" : "500");
       input.min = usesText ? "" : "0";
       input.max = usesText ? "" : "10000";
       input.step = usesText ? "" : "10";
