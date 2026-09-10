@@ -109,4 +109,4 @@ Some wiki announcements are still not exposed as full fill-in templates because 
 - The archive also contains hidden letter clips (`_a.._z`), suffix clips (`_suffix_ing`, `_suffix_plural_regular`, etc.), and fragment clips (`anti-`, `pre-`, `-ish`, `-like`). They remain searchable in the clip list for manual composition.
 - Speed and pitch follow the original C# behavior: both are applied as a playback-rate/resampling factor.
 - Voice gap, overlap, and voice delay mirror the original builder semantics.
-- TTS fragment mode trims leading and trailing silence on each generated word before applying the selected gap, so word-by-word output stays clipped instead of drifting toward one-second pauses.
+- TTS fragment mode trims each generated word with an 8ms RMS window and keeps roughly the original word-clip median edge padding: 16ms leading and 52ms trailing before the selected gap is applied.

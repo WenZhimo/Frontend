@@ -160,8 +160,10 @@ const KOKORO_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
 const kokoroVoices = ["am_michael", "bm_daniel", "am_adam"];
 const TTS_WORKER_URL = new URL("./src/tts-worker.js", import.meta.url);
 const TTS_MAX_UNIT_CHARS = 360;
-const TTS_FRAGMENT_TRIM_THRESHOLD = 0.003;
-const TTS_FRAGMENT_TRIM_PADDING_MS = 35;
+const TTS_FRAGMENT_TRIM_THRESHOLD = 0.01;
+const TTS_FRAGMENT_TRIM_WINDOW_MS = 8;
+const TTS_FRAGMENT_LEADING_PADDING_MS = 16;
+const TTS_FRAGMENT_TRAILING_PADDING_MS = 52;
 
 // Official announcement template data
 const warheadTimeOptions = [
@@ -1632,24 +1634,42 @@ function ttsModeLabel(mode) {
   return mode === "fragment" ? "单词" : "句段";
 }
 
-function trimAudioBufferSilence(buffer, threshold = TTS_FRAGMENT_TRIM_THRESHOLD, paddingMs = TTS_FRAGMENT_TRIM_PADDING_MS) {
+function getWindowMaxRms(buffer, start, end) {
+  let maxRms = 0;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const data = buffer.getChannelData(channel);
+    let sum = 0;
+    for (let i = start; i < end; i += 1) {
+      sum += data[i] * data[i];
+    }
+    maxRms = Math.max(maxRms, Math.sqrt(sum / Math.max(1, end - start)));
+  }
+  return maxRms;
+}
+
+function trimAudioBufferSilence(
+  buffer,
+  threshold = TTS_FRAGMENT_TRIM_THRESHOLD,
+  leadingPaddingMs = TTS_FRAGMENT_LEADING_PADDING_MS,
+  trailingPaddingMs = TTS_FRAGMENT_TRAILING_PADDING_MS,
+) {
+  const windowSize = Math.max(1, Math.round((TTS_FRAGMENT_TRIM_WINDOW_MS / 1000) * buffer.sampleRate));
   let firstAudible = buffer.length;
   let lastAudible = -1;
 
-  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
-    const data = buffer.getChannelData(channel);
-    for (let i = 0; i < data.length; i += 1) {
-      if (Math.abs(data[i]) <= threshold) continue;
-      if (i < firstAudible) firstAudible = i;
-      if (i > lastAudible) lastAudible = i;
-    }
+  for (let start = 0; start < buffer.length; start += windowSize) {
+    const end = Math.min(buffer.length, start + windowSize);
+    if (getWindowMaxRms(buffer, start, end) <= threshold) continue;
+    if (start < firstAudible) firstAudible = start;
+    lastAudible = end - 1;
   }
 
   if (lastAudible < firstAudible) return buffer;
 
-  const padding = Math.round((paddingMs / 1000) * buffer.sampleRate);
-  const start = Math.max(0, firstAudible - padding);
-  const end = Math.min(buffer.length, lastAudible + padding + 1);
+  const leadingPadding = Math.round((leadingPaddingMs / 1000) * buffer.sampleRate);
+  const trailingPadding = Math.round((trailingPaddingMs / 1000) * buffer.sampleRate);
+  const start = Math.max(0, firstAudible - leadingPadding);
+  const end = Math.min(buffer.length, lastAudible + trailingPadding + 1);
   if (start === 0 && end === buffer.length) return buffer;
 
   const trimmed = getAudioContext().createBuffer(
@@ -1834,7 +1854,7 @@ async function finishGeneratedTtsJob(message) {
 
   const modeLabel = ttsModeLabel(message.mode);
   const bgLabel = state.tts.lastBackgroundClip ? `，背景 ${state.tts.lastBackgroundClip.name}` : "";
-  const trimLabel = isFragmentMode ? "，已裁剪单词首尾静音" : "";
+  const trimLabel = isFragmentMode ? "，已按原版词音频剪裁首尾静音" : "";
   setTtsStatus(`TTS 生成完成：${els.ttsVoice.value}，${parts.length} 个${modeLabel}，音频 ${fmtSeconds(buffer.duration)}，耗时 ${fmtSeconds(elapsedMs / 1000)}，后端 ${String(message.backend || "").toUpperCase()} / ${message.dtype}${bgLabel}${trimLabel}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
   resolvePendingTtsJob(message.jobId, buffer);
 }
