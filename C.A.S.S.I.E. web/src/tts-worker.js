@@ -267,8 +267,7 @@ async function handleGenerate(jobId, message) {
         displayText: unit.displayText || unit.targetText || unit.text,
         source: unit.source || "sentence",
         tokenCount: unit.tokenCount || 0,
-        contextText: unit.contextText || "",
-        crop: unit.crop || null,
+        wordGapSlots: unit.wordGapSlots || 0,
         wav,
       });
       transfers.push(wav);

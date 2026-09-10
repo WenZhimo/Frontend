@@ -196,11 +196,11 @@ const TTS_FRAGMENT_TRIM_THRESHOLD = 0.01;
 const TTS_FRAGMENT_TRIM_WINDOW_MS = 8;
 const TTS_FRAGMENT_LEADING_PADDING_MS = 16;
 const TTS_FRAGMENT_TRAILING_PADDING_MS = 52;
-const TTS_FRAGMENT_AUTO_GROUP_MAX_TOKENS = 6;
-const TTS_FRAGMENT_AUTO_GROUP_MAX_CHARS = 72;
-const TTS_FRAGMENT_CONTEXT_TOKENS = 2;
-const TTS_FRAGMENT_CONTEXT_CROP_PADDING_MS = 56;
-const TTS_FRAGMENT_CONTEXT_FADE_MS = 18;
+const TTS_FRAGMENT_AUTO_GROUP_MAX_TOKENS = 3;
+const TTS_FRAGMENT_AUTO_GROUP_MAX_CHARS = 40;
+const TTS_WORD_GAP_SEARCH_MS = 260;
+const TTS_WORD_GAP_WINDOW_MS = 10;
+const TTS_WORD_GAP_FADE_MS = 6;
 
 // Official announcement template data
 const warheadTimeOptions = [
@@ -1796,24 +1796,16 @@ function makeTtsFragmentUnit(tokens, source = "lexicon-phrase", extra = {}) {
   });
 }
 
-function speechWeight(text) {
+function countTtsWords(text) {
   return splitPlainText(text)
-    .reduce((sum, token) => sum + Math.max(1, Math.sqrt(token.length)), 0);
+    .filter((token) => /[a-z0-9]/i.test(token))
+    .length;
 }
 
-function estimateContextCropRatio(targetText, contextText) {
-  const targetWeight = speechWeight(targetText);
-  const contextWeight = speechWeight(contextText);
-  if (targetWeight <= 0 || contextWeight <= 0) return 0.5;
-  return clamp(targetWeight / (targetWeight + contextWeight), 0.38, 0.9);
-}
-
-function collectFollowingFragmentTokens(spans, startIndex, maxTokens = TTS_FRAGMENT_CONTEXT_TOKENS) {
-  const tokens = [];
-  for (let index = startIndex; index < spans.length && tokens.length < maxTokens; index += 1) {
-    tokens.push(...spans[index].tokens.slice(0, maxTokens - tokens.length));
-  }
-  return tokens;
+function makeSentenceTtsUnit(text) {
+  return makeTtsUnit(text, "sentence", {
+    wordGapSlots: Math.max(0, countTtsWords(text) - 1),
+  });
 }
 
 function splitFallbackFragmentTokens(tokens) {
@@ -1836,31 +1828,6 @@ function splitFallbackFragmentTokens(tokens) {
   }
 
   return chunks;
-}
-
-function makeContextCroppedFragmentUnit(tokens, spans, nextSpanIndex, source = "auto-group-context") {
-  const targetTokens = Array.isArray(tokens) ? tokens : [tokens];
-  const targetText = formatTtsFragmentUnit(targetTokens);
-  if (!targetText) return null;
-  const naturalContextTokens = collectFollowingFragmentTokens(spans, nextSpanIndex);
-  const contextText = formatTtsFragmentUnit(naturalContextTokens);
-  if (!contextText) {
-    return makeTtsFragmentUnit(targetTokens, targetTokens.length === 1 ? "auto-single" : "auto-group");
-  }
-
-  const generationText = `${targetText} ${contextText}`.trim();
-  return makeTtsUnit(generationText, source, {
-    targetText,
-    targetTokens,
-    contextText,
-    tokenCount: targetTokens.length,
-    crop: {
-      type: "prefix-ratio",
-      ratio: estimateContextCropRatio(targetText, contextText),
-      paddingMs: TTS_FRAGMENT_CONTEXT_CROP_PADDING_MS,
-      fadeMs: TTS_FRAGMENT_CONTEXT_FADE_MS,
-    },
-  });
 }
 
 function buildTtsFragmentSpans(tokens, phraseCandidates) {
@@ -1896,12 +1863,9 @@ function splitTtsFragmentSentences(text) {
     .filter((tokens) => tokens.length > 0);
 }
 
-function makeAutoFragmentUnit(chunk, spans, nextSpanIndex) {
+function makeAutoFragmentUnit(chunk) {
   const source = chunk.length === 1 ? "auto-single" : "auto-group";
-  if (nextSpanIndex >= spans.length) {
-    return makeTtsFragmentUnit(chunk, source);
-  }
-  return makeContextCroppedFragmentUnit(chunk, spans, nextSpanIndex, `${source}-context`);
+  return makeTtsFragmentUnit(chunk, source);
 }
 
 function splitTtsFragmentSentenceUnits(tokens, phraseCandidates) {
@@ -1916,20 +1880,14 @@ function splitTtsFragmentSentenceUnits(tokens, phraseCandidates) {
       continue;
     }
 
-    const runStart = index;
     const fallbackTokens = [];
     while (index < spans.length && spans[index].type === "fallback") {
       fallbackTokens.push(...spans[index].tokens);
       index += 1;
     }
 
-    let consumedTokens = 0;
-    splitFallbackFragmentTokens(fallbackTokens).forEach((chunk, chunkIndex, chunks) => {
-      consumedTokens += chunk.length;
-      const nextSpanIndex = chunkIndex === chunks.length - 1
-        ? index
-        : runStart + consumedTokens;
-      units.push(makeAutoFragmentUnit(chunk, spans, nextSpanIndex));
+    splitFallbackFragmentTokens(fallbackTokens).forEach((chunk) => {
+      units.push(makeAutoFragmentUnit(chunk));
     });
   }
 
@@ -1948,7 +1906,7 @@ function buildTtsUnits(rawText) {
   const mode = els.ttsGenerationMode.value || "normal";
   const unitItems = mode === "fragment"
     ? splitTtsFragmentUnits(rawText)
-    : splitTtsSpeechSegments(normalizeTtsSpeechText(rawText)).map((text) => makeTtsUnit(text, "sentence"));
+    : splitTtsSpeechSegments(normalizeTtsSpeechText(rawText)).map(makeSentenceTtsUnit);
   return {
     mode,
     units: unitItems.filter(Boolean).map((unit, index) => ({ index, ...unit })),
@@ -2010,49 +1968,116 @@ function trimAudioBufferSilence(
   return trimmed;
 }
 
-function copyAudioBufferRange(buffer, startSample, endSample) {
-  const start = clamp(Math.floor(startSample), 0, buffer.length - 1);
-  const end = clamp(Math.ceil(endSample), start + 1, buffer.length);
-  const output = getAudioContext().createBuffer(buffer.numberOfChannels, end - start, buffer.sampleRate);
-  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
-    output.getChannelData(channel).set(buffer.getChannelData(channel).subarray(start, end));
-  }
-  return output;
+function prepareTtsFragmentPart(part) {
+  return trimAudioBufferSilence(part.buffer);
 }
 
-function fadeAudioBufferEnd(buffer, fadeMs = TTS_FRAGMENT_CONTEXT_FADE_MS) {
-  const fadeSamples = Math.min(buffer.length, Math.round((fadeMs / 1000) * buffer.sampleRate));
-  if (fadeSamples <= 1) return buffer;
+function findQuietWordBoundary(buffer, approximateSample, minSample, maxSample) {
+  const windowSize = Math.max(1, Math.round((TTS_WORD_GAP_WINDOW_MS / 1000) * buffer.sampleRate));
+  const searchRadius = Math.round((TTS_WORD_GAP_SEARCH_MS / 1000) * buffer.sampleRate);
+  const startSample = clamp(approximateSample - searchRadius, minSample, maxSample);
+  const endSample = clamp(approximateSample + searchRadius, startSample, maxSample);
+  let bestSample = approximateSample;
+  let bestRms = Number.POSITIVE_INFINITY;
 
-  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
-    const data = buffer.getChannelData(channel);
-    const fadeStart = data.length - fadeSamples;
-    for (let index = 0; index < fadeSamples; index += 1) {
-      data[fadeStart + index] *= 1 - (index / (fadeSamples - 1));
+  for (let start = startSample; start <= endSample; start += windowSize) {
+    const end = Math.min(buffer.length, start + windowSize);
+    const rms = getWindowMaxRms(buffer, start, end);
+    if (rms < bestRms) {
+      bestRms = rms;
+      bestSample = Math.round((start + end) / 2);
     }
   }
 
-  return buffer;
+  return clamp(bestSample, minSample, maxSample);
 }
 
-function cropAudioBufferPrefix(buffer, crop = {}) {
-  const ratio = clamp(Number(crop.ratio) || 0.5, 0.05, 0.95);
-  const paddingSamples = Math.round(((Number(crop.paddingMs) || 0) / 1000) * buffer.sampleRate);
-  const endSample = clamp(Math.round(buffer.length * ratio) + paddingSamples, 1, buffer.length);
-  const cropped = copyAudioBufferRange(buffer, 0, endSample);
-  return fadeAudioBufferEnd(cropped, Number(crop.fadeMs) || TTS_FRAGMENT_CONTEXT_FADE_MS);
-}
+function findWordGapBoundaries(buffer, slotCount) {
+  const minSpacingSamples = Math.round(0.12 * buffer.sampleRate);
+  const maxSlotsByDuration = Math.max(0, Math.floor(buffer.duration / 0.16) - 1);
+  const usableSlots = Math.min(Math.floor(slotCount), maxSlotsByDuration, 80);
+  const boundaries = [];
+  let previousBoundary = 0;
 
-function prepareTtsFragmentPart(part) {
-  let buffer = trimAudioBufferSilence(part.buffer);
-  if (part.crop?.type === "prefix-ratio") {
-    buffer = cropAudioBufferPrefix(buffer, part.crop);
+  for (let slot = 1; slot <= usableSlots; slot += 1) {
+    const remainingSlots = usableSlots - slot;
+    const approximate = Math.round((buffer.length * slot) / (usableSlots + 1));
+    const minSample = Math.max(previousBoundary + minSpacingSamples, 1);
+    const maxSample = Math.min(buffer.length - 1 - remainingSlots * minSpacingSamples, buffer.length - 1);
+    if (minSample >= maxSample) break;
+
+    const boundary = findQuietWordBoundary(buffer, approximate, minSample, maxSample);
+    boundaries.push(boundary);
+    previousBoundary = boundary;
   }
-  return buffer;
+
+  return boundaries;
 }
 
-function prepareTtsBuffersForMode(parts, mode) {
-  if (mode !== "fragment") return parts.map((part) => part.buffer);
+function applyFadeAroundInsertedGap(outputData, beforeGapEnd, afterGapStart, fadeSamples) {
+  if (fadeSamples <= 1) return;
+
+  const fadeOutStart = Math.max(0, beforeGapEnd - fadeSamples);
+  for (let index = fadeOutStart; index < beforeGapEnd; index += 1) {
+    outputData[index] *= clamp((beforeGapEnd - index) / fadeSamples, 0, 1);
+  }
+
+  const fadeInEnd = Math.min(outputData.length, afterGapStart + fadeSamples);
+  for (let index = afterGapStart; index < fadeInEnd; index += 1) {
+    outputData[index] *= clamp((index - afterGapStart) / fadeSamples, 0, 1);
+  }
+}
+
+function insertWordGaps(buffer, slotCount, gapMs) {
+  const gapSamples = Math.round((Math.max(0, gapMs) / 1000) * buffer.sampleRate);
+  if (gapSamples <= 0 || slotCount <= 0) return buffer;
+
+  const boundaries = findWordGapBoundaries(buffer, slotCount);
+  if (boundaries.length === 0) return buffer;
+
+  const fadeSamples = Math.min(
+    Math.round((TTS_WORD_GAP_FADE_MS / 1000) * buffer.sampleRate),
+    Math.floor(gapSamples / 2),
+  );
+  const output = getAudioContext().createBuffer(
+    buffer.numberOfChannels,
+    buffer.length + boundaries.length * gapSamples,
+    buffer.sampleRate,
+  );
+
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const inputData = buffer.getChannelData(channel);
+    const outputData = output.getChannelData(channel);
+    const gapEdges = [];
+    let inputCursor = 0;
+    let outputCursor = 0;
+
+    boundaries.forEach((boundary) => {
+      const segment = inputData.subarray(inputCursor, boundary);
+      outputData.set(segment, outputCursor);
+      const beforeGapEnd = outputCursor + segment.length;
+      const afterGapStart = beforeGapEnd + gapSamples;
+      outputCursor = afterGapStart;
+      inputCursor = boundary;
+      gapEdges.push({ beforeGapEnd, afterGapStart });
+    });
+
+    outputData.set(inputData.subarray(inputCursor), outputCursor);
+    gapEdges.forEach(({ beforeGapEnd, afterGapStart }) => {
+      applyFadeAroundInsertedGap(outputData, beforeGapEnd, afterGapStart, fadeSamples);
+    });
+  }
+
+  return output;
+}
+
+function prepareTtsSentencePart(part, options) {
+  const gapMs = Math.max(0, options.gapMs - options.overlapMs);
+  return insertWordGaps(part.buffer, part.wordGapSlots || 0, gapMs);
+}
+
+function prepareTtsBuffersForMode(parts, mode, options) {
+  if (mode !== "fragment") return parts.map((part) => prepareTtsSentencePart(part, options));
   return parts.map(prepareTtsFragmentPart);
 }
 
@@ -2208,7 +2233,7 @@ async function finishGeneratedTtsJob(message) {
   if (message.jobId !== state.tts.currentJobId) return;
 
   const options = getTtsOptions();
-  const preparedBuffers = prepareTtsBuffersForMode(decodedParts, message.mode);
+  const preparedBuffers = prepareTtsBuffersForMode(decodedParts, message.mode, options);
   const buffer = await renderTtsPostProcessedBuffer(preparedBuffers, options);
   if (message.jobId !== state.tts.currentJobId) return;
 
@@ -2226,11 +2251,14 @@ async function finishGeneratedTtsJob(message) {
   const lexiconCount = decodedParts.filter((part) => part.source === "lexicon-phrase").length;
   const autoGroupCount = decodedParts.filter((part) => String(part.source || "").startsWith("auto-group")).length;
   const autoSingleCount = decodedParts.filter((part) => String(part.source || "").startsWith("auto-single")).length;
-  const contextCropCount = decodedParts.filter((part) => part.crop?.type === "prefix-ratio").length;
+  const wordGapCount = decodedParts.reduce((sum, part) => sum + (part.wordGapSlots || 0), 0);
   const trimLabel = isFragmentMode
-    ? `，词库短语 ${lexiconCount}，自动短语 ${autoGroupCount}，落单词 ${autoSingleCount}，上下文裁剪 ${contextCropCount}，已剪裁短语首尾静音`
+    ? `，词库短语 ${lexiconCount}，自动短语 ${autoGroupCount}，落单词 ${autoSingleCount}，已剪裁短语首尾静音`
     : "";
-  setTtsStatus(`TTS 生成完成：${els.ttsVoice.value}，${parts.length} 个${modeLabel}，音频 ${fmtSeconds(buffer.duration)}，耗时 ${fmtSeconds(elapsedMs / 1000)}，后端 ${String(message.backend || "").toUpperCase()} / ${message.dtype}${bgLabel}${trimLabel}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
+  const wordGapLabel = !isFragmentMode && wordGapCount > 0 && options.gapMs > options.overlapMs
+    ? `，句内词间隔 ${wordGapCount} 处`
+    : "";
+  setTtsStatus(`TTS 生成完成：${els.ttsVoice.value}，${parts.length} 个${modeLabel}，音频 ${fmtSeconds(buffer.duration)}，耗时 ${fmtSeconds(elapsedMs / 1000)}，后端 ${String(message.backend || "").toUpperCase()} / ${message.dtype}${bgLabel}${trimLabel}${wordGapLabel}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
   resolvePendingTtsJob(message.jobId, buffer);
 }
 
