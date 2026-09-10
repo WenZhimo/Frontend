@@ -147,6 +147,19 @@ const exactTokenAliases = new Map([
   ["re-containment", "recontainment"],
   ["mtfu", "_mtfu"],
 ]);
+const ttsFragmentTokenAliases = new Map([
+  ["_mtfu", "M T F"],
+  ["awating", "awaiting"],
+  ["cassie", "Cassie"],
+  ["classd", "Class D"],
+  ["dms_ann", "Dead Man's Switch"],
+  ["hcz", "H C Z"],
+  ["lcz", "L C Z"],
+  ["mtf", "M T F"],
+  ["ntf", "N T F"],
+  ["outof", "out of"],
+  ["scp", "S C P"],
+]);
 const phraseClipAliases = [
   { phrase: "awaiting recontainment of", clipName: "Awating Recontainment Of" },
   { phrase: "awaiting re containment of", clipName: "Awating Recontainment Of" },
@@ -1613,17 +1626,59 @@ function splitTtsSpeechSegments(text) {
   return segments;
 }
 
+function normalizeTtsFragmentSourceText(text) {
+  return String(text || "")
+    .replace(/\bHCZ\s*[-_#]?\s*(\d+(?:[-_]\d+)*)\b/gi, (_match, digits) => `HCZ ${digits.replace(/\D/g, "").split("").join(" ")}`)
+    .replace(/\bT\s*[-–—]\s*(\d+)/gi, "T minus $1")
+    .replace(/\bSite\s*[-–—]\s*(\d+)/gi, (_match, digits) => `Site ${digits.replace(/\D/g, "").split("").join(" ")}`)
+    .replace(/\bC\.?\s*A\.?\s*S\.?\s*S\.?\s*I\.?\s*E\.?\b/gi, "Cassie");
+}
+
+function formatTtsFragmentToken(token) {
+  const raw = String(token || "").trim();
+  const normalized = normalizeName(raw);
+  const alias = ttsFragmentTokenAliases.get(normalized);
+  if (alias) return alias;
+  return raw.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function formatTtsFragmentUnit(tokens) {
+  return tokens
+    .map(formatTtsFragmentToken)
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function splitTtsFragmentUnits(text) {
-  const words = String(text || "").match(/[A-Za-z0-9]+/g) || [];
-  return words.filter(Boolean);
+  const tokens = tokenizeSentenceText(normalizeTtsFragmentSourceText(text));
+  if (tokens.length === 0) return [];
+  if (state.clips.length === 0) return tokens.map((token) => formatTtsFragmentUnit([token]));
+
+  const { phraseCandidates } = buildTextLookup();
+  const units = [];
+  let index = 0;
+  while (index < tokens.length) {
+    const phraseMatch = findPhraseClip(tokens, index, phraseCandidates);
+    if (phraseMatch) {
+      units.push(formatTtsFragmentUnit(tokens.slice(index, index + phraseMatch.tokenCount)));
+      index += phraseMatch.tokenCount;
+      continue;
+    }
+
+    units.push(formatTtsFragmentUnit([tokens[index]]));
+    index += 1;
+  }
+
+  return units.filter(Boolean);
 }
 
 function buildTtsUnits(rawText) {
   const mode = els.ttsGenerationMode.value || "normal";
-  const speechText = normalizeTtsSpeechText(rawText);
   const unitTexts = mode === "fragment"
-    ? splitTtsFragmentUnits(speechText)
-    : splitTtsSpeechSegments(speechText);
+    ? splitTtsFragmentUnits(rawText)
+    : splitTtsSpeechSegments(normalizeTtsSpeechText(rawText));
   return {
     mode,
     units: unitTexts.map((text, index) => ({ index, text })),
@@ -1631,7 +1686,7 @@ function buildTtsUnits(rawText) {
 }
 
 function ttsModeLabel(mode) {
-  return mode === "fragment" ? "单词" : "句段";
+  return mode === "fragment" ? "词库短语" : "句段";
 }
 
 function getWindowMaxRms(buffer, start, end) {
@@ -1830,7 +1885,7 @@ function handleTtsWorkerMessage(event) {
 async function finishGeneratedTtsJob(message) {
   const parts = [...(message.parts || [])].sort((a, b) => a.index - b.index);
   const isFragmentMode = message.mode === "fragment";
-  setTtsProgress(isFragmentMode ? "正在裁剪并后处理单词音频" : "正在后处理音频", parts.length, parts.length);
+  setTtsProgress(isFragmentMode ? "正在裁剪并后处理短语音频" : "正在后处理音频", parts.length, parts.length);
   const rawBuffers = [];
   for (const part of parts) {
     rawBuffers.push(await getAudioContext().decodeAudioData(part.wav.slice(0)));
@@ -1854,7 +1909,7 @@ async function finishGeneratedTtsJob(message) {
 
   const modeLabel = ttsModeLabel(message.mode);
   const bgLabel = state.tts.lastBackgroundClip ? `，背景 ${state.tts.lastBackgroundClip.name}` : "";
-  const trimLabel = isFragmentMode ? "，已按原版词音频剪裁首尾静音" : "";
+  const trimLabel = isFragmentMode ? "，已按原版词音频剪裁短语首尾静音" : "";
   setTtsStatus(`TTS 生成完成：${els.ttsVoice.value}，${parts.length} 个${modeLabel}，音频 ${fmtSeconds(buffer.duration)}，耗时 ${fmtSeconds(elapsedMs / 1000)}，后端 ${String(message.backend || "").toUpperCase()} / ${message.dtype}${bgLabel}${trimLabel}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
   resolvePendingTtsJob(message.jobId, buffer);
 }
@@ -1970,7 +2025,7 @@ async function generateTtsPreview() {
 
   const { mode, units } = buildTtsUnits(rawText);
   if (units.length === 0) {
-    const error = new Error("TTS 文本没有可生成的句段或单词");
+    const error = new Error("TTS 文本没有可生成的句段或词库短语");
     setTtsStatus(error.message, "error");
     throw error;
   }
@@ -2013,7 +2068,7 @@ async function playTtsAudio() {
 function cancelTtsGeneration() {
   if (!state.tts.isGenerating) return false;
   ensureTtsWorker().postMessage({ type: "cancel", jobId: state.tts.currentJobId });
-  setTtsStatus("正在停止生成；会在当前句段或单词完成后结束。", "error");
+  setTtsStatus("正在停止生成；会在当前句段或词库短语完成后结束。", "error");
   setTtsProgress("正在停止生成", 0, 0);
   return true;
 }

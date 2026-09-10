@@ -28,7 +28,7 @@ Kokoro TTS currently exposes these voices:
 
 The static page loads `kokoro-js` from the jsDelivr ESM CDN inside `src/tts-worker.js`, so model loading and speech generation do not block the main UI thread. The default model is `onnx-community/Kokoro-82M-v1.0-ONNX`, with automatic WebGPU-first loading and WASM fallback. First use needs network access to download the model files; after the browser caches them, later loads are faster. The model ID, backend, and dtype can be edited in the page for custom Kokoro-compatible models.
 
-TTS mode keeps the original processing controls: gap, overlap, voice delay, speed, pitch, tail reverb, and optional duration-matched `BG_N` background audio. Normal mode splits text into sentence/line segments. Fragment mode generates one word at a time, then stitches the words together to mimic the clipped original C.A.S.S.I.E. cadence. Progress and elapsed time update during generation, and generation can be cancelled between units.
+TTS mode keeps the original processing controls: gap, overlap, voice delay, speed, pitch, tail reverb, and optional duration-matched `BG_N` background audio. Normal mode splits text into sentence/line segments. Fragment mode first segments text with the C.A.S.S.I.E. clip library's longest phrase matching, then generates one matched phrase/token at a time to mimic the clipped original cadence. Progress and elapsed time update during generation, and generation can be cancelled between units.
 
 TTS announcement templates use pure text. Fillable official-announcement fields are rendered as normal form controls, highlighted in the preview, and then inserted into the TTS text box as plain editable text.
 
@@ -109,4 +109,4 @@ Some wiki announcements are still not exposed as full fill-in templates because 
 - The archive also contains hidden letter clips (`_a.._z`), suffix clips (`_suffix_ing`, `_suffix_plural_regular`, etc.), and fragment clips (`anti-`, `pre-`, `-ish`, `-like`). They remain searchable in the clip list for manual composition.
 - Speed and pitch follow the original C# behavior: both are applied as a playback-rate/resampling factor.
 - Voice gap, overlap, and voice delay mirror the original builder semantics.
-- TTS fragment mode trims each generated word with an 8ms RMS window and keeps roughly the original word-clip median edge padding: 16ms leading and 52ms trailing before the selected gap is applied.
+- TTS fragment mode trims each generated phrase/token with an 8ms RMS window and keeps roughly the original word-clip median edge padding: 16ms leading and 52ms trailing before the selected gap is applied.
