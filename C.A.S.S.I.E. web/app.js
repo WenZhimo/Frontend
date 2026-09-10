@@ -196,6 +196,11 @@ const TTS_FRAGMENT_TRIM_THRESHOLD = 0.01;
 const TTS_FRAGMENT_TRIM_WINDOW_MS = 8;
 const TTS_FRAGMENT_LEADING_PADDING_MS = 16;
 const TTS_FRAGMENT_TRAILING_PADDING_MS = 52;
+const TTS_FRAGMENT_AUTO_GROUP_MAX_TOKENS = 6;
+const TTS_FRAGMENT_AUTO_GROUP_MAX_CHARS = 72;
+const TTS_FRAGMENT_CONTEXT_TOKENS = 2;
+const TTS_FRAGMENT_CONTEXT_CROP_PADDING_MS = 56;
+const TTS_FRAGMENT_CONTEXT_FADE_MS = 18;
 
 // Official announcement template data
 const warheadTimeOptions = [
@@ -1768,42 +1773,190 @@ function formatTtsFragmentUnit(tokens) {
     .trim();
 }
 
-function splitTtsFragmentUnits(text) {
-  const tokens = tokenizeSentenceText(normalizeTtsFragmentSourceText(text));
-  if (tokens.length === 0) return [];
-  if (state.clips.length === 0) return tokens.map((token) => formatTtsFragmentUnit([token]));
+function makeTtsUnit(text, source = "sentence", extra = {}) {
+  const cleanText = String(text || "").replace(/\s+/g, " ").trim();
+  if (!cleanText) return null;
+  const targetText = String(extra.targetText || cleanText).replace(/\s+/g, " ").trim();
+  return {
+    text: cleanText,
+    targetText,
+    displayText: targetText,
+    source,
+    ...extra,
+  };
+}
 
-  const { phraseCandidates } = buildTextLookup();
-  const units = [];
+function makeTtsFragmentUnit(tokens, source = "lexicon-phrase", extra = {}) {
+  const targetText = formatTtsFragmentUnit(tokens);
+  return makeTtsUnit(targetText, source, {
+    tokenCount: tokens.length,
+    targetTokens: tokens,
+    ...extra,
+    targetText,
+  });
+}
+
+function speechWeight(text) {
+  return splitPlainText(text)
+    .reduce((sum, token) => sum + Math.max(1, Math.sqrt(token.length)), 0);
+}
+
+function estimateContextCropRatio(targetText, contextText) {
+  const targetWeight = speechWeight(targetText);
+  const contextWeight = speechWeight(contextText);
+  if (targetWeight <= 0 || contextWeight <= 0) return 0.5;
+  return clamp(targetWeight / (targetWeight + contextWeight), 0.38, 0.9);
+}
+
+function collectFollowingFragmentTokens(spans, startIndex, maxTokens = TTS_FRAGMENT_CONTEXT_TOKENS) {
+  const tokens = [];
+  for (let index = startIndex; index < spans.length && tokens.length < maxTokens; index += 1) {
+    tokens.push(...spans[index].tokens.slice(0, maxTokens - tokens.length));
+  }
+  return tokens;
+}
+
+function splitFallbackFragmentTokens(tokens) {
+  if (tokens.length <= 1) return [tokens];
+
+  const chunks = [];
+  let index = 0;
+  while (index < tokens.length) {
+    let end = Math.min(tokens.length, index + TTS_FRAGMENT_AUTO_GROUP_MAX_TOKENS);
+    while (
+      end > index + 1
+      && formatTtsFragmentUnit(tokens.slice(index, end)).length > TTS_FRAGMENT_AUTO_GROUP_MAX_CHARS
+    ) {
+      end -= 1;
+    }
+
+    if (tokens.length - end === 1 && end - index > 2) end -= 1;
+    chunks.push(tokens.slice(index, end));
+    index = end;
+  }
+
+  return chunks;
+}
+
+function makeContextCroppedFragmentUnit(tokens, spans, nextSpanIndex, source = "auto-group-context") {
+  const targetTokens = Array.isArray(tokens) ? tokens : [tokens];
+  const targetText = formatTtsFragmentUnit(targetTokens);
+  if (!targetText) return null;
+  const naturalContextTokens = collectFollowingFragmentTokens(spans, nextSpanIndex);
+  const contextText = formatTtsFragmentUnit(naturalContextTokens);
+  if (!contextText) {
+    return makeTtsFragmentUnit(targetTokens, targetTokens.length === 1 ? "auto-single" : "auto-group");
+  }
+
+  const generationText = `${targetText} ${contextText}`.trim();
+  return makeTtsUnit(generationText, source, {
+    targetText,
+    targetTokens,
+    contextText,
+    tokenCount: targetTokens.length,
+    crop: {
+      type: "prefix-ratio",
+      ratio: estimateContextCropRatio(targetText, contextText),
+      paddingMs: TTS_FRAGMENT_CONTEXT_CROP_PADDING_MS,
+      fadeMs: TTS_FRAGMENT_CONTEXT_FADE_MS,
+    },
+  });
+}
+
+function buildTtsFragmentSpans(tokens, phraseCandidates) {
+  const spans = [];
   let index = 0;
   while (index < tokens.length) {
     const phraseMatch = findPhraseClip(tokens, index, phraseCandidates);
     if (phraseMatch) {
-      units.push(formatTtsFragmentUnit(tokens.slice(index, index + phraseMatch.tokenCount)));
+      const phraseTokens = tokens.slice(index, index + phraseMatch.tokenCount);
+      spans.push({
+        type: "lexicon",
+        tokens: phraseTokens,
+        clipName: phraseMatch.clip?.name || "",
+      });
       index += phraseMatch.tokenCount;
       continue;
     }
 
-    units.push(formatTtsFragmentUnit([tokens[index]]));
+    spans.push({ type: "fallback", tokens: [tokens[index]] });
     index += 1;
+  }
+  return spans;
+}
+
+function splitTtsFragmentSentences(text) {
+  const normalized = normalizeTtsFragmentSourceText(text).replace(/\r\n?/g, "\n");
+  return normalized
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .flatMap((paragraph) => paragraph.match(/[^.!?。！？]+(?:[.!?。！？]+|$)/g) || [paragraph])
+    .map((sentence) => tokenizeSentenceText(sentence))
+    .filter((tokens) => tokens.length > 0);
+}
+
+function makeAutoFragmentUnit(chunk, spans, nextSpanIndex) {
+  const source = chunk.length === 1 ? "auto-single" : "auto-group";
+  if (nextSpanIndex >= spans.length) {
+    return makeTtsFragmentUnit(chunk, source);
+  }
+  return makeContextCroppedFragmentUnit(chunk, spans, nextSpanIndex, `${source}-context`);
+}
+
+function splitTtsFragmentSentenceUnits(tokens, phraseCandidates) {
+  const spans = buildTtsFragmentSpans(tokens, phraseCandidates);
+  const units = [];
+  let index = 0;
+  while (index < spans.length) {
+    const span = spans[index];
+    if (span.type === "lexicon") {
+      units.push(makeTtsFragmentUnit(span.tokens, "lexicon-phrase", { clipName: span.clipName }));
+      index += 1;
+      continue;
+    }
+
+    const runStart = index;
+    const fallbackTokens = [];
+    while (index < spans.length && spans[index].type === "fallback") {
+      fallbackTokens.push(...spans[index].tokens);
+      index += 1;
+    }
+
+    let consumedTokens = 0;
+    splitFallbackFragmentTokens(fallbackTokens).forEach((chunk, chunkIndex, chunks) => {
+      consumedTokens += chunk.length;
+      const nextSpanIndex = chunkIndex === chunks.length - 1
+        ? index
+        : runStart + consumedTokens;
+      units.push(makeAutoFragmentUnit(chunk, spans, nextSpanIndex));
+    });
   }
 
   return units.filter(Boolean);
 }
 
+function splitTtsFragmentUnits(text) {
+  const sentences = splitTtsFragmentSentences(text);
+  if (sentences.length === 0) return [];
+
+  const phraseCandidates = state.clips.length === 0 ? [] : buildTextLookup().phraseCandidates;
+  return sentences.flatMap((tokens) => splitTtsFragmentSentenceUnits(tokens, phraseCandidates));
+}
+
 function buildTtsUnits(rawText) {
   const mode = els.ttsGenerationMode.value || "normal";
-  const unitTexts = mode === "fragment"
+  const unitItems = mode === "fragment"
     ? splitTtsFragmentUnits(rawText)
-    : splitTtsSpeechSegments(normalizeTtsSpeechText(rawText));
+    : splitTtsSpeechSegments(normalizeTtsSpeechText(rawText)).map((text) => makeTtsUnit(text, "sentence"));
   return {
     mode,
-    units: unitTexts.map((text, index) => ({ index, text })),
+    units: unitItems.filter(Boolean).map((unit, index) => ({ index, ...unit })),
   };
 }
 
 function ttsModeLabel(mode) {
-  return mode === "fragment" ? "词库短语" : "句段";
+  return mode === "fragment" ? "词库短语/自动短语" : "句段";
 }
 
 function getWindowMaxRms(buffer, start, end) {
@@ -1857,9 +2010,50 @@ function trimAudioBufferSilence(
   return trimmed;
 }
 
-function prepareTtsBuffersForMode(buffers, mode) {
-  if (mode !== "fragment") return buffers;
-  return buffers.map((buffer) => trimAudioBufferSilence(buffer));
+function copyAudioBufferRange(buffer, startSample, endSample) {
+  const start = clamp(Math.floor(startSample), 0, buffer.length - 1);
+  const end = clamp(Math.ceil(endSample), start + 1, buffer.length);
+  const output = getAudioContext().createBuffer(buffer.numberOfChannels, end - start, buffer.sampleRate);
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    output.getChannelData(channel).set(buffer.getChannelData(channel).subarray(start, end));
+  }
+  return output;
+}
+
+function fadeAudioBufferEnd(buffer, fadeMs = TTS_FRAGMENT_CONTEXT_FADE_MS) {
+  const fadeSamples = Math.min(buffer.length, Math.round((fadeMs / 1000) * buffer.sampleRate));
+  if (fadeSamples <= 1) return buffer;
+
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const data = buffer.getChannelData(channel);
+    const fadeStart = data.length - fadeSamples;
+    for (let index = 0; index < fadeSamples; index += 1) {
+      data[fadeStart + index] *= 1 - (index / (fadeSamples - 1));
+    }
+  }
+
+  return buffer;
+}
+
+function cropAudioBufferPrefix(buffer, crop = {}) {
+  const ratio = clamp(Number(crop.ratio) || 0.5, 0.05, 0.95);
+  const paddingSamples = Math.round(((Number(crop.paddingMs) || 0) / 1000) * buffer.sampleRate);
+  const endSample = clamp(Math.round(buffer.length * ratio) + paddingSamples, 1, buffer.length);
+  const cropped = copyAudioBufferRange(buffer, 0, endSample);
+  return fadeAudioBufferEnd(cropped, Number(crop.fadeMs) || TTS_FRAGMENT_CONTEXT_FADE_MS);
+}
+
+function prepareTtsFragmentPart(part) {
+  let buffer = trimAudioBufferSilence(part.buffer);
+  if (part.crop?.type === "prefix-ratio") {
+    buffer = cropAudioBufferPrefix(buffer, part.crop);
+  }
+  return buffer;
+}
+
+function prepareTtsBuffersForMode(parts, mode) {
+  if (mode !== "fragment") return parts.map((part) => part.buffer);
+  return parts.map(prepareTtsFragmentPart);
 }
 
 function setTtsReadyState(isReady) {
@@ -2002,16 +2196,19 @@ function handleTtsWorkerMessage(event) {
 async function finishGeneratedTtsJob(message) {
   const parts = [...(message.parts || [])].sort((a, b) => a.index - b.index);
   const isFragmentMode = message.mode === "fragment";
-  setTtsProgress(isFragmentMode ? "正在裁剪并后处理短语音频" : "正在后处理音频", parts.length, parts.length);
-  const rawBuffers = [];
+  setTtsProgress(isFragmentMode ? "正在裁剪并后处理自动短语音频" : "正在后处理音频", parts.length, parts.length);
+  const decodedParts = [];
   for (const part of parts) {
-    rawBuffers.push(await getAudioContext().decodeAudioData(part.wav.slice(0)));
+    decodedParts.push({
+      ...part,
+      buffer: await getAudioContext().decodeAudioData(part.wav.slice(0)),
+    });
   }
 
   if (message.jobId !== state.tts.currentJobId) return;
 
   const options = getTtsOptions();
-  const preparedBuffers = prepareTtsBuffersForMode(rawBuffers, message.mode);
+  const preparedBuffers = prepareTtsBuffersForMode(decodedParts, message.mode);
   const buffer = await renderTtsPostProcessedBuffer(preparedBuffers, options);
   if (message.jobId !== state.tts.currentJobId) return;
 
@@ -2026,7 +2223,13 @@ async function finishGeneratedTtsJob(message) {
 
   const modeLabel = ttsModeLabel(message.mode);
   const bgLabel = state.tts.lastBackgroundClip ? `，背景 ${state.tts.lastBackgroundClip.name}` : "";
-  const trimLabel = isFragmentMode ? "，已按原版词音频剪裁短语首尾静音" : "";
+  const lexiconCount = decodedParts.filter((part) => part.source === "lexicon-phrase").length;
+  const autoGroupCount = decodedParts.filter((part) => String(part.source || "").startsWith("auto-group")).length;
+  const autoSingleCount = decodedParts.filter((part) => String(part.source || "").startsWith("auto-single")).length;
+  const contextCropCount = decodedParts.filter((part) => part.crop?.type === "prefix-ratio").length;
+  const trimLabel = isFragmentMode
+    ? `，词库短语 ${lexiconCount}，自动短语 ${autoGroupCount}，落单词 ${autoSingleCount}，上下文裁剪 ${contextCropCount}，已剪裁短语首尾静音`
+    : "";
   setTtsStatus(`TTS 生成完成：${els.ttsVoice.value}，${parts.length} 个${modeLabel}，音频 ${fmtSeconds(buffer.duration)}，耗时 ${fmtSeconds(elapsedMs / 1000)}，后端 ${String(message.backend || "").toUpperCase()} / ${message.dtype}${bgLabel}${trimLabel}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
   resolvePendingTtsJob(message.jobId, buffer);
 }
@@ -2142,7 +2345,7 @@ async function generateTtsPreview() {
 
   const { mode, units } = buildTtsUnits(rawText);
   if (units.length === 0) {
-    const error = new Error("TTS 文本没有可生成的句段或词库短语");
+    const error = new Error("TTS 文本没有可生成的句段或自动短语");
     setTtsStatus(error.message, "error");
     throw error;
   }
@@ -2185,7 +2388,7 @@ async function playTtsAudio() {
 function cancelTtsGeneration() {
   if (!state.tts.isGenerating) return false;
   ensureTtsWorker().postMessage({ type: "cancel", jobId: state.tts.currentJobId });
-  setTtsStatus("正在停止生成；会在当前句段或词库短语完成后结束。", "error");
+  setTtsStatus("正在停止生成；会在当前句段或自动短语完成后结束。", "error");
   setTtsProgress("正在停止生成", 0, 0);
   return true;
 }

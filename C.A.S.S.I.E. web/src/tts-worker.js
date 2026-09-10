@@ -254,12 +254,23 @@ async function handleGenerate(jobId, message) {
     }
 
     try {
-      const audio = await state.tts.generate(units[index].text, {
+      const unit = units[index];
+      const audio = await state.tts.generate(unit.text, {
         voice: message.voice,
         speed: message.speed || 1,
       });
       const wav = await audioToWavBuffer(audio);
-      parts.push({ index, text: units[index].text, wav });
+      parts.push({
+        index,
+        text: unit.text,
+        targetText: unit.targetText || unit.text,
+        displayText: unit.displayText || unit.targetText || unit.text,
+        source: unit.source || "sentence",
+        tokenCount: unit.tokenCount || 0,
+        contextText: unit.contextText || "",
+        crop: unit.crop || null,
+        wav,
+      });
       transfers.push(wav);
     } catch (error) {
       post({ type: "error", jobId, message: error?.message || String(error) });
@@ -273,7 +284,7 @@ async function handleGenerate(jobId, message) {
       done: index + 1,
       total: units.length,
       mode: message.mode,
-      currentText: units[index].text,
+      currentText: units[index].displayText || units[index].targetText || units[index].text,
     });
   }
 

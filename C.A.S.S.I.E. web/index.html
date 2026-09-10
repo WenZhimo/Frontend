@@ -159,7 +159,7 @@
           <div class="panel-heading">
             <div>
               <h2 id="ttsScriptTitle">TTS 文本</h2>
-              <span>正常模式纯文本生成；碎片模式按 C.A.S.S.I.E. 词库短语切分</span>
+              <span>正常模式纯文本生成；碎片模式词库优先，普通词自动成组并借上下文裁剪</span>
             </div>
           </div>
 
@@ -234,7 +234,7 @@
               <span>生成模式</span>
               <select id="ttsGenerationMode">
                 <option value="normal">正常：按句段生成</option>
-                <option value="fragment">碎片：按词库短语生成</option>
+                <option value="fragment">碎片：词库优先 + 自动短语</option>
               </select>
             </label>
           </div>
