@@ -1,5 +1,7 @@
 :root {
   color-scheme: dark;
+  --font-body: "Manifold", "Source Han Sans SC", "Noto Sans CJK SC", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  --font-display: "0xA000 Monochrome", "Source Han Sans SC", "Microsoft YaHei UI", sans-serif;
   --bg: #0a0a0b;
   --bg-elevated: #101112;
   --surface: #161719;
@@ -27,6 +29,24 @@
   --inner-line: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
 }
 
+@font-face {
+  font-family: "0xA000 Monochrome";
+  src: url("assets/fonts/0xA000-Monochrome.ttf") format("truetype");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manifold";
+  src: url("assets/fonts/manifold.ttf") format("truetype");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Source Han Sans SC";
+  src: url("assets/fonts/SourceHanSansCN-Regular.otf") format("opentype");
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -42,7 +62,8 @@ body {
   margin: 0;
   overflow-x: hidden;
   color: var(--text);
-  font-family: "Bahnschrift", "DIN Condensed", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  font-family: var(--font-body);
+  font-size: 14px;
   letter-spacing: 0;
   background:
     radial-gradient(circle at 20% 8%, rgba(255, 255, 255, 0.045), transparent 28%),
@@ -97,6 +118,9 @@ button,
   border-radius: var(--radius);
   padding: 0 14px;
   color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 48%),
     var(--surface-3);
@@ -322,7 +346,8 @@ button:disabled::before,
   padding: 3px 7px;
   color: #f0e8df;
   background: #0a0a0b;
-  font-size: 11px;
+  font-family: var(--font-display);
+  font-size: 12px;
   line-height: 1;
   text-transform: uppercase;
   content: "FOUNDATION INTERNAL";
@@ -331,8 +356,9 @@ button:disabled::before,
 .topbar h1 {
   margin: 0;
   color: var(--text-strong);
-  font-size: 30px;
-  font-weight: 900;
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
   line-height: 1.02;
   text-transform: uppercase;
   overflow-wrap: anywhere;
@@ -342,7 +368,7 @@ button:disabled::before,
 .topbar p {
   margin: 8px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.35;
   text-transform: uppercase;
 }
@@ -398,6 +424,7 @@ button:disabled::before,
   justify-content: end;
   min-width: 230px;
   color: var(--muted);
+  font-family: var(--font-display);
   font-size: 12px;
 }
 
@@ -482,8 +509,9 @@ button:disabled::before,
 .panel-heading h2 {
   margin: 0;
   color: var(--text-strong);
-  font-size: 16px;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
   line-height: 1.2;
   text-transform: uppercase;
   overflow-wrap: anywhere;
@@ -498,7 +526,7 @@ button:disabled::before,
   display: block;
   margin-top: 4px;
   color: var(--quiet);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .panel-heading .panel-stat {
@@ -514,7 +542,7 @@ button:disabled::before,
   display: grid;
   gap: 7px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .search-field > span,
@@ -534,6 +562,8 @@ select {
   border: 1px solid var(--line);
   border-radius: 0;
   color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 44%),
     #0f1011;
@@ -542,20 +572,21 @@ select {
 }
 
 input {
-  height: 38px;
-  padding: 0 11px;
+  height: 42px;
+  padding: 0 12px;
 }
 
 select {
-  height: 38px;
+  height: 42px;
   padding: 0 35px 0 11px;
 }
 
 textarea {
-  min-height: 102px;
-  padding: 11px;
+  min-height: 116px;
+  padding: 12px;
   resize: vertical;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 1.62;
 }
 
 input::placeholder,
@@ -683,7 +714,7 @@ textarea::-webkit-scrollbar-thumb {
   display: block;
   overflow: hidden;
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -691,7 +722,7 @@ textarea::-webkit-scrollbar-thumb {
 
 .word-row small {
   color: var(--quiet);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .word-row button {
@@ -738,8 +769,9 @@ textarea::-webkit-scrollbar-thumb {
 .template-head h3 {
   margin: 0;
   color: #f0ece3;
-  font-size: 14px;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
   line-height: 1.25;
   text-transform: uppercase;
 }
@@ -753,7 +785,7 @@ textarea::-webkit-scrollbar-thumb {
   display: block;
   margin-top: 3px;
   color: var(--quiet);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .template-fields {
@@ -774,8 +806,8 @@ textarea::-webkit-scrollbar-thumb {
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.055), transparent 60%),
     #111214;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .template-preview mark {
@@ -791,7 +823,7 @@ textarea::-webkit-scrollbar-thumb {
   min-height: 22px;
   margin: 12px 0 8px;
   color: #d8b46f;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .sentence-item {
@@ -806,11 +838,14 @@ textarea::-webkit-scrollbar-thumb {
 
 .sentence-index {
   color: #d8d2c7;
+  font-family: var(--font-display);
   font-size: 12px;
 }
 
 .sentence-name {
   overflow: hidden;
+  font-size: 15px;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -842,7 +877,7 @@ textarea::-webkit-scrollbar-thumb {
   gap: 9px;
   margin: 16px 0 11px;
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .toggle-line input {
@@ -866,7 +901,7 @@ textarea::-webkit-scrollbar-thumb {
 
 .range-line output {
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .generation-progress {
@@ -882,7 +917,7 @@ textarea::-webkit-scrollbar-thumb {
   justify-content: space-between;
   gap: 12px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   text-transform: uppercase;
 }
 
@@ -954,7 +989,7 @@ progress::-moz-progress-bar {
   margin-top: 14px;
   padding: 11px;
   color: #e1ddd3;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
