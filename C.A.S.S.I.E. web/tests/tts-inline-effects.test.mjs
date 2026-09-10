@@ -18,13 +18,25 @@ test("wrapped syntax cleans model text and distinguishes stutter, hold, and rest
   assert.equal(parsed.effects[2].word, "detected");
 });
 
+test("restart syntax supports multiple full-word and partial-prefix repetitions", () => {
+  const fullWords = parseInlineTtsEffects("#{detected_detected_detected_detected}");
+  assert.equal(fullWords.text, "detected");
+  assert.equal(fullWords.effects[0].prefix, "detected");
+  assert.deepEqual(fullWords.effects[0].restartPrefixes, ["detected", "detected"]);
+
+  const prefixes = parseInlineTtsEffects("#{det_det_det_detected}");
+  assert.equal(prefixes.text, "detected");
+  assert.equal(prefixes.effects[0].prefix, "det");
+  assert.deepEqual(prefixes.effects[0].restartPrefixes, ["det", "det"]);
+});
+
 test("unwrapped punctuation and legacy effect spellings remain ordinary text", () => {
   const source = "Nine-Tailed Fox-3 entered re-containment with containm--ent brea-a-a-a-ch det_detected.";
   assert.deepEqual(parseInlineTtsEffects(source), { text: source, effects: [] });
 });
 
 test("invalid wrapped word effects fail instead of silently changing spelling", () => {
-  for (const source of ["#{ordinary}", "#{re-containment}", "#{det_other}", "#{containm-ent}"]) {
+  for (const source of ["#{ordinary}", "#{re-containment}", "#{det_other}", "#{det_other_detected}", "#{containm-ent}"]) {
     assert.throws(() => parseInlineTtsEffects(source), /无法识别词内效果/, source);
   }
 });
@@ -56,4 +68,27 @@ test("audio processing inserts bounded finite samples for all effect types", () 
   assert.ok(Array.from(output).every(Number.isFinite));
   assert.ok(Math.max(...output) <= 1);
   assert.ok(Math.min(...output) >= -1);
+});
+
+test("audio processing appends every requested restart prefix before the full word", () => {
+  const sampleRate = 1000;
+  const source = new Float32Array(sampleRate);
+  source.fill(0.2);
+  const baseEffect = {
+    type: "restart",
+    anchorRatio: 0.4,
+    wordStartRatio: 0.1,
+    wordEndRatio: 0.9,
+    restart: true,
+    prefix: "det",
+    word: "detected",
+  };
+  const [singleRestart] = applyInlineEffectsToChannels([source], sampleRate, [{ ...baseEffect, restartPrefixes: [] }]);
+  const [multipleRestarts] = applyInlineEffectsToChannels([source], sampleRate, [{
+    ...baseEffect,
+    restartPrefixes: ["det", "det"],
+  }]);
+
+  assert.ok(multipleRestarts.length > singleRestart.length + 400);
+  assert.ok(Array.from(multipleRestarts).every(Number.isFinite));
 });

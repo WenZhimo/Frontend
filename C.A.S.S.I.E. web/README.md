@@ -63,17 +63,19 @@ detonation #{#这段内容不会参与解析} sequence cancelled
 - 可用故障音完整列表为 `G_1`、`G_2`、`G_3`、`G_4`、`G_5`、`G_6`，可按需要调整顺序或重复，例如 `#{$G_3,G_1,G_3}`。
 - `#{#注释内容}`：整段注释会在文本预处理阶段直接丢弃，不参与词库匹配、TTS 分段、生成或音频后处理，也不会打断注释两侧的短语匹配。
 
-## TTS 词内拖音与卡顿
+## TTS 词内拖音、卡顿与复读
 
 Kokoro TTS 输入框支持用 `#{...}` 显式标记词内效果。标记不会交给模型朗读；程序会先恢复正常拼写，再在生成波形的相应位置寻找低能量切点并插入音素片段。括号外的拼写始终按普通文本处理。
 
 ```text
-A #{containm--ent} #{brea-a-a-a-ch} has been #{det_detected}.
+A #{containm--ent} #{brea-a-a-a-ch} has been #{det_det_det_detected}.
 ```
 
 - `#{brea-a-a-a-ch}`：在单词原本的 `a` 处加入额外的 `a`。额外字母有几个就卡顿几次；本例有 3 个额外 `a`，因此卡顿 3 次。
 - `#{containm--ent}`：两个或更多连续连字符拖长前一个音素；连字符越多，持续时间越长。
-- `#{det_detected}`：下划线前是中断位置，下划线后是完整单词，生成 `det detected` 式复读。
+- `#{det_detected}`：最后一段是完整单词，前面的每一段都必须是它的前缀；此例生成 `det detected`。
+- `#{det_det_det_detected}`：支持多次复读，按顺序生成 `det det det detected`。
+- `#{detected_detected_detected_detected}`：前缀也可以等于完整单词，此例完整朗读 `detected` 四次。
 - `Nine-Tailed`、`re-containment`、`brea-a-a-a-ch` 和 `det_detected` 等括号外文本不会触发词内效果。
 
 词内定位使用文本比例、可听区间和附近低能量边界估算，不需要额外的强制对齐模型。较长句子中若定位不理想，可把目标词所在部分单独作为一个句段生成，以缩小估算范围。

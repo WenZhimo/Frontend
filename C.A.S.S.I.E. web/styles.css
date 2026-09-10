@@ -547,6 +547,7 @@ button:disabled::before,
 }
 
 .speech-controls {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(70px, 110px) 42px;
   align-items: end;
@@ -554,11 +555,142 @@ button:disabled::before,
   margin: 12px 0;
 }
 
-.speech-controls > button {
+.speech-insert-button {
   width: 42px;
   height: 42px;
   padding: 0;
   font-size: 24px;
+}
+
+.speech-control-type {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: end;
+  gap: 7px;
+  min-width: 0;
+}
+
+.speech-control-type > label {
+  min-width: 0;
+}
+
+.speech-help-trigger,
+.speech-help-close {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1;
+}
+
+.speech-help-trigger {
+  margin-bottom: 6px;
+  border-color: #77736b;
+  color: #e5dfd3;
+}
+
+.speech-help-trigger[aria-expanded="true"] {
+  border-color: var(--warning);
+  color: #fff8e8;
+  background: #3a310f;
+}
+
+.speech-command-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  display: grid;
+  width: min(480px, calc(100vw - 48px));
+  max-height: min(620px, calc(100vh - 96px));
+  overflow: auto;
+  border: 1px solid #8c877d;
+  padding: 12px;
+  color: var(--text);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    #101112;
+  background-size: 22px 22px, 22px 22px, auto;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.speech-command-popover[hidden] {
+  display: none;
+}
+
+.speech-command-popover header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+}
+
+.speech-command-popover header strong {
+  display: block;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: 16px;
+  text-transform: uppercase;
+}
+
+.speech-command-popover header small {
+  display: block;
+  margin-top: 4px;
+  color: var(--quiet);
+  font-size: 12px;
+}
+
+.speech-help-section {
+  padding-top: 11px;
+}
+
+.speech-help-section + .speech-help-section {
+  margin-top: 10px;
+  border-top: 1px dashed #44464a;
+}
+
+.speech-help-section > b {
+  color: #d8d2c7;
+  font-family: var(--font-display);
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.speech-help-section dl {
+  display: grid;
+  grid-template-columns: minmax(165px, auto) 1fr;
+  gap: 8px 12px;
+  margin: 10px 0 0;
+}
+
+.speech-help-section dt,
+.speech-help-section dd {
+  margin: 0;
+}
+
+.speech-help-section dt {
+  color: var(--warning);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.speech-help-section dd {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.speech-command-popover code {
+  color: inherit;
+  font-family: var(--font-display);
+  font-size: 0.92em;
 }
 
 .speech-control-help {
@@ -1161,6 +1293,33 @@ progress::-moz-progress-bar {
 
   .mode-switch {
     grid-template-columns: 1fr;
+  }
+
+  .speech-controls {
+    grid-template-columns: minmax(0, 1fr) 42px;
+  }
+
+  .speech-controls > label {
+    grid-column: 1;
+  }
+
+  .speech-insert-button {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .speech-control-type,
+  .speech-control-help {
+    grid-column: 1 / -1;
+  }
+
+  .speech-help-section dl {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .speech-help-section dd + dt {
+    margin-top: 7px;
   }
 }
 

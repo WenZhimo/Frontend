@@ -35,20 +35,23 @@ function parseHeldWord(rawWord) {
 }
 
 function parseRestartedWord(rawWord) {
-  const match = /^([A-Za-z]+)_([A-Za-z]+)$/.exec(rawWord);
-  if (!match) return null;
-  const prefix = match[1];
-  const cleanWord = match[2];
-  if (!cleanWord.toLowerCase().startsWith(prefix.toLowerCase()) || prefix.length >= cleanWord.length) {
+  const segments = rawWord.split("_");
+  if (segments.length < 2 || segments.length > 12 || segments.some((segment) => !/^[A-Za-z]+$/.test(segment))) {
     return null;
   }
+  const cleanWord = segments.at(-1);
+  const prefixes = segments.slice(0, -1);
+  const cleanWordLower = cleanWord.toLowerCase();
+  if (prefixes.some((prefix) => !cleanWordLower.startsWith(prefix.toLowerCase()))) return null;
+
   return {
     cleanWord,
     effects: [{
       type: "restart",
-      anchorChar: prefix.length,
+      anchorChar: prefixes[0].length,
       restart: true,
-      prefix,
+      prefix: prefixes[0],
+      restartPrefixes: prefixes.slice(1),
     }],
   };
 }
@@ -305,11 +308,11 @@ function buildEffectEvents(channels, sampleRate, effects) {
   return [...effects]
     .map((effect) => {
       const approximate = audible.start + Math.round(audibleLength * clamp(effect.anchorRatio, 0, 1));
-      const anchor = findQuietBoundary(channels, approximate, sampleRate, audible.start + 1, audible.end - 1);
+      let anchor = findQuietBoundary(channels, approximate, sampleRate, audible.start + 1, audible.end - 1);
       const desiredSlice = Math.max(1, Math.round(sampleRate * ((effect.sliceMs || 48) / 1000)));
       const slice = findBestPrecedingSlice(channels, anchor, desiredSlice, sampleRate, audible.start);
       let skipTo = anchor;
-      let restartRange = null;
+      let restartRanges = [];
 
       if (effect.restart) {
         const wordStartApprox = audible.start + Math.round(audibleLength * clamp(effect.wordStartRatio, 0, 1));
@@ -317,12 +320,28 @@ function buildEffectEvents(channels, sampleRate, effects) {
         const wordStart = findQuietBoundary(channels, wordStartApprox, sampleRate, audible.start, anchor);
         const wordEnd = findQuietBoundary(channels, wordEndApprox, sampleRate, anchor + 1, audible.end);
         if (wordEnd > wordStart + Math.round(sampleRate * 0.08)) {
-          restartRange = { start: wordStart, end: wordEnd };
+          const wordLength = wordEnd - wordStart;
+          const cleanWordLength = Math.max(1, effect.word?.length || 1);
+          const prefixRanges = (effect.restartPrefixes || []).map((prefix) => {
+            const prefixRatio = clamp(prefix.length / cleanWordLength, 0.01, 1);
+            if (prefixRatio >= 0.999) return { start: wordStart, end: wordEnd };
+            const prefixEndApprox = wordStart + Math.round(wordLength * prefixRatio);
+            const prefixEnd = findQuietBoundary(
+              channels,
+              prefixEndApprox,
+              sampleRate,
+              wordStart + 1,
+              wordEnd,
+            );
+            return { start: wordStart, end: Math.max(wordStart + 1, prefixEnd) };
+          });
+          restartRanges = [...prefixRanges, { start: wordStart, end: wordEnd }];
+          if ((effect.prefix?.length || 0) >= cleanWordLength) anchor = wordEnd;
           skipTo = wordEnd;
         }
       }
 
-      return { effect, anchor, slice, restartRange, skipTo };
+      return { effect, anchor, slice, restartRanges, skipTo };
     })
     .sort((a, b) => a.anchor - b.anchor);
 }
@@ -360,14 +379,20 @@ export function applyInlineEffectsToChannels(channels, sampleRate, effects) {
         );
       }
 
-      if (event.restartRange) {
-        const restart = applyEnvelope(
-          channel.subarray(event.restartRange.start, event.restartRange.end),
+      if (event.restartRanges.length > 0) {
+        const restarts = event.restartRanges.map((range) => applyEnvelope(
+          channel.subarray(range.start, range.end),
           fadeSamples,
+        ));
+        const combined = new Float32Array(
+          insertion.length + restarts.reduce((sum, restart) => sum + restart.length, 0),
         );
-        const combined = new Float32Array(insertion.length + restart.length);
         combined.set(insertion, 0);
-        combined.set(restart, insertion.length);
+        let offset = insertion.length;
+        restarts.forEach((restart) => {
+          combined.set(restart, offset);
+          offset += restart.length;
+        });
         insertion = combined;
       }
       insertionsByChannel[channelIndex].push(insertion);

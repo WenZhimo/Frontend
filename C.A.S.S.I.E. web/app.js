@@ -829,7 +829,7 @@ const ttsAnnouncementTemplates = [
     title: "自定义示例：播报指令示意",
     template: [
       "Attention #{$SLEEP_500} #{#停顿：在 Attention 后插入 500ms 静音} all personnel.",
-      "A #{containm--ent} #{#拖音：拉长 containment 中间的音素} #{brea-a-a-a-ch} #{#卡顿：在 breach 的 a 处加入 3 个额外 a，因此卡顿 3 次} has been #{det_detected} #{#复读：说出 det 后重新完整朗读 detected}.",
+      "A #{containm--ent} #{#拖音：拉长 containment 中间的音素} #{brea-a-a-a-ch} #{#卡顿：在 breach 的 a 处加入 3 个额外 a，因此卡顿 3 次} has been #{det_det_det_detected} #{#复读：连续说出 3 次 det，再完整朗读 detected}.",
       "All personnel are advised to remain calm and await further instructions.",
       "#{$G_1,G_2,G_3,G_4,G_5,G_6} #{#故障音覆盖：可用 G_1、G_2、G_3、G_4、G_5、G_6；本例依次全部叠加到下一段语音} Security systems are now operating under emergency protocols.",
     ].join("\n"),
@@ -3068,19 +3068,75 @@ function bindWaveformScrubber(canvas, mode) {
 function bindSpeechControls() {
   document.querySelectorAll("[data-speech-controls]").forEach((container) => {
     const target = document.getElementById(container.dataset.speechControls);
+    const helpId = `speech-command-help-${target.id}`;
+    const helpTitleId = `${helpId}-title`;
     container.innerHTML = `
-      <label><span>语法快捷插入</span><select aria-label="播报指令类型">
-        <option value="SLEEP">停顿</option>
-        <option value="GLITCH">故障音覆盖</option>
-        <option value="COMMENT">注释</option>
-      </select></label>
-      <label><span data-unit>时长 ms</span><input type="number" aria-label="指令参数" min="0" max="10000" step="10" value="500"></label>
-      <button type="button" title="在光标处插入指令" aria-label="在光标处插入指令">+</button>
+      <div class="speech-control-type">
+        <label><span>语法快捷插入</span><select data-speech-command-control aria-label="播报指令类型">
+          <option value="SLEEP">停顿</option>
+          <option value="GLITCH">故障音覆盖</option>
+          <option value="COMMENT">注释</option>
+        </select></label>
+        <button class="speech-help-trigger" type="button" title="查看播报指令说明" aria-label="查看播报指令说明" aria-expanded="false" aria-controls="${helpId}">?</button>
+        <section class="speech-command-popover" id="${helpId}" role="dialog" aria-labelledby="${helpTitleId}" hidden>
+          <header>
+            <div>
+              <strong id="${helpTitleId}">播报指令说明</strong>
+              <small>仅写在 <code>#{...}</code> 内时生效</small>
+            </div>
+            <button class="speech-help-close" type="button" title="关闭说明" aria-label="关闭播报指令说明">×</button>
+          </header>
+          <div class="speech-help-section">
+            <b>通用命令</b>
+            <dl>
+              <dt><code>#{$SLEEP_500}</code></dt>
+              <dd>停顿 500ms，可填写 0–10000ms。</dd>
+              <dt><code>#{$G_3,G_1,G_3}</code></dt>
+              <dd>按顺序叠加故障音，不占用语音时间线；可用 G_1 至 G_6，可重复。</dd>
+              <dt><code>#{#编辑备注}</code></dt>
+              <dd>整段注释直接丢弃，不参与匹配、朗读或后处理。</dd>
+            </dl>
+          </div>
+          <div class="speech-help-section">
+            <b>TTS 词内效果</b>
+            <dl>
+              <dt><code>#{brea-a-a-a-ch}</code></dt>
+              <dd>在原本的 a 处卡顿；3 个额外 a 表示卡顿 3 次。</dd>
+              <dt><code>#{containm--ent}</code></dt>
+              <dd>拖长连字符前的音素；连续连字符越多，拖音越长。</dd>
+              <dt><code>#{det_det_det_detected}</code></dt>
+              <dd>最后一段是完整单词，前面各段必须是它的前缀；生成 det det det detected。</dd>
+              <dt><code>#{detected_detected_detected_detected}</code></dt>
+              <dd>前置段可以等于完整单词；此例完整复读 detected 4 次。</dd>
+            </dl>
+          </div>
+        </section>
+      </div>
+      <label><span data-unit>时长 ms</span><input data-speech-command-control type="number" aria-label="指令参数" min="0" max="10000" step="10" value="500"></label>
+      <button class="speech-insert-button" data-speech-command-control type="button" title="在光标处插入指令" aria-label="在光标处插入指令">+</button>
       <small class="speech-control-help">可用故障音：G_1、G_2、G_3、G_4、G_5、G_6；可按任意顺序组合或重复。</small>
     `;
     const select = container.querySelector("select");
     const input = container.querySelector("input");
     const valueLabel = container.querySelector("[data-unit]");
+    const helpRoot = container.querySelector(".speech-control-type");
+    const helpButton = container.querySelector(".speech-help-trigger");
+    const helpPanel = container.querySelector(".speech-command-popover");
+    const closeHelpButton = container.querySelector(".speech-help-close");
+    const setHelpOpen = (isOpen, restoreFocus = false) => {
+      helpPanel.hidden = !isOpen;
+      helpButton.setAttribute("aria-expanded", String(isOpen));
+      if (isOpen) closeHelpButton.focus();
+      else if (restoreFocus) helpButton.focus();
+    };
+    helpButton.addEventListener("click", () => setHelpOpen(helpPanel.hidden));
+    closeHelpButton.addEventListener("click", () => setHelpOpen(false, true));
+    document.addEventListener("click", (event) => {
+      if (!helpPanel.hidden && !helpRoot.contains(event.target)) setHelpOpen(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !helpPanel.hidden) setHelpOpen(false, true);
+    });
     select.addEventListener("change", () => {
       const isGlitch = select.value === "GLITCH";
       const isComment = select.value === "COMMENT";
@@ -3095,7 +3151,7 @@ function bindSpeechControls() {
       input.pattern = isGlitch ? "G_[1-6](\\s*,\\s*G_[1-6])*" : "";
       input.title = isGlitch ? "使用 G_1 到 G_6，并以英文逗号分隔" : "";
     });
-    container.querySelector("button").addEventListener("click", () => {
+    container.querySelector(".speech-insert-button").addEventListener("click", () => {
       if (!input.reportValidity()) return;
       const command = select.value === "GLITCH"
         ? `#{${"$"}${input.value.split(",").map((value) => value.trim().toUpperCase()).filter(Boolean).join(",")}}`
@@ -3118,7 +3174,7 @@ function setBusy(isBusy) {
   [els.generatePreview, els.playAudio, els.applyText, els.applyTemplate, els.reloadAssets].forEach((el) => {
     el.disabled = isBusy;
   });
-  document.querySelectorAll('[data-speech-controls="textInput"] button, [data-speech-controls="textInput"] select, [data-speech-controls="textInput"] input').forEach((el) => { el.disabled = isBusy; });
+  document.querySelectorAll('[data-speech-controls="textInput"] [data-speech-command-control]').forEach((el) => { el.disabled = isBusy; });
 }
 
 function setTtsBusy(isBusy, options = {}) {
@@ -3153,7 +3209,7 @@ function setTtsBusy(isBusy, options = {}) {
   els.ttsTemplateFields.querySelectorAll("input, select, textarea, button").forEach((control) => {
     control.disabled = isBusy;
   });
-  document.querySelectorAll('[data-speech-controls="ttsInput"] button, [data-speech-controls="ttsInput"] select, [data-speech-controls="ttsInput"] input').forEach((el) => { el.disabled = isBusy; });
+  document.querySelectorAll('[data-speech-controls="ttsInput"] [data-speech-command-control]').forEach((el) => { el.disabled = isBusy; });
 }
 
 function switchMode(mode) {
