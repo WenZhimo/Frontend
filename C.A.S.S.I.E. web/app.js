@@ -15,6 +15,20 @@ const state = {
   currentSource: null,
   audioContext: null,
   activeMode: "cassie",
+  playback: {
+    mode: null,
+    buffer: null,
+    offset: 0,
+    startedAt: 0,
+    rafId: null,
+    progressByMode: {
+      cassie: 0,
+      tts: 0,
+    },
+    dragMode: null,
+    dragPointerId: null,
+    dragWasPlaying: false,
+  },
   tts: {
     worker: null,
     voices: [],
@@ -169,6 +183,11 @@ const phraseClipAliases = [
 ];
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const fmtSeconds = (seconds) => `${seconds.toFixed(2).padStart(5, "0")}s`;
+const waveformColors = {
+  cassie: "#6ee7d8",
+  tts: "#e6b450",
+};
+const waveformPeakCache = new WeakMap();
 const KOKORO_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
 const kokoroVoices = ["am_michael", "bm_daniel", "am_adam"];
 const TTS_WORKER_URL = new URL("./src/tts-worker.js", import.meta.url);
@@ -1509,6 +1528,7 @@ function addClamped(channelData, index, value) {
 
 async function generatePreview() {
   try {
+    stopCurrentSource();
     setBusy(true);
     setStatus("正在预生成音频");
     const buffer = await renderAudioBuffer();
@@ -1528,31 +1548,128 @@ async function generatePreview() {
   }
 }
 
-function stopCurrentSource() {
-  if (state.currentSource) {
-    try {
-      state.currentSource.stop();
-    } catch {
-      // Source may already have ended.
-    }
-    state.currentSource.disconnect();
-    state.currentSource = null;
+function cancelPlaybackProgressLoop() {
+  if (state.playback.rafId) {
+    cancelAnimationFrame(state.playback.rafId);
+    state.playback.rafId = null;
   }
 }
 
-async function playBuffer(buffer) {
+function getWaveformCanvas(mode) {
+  return mode === "tts" ? els.ttsWaveform : els.waveform;
+}
+
+function getWaveformColor(mode) {
+  return mode === "tts" ? waveformColors.tts : waveformColors.cassie;
+}
+
+function getGeneratedBuffer(mode) {
+  return mode === "tts" ? state.tts.generatedBuffer : state.generatedBuffer;
+}
+
+function getPlaybackProgress(mode = state.playback.mode) {
+  if (!mode) return 0;
+  const buffer = state.playback.mode === mode && state.playback.buffer
+    ? state.playback.buffer
+    : getGeneratedBuffer(mode);
+  if (!buffer?.duration) return 0;
+  if (state.currentSource && state.playback.mode === mode && state.audioContext) {
+    const elapsed = state.playback.offset + Math.max(0, state.audioContext.currentTime - state.playback.startedAt);
+    return clamp(elapsed / buffer.duration, 0, 1);
+  }
+  return clamp(state.playback.progressByMode[mode] || 0, 0, 1);
+}
+
+function renderWaveformProgress(mode, progress = getPlaybackProgress(mode)) {
+  const nextProgress = clamp(Number(progress) || 0, 0, 1);
+  const buffer = getGeneratedBuffer(mode);
+  state.playback.progressByMode[mode] = nextProgress;
+  if (buffer) {
+    drawWaveformFor(getWaveformCanvas(mode), buffer, getWaveformColor(mode), nextProgress);
+  } else {
+    drawEmptyWaveformFor(getWaveformCanvas(mode));
+  }
+  updateWaveformAria(mode, nextProgress, buffer);
+}
+
+function isModePlaying(mode) {
+  return Boolean(state.currentSource && state.playback.mode === mode && state.playback.buffer);
+}
+
+function getPlaybackStartOffset(mode, buffer) {
+  const progress = getPlaybackProgress(mode);
+  if (!buffer?.duration || progress >= 0.995) return 0;
+  return clamp(progress * buffer.duration, 0, Math.max(0, buffer.duration - 0.001));
+}
+
+function startPlaybackProgressLoop() {
+  cancelPlaybackProgressLoop();
+  const tick = () => {
+    const { mode } = state.playback;
+    if (!state.currentSource || !mode || !state.playback.buffer) return;
+    const progress = getPlaybackProgress(mode);
+    renderWaveformProgress(mode, progress);
+    if (progress < 1) state.playback.rafId = requestAnimationFrame(tick);
+  };
+  state.playback.rafId = requestAnimationFrame(tick);
+}
+
+function finishPlayback(source, mode) {
+  if (state.currentSource !== source) return;
+  state.currentSource = null;
+  cancelPlaybackProgressLoop();
+  renderWaveformProgress(mode, 1);
+  state.playback.mode = null;
+  state.playback.buffer = null;
+  state.playback.offset = 0;
+  state.playback.startedAt = 0;
+}
+
+function stopCurrentSource({ resetProgress = false } = {}) {
+  const mode = state.playback.mode;
+  const progress = mode && !resetProgress ? getPlaybackProgress(mode) : 0;
+  cancelPlaybackProgressLoop();
+  if (state.currentSource) {
+    const source = state.currentSource;
+    state.currentSource = null;
+    source.onended = null;
+    try {
+      source.stop();
+    } catch {
+      // Source may already have ended.
+    }
+    source.disconnect();
+  }
+  if (mode) {
+    renderWaveformProgress(mode, progress);
+  }
+  state.playback.mode = null;
+  state.playback.buffer = null;
+  state.playback.offset = 0;
+  state.playback.startedAt = 0;
+}
+
+async function playBuffer(buffer, mode = state.activeMode, offset = 0) {
   const context = getAudioContext();
   if (context.state === "suspended") await context.resume();
 
   stopCurrentSource();
+  const playbackMode = mode === "tts" ? "tts" : "cassie";
+  const startOffset = clamp(Number(offset) || 0, 0, Math.max(0, buffer.duration - 0.001));
   const source = context.createBufferSource();
   source.buffer = buffer;
   source.connect(context.destination);
   source.onended = () => {
-    if (state.currentSource === source) state.currentSource = null;
+    finishPlayback(source, playbackMode);
   };
   state.currentSource = source;
-  source.start();
+  state.playback.mode = playbackMode;
+  state.playback.buffer = buffer;
+  state.playback.offset = startOffset;
+  state.playback.startedAt = context.currentTime;
+  renderWaveformProgress(playbackMode, buffer.duration ? startOffset / buffer.duration : 0);
+  source.start(0, startOffset);
+  startPlaybackProgressLoop();
 }
 
 async function playAudio() {
@@ -1561,7 +1678,7 @@ async function playAudio() {
       ? await generatePreview()
       : state.generatedBuffer;
 
-    await playBuffer(buffer);
+    await playBuffer(buffer, "cassie", getPlaybackStartOffset("cassie", buffer));
     setStatus("正在播放预生成音频。");
   } catch {
     // generatePreview already reported the concrete error.
@@ -2058,7 +2175,7 @@ async function playTtsAudio() {
       : state.tts.generatedBuffer;
 
     if (!buffer) return;
-    await playBuffer(buffer);
+    await playBuffer(buffer, "tts", getPlaybackStartOffset("tts", buffer));
     setTtsStatus("正在播放 Kokoro TTS 音频。");
   } catch {
     // generateTtsPreview already reported the concrete error.
@@ -2135,58 +2252,252 @@ function drawEmptyWaveformFor(canvas) {
   ctx.stroke();
 }
 
-function drawWaveformFor(canvas, buffer, color = "#6ee7d8") {
-  if (!canvas || !buffer) return;
-  const ctx = canvas.getContext("2d");
-  const data = buffer.getChannelData(0);
-  const step = Math.max(1, Math.floor(data.length / canvas.width));
-  const mid = canvas.height / 2;
+function getWaveformPeaks(buffer, width) {
+  let cacheByWidth = waveformPeakCache.get(buffer);
+  if (!cacheByWidth) {
+    cacheByWidth = new Map();
+    waveformPeakCache.set(buffer, cacheByWidth);
+  }
+  if (cacheByWidth.has(width)) return cacheByWidth.get(width);
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#111418";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.strokeStyle = "rgba(230, 180, 80, 0.22)";
-  ctx.lineWidth = 1;
-  for (let x = 0; x < canvas.width; x += 60) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
-    ctx.stroke();
+  const mins = new Float32Array(width);
+  const maxs = new Float32Array(width);
+  for (let x = 0; x < width; x += 1) {
+    const start = Math.floor((x / width) * buffer.length);
+    const end = Math.min(buffer.length, Math.max(start + 1, Math.floor(((x + 1) / width) * buffer.length)));
+    let min = 1;
+    let max = -1;
+    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+      const data = buffer.getChannelData(channel);
+      for (let i = start; i < end; i += 1) {
+        const sample = data[i];
+        if (sample < min) min = sample;
+        if (sample > max) max = sample;
+      }
+    }
+    mins[x] = min === 1 ? 0 : min;
+    maxs[x] = max === -1 ? 0 : max;
   }
 
+  const peaks = { mins, maxs };
+  cacheByWidth.set(width, peaks);
+  return peaks;
+}
+
+function strokeWaveformPeaks(ctx, peaks, width, height, color, alpha = 1) {
+  const mid = height / 2;
+  ctx.save();
+  ctx.globalAlpha = alpha;
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  for (let x = 0; x < canvas.width; x += 1) {
-    let min = 1;
-    let max = -1;
-    const start = x * step;
-    for (let i = 0; i < step && start + i < data.length; i += 1) {
-      const sample = data[start + i];
-      if (sample < min) min = sample;
-      if (sample > max) max = sample;
-    }
-    ctx.moveTo(x, mid + min * mid * 0.86);
-    ctx.lineTo(x, mid + max * mid * 0.86);
+  for (let x = 0; x < width; x += 1) {
+    ctx.moveTo(x, mid + peaks.mins[x] * mid * 0.86);
+    ctx.lineTo(x, mid + peaks.maxs[x] * mid * 0.86);
   }
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawWaveformFor(canvas, buffer, color = "#6ee7d8", progress = 0) {
+  if (!canvas || !buffer) return;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const peaks = getWaveformPeaks(buffer, width);
+  const playhead = clamp(Number(progress) || 0, 0, 1) * width;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#111418";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = "rgba(230, 180, 80, 0.22)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x < width; x += 60) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+
+  strokeWaveformPeaks(ctx, peaks, width, height, color, 0.34);
+
+  ctx.save();
+  ctx.globalAlpha = 0.1;
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, playhead, height);
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, playhead, height);
+  ctx.clip();
+  strokeWaveformPeaks(ctx, peaks, width, height, color, 1);
+  ctx.restore();
+
+  const lineX = Math.max(0, Math.min(width, playhead));
+  const handleX = clamp(lineX, 5, width - 5);
+  ctx.strokeStyle = "#f8fafc";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(lineX, 0);
+  ctx.lineTo(lineX, height);
+  ctx.stroke();
+  ctx.fillStyle = "#f8fafc";
+  ctx.beginPath();
+  ctx.arc(handleX, height / 2, 5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function updateWaveformAria(mode, progress = 0, buffer = getGeneratedBuffer(mode)) {
+  const canvas = getWaveformCanvas(mode);
+  if (!canvas) return;
+  const ratio = clamp(Number(progress) || 0, 0, 1);
+  const duration = buffer?.duration || 0;
+  canvas.setAttribute("aria-valuemin", "0");
+  canvas.setAttribute("aria-valuemax", "100");
+  canvas.setAttribute("aria-valuenow", String(Math.round(ratio * 100)));
+  canvas.setAttribute("aria-valuetext", `${fmtSeconds(duration * ratio)} / ${fmtSeconds(duration)}`);
+  canvas.title = duration
+    ? `拖动或点击跳转：${fmtSeconds(duration * ratio)} / ${fmtSeconds(duration)}`
+    : "生成音频后可拖动或点击跳转";
 }
 
 function drawEmptyWaveform() {
   drawEmptyWaveformFor(els.waveform);
+  state.playback.progressByMode.cassie = 0;
+  updateWaveformAria("cassie", 0, null);
 }
 
 function drawTtsEmptyWaveform() {
   drawEmptyWaveformFor(els.ttsWaveform);
+  state.playback.progressByMode.tts = 0;
+  updateWaveformAria("tts", 0, null);
 }
 
 function drawWaveform(buffer) {
-  drawWaveformFor(els.waveform, buffer);
+  state.playback.progressByMode.cassie = 0;
+  drawWaveformFor(els.waveform, buffer, waveformColors.cassie, 0);
+  updateWaveformAria("cassie", 0, buffer);
 }
 
 function drawTtsWaveform(buffer) {
-  drawWaveformFor(els.ttsWaveform, buffer, "#e6b450");
+  state.playback.progressByMode.tts = 0;
+  drawWaveformFor(els.ttsWaveform, buffer, waveformColors.tts, 0);
+  updateWaveformAria("tts", 0, buffer);
+}
+
+function getCanvasProgressFromPointer(canvas, event) {
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width) return 0;
+  return clamp((event.clientX - rect.left) / rect.width, 0, 1);
+}
+
+function reportPlaybackError(mode, error) {
+  const message = error?.message || String(error);
+  if (mode === "tts") {
+    setTtsStatus(message, "error");
+  } else {
+    setStatus(message, "error");
+  }
+}
+
+function announceWaveformSeek(mode, progress) {
+  const buffer = getGeneratedBuffer(mode);
+  if (!buffer?.duration) return;
+  const message = `播放位置：${fmtSeconds(buffer.duration * progress)} / ${fmtSeconds(buffer.duration)}。`;
+  if (mode === "tts") {
+    setTtsStatus(message);
+  } else {
+    setStatus(message);
+  }
+}
+
+function seekWaveform(mode, progress, options = {}) {
+  const buffer = getGeneratedBuffer(mode);
+  if (!buffer) return;
+  const nextProgress = clamp(Number(progress) || 0, 0, 1);
+  renderWaveformProgress(mode, nextProgress);
+  if (options.resume && nextProgress < 0.995) {
+    playBuffer(buffer, mode, nextProgress * buffer.duration).catch((error) => reportPlaybackError(mode, error));
+    return;
+  }
+  announceWaveformSeek(mode, nextProgress);
+}
+
+function setWaveformPointerCapture(canvas, pointerId, shouldCapture) {
+  try {
+    if (shouldCapture) {
+      canvas.setPointerCapture?.(pointerId);
+    } else {
+      canvas.releasePointerCapture?.(pointerId);
+    }
+  } catch {
+    // Synthetic pointer events and some browser edge cases do not own capture.
+  }
+}
+
+function bindWaveformScrubber(canvas, mode) {
+  if (!canvas) return;
+  canvas.tabIndex = 0;
+  canvas.setAttribute("role", "slider");
+
+  canvas.addEventListener("pointerdown", (event) => {
+    if (!getGeneratedBuffer(mode)) return;
+    event.preventDefault();
+    canvas.focus();
+    const wasPlaying = isModePlaying(mode);
+    if (state.currentSource) stopCurrentSource();
+    state.playback.dragMode = mode;
+    state.playback.dragPointerId = event.pointerId;
+    state.playback.dragWasPlaying = wasPlaying;
+    setWaveformPointerCapture(canvas, event.pointerId, true);
+    renderWaveformProgress(mode, getCanvasProgressFromPointer(canvas, event));
+  });
+
+  canvas.addEventListener("pointermove", (event) => {
+    if (state.playback.dragMode !== mode || state.playback.dragPointerId !== event.pointerId) return;
+    event.preventDefault();
+    renderWaveformProgress(mode, getCanvasProgressFromPointer(canvas, event));
+  });
+
+  canvas.addEventListener("pointerup", (event) => {
+    if (state.playback.dragMode !== mode || state.playback.dragPointerId !== event.pointerId) return;
+    event.preventDefault();
+    const shouldResume = state.playback.dragWasPlaying;
+    const progress = getCanvasProgressFromPointer(canvas, event);
+    state.playback.dragMode = null;
+    state.playback.dragPointerId = null;
+    state.playback.dragWasPlaying = false;
+    setWaveformPointerCapture(canvas, event.pointerId, false);
+    seekWaveform(mode, progress, { resume: shouldResume });
+  });
+
+  canvas.addEventListener("pointercancel", (event) => {
+    if (state.playback.dragMode !== mode || state.playback.dragPointerId !== event.pointerId) return;
+    state.playback.dragMode = null;
+    state.playback.dragPointerId = null;
+    state.playback.dragWasPlaying = false;
+    setWaveformPointerCapture(canvas, event.pointerId, false);
+  });
+
+  canvas.addEventListener("keydown", (event) => {
+    const buffer = getGeneratedBuffer(mode);
+    if (!buffer?.duration) return;
+
+    const currentOffset = getPlaybackProgress(mode) * buffer.duration;
+    const step = event.shiftKey ? 1 : 5;
+    let nextOffset = currentOffset;
+    if (event.key === "ArrowLeft") nextOffset = currentOffset - step;
+    if (event.key === "ArrowRight") nextOffset = currentOffset + step;
+    if (event.key === "Home") nextOffset = 0;
+    if (event.key === "End") nextOffset = buffer.duration;
+    if (nextOffset === currentOffset) return;
+
+    event.preventDefault();
+    const progress = clamp(nextOffset / buffer.duration, 0, 1);
+    seekWaveform(mode, progress, { resume: isModePlaying(mode) });
+  });
 }
 
 // UI state and event binding
@@ -2254,6 +2565,9 @@ function escapeHtml(value) {
 }
 
 function bindEvents() {
+  bindWaveformScrubber(els.waveform, "cassie");
+  bindWaveformScrubber(els.ttsWaveform, "tts");
+
   els.modeCassie.addEventListener("click", () => switchMode("cassie"));
   els.modeTts.addEventListener("click", () => switchMode("tts"));
   els.reloadAssets.addEventListener("click", loadManifest);

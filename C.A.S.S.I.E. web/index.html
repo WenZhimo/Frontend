@@ -141,7 +141,7 @@
             <output id="backgroundGainValue">35%</output>
           </label>
 
-          <canvas id="waveform" width="720" height="160" aria-label="Rendered waveform"></canvas>
+          <canvas id="waveform" width="720" height="160" role="slider" tabindex="0" aria-label="原版 C.A.S.S.I.E. 波形进度条" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas>
 
           <div class="transport">
             <button id="generatePreview" type="button">预生成</button>
@@ -293,7 +293,7 @@
             <progress id="ttsProgressBar" max="1" value="0"></progress>
           </div>
 
-          <canvas id="ttsWaveform" width="720" height="160" aria-label="Rendered TTS waveform"></canvas>
+          <canvas id="ttsWaveform" width="720" height="160" role="slider" tabindex="0" aria-label="Kokoro TTS 波形进度条" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></canvas>
           <div id="ttsStatus" class="status" role="status" aria-live="polite">Kokoro 模型会在首次加载或生成时下载。建议通过本地 HTTP 服务运行。</div>
         </section>
       </section>

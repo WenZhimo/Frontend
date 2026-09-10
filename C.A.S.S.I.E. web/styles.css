@@ -572,6 +572,8 @@ progress::-moz-progress-bar {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #111418;
+  cursor: pointer;
+  touch-action: none;
 }
 
 #ttsWaveform {
@@ -582,6 +584,19 @@ progress::-moz-progress-bar {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #111418;
+  cursor: pointer;
+  touch-action: none;
+}
+
+#waveform:active,
+#ttsWaveform:active {
+  cursor: grabbing;
+}
+
+#waveform:focus-visible,
+#ttsWaveform:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 
 .transport {
