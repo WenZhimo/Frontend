@@ -83,11 +83,11 @@ test("command syntax demo template exercises every explicit effect without chang
   const template = app.ttsAnnouncementTemplates.find((item) => item.id === "tts-command-syntax-demo");
   assert.ok(template);
   const templateText = app.buildTtsTemplateText(template, {});
-  for (const syntax of ["#{$SLEEP_500}", "#{containm--ent}", "#{brea-a-a-a-ch}", "#{det_det_det_detected}", "#{$G_1,G_2,G_3,G_4,G_5,G_6}", "#{#停顿："]) {
+  for (const syntax of ["#{$SLEEP_500}", "#{containm--ent}", "#{brea-a-a-a-ch}", "#{dete_dete_det_det_detect-t-t-t-ed}", "#{$G_1,G_2,G_3,G_4,G_5,G_6}", "#{#停顿："]) {
     assert.ok(templateText.includes(syntax), syntax);
   }
   assert.ok(templateText.includes("3 个额外 a，因此卡顿 3 次"));
-  assert.ok(templateText.includes("连续说出 3 次 det"));
+  assert.ok(templateText.includes("最后完整词 detected 再叠加 t 卡顿"));
   assert.ok(templateText.includes("可用 G_1、G_2、G_3、G_4、G_5、G_6"));
 
   const { units } = app.buildTtsUnits(templateText);
@@ -96,6 +96,7 @@ test("command syntax demo template exercises every explicit effect without chang
   const spokenText = units.map((unit) => unit.text).join(" ");
   assert.deepEqual(plain(controls.map((control) => control.type)), ["sleep", "glitch-overlay"]);
   assert.deepEqual(plain(effects.map((effect) => effect.type)), ["hold", "stutter", "restart"]);
+  assert.deepEqual(plain(effects.at(-1).finalEffects.map((effect) => effect.type)), ["stutter"]);
   assert.ok(!/[#{}]|停顿|拖音|卡顿|复读|故障音/.test(spokenText));
   assert.ok(spokenText.includes("Attention all personnel."));
   assert.ok(spokenText.includes("A containment breach has been detected."));

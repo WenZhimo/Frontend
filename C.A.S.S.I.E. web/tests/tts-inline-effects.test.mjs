@@ -30,13 +30,34 @@ test("restart syntax supports multiple full-word and partial-prefix repetitions"
   assert.deepEqual(prefixes.effects[0].restartPrefixes, ["det", "det"]);
 });
 
+test("restart syntax supports a stuttered or held final word", () => {
+  const stuttered = parseInlineTtsEffects("#{dete_dete_det_det_detect-t-t-t-ed}");
+  assert.equal(stuttered.text, "detected");
+  assert.equal(stuttered.effects[0].type, "restart");
+  assert.equal(stuttered.effects[0].prefix, "dete");
+  assert.deepEqual(stuttered.effects[0].restartPrefixes, ["dete", "det", "det"]);
+  assert.deepEqual(stuttered.effects[0].finalEffects.map((effect) => effect.type), ["stutter"]);
+  assert.equal(stuttered.effects[0].finalEffects[0].chunk, "t");
+  assert.equal(stuttered.effects[0].finalEffects[0].count, 3);
+
+  const held = parseInlineTtsEffects("#{contain_containm--ent}");
+  assert.equal(held.text, "containment");
+  assert.deepEqual(held.effects[0].finalEffects.map((effect) => effect.type), ["hold"]);
+
+  const restartedFinal = parseInlineTtsEffects("#{de_det-d-d-detected}");
+  assert.equal(restartedFinal.text, "detected");
+  assert.equal(restartedFinal.effects[0].finalEffects[0].restart, true);
+  assert.equal(restartedFinal.effects[0].finalEffects[0].wordStartRatio, 0);
+  assert.equal(restartedFinal.effects[0].finalEffects[0].wordEndRatio, 1);
+});
+
 test("unwrapped punctuation and legacy effect spellings remain ordinary text", () => {
   const source = "Nine-Tailed Fox-3 entered re-containment with containm--ent brea-a-a-a-ch det_detected.";
   assert.deepEqual(parseInlineTtsEffects(source), { text: source, effects: [] });
 });
 
 test("invalid wrapped word effects fail instead of silently changing spelling", () => {
-  for (const source of ["#{ordinary}", "#{re-containment}", "#{det_other}", "#{det_other_detected}", "#{containm-ent}"]) {
+  for (const source of ["#{ordinary}", "#{re-containment}", "#{det_other}", "#{det_other_detected}", "#{deta_detect-t-t-t-ed}", "#{containm-ent}"]) {
     assert.throws(() => parseInlineTtsEffects(source), /无法识别词内效果/, source);
   }
 });
@@ -91,4 +112,30 @@ test("audio processing appends every requested restart prefix before the full wo
 
   assert.ok(multipleRestarts.length > singleRestart.length + 400);
   assert.ok(Array.from(multipleRestarts).every(Number.isFinite));
+});
+
+test("audio processing applies final-word effects inside restart insertions", () => {
+  const sampleRate = 1000;
+  const source = new Float32Array(sampleRate);
+  for (let index = 0; index < source.length; index += 1) {
+    source[index] = Math.sin(index / 10) * 0.25;
+  }
+  const baseEffect = {
+    type: "restart",
+    anchorRatio: 0.5,
+    wordStartRatio: 0.1,
+    wordEndRatio: 0.9,
+    restart: true,
+    prefix: "dete",
+    restartPrefixes: ["dete", "det", "det"],
+    word: "detected",
+  };
+  const [withoutFinalEffect] = applyInlineEffectsToChannels([source], sampleRate, [{ ...baseEffect, finalEffects: [] }]);
+  const [withFinalEffect] = applyInlineEffectsToChannels([source], sampleRate, [{
+    ...baseEffect,
+    finalEffects: [{ type: "stutter", anchorRatio: 0.75, count: 3, sliceMs: 56, gapMs: 22 }],
+  }]);
+
+  assert.ok(withFinalEffect.length > withoutFinalEffect.length + 120);
+  assert.ok(Array.from(withFinalEffect).every(Number.isFinite));
 });

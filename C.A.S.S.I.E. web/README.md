@@ -68,7 +68,7 @@ detonation #{#这段内容不会参与解析} sequence cancelled
 Kokoro TTS 输入框支持用 `#{...}` 显式标记词内效果。标记不会交给模型朗读；程序会先恢复正常拼写，再在生成波形的相应位置寻找低能量切点并插入音素片段。括号外的拼写始终按普通文本处理。
 
 ```text
-A #{containm--ent} #{brea-a-a-a-ch} has been #{det_det_det_detected}.
+A #{containm--ent} #{brea-a-a-a-ch} has been #{dete_dete_det_det_detect-t-t-t-ed}.
 ```
 
 - `#{brea-a-a-a-ch}`：在单词原本的 `a` 处加入额外的 `a`。额外字母有几个就卡顿几次；本例有 3 个额外 `a`，因此卡顿 3 次。
@@ -76,6 +76,7 @@ A #{containm--ent} #{brea-a-a-a-ch} has been #{det_det_det_detected}.
 - `#{det_detected}`：最后一段是完整单词，前面的每一段都必须是它的前缀；此例生成 `det detected`。
 - `#{det_det_det_detected}`：支持多次复读，按顺序生成 `det det det detected`。
 - `#{detected_detected_detected_detected}`：前缀也可以等于完整单词，此例完整朗读 `detected` 四次。
+- `#{dete_dete_det_det_detect-t-t-t-ed}`：复读可以和最终完整词的卡顿/拖音组合；此例先复读 `dete`、`dete`、`det`、`det`，最后朗读带 `t` 卡顿的 `detected`。
 - `Nine-Tailed`、`re-containment`、`brea-a-a-a-ch` 和 `det_detected` 等括号外文本不会触发词内效果。
 
 词内定位使用文本比例、可听区间和附近低能量边界估算，不需要额外的强制对齐模型。较长句子中若定位不理想，可把目标词所在部分单独作为一个句段生成，以缩小估算范围。

@@ -36,13 +36,26 @@ function parseHeldWord(rawWord) {
 
 function parseRestartedWord(rawWord) {
   const segments = rawWord.split("_");
-  if (segments.length < 2 || segments.length > 12 || segments.some((segment) => !/^[A-Za-z]+$/.test(segment))) {
+  if (segments.length < 2 || segments.length > 12) {
     return null;
   }
-  const cleanWord = segments.at(-1);
   const prefixes = segments.slice(0, -1);
+  if (prefixes.some((segment) => !/^[A-Za-z]+$/.test(segment))) return null;
+
+  const finalSegment = segments.at(-1);
+  const decoratedFinal = parseHeldWord(finalSegment) || parseRepeatedWord(finalSegment);
+  const cleanWord = decoratedFinal?.cleanWord || finalSegment;
+  if (!/^[A-Za-z]+$/.test(cleanWord)) return null;
+
   const cleanWordLower = cleanWord.toLowerCase();
   if (prefixes.some((prefix) => !cleanWordLower.startsWith(prefix.toLowerCase()))) return null;
+  const finalEffects = (decoratedFinal?.effects || []).map(({ anchorChar, ...effect }) => ({
+    ...effect,
+    anchorRatio: anchorChar / Math.max(1, cleanWord.length),
+    wordStartRatio: 0,
+    wordEndRatio: 1,
+    word: cleanWord,
+  }));
 
   return {
     cleanWord,
@@ -52,6 +65,7 @@ function parseRestartedWord(rawWord) {
       restart: true,
       prefix: prefixes[0],
       restartPrefixes: prefixes.slice(1),
+      finalEffects,
     }],
   };
 }
@@ -302,6 +316,28 @@ function makeHoldInsertion(slice, durationSamples, crossfadeSamples) {
   return applyEnvelope(output, Math.min(Math.round(crossfadeSamples * 1.5), Math.floor(output.length / 2)));
 }
 
+function makeRestartInsertionsByChannel(channels, sampleRate, event, fadeSamples) {
+  const finalRangeIndex = event.restartRanges.length - 1;
+  const rangeInsertions = event.restartRanges.map((range, rangeIndex) => {
+    let rangeChannels = channels.map((channel) => channel.subarray(range.start, range.end));
+    if (rangeIndex === finalRangeIndex && event.effect.finalEffects?.length) {
+      rangeChannels = applyInlineEffectsToChannels(rangeChannels, sampleRate, event.effect.finalEffects);
+    }
+    return rangeChannels.map((channel) => applyEnvelope(channel, fadeSamples));
+  });
+
+  return channels.map((_, channelIndex) => {
+    const length = rangeInsertions.reduce((sum, insertion) => sum + insertion[channelIndex].length, 0);
+    const output = new Float32Array(length);
+    let offset = 0;
+    rangeInsertions.forEach((insertion) => {
+      output.set(insertion[channelIndex], offset);
+      offset += insertion[channelIndex].length;
+    });
+    return output;
+  });
+}
+
 function buildEffectEvents(channels, sampleRate, effects) {
   const audible = findAudibleRange(channels, sampleRate);
   const audibleLength = Math.max(1, audible.end - audible.start);
@@ -358,9 +394,12 @@ export function applyInlineEffectsToChannels(channels, sampleRate, effects) {
 
   const insertionsByChannel = channels.map(() => []);
   events.forEach((event) => {
+    const fadeSamples = Math.max(1, Math.round(sampleRate * 0.004));
+    const restartInsertions = event.restartRanges.length > 0
+      ? makeRestartInsertionsByChannel(channels, sampleRate, event, fadeSamples)
+      : null;
     channels.forEach((channel, channelIndex) => {
       const slice = channel.subarray(event.slice.start, event.slice.end);
-      const fadeSamples = Math.max(1, Math.round(sampleRate * 0.004));
       let insertion;
       if (event.effect.type === "hold") {
         insertion = makeHoldInsertion(
@@ -379,20 +418,13 @@ export function applyInlineEffectsToChannels(channels, sampleRate, effects) {
         );
       }
 
-      if (event.restartRanges.length > 0) {
-        const restarts = event.restartRanges.map((range) => applyEnvelope(
-          channel.subarray(range.start, range.end),
-          fadeSamples,
-        ));
+      if (restartInsertions) {
+        const restarts = restartInsertions[channelIndex];
         const combined = new Float32Array(
-          insertion.length + restarts.reduce((sum, restart) => sum + restart.length, 0),
+          insertion.length + restarts.length,
         );
         combined.set(insertion, 0);
-        let offset = insertion.length;
-        restarts.forEach((restart) => {
-          combined.set(restart, offset);
-          offset += restart.length;
-        });
+        combined.set(restarts, insertion.length);
         insertion = combined;
       }
       insertionsByChannel[channelIndex].push(insertion);

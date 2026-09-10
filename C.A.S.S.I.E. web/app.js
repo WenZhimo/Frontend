@@ -829,7 +829,7 @@ const ttsAnnouncementTemplates = [
     title: "自定义示例：播报指令示意",
     template: [
       "Attention #{$SLEEP_500} #{#停顿：在 Attention 后插入 500ms 静音} all personnel.",
-      "A #{containm--ent} #{#拖音：拉长 containment 中间的音素} #{brea-a-a-a-ch} #{#卡顿：在 breach 的 a 处加入 3 个额外 a，因此卡顿 3 次} has been #{det_det_det_detected} #{#复读：连续说出 3 次 det，再完整朗读 detected}.",
+      "A #{containm--ent} #{#拖音：拉长 containment 中间的音素} #{brea-a-a-a-ch} #{#卡顿：在 breach 的 a 处加入 3 个额外 a，因此卡顿 3 次} has been #{dete_dete_det_det_detect-t-t-t-ed} #{#混用：先复读 dete、dete、det、det，最后完整词 detected 再叠加 t 卡顿}.",
       "All personnel are advised to remain calm and await further instructions.",
       "#{$G_1,G_2,G_3,G_4,G_5,G_6} #{#故障音覆盖：可用 G_1、G_2、G_3、G_4、G_5、G_6；本例依次全部叠加到下一段语音} Security systems are now operating under emergency protocols.",
     ].join("\n"),
@@ -3108,6 +3108,8 @@ function bindSpeechControls() {
               <dd>最后一段是完整单词，前面各段必须是它的前缀；生成 det det det detected。</dd>
               <dt><code>#{detected_detected_detected_detected}</code></dt>
               <dd>前置段可以等于完整单词；此例完整复读 detected 4 次。</dd>
+              <dt><code>#{dete_dete_det_det_detect-t-t-t-ed}</code></dt>
+              <dd>复读可和最终完整词的卡顿/拖音组合；此例最后的 detected 会带 t 卡顿。</dd>
             </dl>
           </div>
         </section>
