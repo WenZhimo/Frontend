@@ -793,7 +793,7 @@ const ttsAnnouncementTemplates = [
   {
     id: "tts-decont-countdown",
     title: "LCZ 净化：30 秒倒数",
-    template: "Danger, Light Containment Zone overall decontamination in T-30 seconds. All checkpoint doors have been permanently opened. Please evacuate immediately.",
+    template: "Danger, Light Containment Zone overall decontamination in T-30 seconds. All checkpoint doors have been permanently opened. Please evacuate immediately.20.19.18.17.16.15.14.13.12.10 seconds.9.8.7.6.5.4.3.2.1.Light Containment Zone is locked down and ready for decontamination. The removal of organic substances has now begun.",
     fields: [],
   },
   {
