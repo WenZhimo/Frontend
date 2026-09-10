@@ -1,3 +1,5 @@
+import { parseCassieControlCommands, controlLabel, buildCassieTimeline, scheduleCassieTimeline } from "./src/cassie-controls.js";
+
 // Application state and DOM bindings
 const state = {
   manifest: null,
@@ -1188,25 +1190,22 @@ function findPhraseClip(tokens, startIndex, phraseCandidates, tokenParts = null)
 
 function makeSelectedItem(clip, meta = {}) {
   return {
+    kind: "clip",
     clip,
     minGapAfterMs: Math.max(0, Number(meta.minGapAfterMs) || 0),
   };
+}
+
+function makeControlItem(control) {
+  return { kind: "control", control };
 }
 
 function selectedClip(item) {
   return item?.clip || item;
 }
 
-function selectedMinGapAfterMs(item) {
-  return Math.max(0, Number(item?.minGapAfterMs) || 0);
-}
-
-function scheduledGapSeconds(item, options) {
-  return Math.max(
-    0,
-    options.gapMs - options.overlapMs,
-    selectedMinGapAfterMs(item),
-  ) / 1000;
+function selectedControl(item) {
+  return item?.kind === "control" ? item.control : null;
 }
 
 // Manifest loading and clip browser rendering
@@ -1266,20 +1265,24 @@ function renderWordList() {
 }
 
 function renderSentence() {
-  els.sentenceMeta.textContent = `${state.selected.length} clips`;
+  const clipCount = state.selected.filter((item) => !selectedControl(item)).length;
+  const controlCount = state.selected.length - clipCount;
+  els.sentenceMeta.textContent = `${clipCount} clips${controlCount ? ` · ${controlCount} controls` : ""}`;
   const fragment = document.createDocumentFragment();
 
   state.selected.forEach((selected, index) => {
     const clip = selectedClip(selected);
+    const control = selectedControl(selected);
+    const label = control ? controlLabel(control) : clip.name;
     const item = document.createElement("li");
     item.className = "sentence-item";
     item.innerHTML = `
       <span class="sentence-index">${String(index + 1).padStart(2, "0")}</span>
-      <span class="sentence-name" title="${escapeHtml(clip.name)}">${escapeHtml(clip.name)}</span>
+      <span class="sentence-name" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
       <span class="item-tools">
-        <button type="button" data-action="up" aria-label="Move ${escapeHtml(clip.name)} up">↑</button>
-        <button type="button" data-action="down" aria-label="Move ${escapeHtml(clip.name)} down">↓</button>
-        <button type="button" data-action="remove" aria-label="Remove ${escapeHtml(clip.name)}">×</button>
+        <button type="button" data-action="up" aria-label="Move ${escapeHtml(label)} up">↑</button>
+        <button type="button" data-action="down" aria-label="Move ${escapeHtml(label)} down">↓</button>
+        <button type="button" data-action="remove" aria-label="Remove ${escapeHtml(label)}">×</button>
       </span>
     `;
 
@@ -1322,33 +1325,51 @@ function clearSentence() {
 }
 
 function applyTextToSentence() {
+  let segments;
+  try {
+    segments = parseCassieControlCommands(els.textInput.value);
+  } catch (error) {
+    state.selected = [];
+    markDirty();
+    renderSentence();
+    els.missingTokens.textContent = error.message;
+    setStatus(error.message, "error");
+    return;
+  }
   const { byName, phraseCandidates } = buildTextLookup();
-  const tokenParts = tokenizeSentenceParts(els.textInput.value);
-  const tokens = tokenPartTokens(tokenParts);
-
   const picked = [];
   const missing = [];
-  let index = 0;
-  while (index < tokens.length) {
-    const phraseMatch = findPhraseClip(tokens, index, phraseCandidates, tokenParts);
-    if (phraseMatch) {
-      picked.push(makeSelectedItem(
-        phraseMatch.clip,
-        tokenParts[index + phraseMatch.tokenCount - 1],
-      ));
-      index += phraseMatch.tokenCount;
-      continue;
-    }
+  segments.forEach((segment) => {
+    segment.controlsBefore.forEach((control) => picked.push(makeControlItem(control)));
+    const tokenParts = tokenizeSentenceParts(segment.text);
+    const tokens = tokenPartTokens(tokenParts);
+    let index = 0;
+    while (index < tokens.length) {
+      const phraseMatch = findPhraseClip(tokens, index, phraseCandidates, tokenParts);
+      if (phraseMatch) {
+        picked.push(makeSelectedItem(
+          phraseMatch.clip,
+          tokenParts[index + phraseMatch.tokenCount - 1],
+        ));
+        index += phraseMatch.tokenCount;
+        continue;
+      }
 
-    const token = tokens[index];
-    const clip = resolveClipForToken(token, tokens[index + 1], byName, tokens[index - 1]);
-    if (clip) picked.push(makeSelectedItem(clip, tokenParts[index]));
-    else missing.push(token);
-    index += 1;
-  }
+      const token = tokens[index];
+      const clip = resolveClipForToken(token, tokens[index + 1], byName, tokens[index - 1]);
+      if (clip) picked.push(makeSelectedItem(clip, tokenParts[index]));
+      else missing.push(token);
+      index += 1;
+    }
+  });
 
   state.selected = picked;
-  els.missingTokens.textContent = missing.length ? `未匹配：${missing.join(", ")}` : "";
+  const controlCount = picked.filter((item) => selectedControl(item)).length;
+  const controlLabel = controlCount ? `已识别 ${controlCount} 个控制指令。` : "";
+  els.missingTokens.textContent = [
+    missing.length ? `未匹配：${missing.join(", ")}` : "",
+    controlLabel,
+  ].filter(Boolean).join(" ");
   markDirty();
   renderSentence();
 }
@@ -1586,6 +1607,13 @@ function getBackgroundClip(targetSeconds) {
   }, state.backgrounds[0]);
 }
 
+async function prepareControlRenderItem(control) {
+  if (control.type !== "noise" && control.type !== "jam") return { control };
+  const clip = state.clips.find((candidate) => normalizeName(candidate.name) === control.clipName);
+  if (!clip) throw new Error(`缺少音效资源：${control.clipName}`);
+  return { control, buffer: await decodeClip(clip) };
+}
+
 async function renderAudioBuffer() {
   if (state.selected.length === 0) {
     throw new Error("句子队列为空");
@@ -1593,28 +1621,30 @@ async function renderAudioBuffer() {
 
   const options = getOptions();
   const resampleFactor = Math.max(0.1, options.speedPercent / 100) * Math.pow(2, options.pitchSemitones / 12);
-  const decodedWords = await Promise.all(state.selected.map((item) => decodeClip(selectedClip(item))));
+  const decodedItems = await Promise.all(state.selected.map(async (item) => {
+    const control = selectedControl(item);
+    if (control) return prepareControlRenderItem(control);
+    return { ...item, buffer: await decodeClip(selectedClip(item)) };
+  }));
+  return renderSpeechTimeline(decodedItems, options, "cassie", resampleFactor);
+}
+
+async function renderSpeechTimeline(items, options, mode, playbackRate) {
+  const timeline = buildCassieTimeline(items, { ...options, playbackRate });
+  const resultState = mode === "tts" ? state.tts : state;
   const sampleRate = 44100;
-  const outputChannels = options.enableBackground ? 2 : 1;
-
-  let speechEndSeconds = options.voiceDelayMs / 1000;
-  decodedWords.forEach((buffer, index) => {
-    speechEndSeconds += buffer.duration / resampleFactor;
-    if (index !== decodedWords.length - 1) {
-      speechEndSeconds += scheduledGapSeconds(state.selected[index], options);
-    }
-  });
-
   let backgroundBuffer = null;
-  state.lastBackgroundClip = null;
+  resultState.lastBackgroundClip = null;
   if (options.enableBackground) {
-    state.lastBackgroundClip = getBackgroundClip(speechEndSeconds);
-    if (state.lastBackgroundClip) {
-      backgroundBuffer = await decodeClip(state.lastBackgroundClip);
+    resultState.lastBackgroundClip = getBackgroundClip(timeline.duration);
+    if (resultState.lastBackgroundClip) {
+      backgroundBuffer = await decodeClip(resultState.lastBackgroundClip);
     }
   }
 
-  const totalSeconds = Math.max(0.25, speechEndSeconds, backgroundBuffer?.duration || 0);
+  const totalSeconds = Math.max(0.25, timeline.duration, backgroundBuffer?.duration || 0);
+  const outputChannels = mode === "cassie" ? (options.enableBackground ? 2 : 1)
+    : Math.max(1, backgroundBuffer?.numberOfChannels || 1, ...items.map((item) => item.buffer?.numberOfChannels || 1));
   const offline = createOfflineContext(outputChannels, Math.ceil(totalSeconds * sampleRate), sampleRate);
 
   if (backgroundBuffer) {
@@ -1626,19 +1656,7 @@ async function renderAudioBuffer() {
     bgSource.start(0);
   }
 
-  let cursor = options.voiceDelayMs / 1000;
-  decodedWords.forEach((buffer, index) => {
-    const source = offline.createBufferSource();
-    source.buffer = buffer;
-    source.playbackRate.value = resampleFactor;
-    source.connect(offline.destination);
-    source.start(cursor);
-    cursor += buffer.duration / resampleFactor;
-    if (index !== decodedWords.length - 1) {
-      cursor += scheduledGapSeconds(state.selected[index], options);
-    }
-  });
-
+  scheduleCassieTimeline(offline, timeline);
   const dryBuffer = await offline.startRendering();
   return applyReverbTail(dryBuffer, options.reverbLevel);
 }
@@ -1687,7 +1705,9 @@ async function generatePreview() {
     drawWaveform(buffer);
     els.renderDuration.textContent = fmtSeconds(buffer.duration);
     const bgLabel = state.lastBackgroundClip ? `，背景 ${state.lastBackgroundClip.name}` : "";
-    setStatus(`预生成完成：${state.selected.length} 个片段，${fmtSeconds(buffer.duration)}${bgLabel}。`);
+    const controlCount = state.selected.filter((item) => selectedControl(item)).length;
+    const controlLabel = controlCount ? `，已应用 ${controlCount} 个控制指令` : "";
+    setStatus(`预生成完成：${state.selected.length - controlCount} 个片段${controlLabel}，${fmtSeconds(buffer.duration)}${bgLabel}。`);
     return buffer;
   } catch (error) {
     setStatus(error.message || String(error), "error");
@@ -2133,9 +2153,24 @@ function splitTtsFragmentUnits(text) {
 
 function buildTtsUnits(rawText) {
   const mode = els.ttsGenerationMode.value || "normal";
-  const unitItems = mode === "fragment"
-    ? splitTtsFragmentUnits(rawText)
-    : splitTtsNormalSpeechSegments(rawText).map(makeSentenceTtsUnit);
+  const unitItems = [];
+  let pendingControls = [];
+  parseCassieControlCommands(rawText).forEach((segment) => {
+    pendingControls.push(...segment.controlsBefore);
+    const segmentUnits = mode === "fragment"
+      ? splitTtsFragmentUnits(segment.text)
+      : splitTtsNormalSpeechSegments(segment.text).map(makeSentenceTtsUnit);
+    if (segmentUnits.length === 0) return;
+    if (pendingControls.length > 0) {
+      segmentUnits[0].controlsBefore = pendingControls;
+      pendingControls = [];
+    }
+    unitItems.push(...segmentUnits);
+  });
+
+  if (pendingControls.length > 0 && unitItems.length > 0) {
+    unitItems[unitItems.length - 1].controlsAfter = pendingControls;
+  }
   return {
     mode,
     units: unitItems.filter(Boolean).map((unit, index) => ({ index, ...unit })),
@@ -2309,19 +2344,13 @@ function makeTtsRenderItem(buffer, part) {
   return {
     buffer,
     minGapAfterMs: Math.max(0, Number(part?.minGapAfterMs) || 0),
+    controlsBefore: part?.controlsBefore || [],
+    controlsAfter: part?.controlsAfter || [],
   };
 }
 
 function normalizeTtsRenderItem(item) {
-  return item?.buffer ? item : makeTtsRenderItem(item, {});
-}
-
-function ttsRenderGapSeconds(item, options) {
-  return Math.max(
-    0,
-    options.gapMs - options.overlapMs,
-    Math.max(0, Number(item?.minGapAfterMs) || 0),
-  ) / 1000;
+  return item?.buffer ? makeTtsRenderItem(item.buffer, item) : makeTtsRenderItem(item, {});
 }
 
 function prepareTtsRenderItemsForMode(parts, mode, options) {
@@ -2502,13 +2531,18 @@ async function finishGeneratedTtsJob(message) {
   const autoGroupCount = decodedParts.filter((part) => String(part.source || "").startsWith("auto-group")).length;
   const autoSingleCount = decodedParts.filter((part) => String(part.source || "").startsWith("auto-single")).length;
   const wordGapCount = decodedParts.reduce((sum, part) => sum + (part.wordGapSlots || 0), 0);
+  const controlCount = decodedParts.reduce(
+    (sum, part) => sum + (part.controlsBefore?.length || 0) + (part.controlsAfter?.length || 0),
+    0,
+  );
   const trimLabel = isFragmentMode
     ? `，词库短语 ${lexiconCount}，自动短语 ${autoGroupCount}，落单词 ${autoSingleCount}，已剪裁短语首尾静音`
     : "";
   const wordGapLabel = !isFragmentMode && wordGapCount > 0 && options.gapMs > options.overlapMs
     ? `，句内词间隔 ${wordGapCount} 处`
     : "";
-  setTtsStatus(`TTS 生成完成：${els.ttsVoice.value}，${parts.length} 个${modeLabel}，音频 ${fmtSeconds(buffer.duration)}，耗时 ${fmtSeconds(elapsedMs / 1000)}，后端 ${String(message.backend || "").toUpperCase()} / ${message.dtype}${bgLabel}${trimLabel}${wordGapLabel}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
+  const controlLabel = controlCount ? `，控制指令 ${controlCount} 个` : "";
+  setTtsStatus(`TTS 生成完成：${els.ttsVoice.value}，${parts.length} 个${modeLabel}，音频 ${fmtSeconds(buffer.duration)}，耗时 ${fmtSeconds(elapsedMs / 1000)}，后端 ${String(message.backend || "").toUpperCase()} / ${message.dtype}${bgLabel}${trimLabel}${wordGapLabel}${controlLabel}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
   resolvePendingTtsJob(message.jobId, buffer);
 }
 
@@ -2570,52 +2604,17 @@ function normalizeTtsSpeechText(text, options = {}) {
 async function renderTtsPostProcessedBuffer(rawItems, options) {
   const items = rawItems.map(normalizeTtsRenderItem);
   if (items.length === 0) throw new Error("TTS 文本为空");
-
-  const pitchFactor = Math.pow(2, options.pitchSemitones / 12);
-  const sampleRate = 44100;
-  const speechChannels = Math.max(...items.map((item) => item.buffer.numberOfChannels), 1);
-
-  let speechEndSeconds = options.voiceDelayMs / 1000;
-  items.forEach((item, index) => {
-    speechEndSeconds += item.buffer.duration / pitchFactor;
-    if (index !== items.length - 1) speechEndSeconds += ttsRenderGapSeconds(item, options);
-  });
-
-  let backgroundBuffer = null;
-  state.tts.lastBackgroundClip = null;
-  if (options.enableBackground) {
-    state.tts.lastBackgroundClip = getBackgroundClip(speechEndSeconds);
-    if (state.tts.lastBackgroundClip) {
-      backgroundBuffer = await decodeClip(state.tts.lastBackgroundClip);
+  const timelineItems = [];
+  for (const item of items) {
+    for (const control of item.controlsBefore) {
+      timelineItems.push(await prepareControlRenderItem(control));
+    }
+    timelineItems.push({ ...item, controlsBefore: [], controlsAfter: [] });
+    for (const control of item.controlsAfter) {
+      timelineItems.push(await prepareControlRenderItem(control));
     }
   }
-
-  const totalSeconds = Math.max(0.25, speechEndSeconds, backgroundBuffer?.duration || 0);
-  const outputChannels = Math.max(speechChannels, backgroundBuffer?.numberOfChannels || 1);
-  const offline = createOfflineContext(outputChannels, Math.ceil(totalSeconds * sampleRate), sampleRate);
-
-  if (backgroundBuffer) {
-    const bgSource = offline.createBufferSource();
-    const bgGain = offline.createGain();
-    bgSource.buffer = backgroundBuffer;
-    bgGain.gain.value = options.backgroundGain;
-    bgSource.connect(bgGain).connect(offline.destination);
-    bgSource.start(0);
-  }
-
-  let cursor = options.voiceDelayMs / 1000;
-  items.forEach((item, index) => {
-    const source = offline.createBufferSource();
-    source.buffer = item.buffer;
-    source.playbackRate.value = pitchFactor;
-    source.connect(offline.destination);
-    source.start(cursor);
-    cursor += item.buffer.duration / pitchFactor;
-    if (index !== items.length - 1) cursor += ttsRenderGapSeconds(item, options);
-  });
-
-  const dryBuffer = await offline.startRendering();
-  return applyReverbTail(dryBuffer, options.reverbLevel);
+  return renderSpeechTimeline(timelineItems, options, "tts", Math.pow(2, options.pitchSemitones / 12));
 }
 
 async function generateTtsPreview() {
@@ -2628,7 +2627,13 @@ async function generateTtsPreview() {
     throw error;
   }
 
-  const { mode, units } = buildTtsUnits(rawText);
+  let mode, units;
+  try {
+    ({ mode, units } = buildTtsUnits(rawText));
+  } catch (error) {
+    setTtsStatus(error.message, "error");
+    throw error;
+  }
   if (units.length === 0) {
     const error = new Error("TTS 文本没有可生成的句段或自动短语");
     setTtsStatus(error.message, "error");
@@ -2989,10 +2994,50 @@ function bindWaveformScrubber(canvas, mode) {
 }
 
 // UI state and event binding
+function bindSpeechControls() {
+  document.querySelectorAll("[data-speech-controls]").forEach((container) => {
+    const target = document.getElementById(container.dataset.speechControls);
+    container.innerHTML = `
+      <label><span>播报指令</span><select aria-label="播报指令类型">
+        <option value="SLEEP">停顿</option><option value="STUTT">尾音卡顿</option>
+        <option value="REPEAT">片段重复</option><option value="NOISE">杂音</option>
+        ${[1, 2, 3, 4, 5, 6].map((i) => `<option value="g${i}">故障音 G${i}</option>`).join("")}
+      </select></label>
+      <label><span data-unit>时长 ms</span><input type="number" aria-label="指令参数" min="0" max="10000" step="10" value="500"></label>
+      <button type="button" title="在光标处插入指令" aria-label="在光标处插入指令">+</button>
+    `;
+    const select = container.querySelector("select");
+    const input = container.querySelector("input");
+    const valueLabel = container.querySelector("[data-unit]");
+    select.addEventListener("change", () => {
+      const repeated = select.value === "STUTT" || select.value === "REPEAT";
+      input.hidden = select.value.startsWith("g");
+      valueLabel.hidden = input.hidden;
+      valueLabel.textContent = repeated ? "次数" : "时长 ms";
+      input.max = repeated ? "12" : "10000";
+      input.step = repeated ? "1" : "10";
+      input.value = repeated ? (select.value === "STUTT" ? "3" : "1") : (select.value === "NOISE" ? "300" : "500");
+    });
+    container.querySelector("button").addEventListener("click", () => {
+      if (!input.hidden && !input.reportValidity()) return;
+      const command = select.value.startsWith("g") ? `.${select.value}` : `$${select.value}_${Number(input.value) || 0}`;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const leading = start > 0 && !/\s/.test(target.value[start - 1]) ? " " : "";
+      const trailing = !/\s/.test(target.value[end] || "") ? " " : "";
+      target.setRangeText(`${leading}${command}${trailing}`, start, end, "end");
+      target.focus();
+      if (target === els.textInput) applyTextToSentence();
+      else markTtsDirty();
+    });
+  });
+}
+
 function setBusy(isBusy) {
   [els.generatePreview, els.playAudio, els.applyText, els.applyTemplate, els.reloadAssets].forEach((el) => {
     el.disabled = isBusy;
   });
+  document.querySelectorAll('[data-speech-controls="textInput"] button, [data-speech-controls="textInput"] select, [data-speech-controls="textInput"] input').forEach((el) => { el.disabled = isBusy; });
 }
 
 function setTtsBusy(isBusy, options = {}) {
@@ -3027,6 +3072,7 @@ function setTtsBusy(isBusy, options = {}) {
   els.ttsTemplateFields.querySelectorAll("input, select, textarea, button").forEach((control) => {
     control.disabled = isBusy;
   });
+  document.querySelectorAll('[data-speech-controls="ttsInput"] button, [data-speech-controls="ttsInput"] select, [data-speech-controls="ttsInput"] input').forEach((el) => { el.disabled = isBusy; });
 }
 
 function switchMode(mode) {
@@ -3053,6 +3099,7 @@ function escapeHtml(value) {
 }
 
 function bindEvents() {
+  bindSpeechControls();
   bindWaveformScrubber(els.waveform, "cassie");
   bindWaveformScrubber(els.ttsWaveform, "tts");
 
@@ -3089,7 +3136,9 @@ function bindEvents() {
     els.textInput.value = "mobile task force unit epsilon eleven designated nine tailed fox";
     applyTextToSentence();
   });
-  els.generatePreview.addEventListener("click", generatePreview);
+  els.generatePreview.addEventListener("click", () => {
+    generatePreview().catch(() => { /* The status panel contains the error. */ });
+  });
   els.playAudio.addEventListener("click", playAudio);
   els.stopAudio.addEventListener("click", stopAudio);
   els.backgroundGain.addEventListener("input", () => {

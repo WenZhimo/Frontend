@@ -46,6 +46,28 @@ TTS 模式保留原版处理参数：间隔、提前播放、语音延迟、语�
 
 TTS 版官方公告模板使用纯文本。可填写字段以普通表单控件展示，预览中会高亮字段，应用后会把完整文本写入 TTS 输入框，方便继续编辑。
 
+## C.A.S.S.I.E. 指令效果
+
+原版拼接和 Kokoro TTS 都支持在文本中插入控制指令。指令不会被朗读，而是在它出现的位置加入对应效果；TTS 模式会先移除指令，再把效果加入最终音频时间线。
+
+```text
+Attention $SLEEP_500 all personnel
+Danger, $SPAC_200 light containment zone
+The system is $STUTT_3 malfunctioning
+Repeat this $REPEAT_2 announcement
+Warning $JAM_500_3 all personnel
+Alert $NOISE_300 immediately
+```
+
+- `$SLEEP_毫秒`、`$SPAC_毫秒`：插入静音。两者在网页生成器中都表示当前位置的停顿。
+- `$STUTT_次数`：把前一个语音单元的尾音快速重复指定次数，中间使用短间隔。
+- `$STUTTER_起点_片段长度_次数`：使用游戏原生三参数格式，在下一个语音单元中反复播放指定短片段；例如 `$STUTTER_0.500_0.13_3`。旧式 `jam_(delay)_(stutter amount)` 也会按短片段卡顿处理。
+- `$REPEAT_次数`：把前一个语音单元连续重复指定次数。
+- `$NOISE_毫秒`：插入本地 `static` 杂音片段，并按指定时长循环或裁剪。
+- `$JAM_延迟毫秒_次数`：先插入指定延迟，再播放本地 `g1` 故障音若干次。单独输入 `.g1` 到 `.g6` 可以直接插入对应故障音。
+
+省略参数时会使用默认值：停顿 500ms、杂音 300ms、故障延迟 180ms、卡顿 3 次、重复 1 次。网页会限制异常大的参数，避免一次生成占用过长时间。
+
 ## 音频资源
 
 主要语音资源来自：

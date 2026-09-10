@@ -535,6 +535,7 @@ button:disabled::before,
 
 .search-field,
 .sentence-input,
+.speech-controls label,
 .control-grid label,
 .range-line,
 .template-select,
@@ -543,6 +544,21 @@ button:disabled::before,
   gap: 7px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.speech-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(70px, 110px) 42px;
+  align-items: end;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.speech-controls > button {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 24px;
 }
 
 .search-field > span,
