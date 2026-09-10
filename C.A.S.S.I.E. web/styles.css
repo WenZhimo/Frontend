@@ -223,9 +223,35 @@ button:disabled,
   content: "";
 }
 
+.brand-lockup {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 18px;
+}
+
+.cassie-logo {
+  display: block;
+  width: clamp(280px, 42vw, 610px);
+  max-width: 100%;
+  height: clamp(76px, 10.8vw, 156px);
+  border: 1px solid rgba(236, 234, 210, 0.18);
+  border-radius: 2px;
+  background: #000;
+  object-fit: contain;
+  box-shadow:
+    0 0 0 3px rgba(0, 0, 0, 0.34),
+    0 0 22px rgba(140, 255, 140, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.brand-copy {
+  min-width: 190px;
+}
+
 .topbar h1 {
   margin: 0;
-  font-size: 34px;
+  font-size: 28px;
   line-height: 1.02;
   font-weight: 800;
   text-transform: uppercase;
@@ -235,14 +261,11 @@ button:disabled,
   word-break: break-word;
 }
 
-.topbar h1 span {
-  display: inline-block;
-}
-
 .topbar p {
   margin: 8px 0 0;
   color: var(--muted);
   font-size: 13px;
+  line-height: 1.35;
   text-transform: uppercase;
 }
 
@@ -841,20 +864,34 @@ progress::-moz-progress-bar {
     gap: 14px;
   }
 
+  .brand-lockup {
+    display: grid;
+    gap: 11px;
+  }
+
+  .cassie-logo {
+    width: 100%;
+    height: auto;
+    max-height: 100px;
+  }
+
+  .brand-copy {
+    min-width: 0;
+  }
+
   .topbar h1 {
     max-width: 100%;
-    font-size: 24px;
+    font-size: 22px;
     overflow-wrap: anywhere;
     word-break: break-all;
   }
 
-  .topbar h1 span {
-    display: block;
-  }
-
   .topbar p {
     max-width: 100%;
+    font-size: 11px;
+    line-height: 1.45;
     overflow-wrap: anywhere;
+    word-break: normal;
   }
 
   .topbar-tools {
@@ -913,7 +950,7 @@ progress::-moz-progress-bar {
   }
 
   .topbar h1 {
-    font-size: 20px;
+    font-size: 18px;
     line-height: 1.12;
   }
 
