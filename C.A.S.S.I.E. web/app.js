@@ -185,8 +185,8 @@ const phraseClipAliases = [
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const fmtSeconds = (seconds) => `${seconds.toFixed(2).padStart(5, "0")}s`;
 const waveformColors = {
-  cassie: "#6ee7d8",
-  tts: "#e6b450",
+  cassie: "#d8d2c7",
+  tts: "#9f121b",
 };
 const waveformPeakCache = new WeakMap();
 const KOKORO_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
@@ -2731,9 +2731,9 @@ function drawEmptyWaveformFor(canvas) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#111418";
+  ctx.fillStyle = "#080809";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = "#343a42";
+  ctx.strokeStyle = "#3c3d41";
   ctx.beginPath();
   ctx.moveTo(0, canvas.height / 2);
   ctx.lineTo(canvas.width, canvas.height / 2);
@@ -2787,7 +2787,7 @@ function strokeWaveformPeaks(ctx, peaks, width, height, color, alpha = 1) {
   ctx.restore();
 }
 
-function drawWaveformFor(canvas, buffer, color = "#6ee7d8", progress = 0) {
+function drawWaveformFor(canvas, buffer, color = "#d8d2c7", progress = 0) {
   if (!canvas || !buffer) return;
   const ctx = canvas.getContext("2d");
   const width = canvas.width;
@@ -2796,10 +2796,10 @@ function drawWaveformFor(canvas, buffer, color = "#6ee7d8", progress = 0) {
   const playhead = clamp(Number(progress) || 0, 0, 1) * width;
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#111418";
+  ctx.fillStyle = "#080809";
   ctx.fillRect(0, 0, width, height);
 
-  ctx.strokeStyle = "rgba(230, 180, 80, 0.22)";
+  ctx.strokeStyle = "rgba(216, 210, 199, 0.16)";
   ctx.lineWidth = 1;
   for (let x = 0; x < width; x += 60) {
     ctx.beginPath();
@@ -2825,13 +2825,13 @@ function drawWaveformFor(canvas, buffer, color = "#6ee7d8", progress = 0) {
 
   const lineX = Math.max(0, Math.min(width, playhead));
   const handleX = clamp(lineX, 5, width - 5);
-  ctx.strokeStyle = "#f8fafc";
+  ctx.strokeStyle = "#f2eadc";
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(lineX, 0);
   ctx.lineTo(lineX, height);
   ctx.stroke();
-  ctx.fillStyle = "#f8fafc";
+  ctx.fillStyle = "#f2eadc";
   ctx.beginPath();
   ctx.arc(handleX, height / 2, 5, 0, Math.PI * 2);
   ctx.fill();
