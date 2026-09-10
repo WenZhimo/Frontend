@@ -26,7 +26,7 @@ function loadApp() {
     .replace(/^import[^\n]+\r?\n/gm, "")
     .replace("import.meta.url", '"http://localhost/app.js"');
   const context = vm.createContext({ document, URL, ...controls, ...inlineEffects, ...backgroundAudio });
-  vm.runInContext(`${source}\nthis.api = {state, els, applyTextToSentence, buildTtsUnits, makeTtsRenderItem, renderTtsPostProcessedBuffer};`, context);
+  vm.runInContext(`${source}\nthis.api = {state, els, ttsAnnouncementTemplates, buildTtsTemplateText, applyTextToSentence, buildTtsUnits, makeTtsRenderItem, prepareControlRenderItem, renderTtsPostProcessedBuffer};`, context);
   const api = context.api;
   api.state.clips = JSON.parse(readFileSync(new URL("../assets/audio/manifest.json", import.meta.url), "utf8")).clips;
   return { ...api, context };
@@ -34,74 +34,127 @@ function loadApp() {
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-test("original matching keeps SCP digits and phrase boundaries around effects", () => {
+test("original matching keeps SCP digits and phrase boundaries around wrapped commands", () => {
   const app = loadApp();
-  app.els.textInput.value = "SCP-173 $SLEEP_500 has entered the facility .g1 $REPEAT_2";
+  app.els.textInput.value = "SCP-173 #{$SLEEP_500} has entered the facility #{$G_1,G_2,G_3}";
   app.applyTextToSentence();
   assert.ok(!app.els.missingTokens.textContent.includes("未匹配"));
   assert.deepEqual(Array.from(app.state.selected.slice(0, 4), (item) => item.clip.name.toLowerCase()), ["scp", "1", "7", "3"]);
   assert.equal(app.state.selected[4].control.durationMs, 500);
-  assert.equal(app.state.selected.at(-2).control.clipName, "g1");
-  assert.equal(app.state.selected.at(-1).control.type, "repeat");
-  app.els.textInput.value = "detonation $SLEEP_500 sequence cancelled";
+  assert.deepEqual(plain(app.state.selected.at(-1).control.clipNames), ["g1", "g2", "g3"]);
+
+  app.els.textInput.value = "detonation #{$SLEEP_500} sequence cancelled";
   app.applyTextToSentence();
   assert.ok(!app.state.selected.some((item) => /detonation sequence cancelled/i.test(item.clip?.name)));
 });
 
-test("invalid original commands clear stale queue and show the error", () => {
+test("invalid wrapped commands clear stale original queue while legacy syntax is not parsed", () => {
   const app = loadApp();
   app.els.textInput.value = "attention all personnel";
   app.applyTextToSentence();
   assert.ok(app.state.selected.length > 0);
-  app.els.textInput.value = "attention $SLEEP_invalid personnel";
+  app.els.textInput.value = "attention #{$SLEEP_invalid} personnel";
   app.applyTextToSentence();
   assert.equal(app.state.selected.length, 0);
   assert.ok(app.els.missingTokens.textContent.includes("指令"));
   assert.equal(app.els.status.dataset.tone, "error");
+
+  app.els.textInput.value = "attention $SLEEP_500 personnel";
+  app.applyTextToSentence();
+  assert.ok(!app.state.selected.some((item) => item.control));
+});
+
+test("comments disappear before original matching and TTS segmentation", () => {
+  const app = loadApp();
+  app.els.textInput.value = "attention #{#editor note} all personnel";
+  app.applyTextToSentence();
+  assert.ok(!app.els.missingTokens.textContent.includes("未匹配"));
+  assert.ok(!app.state.selected.some((item) => item.control));
+
+  app.els.ttsGenerationMode.value = "normal";
+  const { units } = app.buildTtsUnits("Danger, #{#discard G_1} light containment zone.");
+  assert.ok(units.every((unit) => !/discard|G_1|#\{/.test(unit.text)));
+  assert.equal(units.flatMap((unit) => [...unit.controlsBefore || [], ...unit.controlsAfter || []]).length, 0);
+});
+
+test("command syntax demo template exercises every explicit effect without changing spoken text", () => {
+  const app = loadApp();
+  app.els.ttsGenerationMode.value = "normal";
+  const template = app.ttsAnnouncementTemplates.find((item) => item.id === "tts-command-syntax-demo");
+  assert.ok(template);
+  const templateText = app.buildTtsTemplateText(template, {});
+  for (const syntax of ["#{$SLEEP_500}", "#{containm--ent}", "#{brea-a-a-a-ch}", "#{det_detected}", "#{$G_1,G_2,G_3}", "#{#停顿："]) {
+    assert.ok(templateText.includes(syntax), syntax);
+  }
+
+  const { units } = app.buildTtsUnits(templateText);
+  const controls = units.flatMap((unit) => [...unit.controlsBefore || [], ...unit.controlsAfter || []]);
+  const effects = units.flatMap((unit) => unit.inlineEffects || []);
+  const spokenText = units.map((unit) => unit.text).join(" ");
+  assert.deepEqual(plain(controls.map((control) => control.type)), ["sleep", "glitch-overlay"]);
+  assert.deepEqual(plain(effects.map((effect) => effect.type)), ["hold", "stutter", "restart"]);
+  assert.ok(!/[#{}]|停顿|拖音|卡顿|复读|故障音/.test(spokenText));
+  assert.ok(spokenText.includes("Attention all personnel."));
+  assert.ok(spokenText.includes("A containment breach has been detected."));
+  assert.ok(spokenText.includes("Security systems are now operating under emergency protocols."));
 });
 
 for (const mode of ["normal", "fragment"]) {
-  test(`${mode} TTS removes commands before inference and preserves leading/trailing metadata`, () => {
+  test(`${mode} TTS removes wrapped commands before inference and preserves metadata`, () => {
     const app = loadApp();
     app.els.ttsGenerationMode.value = mode;
-    const { units } = app.buildTtsUnits("$SLEEP_500 Danger, Light containment zone. $NOISE_300 SCP-173 has entered. $REPEAT_2 $SPAC_200");
+    const { units } = app.buildTtsUnits("#{$SLEEP_500} Danger, Light containment zone. #{$G_1,G_2,G_3} SCP-173 has entered. #{$SLEEP_200}");
     assert.ok(units.length > 3);
-    assert.ok(units.every((unit) => !/\$|SLEEP|NOISE|REPEAT|SPAC/.test(unit.text)));
+    assert.ok(units.every((unit) => !/#\{|SLEEP|G_1/.test(unit.text)));
     assert.equal(units[0].controlsBefore[0].type, "sleep");
     assert.equal(units[0].minGapAfterMs, 180);
     assert.ok(units.some((unit) => unit.text === "1 7 3"));
-    assert.deepEqual(plain(units.at(-1).controlsAfter).map((c) => c.type), ["repeat", "spac"]);
-    assert.equal(units.flatMap((unit) => [...unit.controlsBefore || [], ...unit.controlsAfter || []]).length, 4);
+    assert.equal(units.flatMap((unit) => [...unit.controlsBefore || [], ...unit.controlsAfter || []]).length, 3);
+    assert.equal(units.flatMap((unit) => [...unit.controlsBefore || [], ...unit.controlsAfter || []])[1].type, "glitch-overlay");
+    assert.equal(units.at(-1).controlsAfter[0].durationMs, 200);
   });
 }
 
 for (const mode of ["normal", "fragment"]) {
-  test(`${mode} TTS sends clean words to Kokoro and retains inline effects`, () => {
+  test(`${mode} TTS sends clean words to Kokoro and retains explicit inline effects`, () => {
     const app = loadApp();
     app.els.ttsGenerationMode.value = mode;
-    const { units } = app.buildTtsUnits("A containm——ent brea-a-a-a-ch has been detect-t-t-t-t-detected.");
-    assert.equal(units.map((unit) => unit.text).join(" ").includes("——"), false);
-    assert.equal(units.map((unit) => unit.text).join(" ").includes("-a-a"), false);
+    const { units } = app.buildTtsUnits("A #{containm--ent} #{brea-a-a-a-ch} has been #{det_detected}.");
+    const generatedText = units.map((unit) => unit.text).join(" ");
+    assert.equal(generatedText.includes("#{"), false);
+    assert.equal(generatedText.includes("--"), false);
+    assert.equal(generatedText.includes("_"), false);
     assert.equal(units.reduce((sum, unit) => sum + (unit.inlineEffects?.length || 0), 0), 3);
   });
 }
 
-test("TTS renderer keeps ordering between audio buffers and controls", async () => {
+test("app loads every requested glitch clip and keeps it as an overlay control", async () => {
   const app = loadApp();
-  const speech = { duration: 1, numberOfChannels: 1 };
-  vm.runInContext("renderSpeechTimeline = async (items, options, mode, playbackRate) => ({ items, mode, playbackRate });", app.context);
-  const items = [
-    app.makeTtsRenderItem(speech, { controlsBefore: [controls.parseCassieControlCommands("$SLEEP_500")[0].controlsBefore[0]] }),
-    app.makeTtsRenderItem(speech, { controlsAfter: [controls.parseCassieControlCommands("$REPEAT_2")[0].controlsBefore[0]] }),
-  ];
-  const result = await app.renderTtsPostProcessedBuffer(items, { pitchSemitones: 12 });
-  assert.deepEqual(Array.from(result.items, (item) => item.control?.type || "speech"), ["sleep", "speech", "speech", "repeat"]);
-  assert.equal(result.mode, "tts");
-  assert.equal(result.playbackRate, 2);
-  await app.renderTtsPostProcessedBuffer([{ buffer: speech }], { pitchSemitones: 0 });
+  vm.runInContext("decodeClip = async (clip) => ({ name: clip.name, duration: 0.1, numberOfChannels: 1 });", app.context);
+  const glitch = controls.parseCassieControlCommands("#{$G_1,G_2,G_3}")[0].controlsBefore[0];
+  const item = await app.prepareControlRenderItem(glitch);
+  assert.equal(item.control.type, "glitch-overlay");
+  assert.deepEqual(Array.from(item.buffers, (buffer) => buffer.name.toLowerCase()), ["g1", "g2", "g3"]);
 });
 
-test("worker returns effects unchanged while generating only spoken text", async () => {
+test("TTS renderer keeps ordering between speech, pauses, and glitch overlays", async () => {
+  const app = loadApp();
+  const speech = { duration: 1, numberOfChannels: 1 };
+  vm.runInContext("renderSpeechTimeline = async (items, options, mode, playbackRate) => ({ items, mode, playbackRate }); decodeClip = async (clip) => ({ name: clip.name, duration: 0.1 });", app.context);
+  const sleep = controls.parseCassieControlCommands("#{$SLEEP_500}")[0].controlsBefore[0];
+  const glitch = controls.parseCassieControlCommands("#{$G_1,G_2}")[0].controlsBefore[0];
+  const items = [
+    app.makeTtsRenderItem(speech, { controlsBefore: [sleep] }),
+    app.makeTtsRenderItem(speech, { controlsAfter: [glitch] }),
+  ];
+  const result = await app.renderTtsPostProcessedBuffer(items, { pitchSemitones: 12 });
+  assert.deepEqual(Array.from(result.items, (item) => item.control?.type || "speech"), ["sleep", "speech", "speech", "glitch-overlay"]);
+  assert.equal(result.items.at(-1).buffers.length, 2);
+  assert.equal(result.mode, "tts");
+  assert.equal(result.playbackRate, 2);
+});
+
+test("worker returns effects and wrapped-command metadata while generating only spoken text", async () => {
   const calls = [], messages = [];
   const context = vm.createContext({
     self: { postMessage: (message) => messages.push(message) },
@@ -109,8 +162,8 @@ test("worker returns effects unchanged while generating only spoken text", async
   });
   vm.runInContext(readFileSync(new URL("../src/tts-worker.js", import.meta.url), "utf8"), context);
   vm.runInContext('state.currentJobId = 1; state.tts = { generate }; ensureLoaded = async () => ({backend:"wasm",dtype:"q8"}); this.generateJob = handleGenerate;', context);
-  const before = controls.parseCassieControlCommands("$SLEEP_500")[0].controlsBefore;
-  const after = controls.parseCassieControlCommands("$REPEAT_2")[0].controlsBefore;
+  const before = controls.parseCassieControlCommands("#{$SLEEP_500}")[0].controlsBefore;
+  const after = controls.parseCassieControlCommands("#{$G_1,G_2}")[0].controlsBefore;
   const inline = [{ type: "hold", anchorRatio: 0.5, durationMs: 440 }];
   await context.generateJob(1, { mode: "normal", voice: "am_michael", speed: 1.2, units: [{ text: "Attention.", controlsBefore: before, controlsAfter: after, inlineEffects: inline }] });
   assert.equal(calls[0].text, "Attention.");

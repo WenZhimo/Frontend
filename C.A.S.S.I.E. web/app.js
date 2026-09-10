@@ -825,6 +825,17 @@ const ttsAnnouncementTemplates = [
     ],
   },
   {
+    id: "tts-command-syntax-demo",
+    title: "自定义示例：播报指令示意",
+    template: [
+      "Attention #{$SLEEP_500} #{#停顿：在 Attention 后插入 500ms 静音} all personnel.",
+      "A #{containm--ent} #{#拖音：拉长 containment 中间的音素} #{brea-a-a-a-ch} #{#卡顿：重复 breach 中的 a 音素} has been #{det_detected} #{#复读：说出 det 后重新完整朗读 detected}.",
+      "All personnel are advised to remain calm and await further instructions.",
+      "#{$G_1,G_2,G_3} #{#故障音覆盖：依次将 G_1、G_2、G_3 叠加到下一段语音} Security systems are now operating under emergency protocols.",
+    ].join("\n"),
+    fields: [],
+  },
+  {
     id: "tts-glados",
     title: "自定义示例：GLaDOS",
     template: "Oh, it's you.",
@@ -1640,10 +1651,13 @@ async function getExactBackgroundBuffer(targetSeconds) {
 }
 
 async function prepareControlRenderItem(control) {
-  if (control.type !== "noise" && control.type !== "jam") return { control };
-  const clip = state.clips.find((candidate) => normalizeName(candidate.name) === control.clipName);
-  if (!clip) throw new Error(`缺少音效资源：${control.clipName}`);
-  return { control, buffer: await decodeClip(clip) };
+  if (control.type !== "glitch-overlay") return { control };
+  const buffers = await Promise.all(control.clipNames.map(async (clipName) => {
+    const clip = state.clips.find((candidate) => normalizeName(candidate.name) === clipName);
+    if (!clip) throw new Error(`缺少故障音资源：${clipName}`);
+    return decodeClip(clip);
+  }));
+  return { control, buffers };
 }
 
 async function renderAudioBuffer() {
@@ -3055,10 +3069,10 @@ function bindSpeechControls() {
   document.querySelectorAll("[data-speech-controls]").forEach((container) => {
     const target = document.getElementById(container.dataset.speechControls);
     container.innerHTML = `
-      <label><span>播报指令</span><select aria-label="播报指令类型">
-        <option value="SLEEP">停顿</option><option value="STUTT">尾音卡顿</option>
-        <option value="REPEAT">片段重复</option><option value="NOISE">杂音</option>
-        ${[1, 2, 3, 4, 5, 6].map((i) => `<option value="g${i}">故障音 G${i}</option>`).join("")}
+      <label><span>语法快捷插入</span><select aria-label="播报指令类型">
+        <option value="SLEEP">停顿</option>
+        <option value="GLITCH">故障音覆盖</option>
+        <option value="COMMENT">注释</option>
       </select></label>
       <label><span data-unit>时长 ms</span><input type="number" aria-label="指令参数" min="0" max="10000" step="10" value="500"></label>
       <button type="button" title="在光标处插入指令" aria-label="在光标处插入指令">+</button>
@@ -3067,17 +3081,26 @@ function bindSpeechControls() {
     const input = container.querySelector("input");
     const valueLabel = container.querySelector("[data-unit]");
     select.addEventListener("change", () => {
-      const repeated = select.value === "STUTT" || select.value === "REPEAT";
-      input.hidden = select.value.startsWith("g");
-      valueLabel.hidden = input.hidden;
-      valueLabel.textContent = repeated ? "次数" : "时长 ms";
-      input.max = repeated ? "12" : "10000";
-      input.step = repeated ? "1" : "10";
-      input.value = repeated ? (select.value === "STUTT" ? "3" : "1") : (select.value === "NOISE" ? "300" : "500");
+      const isGlitch = select.value === "GLITCH";
+      const isComment = select.value === "COMMENT";
+      const usesText = isGlitch || isComment;
+      valueLabel.textContent = isGlitch ? "音频序列" : (isComment ? "注释内容" : "时长 ms");
+      input.type = usesText ? "text" : "number";
+      input.value = isGlitch ? "G_1,G_2,G_3" : (isComment ? "注释内容" : "500");
+      input.min = usesText ? "" : "0";
+      input.max = usesText ? "" : "10000";
+      input.step = usesText ? "" : "10";
+      input.required = isGlitch;
+      input.pattern = isGlitch ? "G_[1-6](\\s*,\\s*G_[1-6])*" : "";
+      input.title = isGlitch ? "使用 G_1 到 G_6，并以英文逗号分隔" : "";
     });
     container.querySelector("button").addEventListener("click", () => {
-      if (!input.hidden && !input.reportValidity()) return;
-      const command = select.value.startsWith("g") ? `.${select.value}` : `$${select.value}_${Number(input.value) || 0}`;
+      if (!input.reportValidity()) return;
+      const command = select.value === "GLITCH"
+        ? `#{${"$"}${input.value.split(",").map((value) => value.trim().toUpperCase()).filter(Boolean).join(",")}}`
+        : (select.value === "COMMENT"
+          ? `#{#${input.value.replace(/[{}\r\n]/g, " ")}}`
+          : `#{${"$"}SLEEP_${Number(input.value) || 0}}`);
       const start = target.selectionStart;
       const end = target.selectionEnd;
       const leading = start > 0 && !/\s/.test(target.value[start - 1]) ? " " : "";

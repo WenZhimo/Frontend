@@ -5,57 +5,63 @@ import { parseCassieControlCommands as parse, buildCassieTimeline as plan, sched
 const options = { voiceDelayMs: 0, gapMs: 0, overlapMs: 0, playbackRate: 1 };
 const control = (text) => parse(text).flatMap((segment) => segment.controlsBefore)[0];
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 0.00001, `${actual} != ${expected}`);
-function buffer(seconds = 1, silence = 0) {
+
+function buffer(seconds = 1) {
   const sampleRate = 1000;
   const samples = new Float32Array(Math.round(seconds * sampleRate));
-  samples.fill(0.2, 20, samples.length - silence * sampleRate);
+  samples.fill(0.2);
   return { duration: seconds, sampleRate, length: samples.length, numberOfChannels: 1, getChannelData: () => samples };
 }
 
-test("commands preserve following numbers, punctuation, and ordinary spoken words", () => {
-  const segments = parse("Danger, $SLEEP_500 3 out of 3 generators. Repeat 2 words. sleep 5 seconds.");
+test("only wrapped dollar commands are removed from spoken text", () => {
+  const source = "Danger, #{$SLEEP_500} 3 generators. $SLEEP_250 .g1 jam_0.1_3 #{brea-a-a-a-ch}";
+  const segments = parse(source);
   assert.equal(segments[0].text, "Danger, ");
-  assert.equal(segments[1].text.trim(), "3 out of 3 generators. Repeat 2 words. sleep 5 seconds.");
+  assert.equal(segments[0].controlsBefore.length, 0);
   assert.equal(segments[1].controlsBefore[0].durationMs, 500);
-  assert.equal(parse("$SLEEP_500.")[0].text, ".");
+  assert.equal(segments[1].text.trim(), "3 generators. $SLEEP_250 .g1 jam_0.1_3 #{brea-a-a-a-ch}");
 });
 
-test("consecutive, leading and trailing controls retain their order", () => {
-  const segments = parse("$SLEEP(500) $NOISE_300 Danger $REPEAT_2 $SPAC_200");
-  assert.deepEqual(segments[0].controlsBefore.map((c) => c.type), ["sleep", "noise"]);
-  assert.deepEqual(segments[1].controlsBefore.map((c) => c.type), ["repeat", "spac"]);
+test("leading, consecutive and trailing wrapped commands retain order", () => {
+  const segments = parse("#{$SLEEP_100} #{$G_1,G_2,G_3} Danger #{$SLEEP_200}");
+  assert.deepEqual(segments[0].controlsBefore.map((item) => item.type), ["sleep", "glitch-overlay"]);
+  assert.deepEqual(segments[0].controlsBefore[1].clipNames, ["g1", "g2", "g3"]);
+  assert.equal(segments[0].text.trim(), "Danger");
   assert.equal(segments[1].text, "");
+  assert.equal(segments[1].controlsBefore[0].durationMs, 200);
 });
 
-test("game-style stutter, legacy jam and numbered glitch clips are recognized", () => {
-  assert.deepEqual(control("$STUTTER_0.2_0.13_3"), { type: "stutter-next", offsetSeconds: 0.2, sliceSeconds: 0.13, count: 3 });
-  assert.deepEqual(control("jam_0.05_4"), control("jam_(0.05)_(4)"));
-  assert.equal(control("jam_0.05_4").offsetSeconds, 0.05);
-  assert.equal(control("jam_0.05_4").sliceSeconds, 0.13);
-  assert.equal(control("$JAM_500_3").delayMs, 500);
-  assert.equal(control(".g6").clipName, "g6");
-  assert.equal(control("g1").durationMs, null);
+test("comments are discarded without splitting the surrounding spoken segment", () => {
+  const segments = parse("detonation #{#仅供编辑者阅读 $SLEEP_500} sequence cancelled");
+  assert.deepEqual(segments, [{ text: "detonation  sequence cancelled", controlsBefore: [] }]);
 });
 
-test("invalid commands fail explicitly, defaults and zero are preserved", () => {
-  for (const text of ["$SLEEP_bad", "$SLEEP_-1", "$STUTT_1.5", "$UNKNOWN_3", "$SLEEP_3_4", "$SLEEP(abc)", "$JAM_1_2_3"]) {
+test("malformed wrapped commands fail explicitly while bare legacy syntax remains text", () => {
+  for (const text of [
+    "#{$SLEEP_bad}",
+    "#{$SLEEP_-1}",
+    "#{$SLEEP_10001}",
+    "#{$SLEEP}",
+    "#{$UNKNOWN_3}",
+    "#{$G_0}",
+    "#{$G_1,G_7}",
+    "#{$SLEEP_500",
+    "#{#unfinished comment",
+  ]) {
     assert.throws(() => parse(text), Error, text);
   }
-  assert.equal(control("$SLEEP").durationMs, 500);
-  assert.equal(control("$SPAC").durationMs, 200);
-  assert.equal(control("$STUTT").count, 3);
-  assert.equal(control("$REPEAT_0").count, 0);
-  assert.equal(control("$SLEEP_0").durationMs, 0);
-  assert.equal(control("$REPEAT_999999").count, 12);
-  assert.equal(control("$NOISE_999999").durationMs, 10000);
+  const bare = "$STUTT_3 $STUTTER_0.2_0.1_3 $REPEAT_2 $NOISE_300 $JAM_100_2 .g1 g2 $SLEEP_500";
+  assert.deepEqual(parse(bare), [{ text: bare, controlsBefore: [] }]);
 });
 
-test("pause and delay have exact wall-clock duration at different speech rates", () => {
+test("pause duration stays on wall clock at different speech rates", () => {
   const speech = buffer();
   const timeline = plan([
-    { control: control("$SLEEP_500") }, { buffer: speech },
-    { control: control("$SPAC_200") }, { buffer: speech },
-    { control: control("$SLEEP_500") },
+    { control: control("#{$SLEEP_500}") },
+    { buffer: speech },
+    { control: control("#{$SLEEP_200}") },
+    { buffer: speech },
+    { control: control("#{$SLEEP_500}") },
   ], { ...options, voiceDelayMs: 3000, playbackRate: 2 });
   near(timeline.events[0].at, 3.5);
   near(timeline.events[1].at, 4.2);
@@ -64,83 +70,78 @@ test("pause and delay have exact wall-clock duration at different speech rates",
 
 test("explicit pauses replace default gaps while preserving punctuation minima", () => {
   const speech = buffer();
-  const items = [{ buffer: speech, minGapAfterMs: 280 }, { control: control("$SLEEP_50") }, { buffer: speech }];
+  const items = [{ buffer: speech, minGapAfterMs: 280 }, { control: control("#{$SLEEP_50}") }, { buffer: speech }];
   near(plan(items, { ...options, gapMs: 80 }).duration, 2.28);
-  items[1].control = control("$SLEEP_500");
+  items[1].control = control("#{$SLEEP_500}");
   near(plan(items, { ...options, gapMs: 80 }).duration, 2.5);
 });
 
-test("tail stutter loops an audible syllable rather than a whole clip or trailing silence", () => {
-  const speech = buffer(2, 0.4);
-  const timeline = plan([{ buffer: speech }, { control: control("$STUTT_3") }], options);
-  assert.equal(timeline.events.length, 4);
-  for (const event of timeline.events.slice(1)) {
-    near(event.duration, 0.12);
-    assert.ok(event.offset >= 1.47 && event.offset + event.duration <= 1.608);
-    assert.equal(event.fade, true);
-  }
-  near(timeline.duration, 2.43);
+test("glitch sequence overlays the next speech without advancing its layout", () => {
+  const first = buffer(1);
+  const second = buffer(1);
+  const g1 = buffer(0.1);
+  const g2 = buffer(0.2);
+  const glitch = control("#{$G_1,G_2}");
+  const timeline = plan([
+    { buffer: first },
+    { control: glitch, buffers: [g1, g2] },
+    { buffer: second },
+  ], { ...options, gapMs: 200 });
+
+  near(timeline.events[1].at, 1.2);
+  near(timeline.events[2].at, 1.2);
+  near(timeline.events[3].at, 1.3);
+  assert.deepEqual(timeline.events.slice(2).map((event) => event.overlay), [true, true]);
+  near(timeline.duration, 2.2);
 });
 
-test("repeat uses the complete preceding speech and never the preceding noise", () => {
-  const speech = buffer(1), noise = buffer(0.3);
-  const timeline = plan([{ buffer: speech }, { control: control("$NOISE_300"), buffer: noise }, { control: control("$REPEAT_2") }], options);
-  assert.equal(timeline.events.length, 4);
-  assert.equal(timeline.events.at(-1).buffer, speech);
-  near(timeline.duration, 3.3);
+test("leading glitches start with the first speech and trailing glitches cover its end", () => {
+  const speech = buffer(1);
+  const g1 = buffer(0.1);
+  const g2 = buffer(0.2);
+  const glitch = control("#{$G_1,G_2}");
+
+  const leading = plan([{ control: glitch, buffers: [g1, g2] }, { buffer: speech }], { ...options, voiceDelayMs: 3_000 });
+  near(leading.events[0].at, 3);
+  near(leading.events[1].at, 3);
+  near(leading.events[2].at, 3.1);
+  near(leading.duration, 4);
+
+  const trailing = plan([{ buffer: speech }, { control: glitch, buffers: [g1, g2] }], options);
+  near(trailing.events[1].at, 0.7);
+  near(trailing.events[2].at, 0.8);
+  near(trailing.duration, 1);
 });
 
-test("native stutter repeats the requested slice of the next clip and resumes it", () => {
-  const speech = buffer();
-  const timeline = plan([{ control: control("$STUTTER_0.2_0.13_3") }, { buffer: speech }], options);
-  assert.equal(timeline.events.length, 5);
-  near(timeline.events[0].duration, 0.2);
-  for (const event of timeline.events.slice(1, 4)) {
-    near(event.offset, 0.2);
-    near(event.duration, 0.13);
-  }
-  near(timeline.events.at(-1).offset, 0.2);
-  near(timeline.duration, 1.39);
+test("overlay errors are explicit and long overlays extend only the rendered end", () => {
+  const speech = buffer(0.1);
+  const longGlitch = buffer(0.4);
+  const glitch = control("#{$G_1}");
+  assert.throws(() => plan([{ control: glitch }], options), /缺少故障音资源/);
+  assert.throws(() => plan([{ control: glitch, buffers: [longGlitch] }], options), /需要至少一个语音片段/);
+  near(plan([{ buffer: speech }, { control: glitch, buffers: [longGlitch] }], options).duration, 0.4);
 });
 
-test("noise loops or crops without changing pitch; JAM delay is included", () => {
-  const noise = buffer(0.68);
-  const timeline = plan([{ control: control("$NOISE_1300"), buffer: noise }, { control: control("$JAM_500_3"), buffer: noise }], { ...options, playbackRate: 2 });
-  assert.equal(timeline.events.length, 4);
-  for (const event of timeline.events) {
-    assert.equal(event.playbackRate, 1);
-    assert.equal(event.loop, true);
-  }
-  near(timeline.events[1].at, 1.8);
-  near(timeline.duration, 2.16);
-});
-
-test("missing target and missing sound fail instead of silently dropping effects", () => {
-  assert.throws(() => plan([{ control: control("$REPEAT_2") }], options), /前需要/);
-  assert.throws(() => plan([{ control: control("jam_0.1_3") }], options), /后需要/);
-  assert.throws(() => plan([{ control: control("$NOISE_300") }], options), /缺少音效/);
-});
-
-test("Web Audio events end at planned times with bounded slice fades", () => {
-  const sources = [], automation = [];
+test("Web Audio scheduling preserves overlapping event times", () => {
+  const sources = [];
   const context = {
     destination: {},
     createBufferSource() {
-      const source = { playbackRate: {}, connect: () => ({ connect() {} }), start: (...args) => { source.started = args; }, stop: (end) => { source.ended = end; } };
+      const source = { playbackRate: {}, connect: () => context.destination, start: (...args) => { source.started = args; }, stop: (end) => { source.ended = end; } };
       sources.push(source);
       return source;
     },
-    createGain() { return { gain: { setValueAtTime: (...args) => automation.push(args), linearRampToValueAtTime: (...args) => automation.push(args) } }; },
   };
-  const timeline = plan([{ buffer: buffer() }, { control: control("$STUTT_3") }, { control: control("$NOISE_300"), buffer: buffer(0.68) }], options);
+  const speech = buffer();
+  const glitchBuffer = buffer(0.3);
+  const timeline = plan([
+    { control: control("#{$G_1}"), buffers: [glitchBuffer] },
+    { buffer: speech },
+  ], options);
   scheduleCassieTimeline(context, timeline);
-  assert.equal(sources.length, timeline.events.length);
-  near(sources.at(-1).ended, timeline.duration);
-  sources.forEach((source, index) => {
-    const event = timeline.events[index];
-    near(source.started[0], event.at);
-    near(source.started[1], event.offset);
-    near(source.ended, event.at + event.duration / event.playbackRate);
-  });
-  assert.ok(automation.every(([, time]) => time >= 0 && time <= timeline.duration));
+  assert.equal(sources.length, 2);
+  near(sources[0].started[0], 0);
+  near(sources[1].started[0], 0);
+  near(sources[0].ended, 1);
+  near(sources[1].ended, 0.3);
 });

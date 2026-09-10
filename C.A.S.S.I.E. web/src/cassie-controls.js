@@ -1,156 +1,150 @@
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const number = String.raw`[+-]?(?:\d+(?:\.\d+)?|\.\d+)`;
-const argument = String.raw`(?:\(${number}\)|${number})`;
-const commandPattern = new RegExp(
-  String.raw`\$[a-z]+(?:\([^()\r\n]*\)|(?:_${argument})+)?|\bjam_(?:${argument})(?:_${argument})*|(?<![\w])\.?g[1-6](?![\w])`,
-  "gi",
-);
+const commandWrapperPattern = /#\{([^{}\r\n]*)\}/g;
+const sleepCommandPattern = /^\$SLEEP_(\d+)$/i;
+const glitchCommandPattern = /^\$G_[1-6](?:\s*,\s*G_[1-6])*$/i;
 
-function parseControl(raw) {
-  const glitch = /^\.?g([1-6])$/i.exec(raw);
-  if (glitch) return { type: "noise", clipName: `g${glitch[1]}`, durationMs: null };
-  const name = /^\$?([a-z]+)/i.exec(raw)[1].toLowerCase();
-  const payload = raw.replace(/^\$?[a-z]+/i, "");
-  const args = payload ? payload.replace(/[()]/g, "").replace(/^_/, "").split(/[_ ,]+/).map(Number) : [];
-  if (args.some((value) => !Number.isFinite(value) || value < 0)) {
-    throw new Error(`指令参数无效：${raw}`);
+function parseControl(payload) {
+  const sleep = sleepCommandPattern.exec(payload);
+  if (sleep) {
+    const durationMs = Number(sleep[1]);
+    if (durationMs > 10000) throw new Error(`停顿时长必须在 0 到 10000ms 之间：#{${payload}}`);
+    return { type: "sleep", durationMs };
   }
-  const duration = (value, fallback) => clamp(value ?? fallback, 0, 10000);
-  const count = (value, fallback) => {
-    if (value != null && !Number.isInteger(value)) throw new Error(`重复次数必须是整数：${raw}`);
-    return clamp(value ?? fallback, 0, 12);
-  };
-  if (name === "stutter" && args.length === 3) {
-    return { type: "stutter-next", offsetSeconds: clamp(args[0], 0, 60), sliceSeconds: clamp(args[1], 0.01, 1), count: count(args[2], 3) };
+
+  if (glitchCommandPattern.test(payload)) {
+    const clipNames = payload
+      .slice(1)
+      .split(",")
+      .map((name) => name.trim().toLowerCase().replace("_", ""));
+    return { type: "glitch-overlay", clipNames };
   }
-  if (name === "jam" && !raw.startsWith("$") && args.length === 2) {
-    return { type: "stutter-next", offsetSeconds: clamp(args[0], 0, 60), sliceSeconds: 0.13, count: count(args[1], 3) };
-  }
-  if (name === "jam" && raw.startsWith("$") && args.length <= 2) {
-    return { type: "jam", delayMs: duration(args[0], 180), durationMs: 120, count: count(args[1], 3), clipName: "g1" };
-  }
-  if (args.length <= 1) {
-    if (name === "sleep" || name === "spac") return { type: name, durationMs: duration(args[0], name === "sleep" ? 500 : 200) };
-    if (name === "noise") return { type: "noise", durationMs: duration(args[0], 300), clipName: "static" };
-    if (name === "stutt" || name === "stutter") return { type: "stutter", count: count(args[0], 3) };
-    if (name === "repeat") return { type: "repeat", count: count(args[0], 1) };
-  }
-  throw new Error(`未知指令或参数数量不正确：${raw}`);
+
+  throw new Error(`未知指令或格式不正确：#{${payload}}`);
 }
 
 export function parseCassieControlCommands(text) {
   const source = String(text || "");
+  const dangling = /#\{[$#][^}\r\n]*(?=\r?\n|$)/.exec(source);
+  if (dangling) throw new Error(`标记缺少右花括号：${dangling[0]}`);
+
   const segments = [];
   let cursor = 0;
+  let spokenText = "";
   let controlsBefore = [];
-  for (const match of source.matchAll(commandPattern)) {
-    const chunk = source.slice(cursor, match.index);
-    if (chunk.trim()) {
-      segments.push({ text: chunk, controlsBefore });
+
+  for (const match of source.matchAll(commandWrapperPattern)) {
+    const payload = match[1].trim();
+    const isCommand = payload.startsWith("$");
+    const isComment = payload.startsWith("#");
+    if (!isCommand && !isComment) continue;
+
+    spokenText += source.slice(cursor, match.index);
+    cursor = match.index + match[0].length;
+    if (isComment) continue;
+
+    if (spokenText.trim()) {
+      segments.push({ text: spokenText, controlsBefore });
       controlsBefore = [];
+      spokenText = "";
     }
-    const end = match.index + match[0].length;
-    if (/[\w_(]/.test(source[end] || "")) throw new Error(`指令格式无效：${source.slice(match.index).split(/\s/)[0]}`);
-    controlsBefore.push(parseControl(match[0]));
-    cursor = end;
+    controlsBefore.push(parseControl(payload));
   }
-  const tail = source.slice(cursor);
-  if (tail.trim() || controlsBefore.length || !segments.length) segments.push({ text: tail, controlsBefore });
+
+  spokenText += source.slice(cursor);
+  if (spokenText.trim() || controlsBefore.length || !segments.length) {
+    segments.push({ text: spokenText, controlsBefore });
+  }
   return segments;
 }
 
 export function controlLabel(control) {
-  if (control.type === "stutter-next") return `STUTTER ${control.offsetSeconds}s / ${control.sliceSeconds}s x${control.count}`;
-  if (control.type === "stutter" || control.type === "repeat") return `${control.type.toUpperCase()} x${control.count}`;
-  if (control.type === "jam") return `JAM +${control.delayMs}ms x${control.count}`;
-  if (control.durationMs == null) return control.clipName.toUpperCase();
-  return `${control.type.toUpperCase()} ${control.durationMs}ms`;
+  if (control.type === "sleep") return `SLEEP ${control.durationMs}ms`;
+  if (control.type === "glitch-overlay") return `GLITCH ${control.clipNames.map((name) => name.toUpperCase()).join(" → ")}`;
+  return String(control.type || "CONTROL").toUpperCase();
 }
 
-function audibleEnd(buffer) {
-  const window = Math.max(1, Math.round(buffer.sampleRate * 0.008));
-  for (let end = buffer.length; end > 0; end -= window) {
-    const start = Math.max(0, end - window);
-    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-      const samples = buffer.getChannelData(channel);
-      let sum = 0;
-      for (let i = start; i < end; i++) sum += samples[i] ** 2;
-      if (Math.sqrt(sum / (end - start)) > 0.01) return end / buffer.sampleRate;
-    }
-  }
-  return buffer.duration;
+function eventEnd(event) {
+  return event.at + event.duration / event.playbackRate;
 }
 
-// Both renderers use this plan for duration and playback, avoiding drift at controls.
+// Speech and overlay events share one plan so preview and export stay sample-aligned.
 export function buildCassieTimeline(items, options) {
   const events = [];
   const rate = options.playbackRate ?? 1;
   const defaultGap = Math.max(0, options.gapMs - options.overlapMs) / 1000;
   let cursor = options.voiceDelayMs / 1000;
   let pendingGap = 0;
-  let previous = null;
-  let nextStutter = null;
-  const advance = (seconds) => {
-    cursor += seconds;
-    if (cursor > 1800 || events.length > 10000) throw new Error("播报超过 30 分钟或片段过多，请拆分文本。");
+  let pendingOverlayBuffers = [];
+  let lastSpeech = null;
+  let duration = cursor;
+
+  const checkLimits = () => {
+    if (duration > 1800 || events.length > 10000) {
+      throw new Error("播报超过 30 分钟或片段过多，请拆分文本。");
+    }
   };
-  const play = (buffer, offset = 0, duration = buffer.duration, playbackRate = rate, loop = false, fade = false) => {
-    if (duration <= 0) return;
-    events.push({ buffer, at: cursor, offset, duration, playbackRate, loop, fade });
-    advance(duration / playbackRate);
+
+  const addEvent = ({ buffer, at, offset = 0, duration: eventDuration = buffer.duration, playbackRate = rate, loop = false, fade = false, overlay = false }) => {
+    if (!buffer || eventDuration <= 0) return;
+    const event = { buffer, at, offset, duration: eventDuration, playbackRate, loop, fade, overlay };
+    events.push(event);
+    duration = Math.max(duration, eventEnd(event));
+    checkLimits();
+  };
+
+  const addOverlaySequence = (buffers, at) => {
+    let overlayAt = at;
+    for (const buffer of buffers) {
+      addEvent({ buffer, at: overlayAt, playbackRate: 1, overlay: true });
+      overlayAt += buffer.duration;
+    }
   };
 
   for (const item of items) {
     const control = item.control;
     if (!control) {
-      advance(pendingGap);
-      if (nextStutter) {
-        const offset = Math.min(nextStutter.offsetSeconds, Math.max(0, item.buffer.duration - 0.01));
-        const slice = Math.min(nextStutter.sliceSeconds, item.buffer.duration - offset);
-        play(item.buffer, 0, offset, rate, false, true);
-        for (let i = 0; i < nextStutter.count; i++) play(item.buffer, offset, slice, rate, false, true);
-        play(item.buffer, offset, item.buffer.duration - offset, rate, false, true);
-        nextStutter = null;
-      } else {
-        play(item.buffer);
+      cursor += pendingGap;
+      const speechStart = cursor;
+      addEvent({ buffer: item.buffer, at: speechStart });
+      cursor += item.buffer.duration / rate;
+      duration = Math.max(duration, cursor);
+      lastSpeech = { start: speechStart, end: cursor };
+
+      if (pendingOverlayBuffers.length > 0) {
+        addOverlaySequence(pendingOverlayBuffers, speechStart);
+        pendingOverlayBuffers = [];
       }
-      previous = item.buffer;
+
       pendingGap = Math.max(defaultGap, (item.minGapAfterMs || 0) / 1000);
+      checkLimits();
       continue;
     }
-    if (control.type === "stutter-next") {
-      if (nextStutter) throw new Error("连续的 STUTTER / jam 指令之间需要一段语音。");
-      nextStutter = control;
-      continue;
-    }
-    if (control.type === "sleep" || control.type === "spac") {
-      advance(Math.max(pendingGap, control.durationMs / 1000));
+
+    if (control.type === "sleep") {
+      cursor += Math.max(pendingGap, control.durationMs / 1000);
       pendingGap = 0;
+      duration = Math.max(duration, cursor);
+      checkLimits();
       continue;
     }
-    if (control.type === "noise" || control.type === "jam") {
-      if (!item.buffer) throw new Error(`缺少音效资源：${control.clipName}`);
-      advance(Math.max(pendingGap, (control.delayMs || 0) / 1000));
-      const duration = control.durationMs == null ? item.buffer.duration : control.durationMs / 1000;
-      const count = control.type === "jam" ? control.count : 1;
-      for (let i = 0; i < count; i++) play(item.buffer, 0, duration, 1, true, true);
-      pendingGap = 0;
+
+    if (control.type === "glitch-overlay") {
+      if (!Array.isArray(item.buffers) || item.buffers.length !== control.clipNames.length) {
+        throw new Error(`缺少故障音资源：${control.clipNames.join(", ")}`);
+      }
+      pendingOverlayBuffers.push(...item.buffers);
       continue;
     }
-    if (!previous) throw new Error(`${controlLabel(control)} 前需要一个语音片段。`);
-    if (control.count === 0) continue;
-    const isStutter = control.type === "stutter";
-    const end = isStutter ? audibleEnd(previous) : previous.duration;
-    const duration = isStutter ? Math.min(0.12, end) : previous.duration;
-    advance(pendingGap);
-    for (let i = 0; i < control.count; i++) {
-      play(previous, end - duration, duration, rate, false, isStutter);
-      if (isStutter && i < control.count - 1) advance(0.035);
-    }
-    pendingGap = defaultGap;
+
+    throw new Error(`不支持的控制指令：${control.type}`);
   }
-  if (nextStutter) throw new Error("STUTTER / jam 指令后需要一个语音片段。");
-  return { events, duration: cursor };
+
+  if (pendingOverlayBuffers.length > 0) {
+    if (!lastSpeech) throw new Error("故障音覆盖需要至少一个语音片段。");
+    const overlayDuration = pendingOverlayBuffers.reduce((sum, buffer) => sum + buffer.duration, 0);
+    addOverlaySequence(pendingOverlayBuffers, Math.max(lastSpeech.start, lastSpeech.end - overlayDuration));
+  }
+
+  return { events, duration };
 }
 
 export function scheduleCassieTimeline(context, timeline) {
@@ -159,7 +153,7 @@ export function scheduleCassieTimeline(context, timeline) {
     source.buffer = event.buffer;
     source.playbackRate.value = event.playbackRate;
     source.loop = event.loop;
-    const end = event.at + event.duration / event.playbackRate;
+    const end = eventEnd(event);
     if (event.fade) {
       const gain = context.createGain();
       const fade = Math.min(0.003, (end - event.at) / 2);

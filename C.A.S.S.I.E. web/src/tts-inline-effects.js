@@ -1,5 +1,5 @@
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-const decoratedWordPattern = /[A-Za-z]+(?:[-\u2013\u2014]+[A-Za-z]+)+/g;
+const effectWrapperPattern = /#\{([^{}\r\n]*)\}/g;
 const spokenWordPattern = /[A-Za-z0-9]+(?:['\u2019][A-Za-z0-9]+)?/g;
 const vowelPattern = /^[aeiouy]+$/i;
 
@@ -12,7 +12,7 @@ function wordTokens(text) {
 }
 
 function parseHeldWord(rawWord) {
-  const holdPattern = /([A-Za-z])([\u2013\u2014]{2,}|-{2,})(?=[A-Za-z])/g;
+  const holdPattern = /([A-Za-z])(-{2,})(?=[A-Za-z])/g;
   const effects = [];
   let cleanWord = "";
   let cursor = 0;
@@ -32,6 +32,25 @@ function parseHeldWord(rawWord) {
   if (effects.length === 0) return null;
   cleanWord += rawWord.slice(cursor);
   return { cleanWord, effects };
+}
+
+function parseRestartedWord(rawWord) {
+  const match = /^([A-Za-z]+)_([A-Za-z]+)$/.exec(rawWord);
+  if (!match) return null;
+  const prefix = match[1];
+  const cleanWord = match[2];
+  if (!cleanWord.toLowerCase().startsWith(prefix.toLowerCase()) || prefix.length >= cleanWord.length) {
+    return null;
+  }
+  return {
+    cleanWord,
+    effects: [{
+      type: "restart",
+      anchorChar: prefix.length,
+      restart: true,
+      prefix,
+    }],
+  };
 }
 
 function parseRepeatedWord(rawWord) {
@@ -74,7 +93,7 @@ function parseRepeatedWord(rawWord) {
 }
 
 function parseDecoratedWord(rawWord) {
-  return parseHeldWord(rawWord) || parseRepeatedWord(rawWord);
+  return parseRestartedWord(rawWord) || parseHeldWord(rawWord) || parseRepeatedWord(rawWord);
 }
 
 export function parseInlineTtsEffects(text) {
@@ -83,15 +102,17 @@ export function parseInlineTtsEffects(text) {
   let cleanText = "";
   let cursor = 0;
 
-  for (const match of source.matchAll(decoratedWordPattern)) {
-    const parsed = parseDecoratedWord(match[0]);
-    if (!parsed) continue;
+  for (const match of source.matchAll(effectWrapperPattern)) {
+    const payload = match[1].trim();
+    if (payload.startsWith("$")) continue;
+    const parsed = parseDecoratedWord(payload);
+    if (!parsed) throw new Error(`无法识别词内效果：#{${payload}}`);
     cleanText += source.slice(cursor, match.index);
     const wordStart = cleanText.length;
     cleanText += parsed.cleanWord;
     parsed.effects.forEach((effect) => pendingEffects.push({
       ...effect,
-      rawWord: match[0],
+      rawWord: `#{${payload}}`,
       word: parsed.cleanWord,
       wordStart,
       anchorRatio: effect.anchorChar / Math.max(1, parsed.cleanWord.length),
@@ -328,6 +349,8 @@ export function applyInlineEffectsToChannels(channels, sampleRate, effects) {
           Math.max(1, Math.round(sampleRate * event.effect.durationMs / 1000)),
           Math.max(1, Math.round(sampleRate * 0.008)),
         );
+      } else if (event.effect.type === "restart") {
+        insertion = new Float32Array(0);
       } else {
         insertion = makeStutterInsertion(
           slice,
