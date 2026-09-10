@@ -120,6 +120,7 @@ const els = {
 
 // Token normalization and clip alias data
 const textSplitRe = /[ ,.!?\r\n;:\t，。！？；：、]+/g;
+const speechBoundaryRe = /[,;:，；：、]+|[.!?。！？]+|\n+/g;
 const scpNumberRe = /\bSCP\s*[-_#]?\s*(\d+(?:[-_]\d+)*)\b/gi;
 const phraseSeparatorRe = /[^a-z0-9]+/g;
 const vowelSoundTokens = new Set(["scp", "a", "e", "f", "h", "i", "l", "m", "n", "o", "r", "s", "x", "8", "11", "18", "80", "80s"]);
@@ -201,6 +202,11 @@ const TTS_FRAGMENT_AUTO_GROUP_MAX_CHARS = 40;
 const TTS_WORD_GAP_SEARCH_MS = 260;
 const TTS_WORD_GAP_WINDOW_MS = 10;
 const TTS_WORD_GAP_FADE_MS = 6;
+const SOFT_PUNCTUATION_PAUSE_MS = 180;
+const HARD_PUNCTUATION_PAUSE_MS = 280;
+const SCP_PREFIX_PAUSE_MS = 150;
+const SCP_DIGIT_PAUSE_MS = 70;
+const SCP_SUFFIX_PAUSE_MS = 150;
 
 // Official announcement template data
 const warheadTimeOptions = [
@@ -956,21 +962,127 @@ function normalizeSentenceInput(text) {
     .replace(/\bdead\s+man's\s+switch\b/gi, "dms_ann");
 }
 
-function tokenizeSentenceText(text) {
-  const tokens = [];
-  const normalizedText = normalizeSentenceInput(text);
+function punctuationPauseMs(boundary) {
+  if (!boundary) return 0;
+  return /[.!?。！？\n]/.test(boundary) ? HARD_PUNCTUATION_PAUSE_MS : SOFT_PUNCTUATION_PAUSE_MS;
+}
+
+function withBoundaryPunctuation(text, boundary) {
+  const cleanText = String(text || "").trim();
+  if (!cleanText) return "";
+  const punctuation = String(boundary || "").replace(/\s+/g, "");
+  return punctuation ? `${cleanText}${punctuation}` : cleanText;
+}
+
+function applyTokenMinGap(part, gapMs) {
+  if (!part || gapMs <= 0) return part;
+  part.minGapAfterMs = Math.max(Number(part.minGapAfterMs) || 0, gapMs);
+  return part;
+}
+
+function tokenPartToken(part) {
+  return typeof part === "string" ? part : part?.token;
+}
+
+function tokenPartMinGapAfterMs(part) {
+  return Math.max(0, Number(part?.minGapAfterMs) || 0);
+}
+
+function tokenPartHasBoundaryAfter(part) {
+  return tokenPartMinGapAfterMs(part) > 0;
+}
+
+function tokenPartTokens(parts) {
+  return parts.map(tokenPartToken).filter(Boolean);
+}
+
+function splitSpeechTextSegments(text) {
+  const normalized = String(text || "").replace(/\r\n?/g, "\n");
+  const segments = [];
+  let cursor = 0;
+  let match;
+
+  speechBoundaryRe.lastIndex = 0;
+  while ((match = speechBoundaryRe.exec(normalized)) !== null) {
+    const chunk = normalized.slice(cursor, match.index).trim();
+    if (chunk) {
+      segments.push({
+        text: withBoundaryPunctuation(chunk, match[0]),
+        minGapAfterMs: punctuationPauseMs(match[0]),
+      });
+    }
+    cursor = match.index + match[0].length;
+  }
+
+  const tail = normalized.slice(cursor).trim();
+  if (tail) segments.push({ text: tail, minGapAfterMs: 0 });
+  return segments;
+}
+
+function pushPlainTokenParts(parts, text) {
+  splitPlainText(text).forEach((token) => {
+    parts.push({ token, minGapAfterMs: 0 });
+  });
+}
+
+function pushScpDesignationParts(parts, digitsText) {
+  const digits = String(digitsText || "").replace(/\D/g, "").split("").filter(Boolean);
+  parts.push({
+    token: "SCP",
+    minGapAfterMs: SCP_PREFIX_PAUSE_MS,
+    isScpDesignationPrefix: true,
+  });
+
+  digits.forEach((digit, index) => {
+    parts.push({
+      token: digit,
+      minGapAfterMs: index === digits.length - 1 ? SCP_SUFFIX_PAUSE_MS : SCP_DIGIT_PAUSE_MS,
+      isScpDesignationDigit: true,
+    });
+  });
+}
+
+function tokenizeSpeechSegmentParts(text) {
+  const parts = [];
   let cursor = 0;
   let match;
 
   scpNumberRe.lastIndex = 0;
-  while ((match = scpNumberRe.exec(normalizedText)) !== null) {
-    tokens.push(...splitPlainText(normalizedText.slice(cursor, match.index)));
-    tokens.push("SCP", ...match[1].replace(/\D/g, "").split(""));
+  while ((match = scpNumberRe.exec(text)) !== null) {
+    pushPlainTokenParts(parts, text.slice(cursor, match.index));
+    pushScpDesignationParts(parts, match[1]);
     cursor = match.index + match[0].length;
   }
 
-  tokens.push(...splitPlainText(normalizedText.slice(cursor)));
-  return tokens;
+  pushPlainTokenParts(parts, text.slice(cursor));
+  return parts;
+}
+
+function tokenizeSentenceParts(text) {
+  const normalizedText = normalizeSentenceInput(text);
+  const parts = [];
+
+  splitSpeechTextSegments(normalizedText).forEach((segment) => {
+    const segmentParts = tokenizeSpeechSegmentParts(segment.text);
+    if (segmentParts.length > 0) {
+      applyTokenMinGap(segmentParts[segmentParts.length - 1], segment.minGapAfterMs);
+      parts.push(...segmentParts);
+    }
+  });
+
+  return parts;
+}
+
+function tokenizeSentenceText(text) {
+  return tokenPartTokens(tokenizeSentenceParts(text));
+}
+
+function hasBoundaryWithinTokenParts(tokenParts, startIndex, tokenCount) {
+  if (!tokenParts || tokenCount <= 1) return false;
+  for (let index = startIndex; index < startIndex + tokenCount - 1; index += 1) {
+    if (tokenPartHasBoundaryAfter(tokenParts[index])) return true;
+  }
+  return false;
 }
 
 function startsWithVowelSound(token) {
@@ -1055,10 +1167,11 @@ function isPhraseCandidate(clip) {
     && !name.endsWith("-");
 }
 
-function findPhraseClip(tokens, startIndex, phraseCandidates) {
+function findPhraseClip(tokens, startIndex, phraseCandidates, tokenParts = null) {
   for (const candidate of phraseCandidates) {
     for (const tokenCount of candidate.tokenCounts) {
       if (tokenCount > tokens.length - startIndex) continue;
+      if (hasBoundaryWithinTokenParts(tokenParts, startIndex, tokenCount)) continue;
 
       const segmentKey = normalizePhraseTokens(tokens.slice(startIndex, startIndex + tokenCount));
       if (candidate.keys.has(segmentKey)) {
@@ -1071,6 +1184,29 @@ function findPhraseClip(tokens, startIndex, phraseCandidates) {
   }
 
   return null;
+}
+
+function makeSelectedItem(clip, meta = {}) {
+  return {
+    clip,
+    minGapAfterMs: Math.max(0, Number(meta.minGapAfterMs) || 0),
+  };
+}
+
+function selectedClip(item) {
+  return item?.clip || item;
+}
+
+function selectedMinGapAfterMs(item) {
+  return Math.max(0, Number(item?.minGapAfterMs) || 0);
+}
+
+function scheduledGapSeconds(item, options) {
+  return Math.max(
+    0,
+    options.gapMs - options.overlapMs,
+    selectedMinGapAfterMs(item),
+  ) / 1000;
 }
 
 // Manifest loading and clip browser rendering
@@ -1133,7 +1269,8 @@ function renderSentence() {
   els.sentenceMeta.textContent = `${state.selected.length} clips`;
   const fragment = document.createDocumentFragment();
 
-  state.selected.forEach((clip, index) => {
+  state.selected.forEach((selected, index) => {
+    const clip = selectedClip(selected);
     const item = document.createElement("li");
     item.className = "sentence-item";
     item.innerHTML = `
@@ -1156,7 +1293,7 @@ function renderSentence() {
 }
 
 function addClip(clip) {
-  state.selected.push(clip);
+  state.selected.push(makeSelectedItem(clip));
   markDirty();
   renderSentence();
 }
@@ -1186,22 +1323,26 @@ function clearSentence() {
 
 function applyTextToSentence() {
   const { byName, phraseCandidates } = buildTextLookup();
-  const tokens = tokenizeSentenceText(els.textInput.value);
+  const tokenParts = tokenizeSentenceParts(els.textInput.value);
+  const tokens = tokenPartTokens(tokenParts);
 
   const picked = [];
   const missing = [];
   let index = 0;
   while (index < tokens.length) {
-    const phraseMatch = findPhraseClip(tokens, index, phraseCandidates);
+    const phraseMatch = findPhraseClip(tokens, index, phraseCandidates, tokenParts);
     if (phraseMatch) {
-      picked.push(phraseMatch.clip);
+      picked.push(makeSelectedItem(
+        phraseMatch.clip,
+        tokenParts[index + phraseMatch.tokenCount - 1],
+      ));
       index += phraseMatch.tokenCount;
       continue;
     }
 
     const token = tokens[index];
     const clip = resolveClipForToken(token, tokens[index + 1], byName, tokens[index - 1]);
-    if (clip) picked.push(clip);
+    if (clip) picked.push(makeSelectedItem(clip, tokenParts[index]));
     else missing.push(token);
     index += 1;
   }
@@ -1452,15 +1593,16 @@ async function renderAudioBuffer() {
 
   const options = getOptions();
   const resampleFactor = Math.max(0.1, options.speedPercent / 100) * Math.pow(2, options.pitchSemitones / 12);
-  const effectiveGap = Math.max(0, options.gapMs - options.overlapMs) / 1000;
-  const decodedWords = await Promise.all(state.selected.map((clip) => decodeClip(clip)));
+  const decodedWords = await Promise.all(state.selected.map((item) => decodeClip(selectedClip(item))));
   const sampleRate = 44100;
   const outputChannels = options.enableBackground ? 2 : 1;
 
   let speechEndSeconds = options.voiceDelayMs / 1000;
   decodedWords.forEach((buffer, index) => {
     speechEndSeconds += buffer.duration / resampleFactor;
-    if (index !== decodedWords.length - 1) speechEndSeconds += effectiveGap;
+    if (index !== decodedWords.length - 1) {
+      speechEndSeconds += scheduledGapSeconds(state.selected[index], options);
+    }
   });
 
   let backgroundBuffer = null;
@@ -1492,7 +1634,9 @@ async function renderAudioBuffer() {
     source.connect(offline.destination);
     source.start(cursor);
     cursor += buffer.duration / resampleFactor;
-    if (index !== decodedWords.length - 1) cursor += effectiveGap;
+    if (index !== decodedWords.length - 1) {
+      cursor += scheduledGapSeconds(state.selected[index], options);
+    }
   });
 
   const dryBuffer = await offline.startRendering();
@@ -1728,24 +1872,69 @@ function splitLongTtsUnit(text) {
   return units;
 }
 
+function splitLongTtsSegment(segment) {
+  const chunks = splitLongTtsUnit(segment.text);
+  return chunks.map((text, index) => ({
+    text,
+    minGapAfterMs: index === chunks.length - 1 ? segment.minGapAfterMs : 0,
+  }));
+}
+
 function splitTtsSpeechSegments(text) {
-  const paragraphs = String(text || "")
-    .replace(/\r\n?/g, "\n")
-    .split(/\n+/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
+  return splitSpeechTextSegments(text).flatMap(splitLongTtsSegment);
+}
 
-  const segments = [];
-  paragraphs.forEach((paragraph) => {
-    const sentenceParts = paragraph.match(/[^.!?。！？]+(?:[.!?。！？]+|$)/g) || [paragraph];
-    sentenceParts
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .flatMap(splitLongTtsUnit)
-      .forEach((part) => segments.push(part));
+function hasTtsSpeechContent(text) {
+  return /[a-z0-9]/i.test(String(text || ""));
+}
+
+function pushTtsNormalTextSegments(segments, text, minGapAfterMs = 0) {
+  const cleanText = String(text || "").trim();
+  if (!cleanText) return;
+
+  if (!hasTtsSpeechContent(cleanText)) {
+    if (segments.length > 0) {
+      applyUnitMinGap(segments[segments.length - 1], minGapAfterMs);
+    }
+    return;
+  }
+
+  splitLongTtsUnit(cleanText).forEach((chunk, index, chunks) => {
+    segments.push({
+      text: chunk,
+      minGapAfterMs: index === chunks.length - 1 ? minGapAfterMs : 0,
+    });
   });
+}
 
+function pushTtsScpDesignationSegments(segments, digitsText) {
+  const digits = String(digitsText || "").replace(/\D/g, "").split("").filter(Boolean);
+  segments.push({ text: "S C P", minGapAfterMs: SCP_PREFIX_PAUSE_MS });
+  if (digits.length > 0) {
+    segments.push({ text: digits.join(" "), minGapAfterMs: SCP_SUFFIX_PAUSE_MS });
+  }
+}
+
+function splitTtsNormalSegment(segment) {
+  const text = String(segment?.text || "");
+  const segments = [];
+  let cursor = 0;
+  let match;
+
+  scpNumberRe.lastIndex = 0;
+  while ((match = scpNumberRe.exec(text)) !== null) {
+    pushTtsNormalTextSegments(segments, text.slice(cursor, match.index));
+    pushTtsScpDesignationSegments(segments, match[1]);
+    cursor = match.index + match[0].length;
+  }
+
+  pushTtsNormalTextSegments(segments, text.slice(cursor), Math.max(0, Number(segment?.minGapAfterMs) || 0));
   return segments;
+}
+
+function splitTtsNormalSpeechSegments(text) {
+  return splitSpeechTextSegments(normalizeTtsSpeechText(text, { preserveScpDesignation: true }))
+    .flatMap(splitTtsNormalSegment);
 }
 
 function normalizeTtsFragmentSourceText(text) {
@@ -1802,65 +1991,94 @@ function countTtsWords(text) {
     .length;
 }
 
-function makeSentenceTtsUnit(text) {
+function makeSentenceTtsUnit(segment) {
+  const text = typeof segment === "string" ? segment : segment.text;
   return makeTtsUnit(text, "sentence", {
     wordGapSlots: Math.max(0, countTtsWords(text) - 1),
+    minGapAfterMs: Math.max(0, Number(segment?.minGapAfterMs) || 0),
   });
 }
 
-function splitFallbackFragmentTokens(tokens) {
-  if (tokens.length <= 1) return [tokens];
+function isScpDesignationPrefixPart(part) {
+  return Boolean(part?.isScpDesignationPrefix);
+}
+
+function isScpDesignationDigitPart(part) {
+  return Boolean(part?.isScpDesignationDigit);
+}
+
+function splitFallbackFragmentParts(parts) {
+  if (parts.length <= 1) return [parts];
 
   const chunks = [];
   let index = 0;
-  while (index < tokens.length) {
-    let end = Math.min(tokens.length, index + TTS_FRAGMENT_AUTO_GROUP_MAX_TOKENS);
+  while (index < parts.length) {
+    if (isScpDesignationPrefixPart(parts[index]) && isScpDesignationDigitPart(parts[index + 1])) {
+      chunks.push([parts[index]]);
+      index += 1;
+      const digitStart = index;
+      while (index < parts.length && isScpDesignationDigitPart(parts[index])) index += 1;
+      chunks.push(parts.slice(digitStart, index));
+      continue;
+    }
+
+    let end = Math.min(parts.length, index + TTS_FRAGMENT_AUTO_GROUP_MAX_TOKENS);
+    for (let cursor = index; cursor < end - 1; cursor += 1) {
+      if (tokenPartHasBoundaryAfter(parts[cursor])) {
+        end = cursor + 1;
+        break;
+      }
+    }
+
     while (
       end > index + 1
-      && formatTtsFragmentUnit(tokens.slice(index, end)).length > TTS_FRAGMENT_AUTO_GROUP_MAX_CHARS
+      && formatTtsFragmentUnit(tokenPartTokens(parts.slice(index, end))).length > TTS_FRAGMENT_AUTO_GROUP_MAX_CHARS
     ) {
       end -= 1;
     }
 
-    if (tokens.length - end === 1 && end - index > 2) end -= 1;
-    chunks.push(tokens.slice(index, end));
+    if (parts.length - end === 1 && end - index > 2) end -= 1;
+    chunks.push(parts.slice(index, end));
     index = end;
   }
 
   return chunks;
 }
 
-function buildTtsFragmentSpans(tokens, phraseCandidates) {
+function buildTtsFragmentSpans(tokenParts, phraseCandidates) {
+  const tokens = tokenPartTokens(tokenParts);
   const spans = [];
   let index = 0;
   while (index < tokens.length) {
-    const phraseMatch = findPhraseClip(tokens, index, phraseCandidates);
+    const phraseMatch = findPhraseClip(tokens, index, phraseCandidates, tokenParts);
     if (phraseMatch) {
       const phraseTokens = tokens.slice(index, index + phraseMatch.tokenCount);
       spans.push({
         type: "lexicon",
         tokens: phraseTokens,
         clipName: phraseMatch.clip?.name || "",
+        minGapAfterMs: tokenPartMinGapAfterMs(tokenParts[index + phraseMatch.tokenCount - 1]),
       });
       index += phraseMatch.tokenCount;
       continue;
     }
 
-    spans.push({ type: "fallback", tokens: [tokens[index]] });
+    spans.push({
+      type: "fallback",
+      tokenPart: tokenParts[index],
+      tokens: [tokens[index]],
+      minGapAfterMs: tokenPartMinGapAfterMs(tokenParts[index]),
+    });
     index += 1;
   }
   return spans;
 }
 
 function splitTtsFragmentSentences(text) {
-  const normalized = normalizeTtsFragmentSourceText(text).replace(/\r\n?/g, "\n");
-  return normalized
-    .split(/\n+/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean)
-    .flatMap((paragraph) => paragraph.match(/[^.!?。！？]+(?:[.!?。！？]+|$)/g) || [paragraph])
-    .map((sentence) => tokenizeSentenceText(sentence))
-    .filter((tokens) => tokens.length > 0);
+  const normalized = normalizeTtsFragmentSourceText(text);
+  return splitSpeechTextSegments(normalized)
+    .map((segment) => tokenizeSentenceParts(segment.text))
+    .filter((tokenParts) => tokenParts.length > 0);
 }
 
 function makeAutoFragmentUnit(chunk) {
@@ -1868,26 +2086,37 @@ function makeAutoFragmentUnit(chunk) {
   return makeTtsFragmentUnit(chunk, source);
 }
 
-function splitTtsFragmentSentenceUnits(tokens, phraseCandidates) {
-  const spans = buildTtsFragmentSpans(tokens, phraseCandidates);
+function applyUnitMinGap(unit, minGapAfterMs) {
+  if (!unit || minGapAfterMs <= 0) return unit;
+  unit.minGapAfterMs = Math.max(Number(unit.minGapAfterMs) || 0, minGapAfterMs);
+  return unit;
+}
+
+function splitTtsFragmentSentenceUnits(tokenParts, phraseCandidates) {
+  const spans = buildTtsFragmentSpans(tokenParts, phraseCandidates);
   const units = [];
   let index = 0;
   while (index < spans.length) {
     const span = spans[index];
     if (span.type === "lexicon") {
-      units.push(makeTtsFragmentUnit(span.tokens, "lexicon-phrase", { clipName: span.clipName }));
+      units.push(applyUnitMinGap(
+        makeTtsFragmentUnit(span.tokens, "lexicon-phrase", { clipName: span.clipName }),
+        span.minGapAfterMs,
+      ));
       index += 1;
       continue;
     }
 
-    const fallbackTokens = [];
+    const fallbackParts = [];
     while (index < spans.length && spans[index].type === "fallback") {
-      fallbackTokens.push(...spans[index].tokens);
+      fallbackParts.push(spans[index].tokenPart);
       index += 1;
     }
 
-    splitFallbackFragmentTokens(fallbackTokens).forEach((chunk) => {
-      units.push(makeAutoFragmentUnit(chunk));
+    splitFallbackFragmentParts(fallbackParts).forEach((chunk) => {
+      const tokens = tokenPartTokens(chunk);
+      const unit = makeAutoFragmentUnit(tokens);
+      units.push(applyUnitMinGap(unit, tokenPartMinGapAfterMs(chunk[chunk.length - 1])));
     });
   }
 
@@ -1899,14 +2128,14 @@ function splitTtsFragmentUnits(text) {
   if (sentences.length === 0) return [];
 
   const phraseCandidates = state.clips.length === 0 ? [] : buildTextLookup().phraseCandidates;
-  return sentences.flatMap((tokens) => splitTtsFragmentSentenceUnits(tokens, phraseCandidates));
+  return sentences.flatMap((tokenParts) => splitTtsFragmentSentenceUnits(tokenParts, phraseCandidates));
 }
 
 function buildTtsUnits(rawText) {
   const mode = els.ttsGenerationMode.value || "normal";
   const unitItems = mode === "fragment"
     ? splitTtsFragmentUnits(rawText)
-    : splitTtsSpeechSegments(normalizeTtsSpeechText(rawText)).map(makeSentenceTtsUnit);
+    : splitTtsNormalSpeechSegments(rawText).map(makeSentenceTtsUnit);
   return {
     mode,
     units: unitItems.filter(Boolean).map((unit, index) => ({ index, ...unit })),
@@ -2076,9 +2305,30 @@ function prepareTtsSentencePart(part, options) {
   return insertWordGaps(part.buffer, part.wordGapSlots || 0, gapMs);
 }
 
-function prepareTtsBuffersForMode(parts, mode, options) {
-  if (mode !== "fragment") return parts.map((part) => prepareTtsSentencePart(part, options));
-  return parts.map(prepareTtsFragmentPart);
+function makeTtsRenderItem(buffer, part) {
+  return {
+    buffer,
+    minGapAfterMs: Math.max(0, Number(part?.minGapAfterMs) || 0),
+  };
+}
+
+function normalizeTtsRenderItem(item) {
+  return item?.buffer ? item : makeTtsRenderItem(item, {});
+}
+
+function ttsRenderGapSeconds(item, options) {
+  return Math.max(
+    0,
+    options.gapMs - options.overlapMs,
+    Math.max(0, Number(item?.minGapAfterMs) || 0),
+  ) / 1000;
+}
+
+function prepareTtsRenderItemsForMode(parts, mode, options) {
+  if (mode !== "fragment") {
+    return parts.map((part) => makeTtsRenderItem(prepareTtsSentencePart(part, options), part));
+  }
+  return parts.map((part) => makeTtsRenderItem(prepareTtsFragmentPart(part), part));
 }
 
 function setTtsReadyState(isReady) {
@@ -2233,8 +2483,8 @@ async function finishGeneratedTtsJob(message) {
   if (message.jobId !== state.tts.currentJobId) return;
 
   const options = getTtsOptions();
-  const preparedBuffers = prepareTtsBuffersForMode(decodedParts, message.mode, options);
-  const buffer = await renderTtsPostProcessedBuffer(preparedBuffers, options);
+  const preparedItems = prepareTtsRenderItemsForMode(decodedParts, message.mode, options);
+  const buffer = await renderTtsPostProcessedBuffer(preparedItems, options);
   if (message.jobId !== state.tts.currentJobId) return;
 
   const elapsedMs = stopTtsTimer();
@@ -2298,9 +2548,16 @@ async function handleLoadTtsModel() {
   }
 }
 
-function normalizeTtsSpeechText(text) {
-  return String(text || "")
-    .replace(/\bSCP\s*[-_#]?\s*(\d+(?:[-_]\d+)*)\b/gi, (_match, digits) => `S C P ${digits.replace(/\D/g, "").split("").join(" ")}`)
+function normalizeTtsSpeechText(text, options = {}) {
+  let normalized = String(text || "");
+  if (!options.preserveScpDesignation) {
+    normalized = normalized.replace(
+      /\bSCP\s*[-_#]?\s*(\d+(?:[-_]\d+)*)\b/gi,
+      (_match, digits) => `S C P ${digits.replace(/\D/g, "").split("").join(" ")}`,
+    );
+  }
+
+  return normalized
     .replace(/\bHCZ\s*[-_#]?\s*(\d+)/gi, (_match, digits) => `H C Z ${digits.replace(/\D/g, "").split("").join(" ")}`)
     .replace(/\bLCZ\b/gi, "L C Z")
     .replace(/\bMTF\b/gi, "M T F")
@@ -2310,18 +2567,18 @@ function normalizeTtsSpeechText(text) {
     .replace(/\bC\.?\s*A\.?\s*S\.?\s*S\.?\s*I\.?\s*E\.?\b/gi, "Cassie");
 }
 
-async function renderTtsPostProcessedBuffer(rawBuffers, options) {
-  if (rawBuffers.length === 0) throw new Error("TTS 文本为空");
+async function renderTtsPostProcessedBuffer(rawItems, options) {
+  const items = rawItems.map(normalizeTtsRenderItem);
+  if (items.length === 0) throw new Error("TTS 文本为空");
 
   const pitchFactor = Math.pow(2, options.pitchSemitones / 12);
-  const effectiveGap = Math.max(0, options.gapMs - options.overlapMs) / 1000;
   const sampleRate = 44100;
-  const speechChannels = Math.max(...rawBuffers.map((buffer) => buffer.numberOfChannels), 1);
+  const speechChannels = Math.max(...items.map((item) => item.buffer.numberOfChannels), 1);
 
   let speechEndSeconds = options.voiceDelayMs / 1000;
-  rawBuffers.forEach((buffer, index) => {
-    speechEndSeconds += buffer.duration / pitchFactor;
-    if (index !== rawBuffers.length - 1) speechEndSeconds += effectiveGap;
+  items.forEach((item, index) => {
+    speechEndSeconds += item.buffer.duration / pitchFactor;
+    if (index !== items.length - 1) speechEndSeconds += ttsRenderGapSeconds(item, options);
   });
 
   let backgroundBuffer = null;
@@ -2347,14 +2604,14 @@ async function renderTtsPostProcessedBuffer(rawBuffers, options) {
   }
 
   let cursor = options.voiceDelayMs / 1000;
-  rawBuffers.forEach((buffer, index) => {
+  items.forEach((item, index) => {
     const source = offline.createBufferSource();
-    source.buffer = buffer;
+    source.buffer = item.buffer;
     source.playbackRate.value = pitchFactor;
     source.connect(offline.destination);
     source.start(cursor);
-    cursor += buffer.duration / pitchFactor;
-    if (index !== rawBuffers.length - 1) cursor += effectiveGap;
+    cursor += item.buffer.duration / pitchFactor;
+    if (index !== items.length - 1) cursor += ttsRenderGapSeconds(item, options);
   });
 
   const dryBuffer = await offline.startRendering();

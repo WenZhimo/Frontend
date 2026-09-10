@@ -268,6 +268,7 @@ async function handleGenerate(jobId, message) {
         source: unit.source || "sentence",
         tokenCount: unit.tokenCount || 0,
         wordGapSlots: unit.wordGapSlots || 0,
+        minGapAfterMs: unit.minGapAfterMs || 0,
         wav,
       });
       transfers.push(wav);
