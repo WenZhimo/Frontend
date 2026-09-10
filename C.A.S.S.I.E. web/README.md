@@ -1,114 +1,131 @@
-# C.A.S.S.I.E. Web Sentence Builder
+# C.A.S.S.I.E. Web 语句生成器
 
-Static browser port of the C.A.S.S.I.E. sentence builder. It concatenates locally extracted SCP: Secret Laboratory voice clips with Web Audio and exports a generated WAV file.
+- 原项目：[Convex89524/C.A.S.S.I.E](https://github.com/Convex89524/C.A.S.S.I.E)
+- 本项目 GitHub Pages：[C.A.S.S.I.E. web](https://wenzhimo.github.io/Frontend/C.A.S.S.I.E.%20web/index.html)
 
-## Run
+这是 C.A.S.S.I.E. 语句生成器的静态网页版本。它可以在浏览器内拼接本地提取的《SCP: Secret Laboratory》C.A.S.S.I.E. 语音片段，通过 Web Audio 生成预览音频并导出 WAV；同时也支持 Kokoro TTS 模型生成。
 
-Double-click `run-local.bat` to start the local static server and open the app in the default browser.
+## 运行方式
+
+双击项目目录里的 `run-local.bat`，脚本会启动本地静态服务，并自动用默认浏览器打开网页。
+
+手动启动也可以：
 
 ```powershell
-cd "D:\盒子\HTML\C.A.S.S.I.E. web"
 python -m http.server 5173 --bind 127.0.0.1
 ```
 
-Open `http://127.0.0.1:5173/`.
+然后打开：
 
-## Modes
+```text
+http://127.0.0.1:5173/
+```
 
-The app has two separate generator surfaces:
+## 功能模式
 
-- **Original clip mode** keeps the SCP:SL / C.A.S.S.I.E. behavior: it tokenizes text, matches words and phrases against the extracted audio library, optionally adds the duration-matched `BG_4..BG_40` bed, then exports a WAV.
-- **Kokoro TTS mode** sends the full text directly to a browser-side Kokoro model. It does not validate each word against the C.A.S.S.I.E. clip library, so high-frequency words and missing archive terms can be spoken normally.
+应用有两个独立界面：
 
-Kokoro TTS currently exposes these voices:
+- **原版语音拼接模式**：保留 SCP:SL / C.A.S.S.I.E. 的片段拼接思路。程序会把输入文本分词，优先匹配词库中的单词和短语，可选叠加按时长匹配的 `BG_4..BG_40` 背景提示音，最后导出 WAV。
+- **Kokoro TTS 模式**：将文本交给浏览器侧 Kokoro 模型生成语音，不再逐词检查 C.A.S.S.I.E. 词库，因此极高频词和本地片段缺失的词也可以正常朗读。
+
+Kokoro TTS 当前预置音色：
 
 - `am_michael`
 - `bm_daniel`
 - `am_adam`
 
-The static page loads `kokoro-js` from the jsDelivr ESM CDN inside `src/tts-worker.js`, so model loading and speech generation do not block the main UI thread. The default model is `onnx-community/Kokoro-82M-v1.0-ONNX`, with automatic WebGPU-first loading and WASM fallback. First use needs network access to download the model files; after the browser caches them, later loads are faster. The model ID, backend, and dtype can be edited in the page for custom Kokoro-compatible models.
+静态页面会在 `src/tts-worker.js` 中从 jsDelivr ESM CDN 加载 `kokoro-js`，模型加载和生成都在 worker 中执行，避免阻塞主界面。默认模型为 `onnx-community/Kokoro-82M-v1.0-ONNX`，会优先尝试 WebGPU，并在不可用时回退到 WASM。首次使用需要联网下载模型文件；浏览器缓存后，后续加载会更快。页面中也可以编辑模型 ID、后端和 dtype，以使用兼容 Kokoro 的自定义模型。
 
-TTS mode keeps the original processing controls: gap, overlap, voice delay, speed, pitch, tail reverb, and optional duration-matched `BG_N` background audio. Normal mode splits text into sentence/line segments. Fragment mode first segments text with the C.A.S.S.I.E. clip library's longest phrase matching, then generates one matched phrase/token at a time to mimic the clipped original cadence. Progress and elapsed time update during generation, and generation can be cancelled between units.
+TTS 模式保留原版处理参数：间隔、提前播放、语音延迟、语速、音高、尾音混响，以及可选的 `BG_N` 背景提示音。正常模式按句段生成，并可在估算的句内词边界插入间隔；碎片模式会先用 C.A.S.S.I.E. 词库做最长短语匹配，再把剩余普通词组成 2-3 词短碎片生成，以保留更明显的拼接感。生成过程中会显示进度和耗时，也可以中途停止。
 
-TTS announcement templates use pure text. Fillable official-announcement fields are rendered as normal form controls, highlighted in the preview, and then inserted into the TTS text box as plain editable text.
+TTS 版官方公告模板使用纯文本。可填写字段以普通表单控件展示，预览中会高亮字段，应用后会把完整文本写入 TTS 输入框，方便继续编辑。
 
-## Assets
+## 音频资源
 
-Primary audio was extracted from:
+主要语音资源来自：
 
-`C:\Users\LENOVO\Downloads\CASSIE-1.2.0\cassie.data`
-
-That file is a custom `.NET BinaryReader` archive:
-
-1. `OGGDATA1` magic, 8 bytes
-2. little-endian `Int32` file count
-3. repeated entries: 7-bit length UTF-8 path, little-endian `Int64` byte length, raw Ogg bytes
-
-Extracted files live in `assets/audio/cassie-data/`. The app manifest lives at `assets/audio/manifest.json`.
-
-Official wiki MP3 samples are also mirrored into `assets/audio/wiki-announcements/`. These are full rendered announcement examples from the wiki, so they are useful for exact playback of missing-word announcements, but they cannot replace fill-in templates when the player wants a different SCP number, unit designation, or count.
-
-To decode another copy:
-
-```powershell
-python tools\extract-cassie-data.py "C:\Users\LENOVO\Downloads\CASSIE-1.2.0\cassie.data" "assets\audio\cassie-data"
+```text
+CASSIE-1.2.0\cassie.data
+(见原项目：Convex89524/C.A.S.S.I.E)
 ```
 
-To refresh the official wiki MP3 mirrors and manifest entries:
+`cassie.data` 是一个自定义 `.NET BinaryReader` 归档，结构如下：
+
+1. `OGGDATA1` 魔数，8 字节。
+2. 小端 `Int32` 文件数量。
+3. 重复条目：7-bit 长度 UTF-8 路径、小端 `Int64` 字节长度、原始 Ogg 数据。
+
+已提取文件位于 `assets/audio/cassie-data/`，应用 manifest 位于 `assets/audio/manifest.json`。
+
+官方 wiki MP3 示例也已镜像到 `assets/audio/wiki-announcements/`。这些文件是完整渲染后的公告示例，适合直接播放缺词公告，但当玩家需要自定义 SCP 编号、单位代号或数量时，仍不能替代可填写模板。
+
+重新解码另一份 `cassie.data`：
+
+```powershell
+python tools\extract-cassie-data.py "<cassie.data 文件路径>" "assets\audio\cassie-data"
+```
+
+刷新官方 wiki MP3 镜像和 manifest 条目：
 
 ```powershell
 python tools\import-wiki-audio.py
 ```
 
-## Announcement templates
+## 官方公告模板
 
-Template subtitles were checked against:
+模板字幕已对照以下来源核查：
 
-`https://en.scpslgame.com/index.php?title=C.A.S.S.I.E.`
+```text
+https://en.scpslgame.com/index.php?title=C.A.S.S.I.E.
+<SCP: Secret Laboratory 安装目录>\Translations\en\Subtitles.txt
+```
 
-`E:\SteamLibrary\steamapps\common\SCP Secret Laboratory\Translations\en\Subtitles.txt`
+本次核查的 wiki 版本最后编辑于 2026-09-08，包含游戏内公告和建议 / 自定义公告示例。
 
-The wiki revision checked here was last edited on 2026-09-08 and includes both in-game announcements and suggested/custom announcement examples.
+页面内模板生成器已包含可由本地语音库拼出的可填写官方公告：
 
-The in-page template builder includes fill-in official announcements that can be produced by the extracted audio library:
+- MTF / NTF 入场公告，包括入场 + 待收容数量，以及入场 + `All SCPs secured` 变体。
+- 待重新收容数量公告。
+- SCP 终止公告：未指定原因、由 SCP 终止、由 Automatic Security System 终止、由 Alpha Warhead 终止、由 Marshmallow Man 终止。
+- SCP 收容公告：由 Science Personnel、Class-D Personnel、Chaos Insurgency、未知单位、指定 Containment Unit 收容，以及在 Decontamination Sequence 中丢失。
+- 发电机进度和完成公告，包括 `3 out of 3 generators activated. All generators have been successfully engaged.`。
+- Overcharge、Facility operational、LCZ decontamination、Alpha Warhead 启动 / 取消 / 恢复与时间选择、Dead Man's Switch、Chaos Insurgency Gate A 公告。
+- wiki 中可完全本地配音的自定义示例：`Hello and welcome to Site-02.`、`SCP-999 successfully terminated.`、`Unauthorized user detected at HCZ-096 terminal.`。
 
-- MTF / NTF entry announcements, including entry + re-containment count and entry + `All SCPs secured` variants.
-- Awaiting re-containment count announcements.
-- SCP termination announcements: unspecified cause, by SCP, Automatic Security System, Alpha Warhead, and Marshmallow Man.
-- SCP containment announcements: Science Personnel, Class-D Personnel, Chaos Insurgency, unknown unit, specific containment unit, and lost in Decontamination Sequence.
-- Generator progress and completion announcements, including `3 out of 3 generators activated. All generators have been successfully engaged.`
-- Overcharge, Facility operational, LCZ decontamination, Alpha Warhead start/cancel/resume with time selection, Dead Man's Switch, and Chaos Insurgency Gate A announcements.
-- Custom-announcement examples from the wiki that can be fully voiced locally: `Hello and welcome to Site-02.`, `SCP-999 successfully terminated.`, and `Unauthorized user detected at HCZ-096 terminal.`
+模板生成器也包含官方 wiki MP3 一键模板，用于播放无法逐词从本地归档重建的完整公告：
 
-The template builder also includes official wiki MP3 one-click templates for full announcements that cannot be rebuilt word-by-word from the local archive:
+- MTF 入场且仍有 SCP 存活。
+- MTF 入场且无 SCP 存活。
+- Ghostbusters。
+- Tactical Holiday。
+- 完整 Dead Man's Switch。
+- GLaDOS 自定义示例。
 
-- MTF entry with SCPs alive, MTF entry with no SCPs alive, Ghostbusters, Tactical Holiday, full Dead Man's Switch, and the GLaDOS custom example.
+仍未作为完整可填写模板暴露的 wiki 公告，主要原因是本地音频归档缺少必要词语：
 
-Some wiki announcements are still not exposed as full fill-in templates because the local audio archive is missing required words:
+- 标准 MTF 疏散完整句缺少 `advised`、`protocols`、`reaches`、`destination`；`No SCPs Alive` 变体还缺少 `safety`、`remains`、`within`、`exercise`。
+- Ghostbusters 公告缺少 `ghostbusters` 和 `specters`。
+- Tactical Holiday 完整公告缺少 `holiday`、`workshop`、`elves`、`gingerbread`、`festivized`、`sight` 及相关季节词，尽管本地有 `xmas_epsilon11`、`xmas_scpsubjects` 等部分片段。
+- 完整 Dead Man's Switch 可以使用本地 `dms_ann` 片段，但无法逐词重建，因为缺少 `underground`、`section`、`set`、`recovery`、`switch`。
+- GLaDOS 笑话示例缺少 `oh` 和 `GLaDOS`。
 
-- Full standard MTF evacuation sentence: missing `advised`, `protocols`, `reaches`, and `destination`; the `No SCPs Alive` variant also lacks `safety`, `remains`, `within`, and `exercise`.
-- Ghostbusters announcement: missing `ghostbusters` and `specters`.
-- Full Tactical Holiday announcement: missing `holiday`, `workshop`, `elves`, `gingerbread`, `festivized`, `sight`, and related seasonal terms, despite local partial clips such as `xmas_epsilon11` and `xmas_scpsubjects`.
-- Full Dead Man's Switch sentence can use local `dms_ann`; word-by-word rebuild is not available because `underground`, `section`, `set`, `recovery`, and `switch` are missing.
-- GLaDOS joke example is not exposed because `oh` and `GLaDOS` are missing.
+## 重要说明
 
-## Notes
-
-- The raw voice clips are dry, but the app defaults to program-style processing: `3000ms` voice delay and `60` tail reverb.
-- Background audio is optional and defaults off.
-- The duplicate-asset cleanup pass found no byte-identical audio files, duplicate manifest entries, or unreferenced `.ogg`/`.mp3`/`.wav` assets, so no audio files were removed.
-- `BG_4` through `BG_40` are selected by the number after `BG_`, which is the noise-bed duration between the leading and trailing prompt sounds.
-- `cassie.data` contains `BG_4..BG_40` except `BG_14`; this project keeps a generated `BG_14.wav` supplement so every duration from 4 to 40 is available.
-- The app selects `BG_N` by `ceil(sentence duration + voice delay)`, clamped to the available `4..40` range, matching the original folder lookup behavior.
-- `the` is an input alias: it resolves to `the_vowel` before vowel-sound words and `the_consonant` otherwise.
-- SCP numeric designations are read digit-by-digit: `SCP-999` becomes `SCP`, `9`, `9`, `9` instead of a single `999` token.
-- Wiki-style `Epsilon-11`, `re-containment`, and `Dead Man's Switch` spellings are normalized before matching so copied announcement text does not drop those clips.
-- English number words are aliases for existing numeric clips when available: for example `eleven` resolves to `11`.
-- Text input greedily matches multiword clip names before falling back to single words: for example `nine tailed fox` resolves to `Nine-Tailed Fox`, and `mobile task force unit` resolves to `Mobile Task Force unit`.
-- `Awating Recontainment Of` is treated as the full phrase `awaiting re-containment of`, matching the actual clip audio and avoiding a duplicated `of` in generated announcements.
-- The archive also contains hidden letter clips (`_a.._z`), suffix clips (`_suffix_ing`, `_suffix_plural_regular`, etc.), and fragment clips (`anti-`, `pre-`, `-ish`, `-like`). They remain searchable in the clip list for manual composition.
-- Speed and pitch follow the original C# behavior: both are applied as a playback-rate/resampling factor.
-- Voice gap, overlap, and voice delay mirror the original builder semantics.
-- TTS normal mode keeps sentence-level generation, then uses the interval setting to insert short gaps at estimated low-energy word boundaries inside each sentence.
-- TTS fragment mode greedily uses C.A.S.S.I.E. phrase clips first, then groups leftover words into 2-3 word automatic phrases. It no longer generates extra context for cropping, avoiding leaked context tails while keeping a clearer concatenated feel.
-- Fragment audio still trims each generated phrase with an 8ms RMS window and keeps roughly the original word-clip median edge padding: 16ms leading and 52ms trailing before the selected gap is applied.
+- 原始语音片段本身是干声；程序默认添加类似游戏播报的后处理：`3000ms` 语音延迟和 `60` 尾音混响。
+- 背景提示音默认关闭，可在界面中手动启用。
+- 重复资源清理检查没有发现字节完全相同的音频、重复 manifest 条目或未引用的 `.ogg` / `.mp3` / `.wav`，因此没有删除音频文件。
+- `BG_4` 到 `BG_40` 会按文件名数字选择；数字表示两段提示音之间背景噪声的持续秒数。
+- `cassie.data` 中包含 `BG_4..BG_40`，但缺少 `BG_14`；本项目保留了生成的 `BG_14.wav` 补充文件，使 4 到 40 秒区间完整可用。
+- 应用会按 `ceil(语句时长 + 语音延迟)` 选择 `BG_N`，并限制在可用的 `4..40` 范围内，匹配原项目的文件夹查找行为。
+- `the` 是输入别名：元音音素前解析为 `the_vowel`，其他情况解析为 `the_consonant`。
+- SCP 数字编号会逐位朗读：`SCP-999` 会变成 `SCP`、`9`、`9`、`9`，而不是单个 `999`。
+- 复制 wiki 文本时，`Epsilon-11`、`re-containment`、`Dead Man's Switch` 等写法会在匹配前规范化，避免遗漏对应片段。
+- 英文数字词会在可用时映射到数字音频，例如 `eleven` 会解析为 `11`。
+- 文本输入会优先贪婪匹配多词片段，再回退到单词。例如 `nine tailed fox` 会解析为 `Nine-Tailed Fox`，`mobile task force unit` 会解析为 `Mobile Task Force unit`。
+- `Awating Recontainment Of` 会作为完整短语 `awaiting re-containment of` 处理，匹配实际音频内容，避免生成公告时重复出现 `of`。
+- 归档中还包含隐藏字母片段（`_a.._z`）、后缀片段（`_suffix_ing`、`_suffix_plural_regular` 等）和词缀片段（`anti-`、`pre-`、`-ish`、`-like`）。这些仍可在片段列表中搜索并手动组合。
+- 语速和音高沿用原 C# 行为：二者都会作为播放率 / 重采样系数应用。
+- 间隔、提前播放和语音延迟沿用原生成器语义。
+- TTS 正常模式保持句段级生成，然后用“间隔”参数在估算的低能量词边界插入短暂停顿。
+- TTS 碎片模式优先使用 C.A.S.S.I.E. 词库短语，再把剩余词组为 2-3 词自动短语。它不再生成额外上下文进行裁剪，以避免上下文尾音泄漏，同时保留更清晰的拼接感。
+- 碎片音频会用 8ms RMS 窗口剪裁每段首尾静音，并保留接近原版词片段中位数的边缘留白：开头约 16ms，结尾约 52ms，然后再应用用户设置的间隔。
