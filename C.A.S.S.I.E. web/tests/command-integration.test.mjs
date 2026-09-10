@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import * as controls from "../src/cassie-controls.js";
+import * as inlineEffects from "../src/tts-inline-effects.js";
+import * as backgroundAudio from "../src/background-audio.js";
 
 function loadApp() {
   const elements = new Map();
@@ -21,9 +23,9 @@ function loadApp() {
   };
   let source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
   source = source.slice(0, source.lastIndexOf("\nrenderAnnouncementTemplates();"))
-    .replace(/^import[^\n]+\n/, "")
+    .replace(/^import[^\n]+\r?\n/gm, "")
     .replace("import.meta.url", '"http://localhost/app.js"');
-  const context = vm.createContext({ document, URL, ...controls });
+  const context = vm.createContext({ document, URL, ...controls, ...inlineEffects, ...backgroundAudio });
   vm.runInContext(`${source}\nthis.api = {state, els, applyTextToSentence, buildTtsUnits, makeTtsRenderItem, renderTtsPostProcessedBuffer};`, context);
   const api = context.api;
   api.state.clips = JSON.parse(readFileSync(new URL("../assets/audio/manifest.json", import.meta.url), "utf8")).clips;
@@ -73,6 +75,17 @@ for (const mode of ["normal", "fragment"]) {
   });
 }
 
+for (const mode of ["normal", "fragment"]) {
+  test(`${mode} TTS sends clean words to Kokoro and retains inline effects`, () => {
+    const app = loadApp();
+    app.els.ttsGenerationMode.value = mode;
+    const { units } = app.buildTtsUnits("A containm——ent brea-a-a-a-ch has been detect-t-t-t-t-detected.");
+    assert.equal(units.map((unit) => unit.text).join(" ").includes("——"), false);
+    assert.equal(units.map((unit) => unit.text).join(" ").includes("-a-a"), false);
+    assert.equal(units.reduce((sum, unit) => sum + (unit.inlineEffects?.length || 0), 0), 3);
+  });
+}
+
 test("TTS renderer keeps ordering between audio buffers and controls", async () => {
   const app = loadApp();
   const speech = { duration: 1, numberOfChannels: 1 };
@@ -98,12 +111,14 @@ test("worker returns effects unchanged while generating only spoken text", async
   vm.runInContext('state.currentJobId = 1; state.tts = { generate }; ensureLoaded = async () => ({backend:"wasm",dtype:"q8"}); this.generateJob = handleGenerate;', context);
   const before = controls.parseCassieControlCommands("$SLEEP_500")[0].controlsBefore;
   const after = controls.parseCassieControlCommands("$REPEAT_2")[0].controlsBefore;
-  await context.generateJob(1, { mode: "normal", voice: "am_michael", speed: 1.2, units: [{ text: "Attention.", controlsBefore: before, controlsAfter: after }] });
+  const inline = [{ type: "hold", anchorRatio: 0.5, durationMs: 440 }];
+  await context.generateJob(1, { mode: "normal", voice: "am_michael", speed: 1.2, units: [{ text: "Attention.", controlsBefore: before, controlsAfter: after, inlineEffects: inline }] });
   assert.equal(calls[0].text, "Attention.");
   assert.equal(calls[0].options.speed, 1.2);
   const done = messages.find((message) => message.type === "done");
   assert.ok(done);
   assert.deepEqual(plain(done.parts[0].controlsBefore), before);
   assert.deepEqual(plain(done.parts[0].controlsAfter), after);
+  assert.deepEqual(plain(done.parts[0].inlineEffects), inline);
   assert.ok(done.parts[0].wav.byteLength > 44);
 });

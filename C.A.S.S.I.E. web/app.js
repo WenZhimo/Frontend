@@ -1,4 +1,6 @@
 import { parseCassieControlCommands, controlLabel, buildCassieTimeline, scheduleCassieTimeline } from "./src/cassie-controls.js";
+import { parseInlineTtsEffects, attachInlineTtsEffects, applyInlineEffectsToChannels } from "./src/tts-inline-effects.js";
+import { synthesizeExactBackgroundChannels } from "./src/background-audio.js";
 
 // Application state and DOM bindings
 const state = {
@@ -7,6 +9,7 @@ const state = {
   words: [],
   phrases: [],
   backgrounds: [],
+  synthesizedBackground: null,
   selected: [],
   category: "word",
   decoded: new Map(),
@@ -1223,10 +1226,11 @@ async function loadManifest() {
   state.backgrounds = state.clips
     .filter((clip) => clip.category === "background")
     .sort((a, b) => getBackgroundSeconds(a) - getBackgroundSeconds(b));
+  state.synthesizedBackground = null;
 
   els.assetCount.textContent = `${state.manifest.counts.total} clips / ${state.manifest.counts.word} words`;
   els.libraryMeta.textContent = `${state.manifest.counts.word} 词 · ${state.manifest.counts.phrase} 公告 · ${state.manifest.counts.background} BG`;
-  setStatus("词库就绪。默认语音延迟 3000ms，尾音混响 60；背景会按语句时长匹配 BG_4~BG_40。");
+  setStatus("词库就绪。默认语音延迟 3000ms，尾音混响 60；背景会按完整播报时长精确生成。");
   renderWordList();
   applyTextToSentence();
 }
@@ -1593,18 +1597,46 @@ function getBackgroundSeconds(clip) {
   return match ? Number(match[1]) : Number.POSITIVE_INFINITY;
 }
 
-function getBackgroundClip(targetSeconds) {
+function getBackgroundMasterClip() {
   if (state.backgrounds.length === 0) return null;
+  const timedBackgrounds = state.backgrounds.filter((clip) => Number.isFinite(getBackgroundSeconds(clip)));
+  if (timedBackgrounds.length === 0) return null;
+  return timedBackgrounds.find((clip) => getBackgroundSeconds(clip) === 40)
+    || timedBackgrounds.reduce((longest, clip) => (
+      getBackgroundSeconds(clip) > getBackgroundSeconds(longest) ? clip : longest
+    ), timedBackgrounds[0]);
+}
 
-  const target = clamp(Math.ceil(targetSeconds), 4, 40);
-  const direct = state.backgrounds.find((clip) => getBackgroundSeconds(clip) === target);
-  if (direct) return direct;
+function createBufferFromChannels(channels, sampleRate) {
+  const output = getAudioContext().createBuffer(channels.length, channels[0].length, sampleRate);
+  channels.forEach((channel, index) => output.getChannelData(index).set(channel));
+  return output;
+}
 
-  return state.backgrounds.reduce((best, clip) => {
-    const currentDiff = Math.abs(getBackgroundSeconds(clip) - target);
-    const bestDiff = Math.abs(getBackgroundSeconds(best) - target);
-    return currentDiff < bestDiff ? clip : best;
-  }, state.backgrounds[0]);
+async function getExactBackgroundBuffer(targetSeconds) {
+  const masterClip = getBackgroundMasterClip();
+  if (!masterClip) return null;
+  const target = Math.max(4, Math.ceil(Number(targetSeconds) || 0));
+  const cacheKey = `${masterClip.file}:${target}`;
+  if (state.synthesizedBackground?.key === cacheKey) return state.synthesizedBackground.value;
+
+  const masterBuffer = await decodeClip(masterClip);
+  const sourceChannels = Array.from(
+    { length: masterBuffer.numberOfChannels },
+    (_, index) => masterBuffer.getChannelData(index),
+  );
+  const synthesized = synthesizeExactBackgroundChannels(sourceChannels, masterBuffer.sampleRate, target);
+  const result = {
+    buffer: createBufferFromChannels(synthesized.channels, masterBuffer.sampleRate),
+    clip: {
+      ...masterClip,
+      name: `BG_AUTO_${synthesized.plan.targetSeconds}s`,
+      backgroundSeconds: synthesized.plan.targetSeconds,
+      generated: true,
+    },
+  };
+  state.synthesizedBackground = { key: cacheKey, value: result };
+  return result;
 }
 
 async function prepareControlRenderItem(control) {
@@ -1636,9 +1668,10 @@ async function renderSpeechTimeline(items, options, mode, playbackRate) {
   let backgroundBuffer = null;
   resultState.lastBackgroundClip = null;
   if (options.enableBackground) {
-    resultState.lastBackgroundClip = getBackgroundClip(timeline.duration);
-    if (resultState.lastBackgroundClip) {
-      backgroundBuffer = await decodeClip(resultState.lastBackgroundClip);
+    const background = await getExactBackgroundBuffer(timeline.duration);
+    if (background) {
+      resultState.lastBackgroundClip = background.clip;
+      backgroundBuffer = background.buffer;
     }
   }
 
@@ -2157,9 +2190,14 @@ function buildTtsUnits(rawText) {
   let pendingControls = [];
   parseCassieControlCommands(rawText).forEach((segment) => {
     pendingControls.push(...segment.controlsBefore);
+    const inline = parseInlineTtsEffects(segment.text);
     const segmentUnits = mode === "fragment"
-      ? splitTtsFragmentUnits(segment.text)
-      : splitTtsNormalSpeechSegments(segment.text).map(makeSentenceTtsUnit);
+      ? splitTtsFragmentUnits(inline.text)
+      : splitTtsNormalSpeechSegments(inline.text).map(makeSentenceTtsUnit);
+    const attached = attachInlineTtsEffects(segmentUnits, inline.effects);
+    if (attached.unmatched.length > 0) {
+      throw new Error(`无法定位词内效果：${attached.unmatched.map((effect) => effect.rawWord).join("、")}`);
+    }
     if (segmentUnits.length === 0) return;
     if (pendingControls.length > 0) {
       segmentUnits[0].controlsBefore = pendingControls;
@@ -2234,6 +2272,16 @@ function trimAudioBufferSilence(
 
 function prepareTtsFragmentPart(part) {
   return trimAudioBufferSilence(part.buffer);
+}
+
+function applyTtsInlineEffects(buffer, effects) {
+  if (!effects?.length) return buffer;
+  const channels = Array.from(
+    { length: buffer.numberOfChannels },
+    (_, index) => buffer.getChannelData(index),
+  );
+  const processed = applyInlineEffectsToChannels(channels, buffer.sampleRate, effects);
+  return createBufferFromChannels(processed, buffer.sampleRate);
 }
 
 function findQuietWordBoundary(buffer, approximateSample, minSample, maxSample) {
@@ -2346,6 +2394,7 @@ function makeTtsRenderItem(buffer, part) {
     minGapAfterMs: Math.max(0, Number(part?.minGapAfterMs) || 0),
     controlsBefore: part?.controlsBefore || [],
     controlsAfter: part?.controlsAfter || [],
+    inlineEffects: part?.inlineEffects || [],
   };
 }
 
@@ -2355,9 +2404,15 @@ function normalizeTtsRenderItem(item) {
 
 function prepareTtsRenderItemsForMode(parts, mode, options) {
   if (mode !== "fragment") {
-    return parts.map((part) => makeTtsRenderItem(prepareTtsSentencePart(part, options), part));
+    return parts.map((part) => {
+      const effected = applyTtsInlineEffects(part.buffer, part.inlineEffects);
+      return makeTtsRenderItem(prepareTtsSentencePart({ ...part, buffer: effected }, options), part);
+    });
   }
-  return parts.map((part) => makeTtsRenderItem(prepareTtsFragmentPart(part), part));
+  return parts.map((part) => {
+    const trimmed = prepareTtsFragmentPart(part);
+    return makeTtsRenderItem(applyTtsInlineEffects(trimmed, part.inlineEffects), part);
+  });
 }
 
 function setTtsReadyState(isReady) {
@@ -2535,6 +2590,7 @@ async function finishGeneratedTtsJob(message) {
     (sum, part) => sum + (part.controlsBefore?.length || 0) + (part.controlsAfter?.length || 0),
     0,
   );
+  const inlineEffectCount = decodedParts.reduce((sum, part) => sum + (part.inlineEffects?.length || 0), 0);
   const trimLabel = isFragmentMode
     ? `，词库短语 ${lexiconCount}，自动短语 ${autoGroupCount}，落单词 ${autoSingleCount}，已剪裁短语首尾静音`
     : "";
@@ -2542,7 +2598,8 @@ async function finishGeneratedTtsJob(message) {
     ? `，句内词间隔 ${wordGapCount} 处`
     : "";
   const controlLabel = controlCount ? `，控制指令 ${controlCount} 个` : "";
-  setTtsStatus(`TTS 生成完成：${els.ttsVoice.value}，${parts.length} 个${modeLabel}，音频 ${fmtSeconds(buffer.duration)}，耗时 ${fmtSeconds(elapsedMs / 1000)}，后端 ${String(message.backend || "").toUpperCase()} / ${message.dtype}${bgLabel}${trimLabel}${wordGapLabel}${controlLabel}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
+  const inlineLabel = inlineEffectCount ? `，词内效果 ${inlineEffectCount} 个` : "";
+  setTtsStatus(`TTS 生成完成：${els.ttsVoice.value}，${parts.length} 个${modeLabel}，音频 ${fmtSeconds(buffer.duration)}，耗时 ${fmtSeconds(elapsedMs / 1000)}，后端 ${String(message.backend || "").toUpperCase()} / ${message.dtype}${bgLabel}${trimLabel}${wordGapLabel}${controlLabel}${inlineLabel}。已应用间隔 ${options.gapMs}ms、提前播放 ${options.overlapMs}ms、延迟 ${options.voiceDelayMs}ms、语速 ${options.speedPercent}%、音高 ${options.pitchSemitones}、尾音混响 ${options.reverbLevel}。`);
   resolvePendingTtsJob(message.jobId, buffer);
 }
 

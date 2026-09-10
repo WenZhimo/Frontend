@@ -271,6 +271,7 @@ async function handleGenerate(jobId, message) {
         minGapAfterMs: unit.minGapAfterMs || 0,
         controlsBefore: unit.controlsBefore || [],
         controlsAfter: unit.controlsAfter || [],
+        inlineEffects: unit.inlineEffects || [],
         wav,
       });
       transfers.push(wav);

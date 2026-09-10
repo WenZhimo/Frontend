@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>C.A.S.S.I.E. Signal Console</title>
-    <link rel="icon" href="data:,">
+    <link rel="icon" type="image/jpeg" href="assets/images/scp-logo.jpg">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -103,7 +103,7 @@
           <div class="panel-heading">
             <div>
               <h2 id="controlsTitle">生成参数</h2>
-              <span>BG_4~BG_40 自动匹配</span>
+              <span>按播报时长精确生成 BG 背景</span>
             </div>
           </div>
 
@@ -136,7 +136,7 @@
 
           <label class="toggle-line">
             <input id="enableBackground" type="checkbox">
-            <span>启用 BG_N 背景提示音</span>
+            <span>启用精确时长背景提示音</span>
           </label>
 
           <label class="range-line">
@@ -163,7 +163,7 @@
           <div class="panel-heading">
             <div>
               <h2 id="ttsScriptTitle">TTS 文本</h2>
-              <span>正常模式可插入句内词间隔；碎片模式词库优先，普通词切成短碎片</span>
+              <span>支持词内拖音、复读、卡顿；碎片模式词库优先</span>
             </div>
           </div>
 
@@ -273,7 +273,7 @@
 
           <label class="toggle-line">
             <input id="ttsEnableBackground" type="checkbox">
-            <span>启用 BG_N 背景提示音</span>
+            <span>启用精确时长背景提示音</span>
           </label>
 
           <label class="range-line">
