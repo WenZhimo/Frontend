@@ -111,7 +111,7 @@ def extract_archive(archive_path: Path, output_dir: Path) -> dict:
             )
 
     manifest = {
-        "archive": str(archive_path),
+        "archive": archive_path.name,
         "count": len(entries),
         "entries": entries,
     }
