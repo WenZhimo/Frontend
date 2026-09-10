@@ -105,6 +105,8 @@ Some wiki announcements are still not exposed as full fill-in templates because 
 - Wiki-style `Epsilon-11`, `re-containment`, and `Dead Man's Switch` spellings are normalized before matching so copied announcement text does not drop those clips.
 - English number words are aliases for existing numeric clips when available: for example `eleven` resolves to `11`.
 - Text input greedily matches multiword clip names before falling back to single words: for example `nine tailed fox` resolves to `Nine-Tailed Fox`, and `mobile task force unit` resolves to `Mobile Task Force unit`.
+- `Awating Recontainment Of` is treated as the full phrase `awaiting re-containment of`, matching the actual clip audio and avoiding a duplicated `of` in generated announcements.
 - The archive also contains hidden letter clips (`_a.._z`), suffix clips (`_suffix_ing`, `_suffix_plural_regular`, etc.), and fragment clips (`anti-`, `pre-`, `-ish`, `-like`). They remain searchable in the clip list for manual composition.
 - Speed and pitch follow the original C# behavior: both are applied as a playback-rate/resampling factor.
 - Voice gap, overlap, and voice delay mirror the original builder semantics.
+- TTS fragment mode trims leading and trailing silence on each generated word before applying the selected gap, so word-by-word output stays clipped instead of drifting toward one-second pauses.
