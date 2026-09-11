@@ -23,9 +23,9 @@ test("only wrapped dollar commands are removed from spoken text", () => {
 });
 
 test("leading, consecutive and trailing wrapped commands retain order", () => {
-  const segments = parse("#{$SLEEP_100} #{$G_1,G_2,G_3} Danger #{$SLEEP_200}");
-  assert.deepEqual(segments[0].controlsBefore.map((item) => item.type), ["sleep", "glitch-overlay"]);
-  assert.deepEqual(segments[0].controlsBefore[1].clipNames, ["g1", "g2", "g3"]);
+  const segments = parse("#{$SLEEP_100} #{$GAP_0} #{$G_1,G_2,G_3} Danger #{$SLEEP_200}");
+  assert.deepEqual(segments[0].controlsBefore.map((item) => item.type), ["sleep", "gap", "glitch-overlay"]);
+  assert.deepEqual(segments[0].controlsBefore[2].clipNames, ["g1", "g2", "g3"]);
   assert.equal(segments[0].text.trim(), "Danger");
   assert.equal(segments[1].text, "");
   assert.equal(segments[1].controlsBefore[0].durationMs, 200);
@@ -41,6 +41,9 @@ test("malformed wrapped commands fail explicitly while bare legacy syntax remain
     "#{$SLEEP_bad}",
     "#{$SLEEP_-1}",
     "#{$SLEEP_10001}",
+    "#{$GAP_bad}",
+    "#{$GAP_-1}",
+    "#{$GAP_10001}",
     "#{$SLEEP}",
     "#{$UNKNOWN_3}",
     "#{$G_0}",
@@ -74,6 +77,19 @@ test("explicit pauses replace default gaps while preserving punctuation minima",
   near(plan(items, { ...options, gapMs: 80 }).duration, 2.28);
   items[1].control = control("#{$SLEEP_500}");
   near(plan(items, { ...options, gapMs: 80 }).duration, 2.5);
+});
+
+test("exact gap overrides default and punctuation gaps", () => {
+  const speech = buffer();
+  near(plan([{ buffer: speech, minGapAfterMs: 500 }, { control: control("#{$GAP_0}") }, { buffer: speech }], { ...options, gapMs: 200 }).duration, 2);
+  near(plan([{ buffer: speech, minGapAfterMs: 80 }, { control: control("#{$GAP_500}") }, { buffer: speech }], { ...options, gapMs: 200 }).duration, 2.5);
+});
+
+test("command split SCP designations stay digit-by-digit", () => {
+  const segments = parse("SCP-#{$GAP_0}173 has breached");
+  assert.equal(segments[0].text.trim(), "SCP");
+  assert.equal(segments[1].controlsBefore[0].type, "gap");
+  assert.equal(segments[1].text.trim(), "1 7 3 has breached");
 });
 
 test("glitch sequence overlays the next speech without advancing its layout", () => {

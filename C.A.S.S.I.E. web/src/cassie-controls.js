@@ -1,6 +1,19 @@
 const commandWrapperPattern = /#\{([^{}\r\n]*)\}/g;
 const sleepCommandPattern = /^\$SLEEP_(\d+)$/i;
+const gapCommandPattern = /^\$GAP_(\d+)$/i;
 const glitchCommandPattern = /^\$G_[1-6](?:\s*,\s*G_[1-6])*$/i;
+const commandSeparatedScpPattern = /\bSCP\b\s*[-_#]?\s*(#\{[$#][^{}\r\n]*\})\s*(\d+(?:[-_]\d+)*)\b/gi;
+
+function spaceDigits(value) {
+  return String(value || "").replace(/\D/g, "").split("").filter(Boolean).join(" ");
+}
+
+function normalizeCommandSeparatedDesignations(source) {
+  return String(source || "").replace(
+    commandSeparatedScpPattern,
+    (_match, command, digits) => `SCP ${command} ${spaceDigits(digits)}`,
+  );
+}
 
 function parseControl(payload) {
   const sleep = sleepCommandPattern.exec(payload);
@@ -8,6 +21,13 @@ function parseControl(payload) {
     const durationMs = Number(sleep[1]);
     if (durationMs > 10000) throw new Error(`停顿时长必须在 0 到 10000ms 之间：#{${payload}}`);
     return { type: "sleep", durationMs };
+  }
+
+  const gap = gapCommandPattern.exec(payload);
+  if (gap) {
+    const durationMs = Number(gap[1]);
+    if (durationMs > 10000) throw new Error(`精确间隔必须在 0 到 10000ms 之间：#{${payload}}`);
+    return { type: "gap", durationMs };
   }
 
   if (glitchCommandPattern.test(payload)) {
@@ -22,7 +42,7 @@ function parseControl(payload) {
 }
 
 export function parseCassieControlCommands(text) {
-  const source = String(text || "");
+  const source = normalizeCommandSeparatedDesignations(text);
   const dangling = /#\{[$#][^}\r\n]*(?=\r?\n|$)/.exec(source);
   if (dangling) throw new Error(`标记缺少右花括号：${dangling[0]}`);
 
@@ -58,6 +78,7 @@ export function parseCassieControlCommands(text) {
 
 export function controlLabel(control) {
   if (control.type === "sleep") return `SLEEP ${control.durationMs}ms`;
+  if (control.type === "gap") return `GAP ${control.durationMs}ms`;
   if (control.type === "glitch-overlay") return `GLITCH ${control.clipNames.map((name) => name.toUpperCase()).join(" → ")}`;
   return String(control.type || "CONTROL").toUpperCase();
 }
@@ -121,6 +142,14 @@ export function buildCassieTimeline(items, options) {
 
     if (control.type === "sleep") {
       cursor += Math.max(pendingGap, control.durationMs / 1000);
+      pendingGap = 0;
+      duration = Math.max(duration, cursor);
+      checkLimits();
+      continue;
+    }
+
+    if (control.type === "gap") {
+      cursor += control.durationMs / 1000;
       pendingGap = 0;
       duration = Math.max(duration, cursor);
       checkLimits();

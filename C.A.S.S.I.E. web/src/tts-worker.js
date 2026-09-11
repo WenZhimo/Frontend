@@ -272,6 +272,8 @@ async function handleGenerate(jobId, message) {
         controlsBefore: unit.controlsBefore || [],
         controlsAfter: unit.controlsAfter || [],
         inlineEffects: unit.inlineEffects || [],
+        trimLeadingSilence: Boolean(unit.trimLeadingSilence),
+        trimTrailingSilence: Boolean(unit.trimTrailingSilence),
         wav,
       });
       transfers.push(wav);

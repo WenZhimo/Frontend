@@ -1956,7 +1956,7 @@ function hasTtsSpeechContent(text) {
 }
 
 function pushTtsNormalTextSegments(segments, text, minGapAfterMs = 0) {
-  const cleanText = String(text || "").trim();
+  const cleanText = normalizeTtsFreeTextSegment(String(text || "").trim());
   if (!cleanText) return;
 
   if (!hasTtsSpeechContent(cleanText)) {
@@ -2223,10 +2223,28 @@ function buildTtsUnits(rawText) {
   if (pendingControls.length > 0 && unitItems.length > 0) {
     unitItems[unitItems.length - 1].controlsAfter = pendingControls;
   }
+  applyTtsGapTrimHints(unitItems);
   return {
     mode,
     units: unitItems.filter(Boolean).map((unit, index) => ({ index, ...unit })),
   };
+}
+
+function controlListHasExactGap(controls) {
+  return (controls || []).some((control) => control.type === "gap");
+}
+
+function applyTtsGapTrimHints(units) {
+  units.forEach((unit, index) => {
+    if (controlListHasExactGap(unit.controlsBefore)) {
+      unit.trimLeadingSilence = true;
+      if (index > 0) units[index - 1].trimTrailingSilence = true;
+    }
+    if (controlListHasExactGap(unit.controlsAfter)) {
+      unit.trimTrailingSilence = true;
+      if (index < units.length - 1) units[index + 1].trimLeadingSilence = true;
+    }
+  });
 }
 
 function ttsModeLabel(mode) {
@@ -2251,7 +2269,11 @@ function trimAudioBufferSilence(
   threshold = TTS_FRAGMENT_TRIM_THRESHOLD,
   leadingPaddingMs = TTS_FRAGMENT_LEADING_PADDING_MS,
   trailingPaddingMs = TTS_FRAGMENT_TRAILING_PADDING_MS,
+  options = {},
 ) {
+  const trimLeading = options.trimLeading !== false;
+  const trimTrailing = options.trimTrailing !== false;
+  if (!trimLeading && !trimTrailing) return buffer;
   const windowSize = Math.max(1, Math.round((TTS_FRAGMENT_TRIM_WINDOW_MS / 1000) * buffer.sampleRate));
   let firstAudible = buffer.length;
   let lastAudible = -1;
@@ -2267,8 +2289,8 @@ function trimAudioBufferSilence(
 
   const leadingPadding = Math.round((leadingPaddingMs / 1000) * buffer.sampleRate);
   const trailingPadding = Math.round((trailingPaddingMs / 1000) * buffer.sampleRate);
-  const start = Math.max(0, firstAudible - leadingPadding);
-  const end = Math.min(buffer.length, lastAudible + trailingPadding + 1);
+  const start = trimLeading ? Math.max(0, firstAudible - leadingPadding) : 0;
+  const end = trimTrailing ? Math.min(buffer.length, lastAudible + trailingPadding + 1) : buffer.length;
   if (start === 0 && end === buffer.length) return buffer;
 
   const trimmed = getAudioContext().createBuffer(
@@ -2399,7 +2421,13 @@ function insertWordGaps(buffer, slotCount, gapMs) {
 
 function prepareTtsSentencePart(part, options) {
   const gapMs = Math.max(0, options.gapMs - options.overlapMs);
-  return insertWordGaps(part.buffer, part.wordGapSlots || 0, gapMs);
+  const buffer = (part.trimLeadingSilence || part.trimTrailingSilence)
+    ? trimAudioBufferSilence(part.buffer, TTS_FRAGMENT_TRIM_THRESHOLD, 6, 6, {
+      trimLeading: part.trimLeadingSilence,
+      trimTrailing: part.trimTrailingSilence,
+    })
+    : part.buffer;
+  return insertWordGaps(buffer, part.wordGapSlots || 0, gapMs);
 }
 
 function makeTtsRenderItem(buffer, part) {
@@ -2409,6 +2437,8 @@ function makeTtsRenderItem(buffer, part) {
     controlsBefore: part?.controlsBefore || [],
     controlsAfter: part?.controlsAfter || [],
     inlineEffects: part?.inlineEffects || [],
+    trimLeadingSilence: Boolean(part?.trimLeadingSilence),
+    trimTrailingSilence: Boolean(part?.trimTrailingSilence),
   };
 }
 
@@ -2670,6 +2700,14 @@ function normalizeTtsSpeechText(text, options = {}) {
     .replace(/\bT\s*[-–—]\s*(\d+)/gi, "T minus $1")
     .replace(/\bSite\s*[-–—]\s*(\d+)/gi, (_match, digits) => `Site ${digits.split("").join(" ")}`)
     .replace(/\bC\.?\s*A\.?\s*S\.?\s*S\.?\s*I\.?\s*E\.?\b/gi, "Cassie");
+}
+
+function normalizeTtsFreeTextSegment(text) {
+  return String(text || "")
+    .replace(/\bSCP\b\s*[-_#]?\s*$/gi, "S C P")
+    .replace(/\bSCP\b/gi, "S C P")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 async function renderTtsPostProcessedBuffer(rawItems, options) {
@@ -3074,6 +3112,7 @@ function bindSpeechControls() {
       <div class="speech-control-type">
         <label><span>语法快捷插入</span><select data-speech-command-control aria-label="播报指令类型">
           <option value="SLEEP">停顿</option>
+          <option value="GAP">精确间隔</option>
           <option value="GLITCH">故障音覆盖</option>
           <option value="COMMENT">注释</option>
         </select></label>
@@ -3090,7 +3129,9 @@ function bindSpeechControls() {
             <b>通用命令</b>
             <dl>
               <dt><code>#{$SLEEP_500}</code></dt>
-              <dd>停顿 500ms，可填写 0–10000ms。</dd>
+              <dd>插入至少 500ms 的停顿，会保留更长的默认/标点停顿。</dd>
+              <dt><code>#{$GAP_0}</code></dt>
+              <dd>精确覆盖两个片段之间的间隔；0ms 用于连读，500ms 用于强制半秒间隔，例如 SCP-#{$GAP_0}173。</dd>
               <dt><code>#{$G_3,G_1,G_3}</code></dt>
               <dd>按顺序叠加故障音，不占用语音时间线；可用 G_1 至 G_6，可重复。</dd>
               <dt><code>#{#编辑备注}</code></dt>
@@ -3142,10 +3183,11 @@ function bindSpeechControls() {
     select.addEventListener("change", () => {
       const isGlitch = select.value === "GLITCH";
       const isComment = select.value === "COMMENT";
+      const isGap = select.value === "GAP";
       const usesText = isGlitch || isComment;
-      valueLabel.textContent = isGlitch ? "音频序列" : (isComment ? "注释内容" : "时长 ms");
+      valueLabel.textContent = isGlitch ? "音频序列" : (isComment ? "注释内容" : (isGap ? "间隔 ms" : "时长 ms"));
       input.type = usesText ? "text" : "number";
-      input.value = isGlitch ? "G_1,G_2,G_3,G_4,G_5,G_6" : (isComment ? "注释内容" : "500");
+      input.value = isGlitch ? "G_1,G_2,G_3,G_4,G_5,G_6" : (isComment ? "注释内容" : (isGap ? "0" : "500"));
       input.min = usesText ? "" : "0";
       input.max = usesText ? "" : "10000";
       input.step = usesText ? "" : "10";
@@ -3159,7 +3201,7 @@ function bindSpeechControls() {
         ? `#{${"$"}${input.value.split(",").map((value) => value.trim().toUpperCase()).filter(Boolean).join(",")}}`
         : (select.value === "COMMENT"
           ? `#{#${input.value.replace(/[{}\r\n]/g, " ")}}`
-          : `#{${"$"}SLEEP_${Number(input.value) || 0}}`);
+          : `#{${"$"}${select.value === "GAP" ? "GAP" : "SLEEP"}_${Number(input.value) || 0}}`);
       const start = target.selectionStart;
       const end = target.selectionEnd;
       const leading = start > 0 && !/\s/.test(target.value[start - 1]) ? " " : "";

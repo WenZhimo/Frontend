@@ -48,6 +48,26 @@ test("original matching keeps SCP digits and phrase boundaries around wrapped co
   assert.ok(!app.state.selected.some((item) => /detonation sequence cancelled/i.test(item.clip?.name)));
 });
 
+test("exact gap controls SCP designation pauses in original and TTS modes", () => {
+  const app = loadApp();
+  app.els.textInput.value = "SCP-#{$GAP_0}173 has entered the facility";
+  app.applyTextToSentence();
+  assert.ok(!app.els.missingTokens.textContent.includes("未匹配"));
+  assert.deepEqual(Array.from(app.state.selected.slice(0, 5), (item) => item.control?.type || item.clip.name.toLowerCase()), ["scp", "gap", "1", "7", "3"]);
+  assert.equal(app.state.selected[1].control.durationMs, 0);
+
+  app.els.ttsGenerationMode.value = "normal";
+  const normal = app.buildTtsUnits("SCP-#{$GAP_0}173 has entered the facility").units;
+  assert.deepEqual(plain(normal.slice(0, 2).map((unit) => unit.text)), ["S C P", "1 7 3 has entered the facility"]);
+  assert.equal(normal[1].controlsBefore[0].type, "gap");
+  assert.equal(normal[0].trimTrailingSilence, true);
+  assert.equal(normal[1].trimLeadingSilence, true);
+
+  app.els.ttsGenerationMode.value = "fragment";
+  const fragment = app.buildTtsUnits("SCP #{$GAP_500} 173 has entered the facility").units;
+  assert.equal(fragment[1].controlsBefore[0].durationMs, 500);
+});
+
 test("invalid wrapped commands clear stale original queue while legacy syntax is not parsed", () => {
   const app = loadApp();
   app.els.textInput.value = "attention all personnel";
@@ -146,13 +166,14 @@ test("TTS renderer keeps ordering between speech, pauses, and glitch overlays", 
   const speech = { duration: 1, numberOfChannels: 1 };
   vm.runInContext("renderSpeechTimeline = async (items, options, mode, playbackRate) => ({ items, mode, playbackRate }); decodeClip = async (clip) => ({ name: clip.name, duration: 0.1 });", app.context);
   const sleep = controls.parseCassieControlCommands("#{$SLEEP_500}")[0].controlsBefore[0];
+  const gap = controls.parseCassieControlCommands("#{$GAP_0}")[0].controlsBefore[0];
   const glitch = controls.parseCassieControlCommands("#{$G_1,G_2}")[0].controlsBefore[0];
   const items = [
-    app.makeTtsRenderItem(speech, { controlsBefore: [sleep] }),
+    app.makeTtsRenderItem(speech, { controlsBefore: [sleep, gap], trimLeadingSilence: true }),
     app.makeTtsRenderItem(speech, { controlsAfter: [glitch] }),
   ];
   const result = await app.renderTtsPostProcessedBuffer(items, { pitchSemitones: 12 });
-  assert.deepEqual(Array.from(result.items, (item) => item.control?.type || "speech"), ["sleep", "speech", "speech", "glitch-overlay"]);
+  assert.deepEqual(Array.from(result.items, (item) => item.control?.type || "speech"), ["sleep", "gap", "speech", "speech", "glitch-overlay"]);
   assert.equal(result.items.at(-1).buffers.length, 2);
   assert.equal(result.mode, "tts");
   assert.equal(result.playbackRate, 2);
@@ -169,7 +190,7 @@ test("worker returns effects and wrapped-command metadata while generating only 
   const before = controls.parseCassieControlCommands("#{$SLEEP_500}")[0].controlsBefore;
   const after = controls.parseCassieControlCommands("#{$G_1,G_2}")[0].controlsBefore;
   const inline = [{ type: "hold", anchorRatio: 0.5, durationMs: 440 }];
-  await context.generateJob(1, { mode: "normal", voice: "am_michael", speed: 1.2, units: [{ text: "Attention.", controlsBefore: before, controlsAfter: after, inlineEffects: inline }] });
+  await context.generateJob(1, { mode: "normal", voice: "am_michael", speed: 1.2, units: [{ text: "Attention.", controlsBefore: before, controlsAfter: after, inlineEffects: inline, trimLeadingSilence: true, trimTrailingSilence: true }] });
   assert.equal(calls[0].text, "Attention.");
   assert.equal(calls[0].options.speed, 1.2);
   const done = messages.find((message) => message.type === "done");
@@ -177,5 +198,7 @@ test("worker returns effects and wrapped-command metadata while generating only 
   assert.deepEqual(plain(done.parts[0].controlsBefore), before);
   assert.deepEqual(plain(done.parts[0].controlsAfter), after);
   assert.deepEqual(plain(done.parts[0].inlineEffects), inline);
+  assert.equal(done.parts[0].trimLeadingSilence, true);
+  assert.equal(done.parts[0].trimTrailingSilence, true);
   assert.ok(done.parts[0].wav.byteLength > 44);
 });
