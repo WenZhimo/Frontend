@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TTS 真实波形图片生成器</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b7f7a'/%3E%3Cpath d='M9 32h8c2-16 8-16 10 0s8 16 10 0 8-16 10 0h8' fill='none' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app">
+    <section class="workspace" aria-label="TTS 真实波形图片生成器">
+      <aside class="panel editor-panel">
+        <header class="panel-header">
+          <div>
+            <h1>TTS 真实波形图片生成器</h1>
+            <p>两套模式都由 TTS 生成音频，再从真实音频峰值绘制图片。</p>
+          </div>
+          <span class="status-dot" aria-hidden="true"></span>
+        </header>
+
+        <div class="toolbar" aria-label="文本格式">
+          <button class="tool-btn" type="button" data-command="bold" title="加粗"><strong>B</strong></button>
+          <button class="tool-btn" type="button" data-command="italic" title="斜体"><em>I</em></button>
+          <button class="tool-btn" type="button" data-command="underline" title="下划线"><u>U</u></button>
+          <label class="color-tool" title="文字颜色">
+            <span>色</span>
+            <input id="textColor" type="color" value="#101820">
+          </label>
+          <select id="fontSize" class="select-inline" title="文字大小">
+            <option value="3">标准</option>
+            <option value="2">小字</option>
+            <option value="4">大字</option>
+            <option value="5">标题</option>
+          </select>
+          <button id="resetSample" class="ghost-btn" type="button">示例</button>
+        </div>
+
+        <div id="editor" class="text-editor" contenteditable="true" spellcheck="false" aria-label="输入文字"></div>
+
+        <div class="mode-card">
+          <label>
+            <span>生成模式</span>
+            <select id="synthesisMode">
+              <option value="letters">字母发音版 · 先用 TTS 生成 A-Z</option>
+              <option value="words">单词发音版 · 按输入逐词生成</option>
+            </select>
+          </label>
+          <div class="mode-actions" data-mode-panel="letters">
+            <button id="sampleLettersBtn" class="primary-btn" type="button">生成 A-Z 字母采样</button>
+            <small>同一音色/语速会缓存；换音色后可重新生成不同波形。</small>
+          </div>
+          <div class="mode-actions" data-mode-panel="words" hidden>
+            <button id="generateWordsBtn" class="primary-btn" type="button">生成输入单词波形</button>
+            <small>以单词/连续文本块为单位生成，然后按原空格、换行拼接。</small>
+          </div>
+        </div>
+
+        <div class="control-grid">
+          <label>
+            <span>Kokoro 音色</span>
+            <select id="ttsVoice">
+              <option value="am_michael">am_michael</option>
+              <option value="bm_daniel">bm_daniel</option>
+              <option value="am_adam">am_adam</option>
+              <option value="af_heart">af_heart</option>
+              <option value="af_bella">af_bella</option>
+              <option value="bf_emma">bf_emma</option>
+              <option value="bm_george">bm_george</option>
+            </select>
+          </label>
+          <label>
+            <span>后端</span>
+            <select id="ttsBackend">
+              <option value="auto">自动</option>
+              <option value="wasm">WASM</option>
+              <option value="webgpu">WebGPU</option>
+            </select>
+          </label>
+          <label>
+            <span>精度</span>
+            <select id="ttsDtype">
+              <option value="auto">自动</option>
+              <option value="q8">q8</option>
+              <option value="fp32">fp32</option>
+            </select>
+          </label>
+          <label>
+            <span>导出格式</span>
+            <select id="format">
+              <option value="png">PNG</option>
+              <option value="svg">SVG</option>
+              <option value="webp">WEBP</option>
+              <option value="jpeg">JPG</option>
+            </select>
+          </label>
+          <label>
+            <span>背景</span>
+            <select id="backgroundMode">
+              <option value="paper">纸白</option>
+              <option value="transparent">透明</option>
+              <option value="soft">淡灰</option>
+            </select>
+          </label>
+          <label>
+            <span>全局墨色</span>
+            <input id="inkColor" type="color" value="#111111">
+          </label>
+          <label>
+            <span>纸张颜色</span>
+            <input id="paperColor" type="color" value="#fbfcfe">
+          </label>
+        </div>
+
+        <div class="slider-stack">
+          <label>
+            <span>横向密度 px/s <output id="pixelsPerSecondOut">92</output></span>
+            <input id="pixelsPerSecond" type="range" min="36" max="220" value="92">
+          </label>
+          <label>
+            <span>行距 <output id="lineHeightOut">48</output></span>
+            <input id="lineHeight" type="range" min="28" max="96" value="48">
+          </label>
+          <label>
+            <span>波形高度 <output id="amplitudeOut">20</output></span>
+            <input id="amplitude" type="range" min="6" max="42" value="20">
+          </label>
+          <label>
+            <span>墨迹毛边 <output id="roughnessOut">28</output></span>
+            <input id="roughness" type="range" min="0" max="100" value="28">
+          </label>
+          <label>
+            <span>单位间隔 ms <output id="unitGapOut">120</output></span>
+            <input id="unitGap" type="range" min="0" max="500" value="120">
+          </label>
+          <label>
+            <span>TTS 语速 % <output id="ttsSpeedOut">100</output></span>
+            <input id="ttsSpeed" type="range" min="50" max="180" value="100">
+          </label>
+        </div>
+
+        <div class="checks">
+          <label><input id="preserveStyle" type="checkbox" checked> 保留编辑器颜色与粗斜线</label>
+          <label><input id="showGuides" type="checkbox" checked> 显示淡参考横线</label>
+          <label><input id="tightCrop" type="checkbox"> 紧凑裁切</label>
+        </div>
+
+        <section id="generationProgress" class="generation-progress" aria-live="polite" aria-busy="false">
+          <div class="progress-header">
+            <strong id="progressLabel">待生成</strong>
+            <span id="progressCount">0%</span>
+          </div>
+          <progress id="progressBar" max="1" value="0"></progress>
+          <small id="progressDetail">点击生成后会显示模型加载、当前语音单元和耗时。</small>
+        </section>
+
+        <div class="actions">
+          <button id="playAudioBtn" class="secondary-btn" type="button">试听拼接音频</button>
+          <button id="downloadBtn" class="primary-btn" type="button">导出图片</button>
+          <button id="copyPngBtn" class="secondary-btn" type="button">复制 PNG</button>
+          <button id="clearBtn" class="ghost-btn" type="button">清空</button>
+        </div>
+
+        <p id="audioStatus" class="status" role="status" aria-live="polite">请选择模式并生成 TTS 音频。</p>
+      </aside>
+
+      <section class="preview-panel">
+        <div class="preview-topbar">
+          <div>
+            <strong>实时预览</strong>
+            <span id="metrics">0 音频单元 · 0 × 0</span>
+          </div>
+          <div class="preview-actions" aria-label="预览控制">
+            <div class="zoom-controls" aria-label="画布缩放">
+              <button id="zoomOutBtn" class="ghost-btn compact zoom-btn" type="button" title="缩小画布">-</button>
+              <span id="previewZoomLabel" class="zoom-label">100%</span>
+              <button id="zoomInBtn" class="ghost-btn compact zoom-btn" type="button" title="放大画布">+</button>
+              <button id="zoomFitBtn" class="ghost-btn compact" type="button" title="适应当前画布视口">适屏</button>
+              <button id="zoomResetBtn" class="ghost-btn compact" type="button" title="恢复 1:1">1:1</button>
+            </div>
+            <button id="refreshSeed" class="ghost-btn compact" type="button" title="重绘墨迹">重绘</button>
+          </div>
+        </div>
+        <div id="previewShell" class="preview-shell" title="按 Ctrl + 鼠标滚轮缩放画布">
+          <div id="preview" class="preview" role="img" aria-label="TTS 波形文字预览"></div>
+        </div>
+        <div class="alphabet-strip" aria-label="TTS 字母采样参考">
+          <div class="strip-title">TTS alphabet sample map</div>
+          <div id="alphabetMap" class="alphabet-map"></div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
