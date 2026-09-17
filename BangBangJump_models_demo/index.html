@@ -8,12 +8,27 @@
   <script type="module" src="vendor/model-viewer.min.js"></script>
   <style>
     :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --ink: #f4f7fb;
+      --muted: #9ca8b8;
+      --line: #2c3542;
+      --panel: #171d26;
+      --panel-strong: #202936;
+      --accent: #f06474;
+      --accent-2: #55c8ba;
+      --soft: #252e3b;
+      --shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+    }
+
+    body.light-theme {
       color-scheme: light;
       --bg: #f7f6f0;
       --ink: #15171f;
       --muted: #626676;
       --line: #ddd8cb;
       --panel: #ffffff;
+      --panel-strong: #f0eee7;
       --accent: #e84a5f;
       --accent-2: #168f86;
       --soft: #f0eee7;
@@ -35,6 +50,7 @@
       background: var(--bg);
       color: var(--ink);
       letter-spacing: 0;
+      transition: background-color 180ms ease, color 180ms ease;
     }
 
     button,
@@ -55,8 +71,13 @@
       gap: 18px;
       padding: 28px;
       border-right: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.72);
+      background: rgba(13, 17, 23, 0.78);
       backdrop-filter: blur(12px);
+      transition: background-color 180ms ease, border-color 180ms ease;
+    }
+
+    body.light-theme .sidebar {
+      background: rgba(255, 255, 255, 0.72);
     }
 
     .brand {
@@ -109,6 +130,7 @@
       color: var(--ink);
       background: var(--panel);
       outline: none;
+      transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
     }
 
     .search:focus {
@@ -261,6 +283,7 @@
       font-weight: 780;
       text-decoration: none;
       cursor: pointer;
+      transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
     }
 
     .action.primary {
@@ -276,10 +299,18 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       background:
+        linear-gradient(180deg, rgba(29, 37, 48, 0.95), rgba(14, 18, 24, 0.98)),
+        radial-gradient(circle at 20% 20%, rgba(85, 200, 186, 0.16), transparent 35%),
+        radial-gradient(circle at 80% 30%, rgba(240, 100, 116, 0.18), transparent 34%);
+      box-shadow: var(--shadow);
+      transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    body.light-theme .viewer-wrap {
+      background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(245, 241, 232, 0.94)),
         radial-gradient(circle at 20% 20%, rgba(22, 143, 134, 0.13), transparent 35%),
         radial-gradient(circle at 80% 30%, rgba(232, 74, 95, 0.12), transparent 34%);
-      box-shadow: var(--shadow);
     }
 
     model-viewer {
@@ -303,6 +334,7 @@
       font-size: 12px;
       font-weight: 700;
       backdrop-filter: blur(10px);
+      transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
     }
 
     .footer {
@@ -390,6 +422,7 @@
           </div>
         </div>
         <div class="actions">
+          <button class="action" id="themeToggle" type="button" aria-pressed="false">浅色模式</button>
           <button class="action" id="resetView" type="button">重置视角</button>
           <button class="action" id="rotateToggle" type="button">暂停旋转</button>
           <a class="action primary" id="downloadLink" href="models/Anon.glb" download>下载 GLB</a>
@@ -437,7 +470,26 @@
     const status = document.querySelector("#status");
     const downloadLink = document.querySelector("#downloadLink");
     const rotateToggle = document.querySelector("#rotateToggle");
+    const themeToggle = document.querySelector("#themeToggle");
+    const THEME_KEY = "bangbangjump-theme";
     let active = models[0];
+
+    function setTheme(theme) {
+      const isLight = theme === "light";
+      document.body.classList.toggle("light-theme", isLight);
+      themeToggle.textContent = isLight ? "暗黑模式" : "浅色模式";
+      themeToggle.setAttribute("aria-pressed", String(isLight));
+      themeToggle.setAttribute("aria-label", isLight ? "切换到暗黑模式" : "切换到浅色模式");
+      themeToggle.title = isLight ? "切换到暗黑模式" : "切换到浅色模式";
+    }
+
+    let savedTheme = null;
+    try {
+      savedTheme = localStorage.getItem(THEME_KEY);
+    } catch {
+      savedTheme = null;
+    }
+    setTheme(savedTheme === "light" ? "light" : "dark");
 
     function renderList(filter = "") {
       const query = filter.trim().toLowerCase();
@@ -492,6 +544,16 @@
     rotateToggle.addEventListener("click", () => {
       viewer.autoRotate = !viewer.autoRotate;
       rotateToggle.textContent = viewer.autoRotate ? "暂停旋转" : "开始旋转";
+    });
+
+    themeToggle.addEventListener("click", () => {
+      const nextTheme = document.body.classList.contains("light-theme") ? "dark" : "light";
+      setTheme(nextTheme);
+      try {
+        localStorage.setItem(THEME_KEY, nextTheme);
+      } catch {
+        // Theme still changes for the current page when storage is unavailable.
+      }
     });
 
     customElements.whenDefined("model-viewer").catch(() => {
