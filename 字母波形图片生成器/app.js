@@ -18,6 +18,9 @@ const controls = {
   lineHeight: document.querySelector("#lineHeight"),
   amplitude: document.querySelector("#amplitude"),
   roughness: document.querySelector("#roughness"),
+  spikeBoost: document.querySelector("#spikeBoost"),
+  waveformDetail: document.querySelector("#waveformDetail"),
+  inkBleed: document.querySelector("#inkBleed"),
   unitGap: document.querySelector("#unitGap"),
   preserveStyle: document.querySelector("#preserveStyle"),
   showGuides: document.querySelector("#showGuides"),
@@ -350,6 +353,9 @@ function getSettings() {
     lineHeight: Number(controls.lineHeight.value),
     amplitude: Number(controls.amplitude.value),
     roughness: Number(controls.roughness.value) / 100,
+    spikeBoost: clamp(Number(controls.spikeBoost.value) || 280, 100, 500) / 100,
+    waveformDetail: clamp(Number(controls.waveformDetail.value) || 4, 1, 8),
+    inkBleed: clamp(Number(controls.inkBleed.value) || 18, 0, 100) / 100,
     unitGapMs: Number(controls.unitGap.value),
     preserveStyle: controls.preserveStyle.checked,
     showGuides: controls.showGuides.checked,
@@ -541,9 +547,23 @@ function trimAudioSilence(buffer) {
   };
 }
 
+function shapeWaveSample(value, peak, gamma = 0.8) {
+  if (!peak) return 0;
+  const magnitude = clamp(Math.abs(value) / peak, 0, 1);
+  return Math.sign(value) * Math.pow(magnitude, gamma);
+}
+
 function getWavePeaks(buffer, width, settings, seedText = "") {
   const safeWidth = Math.max(1, Math.round(width));
-  const cacheId = `${safeWidth}|${settings.roughness.toFixed(3)}|${seedText}`;
+  const detailScale = clamp(Math.round(settings.waveformDetail || 4), 1, 8);
+  const microWidth = Math.min(12000, Math.max(safeWidth, Math.round(safeWidth * detailScale)));
+  const cacheId = [
+    safeWidth,
+    detailScale,
+    settings.roughness.toFixed(3),
+    Number(settings.spikeBoost || 2.8).toFixed(2),
+    seedText
+  ].join("|");
   let cache = audioPeakCache.get(buffer);
   if (!cache) {
     cache = new Map();
@@ -552,11 +572,14 @@ function getWavePeaks(buffer, width, settings, seedText = "") {
   if (cache.has(cacheId)) return cache.get(cacheId);
 
   const random = mulberry32(fnv1a(`${cacheId}:${buffer.duration}:${buffer.length}`));
-  const mins = new Float32Array(safeWidth);
-  const maxs = new Float32Array(safeWidth);
-  for (let x = 0; x < safeWidth; x += 1) {
-    const start = Math.floor((x / safeWidth) * buffer.length);
-    const end = Math.min(buffer.length, Math.max(start + 1, Math.floor(((x + 1) / safeWidth) * buffer.length)));
+  const rawMins = new Float32Array(microWidth);
+  const rawMaxs = new Float32Array(microWidth);
+  const envelopes = new Float32Array(microWidth);
+  let peak = 0;
+
+  for (let x = 0; x < microWidth; x += 1) {
+    const start = Math.floor((x / microWidth) * buffer.length);
+    const end = Math.min(buffer.length, Math.max(start + 1, Math.floor(((x + 1) / microWidth) * buffer.length)));
     let min = 1;
     let max = -1;
     for (let i = start; i < end; i += 1) {
@@ -564,12 +587,63 @@ function getWavePeaks(buffer, width, settings, seedText = "") {
       if (sample < min) min = sample;
       if (sample > max) max = sample;
     }
-    const inkJitter = 1 + (random() - 0.5) * settings.roughness * 0.26;
-    mins[x] = (min === 1 ? 0 : min) * inkJitter;
-    maxs[x] = (max === -1 ? 0 : max) * inkJitter;
+    const safeMin = min === 1 ? 0 : min;
+    const safeMax = max === -1 ? 0 : max;
+    rawMins[x] = safeMin;
+    rawMaxs[x] = safeMax;
+    envelopes[x] = Math.max(Math.abs(safeMin), Math.abs(safeMax));
+    peak = Math.max(peak, envelopes[x]);
   }
 
-  const peaks = { mins, maxs, width: safeWidth };
+  const mins = new Float32Array(safeWidth);
+  const maxs = new Float32Array(safeWidth);
+  for (let x = 0; x < safeWidth; x += 1) {
+    const start = Math.floor((x / safeWidth) * microWidth);
+    const end = Math.min(microWidth, Math.max(start + 1, Math.floor(((x + 1) / safeWidth) * microWidth)));
+    let min = 1;
+    let max = -1;
+    for (let i = start; i < end; i += 1) {
+      if (rawMins[i] < min) min = rawMins[i];
+      if (rawMaxs[i] > max) max = rawMaxs[i];
+    }
+    const inkJitter = 1 + (random() - 0.5) * settings.roughness * 0.34;
+    mins[x] = shapeWaveSample(min === 1 ? 0 : min, peak, 0.8) * inkJitter;
+    maxs[x] = shapeWaveSample(max === -1 ? 0 : max, peak, 0.8) * inkJitter;
+  }
+
+  const spikes = [];
+  const safePeak = peak || 1;
+  const spikeBoost = Number(settings.spikeBoost || 2.8);
+  for (let i = 0; i < microWidth; i += 1) {
+    const envelope = envelopes[i] / safePeak;
+    const previous = i > 0 ? envelopes[i - 1] / safePeak : envelope;
+    const next = i < microWidth - 1 ? envelopes[i + 1] / safePeak : envelope;
+    const neighbor = Math.max(previous, next);
+    const rising = Math.max(0, envelope - neighbor);
+    const localPeak = envelope > 0.018
+      && envelope >= previous * 1.015
+      && envelope >= next * 1.015;
+    const keepHairline = envelope > 0.014 && (localPeak || i % 2 === 0);
+    if (!keepHairline) continue;
+
+    const prominence = clamp(rising / 0.12, 0, 1);
+    const gain = localPeak
+      ? 1 + spikeBoost * (0.18 + prominence * 0.38)
+      : 1 + spikeBoost * 0.04;
+    const min = clamp(shapeWaveSample(rawMins[i], safePeak, 0.76) * gain, -1.8, 1.8);
+    const max = clamp(shapeWaveSample(rawMaxs[i], safePeak, 0.76) * gain, -1.8, 1.8);
+
+    spikes.push({
+      x: ((i + 0.5) / microWidth) * safeWidth,
+      min,
+      max,
+      localPeak,
+      width: localPeak ? 0.72 + settings.roughness * 0.42 : 0.42 + settings.roughness * 0.2,
+      opacity: clamp(0.18 + envelope * 0.56 + (localPeak ? 0.16 : 0), 0.18, 0.82)
+    });
+  }
+
+  const peaks = { mins, maxs, spikes, width: safeWidth, peak };
   cache.set(cacheId, peaks);
   return peaks;
 }
@@ -595,6 +669,15 @@ function buildWavePath(token, x, centerY, settings) {
 
   const fillPath = `M ${top.join(" L ")} L ${bottom.join(" L ")} Z`;
   const centerPath = `M ${x.toFixed(2)},${centerY.toFixed(2)} L ${(x + width).toFixed(2)},${centerY.toFixed(2)}`;
+  const spikeLines = peaks.spikes.map((spike) => {
+    const spikeX = x + spike.x;
+    const topY = centerY - spike.max * amp;
+    const bottomY = centerY - spike.min * amp;
+    return `<line x1="${spikeX.toFixed(2)}" y1="${topY.toFixed(2)}" x2="${spikeX.toFixed(2)}" y2="${bottomY.toFixed(2)}" stroke="${escapeXml(color)}" stroke-width="${spike.width.toFixed(2)}" stroke-linecap="round" opacity="${spike.opacity.toFixed(3)}"/>`;
+  }).join("");
+  const bleed = settings.inkBleed > 0
+    ? `<path d="${fillPath}" fill="${escapeXml(color)}" opacity="${(0.06 + settings.inkBleed * 0.16).toFixed(3)}" filter="url(#inkBleedFilter)"/>`
+    : "";
   const transform = token.style?.italic
     ? ` transform="translate(${(x + width / 2).toFixed(2)} ${centerY.toFixed(2)}) skewX(-8) translate(${(-x - width / 2).toFixed(2)} ${(-centerY).toFixed(2)})"`
     : "";
@@ -604,8 +687,10 @@ function buildWavePath(token, x, centerY, settings) {
 
   return [
     `<g${transform}>`,
-    `<path d="${fillPath}" fill="${escapeXml(color)}" opacity="${token.style?.bold ? "0.84" : "0.7"}"/>`,
+    bleed,
+    `<path d="${fillPath}" fill="${escapeXml(color)}" opacity="${token.style?.bold ? "0.78" : "0.58"}"/>`,
     `<path d="${centerPath}" stroke="${escapeXml(color)}" stroke-width="${token.style?.bold ? "1.2" : "0.75"}" stroke-linecap="round" opacity="0.32"/>`,
+    spikeLines,
     underline,
     `</g>`
   ].join("");
@@ -640,6 +725,10 @@ function buildSvgString() {
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" role="img" aria-label="Generated TTS waveform text">`);
   parts.push(`<title>TTS waveform text export</title>`);
   parts.push(`<desc>Waveforms are rendered from Kokoro TTS generated audio buffers. Letter mode uses TTS-generated A-Z samples; word mode generates input speech units.</desc>`);
+  if (settings.inkBleed > 0) {
+    const blur = (0.35 + settings.inkBleed * 1.15).toFixed(2);
+    parts.push(`<defs><filter id="inkBleedFilter" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="${blur}"/></filter></defs>`);
+  }
   if (settings.background !== "transparent") {
     parts.push(`<rect width="100%" height="100%" rx="10" fill="${escapeXml(settings.background)}"/>`);
   }
@@ -1140,7 +1229,7 @@ function renderAlphabetMap() {
       width: 60,
       style: { color: settings.inkColor, bold: false, italic: false, underline: false, scale: 1 }
     };
-    return `<div class="letter-card"><svg viewBox="0 0 72 28" aria-hidden="true">${buildWavePath(token, 6, 14, { ...settings, amplitude: 9, roughness: 0.14 })}</svg><span>${letter.toLowerCase()}</span></div>`;
+    return `<div class="letter-card"><svg viewBox="0 0 72 28" aria-hidden="true">${buildWavePath(token, 6, 14, { ...settings, amplitude: 9, roughness: 0.14, spikeBoost: 1.5, waveformDetail: 2, inkBleed: 0 })}</svg><span>${letter.toLowerCase()}</span></div>`;
   }).join("");
 }
 
@@ -1285,7 +1374,7 @@ function updateToolbarState() {
 }
 
 function updateControlOutputs() {
-  ["pixelsPerSecond", "lineHeight", "amplitude", "roughness", "unitGap", "ttsSpeed"].forEach((name) => {
+  ["pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "waveformDetail", "inkBleed", "unitGap", "ttsSpeed"].forEach((name) => {
     const output = document.querySelector(`#${name}Out`);
     if (output) output.value = controls[name].value;
   });
@@ -1319,7 +1408,7 @@ function bindEvents() {
   controls.fontSize.addEventListener("change", (event) => applyFontSize(event.target.value));
   controls.synthesisMode.addEventListener("change", updateModeUi);
 
-  ["backgroundMode", "inkColor", "paperColor", "pixelsPerSecond", "lineHeight", "amplitude", "roughness", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
+  ["backgroundMode", "inkColor", "paperColor", "pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "waveformDetail", "inkBleed", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
     controls[name].addEventListener("input", () => {
       updateControlOutputs();
       renderFromCache();
