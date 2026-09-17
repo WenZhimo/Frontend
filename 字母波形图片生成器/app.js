@@ -35,6 +35,7 @@ const controls = {
   progressCount: document.querySelector("#progressCount"),
   progressBar: document.querySelector("#progressBar"),
   progressDetail: document.querySelector("#progressDetail"),
+  themeToggle: document.querySelector("#themeToggle"),
   previewShell: document.querySelector("#previewShell"),
   zoomOutBtn: document.querySelector("#zoomOutBtn"),
   zoomInBtn: document.querySelector("#zoomInBtn"),
@@ -52,6 +53,7 @@ const sampleHtml = [
 
 const TTS_WORKER_URL = "./tts-worker.js";
 const TTS_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
+const THEME_STORAGE_KEY = "tts-wave-theme";
 const SILENCE_TRIM = {
   floorThreshold: 0.0035,
   relativeThreshold: 0.018,
@@ -1360,6 +1362,34 @@ function updateControlOutputs() {
   });
 }
 
+function getTheme() {
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+}
+
+function updateThemeToggle() {
+  const isDark = getTheme() === "dark";
+  const icon = controls.themeToggle.querySelector("[aria-hidden]");
+  const label = controls.themeToggle.querySelector("span:not([aria-hidden])");
+  if (icon) icon.textContent = isDark ? "☼" : "☾";
+  if (label) label.textContent = isDark ? "浅色" : "深色";
+  controls.themeToggle.title = isDark ? "切换到浅色模式" : "切换到深色模式";
+  controls.themeToggle.setAttribute("aria-label", controls.themeToggle.title);
+  controls.themeToggle.setAttribute("aria-pressed", String(isDark));
+}
+
+function setTheme(theme, { persist = true } = {}) {
+  const nextTheme = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = nextTheme;
+  if (persist) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    } catch {
+      // Theme still applies for the current page when storage is unavailable.
+    }
+  }
+  updateThemeToggle();
+}
+
 function renderAfterInput() {
   renderTicket += 1;
   stopPlayback({ resetOffset: true, silent: true });
@@ -1379,6 +1409,10 @@ function bindEvents() {
   editor.addEventListener("keyup", updateToolbarState);
   editor.addEventListener("mouseup", updateToolbarState);
   editor.addEventListener("paste", () => window.setTimeout(renderAfterInput, 0));
+
+  controls.themeToggle.addEventListener("click", () => {
+    setTheme(getTheme() === "dark" ? "light" : "dark");
+  });
 
   document.querySelectorAll("[data-command]").forEach((button) => {
     button.addEventListener("click", () => applyCommand(button.dataset.command));
@@ -1468,5 +1502,6 @@ function bindEvents() {
 }
 
 bindEvents();
+setTheme(getTheme(), { persist: false });
 updateControlOutputs();
 updateModeUi();
