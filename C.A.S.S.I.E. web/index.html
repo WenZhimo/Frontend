@@ -205,18 +205,34 @@
           </div>
 
           <div class="control-grid">
-            <label>
-              <span>音色</span>
-              <select id="ttsVoice">
-                <option value="am_michael">am_michael</option>
-                <option value="bm_daniel">bm_daniel</option>
-                <option value="am_adam">am_adam</option>
-              </select>
-            </label>
-            <label>
-              <span>模型 ID</span>
-              <input id="ttsModel" type="text" value="onnx-community/Kokoro-82M-v1.0-ONNX" spellcheck="false">
-            </label>
+            <div class="tts-voice-field">
+              <label>
+                <span>音色</span>
+                <select id="ttsVoice">
+                  <option value="am_michael">am_michael</option>
+                  <option value="bm_daniel">bm_daniel</option>
+                  <option value="am_adam">am_adam</option>
+                </select>
+              </label>
+              <div class="local-picker-actions">
+                <button id="importTtsVoices" class="ghost-button" type="button">导入本地音色（可多选）</button>
+                <button id="clearTtsVoices" class="ghost-button" type="button" disabled>清除本地音色</button>
+                <input id="ttsVoiceFiles" class="file-input-hidden" type="file" accept=".bin,application/octet-stream" multiple>
+              </div>
+              <small id="ttsLocalVoiceStatus" class="local-model-status">使用模型内置音色</small>
+            </div>
+            <div class="tts-model-field">
+              <label>
+                <span>模型 ID</span>
+                <input id="ttsModel" type="text" value="onnx-community/Kokoro-82M-v1.0-ONNX" spellcheck="false">
+              </label>
+              <div class="local-picker-actions">
+                <button id="importTtsModel" class="ghost-button" type="button">导入本地模型目录</button>
+                <button id="clearTtsModel" class="ghost-button" type="button" disabled>改用模型 ID</button>
+                <input id="ttsModelFiles" class="file-input-hidden" type="file" webkitdirectory directory multiple>
+              </div>
+              <small id="ttsLocalModelStatus" class="local-model-status">可填写 Hugging Face 模型 ID，或导入包含配置和 ONNX 权重的目录</small>
+            </div>
             <label>
               <span>推理后端</span>
               <select id="ttsBackend">

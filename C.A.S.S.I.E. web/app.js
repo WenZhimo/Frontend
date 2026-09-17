@@ -37,6 +37,8 @@ const state = {
   tts: {
     worker: null,
     voices: [],
+    localVoiceFiles: [],
+    localModel: null,
     currentJobId: 0,
     pendingJob: null,
     isGenerating: false,
@@ -121,6 +123,14 @@ const els = {
   ttsWaveform: document.querySelector("#ttsWaveform"),
   ttsRenderDuration: document.querySelector("#ttsRenderDuration"),
   ttsStatus: document.querySelector("#ttsStatus"),
+  importTtsVoices: document.querySelector("#importTtsVoices"),
+  clearTtsVoices: document.querySelector("#clearTtsVoices"),
+  ttsVoiceFiles: document.querySelector("#ttsVoiceFiles"),
+  ttsLocalVoiceStatus: document.querySelector("#ttsLocalVoiceStatus"),
+  importTtsModel: document.querySelector("#importTtsModel"),
+  clearTtsModel: document.querySelector("#clearTtsModel"),
+  ttsModelFiles: document.querySelector("#ttsModelFiles"),
+  ttsLocalModelStatus: document.querySelector("#ttsLocalModelStatus"),
 };
 
 // Token normalization and clip alias data
@@ -212,6 +222,7 @@ const HARD_PUNCTUATION_PAUSE_MS = 280;
 const SCP_PREFIX_PAUSE_MS = 150;
 const SCP_DIGIT_PAUSE_MS = 70;
 const SCP_SUFFIX_PAUSE_MS = 150;
+const LOCAL_TTS_MODEL_ID = "local-cassie-model";
 
 // Official announcement template data
 const warheadTimeOptions = [
@@ -890,9 +901,12 @@ function getTtsOptions() {
 
 function getTtsModelSettings() {
   return {
-    modelId: String(els.ttsModel.value || "").trim() || KOKORO_MODEL_ID,
+    modelId: state.tts.localModel ? LOCAL_TTS_MODEL_ID : (String(els.ttsModel.value || "").trim() || KOKORO_MODEL_ID),
     device: els.ttsBackend.value || "auto",
     dtype: els.ttsDtype.value || "auto",
+    localModelFiles: state.tts.localModel?.files || [],
+    localModelLabel: state.tts.localModel?.label || "",
+    localVoiceFiles: state.tts.localVoiceFiles,
   };
 }
 
@@ -920,6 +934,110 @@ function reloadTtsModelOnNextUse() {
   state.tts.currentJobId += 1;
   setTtsProgress("模型设置已变更", 0, 0);
   markTtsDirty();
+}
+
+function normalizeLocalVoiceId(fileName, index = 0) {
+  const raw = String(fileName || "")
+    .replace(/\.[^.]+$/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const language = /^b(?:f|m)_/.test(raw) ? "b" : "a";
+  const safeName = raw.replace(/^[ab]_/, "") || `voice_${index + 1}`;
+  return `${language}_local_${safeName}`;
+}
+
+function localVoiceLabel(fileName) {
+  return String(fileName || "").replace(/\.[^.]+$/, "") || "本地音色";
+}
+
+function refreshTtsVoiceOptions() {
+  const selected = els.ttsVoice.value;
+  const presetGroup = document.createElement("optgroup");
+  presetGroup.label = "模型内置音色";
+  kokoroVoices.forEach((voice) => {
+    const option = document.createElement("option");
+    option.value = voice;
+    option.textContent = voice;
+    presetGroup.appendChild(option);
+  });
+
+  const localGroup = document.createElement("optgroup");
+  localGroup.label = "本地导入音色";
+  state.tts.localVoiceFiles.forEach((voice) => {
+    const option = document.createElement("option");
+    option.value = voice.id;
+    option.textContent = `${voice.label} · ${voice.id}`;
+    localGroup.appendChild(option);
+  });
+
+  els.ttsVoice.replaceChildren(presetGroup);
+  if (state.tts.localVoiceFiles.length > 0) els.ttsVoice.appendChild(localGroup);
+  const available = [...kokoroVoices, ...state.tts.localVoiceFiles.map((voice) => voice.id)];
+  els.ttsVoice.value = available.includes(selected) ? selected : kokoroVoices[0];
+  els.clearTtsVoices.disabled = state.tts.localVoiceFiles.length === 0;
+  els.ttsLocalVoiceStatus.textContent = state.tts.localVoiceFiles.length > 0
+    ? `已添加 ${state.tts.localVoiceFiles.length} 个本地音色；文件只在当前浏览器会话中使用`
+    : "使用模型内置音色";
+}
+
+function clearLocalTtsVoices() {
+  state.tts.localVoiceFiles = [];
+  refreshTtsVoiceOptions();
+  markTtsDirty();
+  setTtsStatus("已清除本地音色；模型内置音色仍可使用。", "normal");
+}
+
+function setLocalTtsModel(files) {
+  const rawPaths = files.map((file) => String(file.webkitRelativePath || file.name || "").replaceAll("\\", "/"));
+  const root = rawPaths[0]?.split("/")[0] || "本地模型";
+  const normalizedFiles = files.map((file, index) => ({
+    path: rawPaths[index].startsWith(`${root}/`) ? rawPaths[index].slice(root.length + 1) : rawPaths[index],
+    file,
+  }));
+  const hasConfig = normalizedFiles.some((entry) => /(^|\/)config\.json$/i.test(entry.path));
+  const hasOnnx = normalizedFiles.some((entry) => /\.onnx$/i.test(entry.path));
+  state.tts.localModel = {
+    id: LOCAL_TTS_MODEL_ID,
+    label: root,
+    displayValue: `本地模型 / ${root}`,
+    files: normalizedFiles,
+  };
+  els.ttsModel.value = state.tts.localModel.displayValue;
+  els.ttsModel.readOnly = true;
+  els.ttsModel.dataset.localModel = "true";
+  els.clearTtsModel.disabled = false;
+  els.ttsLocalModelStatus.textContent = `已选择 ${root} · ${normalizedFiles.length} 个文件${hasConfig && hasOnnx ? "" : " · 未检测到 config.json 或 ONNX 文件，请确认目录结构"}`;
+  reloadTtsModelOnNextUse();
+  setTtsStatus(`已载入本地模型目录 ${root}；点击“加载模型”后开始本地推理。`, "normal");
+}
+
+function clearLocalTtsModel({ reload = true } = {}) {
+  state.tts.localModel = null;
+  els.ttsModel.readOnly = false;
+  delete els.ttsModel.dataset.localModel;
+  els.ttsModel.value = KOKORO_MODEL_ID;
+  els.clearTtsModel.disabled = true;
+  els.ttsLocalModelStatus.textContent = "可填写 Hugging Face 模型 ID，或导入包含配置和 ONNX 权重的目录";
+  if (reload) reloadTtsModelOnNextUse();
+}
+
+function importLocalTtsVoices() {
+  const files = Array.from(els.ttsVoiceFiles.files || []).filter((file) => /\.bin$/i.test(file.name));
+  if (files.length === 0) {
+    setTtsStatus("请选择 Kokoro 音色 .bin 文件；可以一次选择多个文件。", "error");
+    return;
+  }
+  const byId = new Map(state.tts.localVoiceFiles.map((voice) => [voice.id, voice]));
+  files.forEach((file, index) => {
+    const id = normalizeLocalVoiceId(file.name, index);
+    byId.set(id, { id, label: localVoiceLabel(file.name), file });
+  });
+  state.tts.localVoiceFiles = [...byId.values()];
+  refreshTtsVoiceOptions();
+  markTtsDirty();
+  setTtsStatus(`已添加 ${files.length} 个本地音色，可在“音色”下拉栏中选择。`, "normal");
+  els.ttsVoiceFiles.value = "";
 }
 
 // Original C.A.S.S.I.E. token matching
@@ -2509,14 +2627,16 @@ function formatLoadedStatus(message) {
   const backend = String(message.backend || "unknown").toUpperCase();
   const dtype = message.dtype || "auto";
   const enabledVoices = message.enabledVoices || kokoroVoices;
+  const localModelLabel = message.localModelLabel ? ` 本地模型：${message.localModelLabel}。` : "";
+  const localVoiceLabel = message.localVoices?.length ? ` 已载入本地音色：${message.localVoices.join("、")}。` : "";
   if (message.voices?.length) {
     const missingVoices = enabledVoices.filter((voice) => !message.voices.includes(voice));
     const suffix = missingVoices.length
       ? ` 未在模型列表中看到：${missingVoices.join(", ")}；仍保留选项，生成时以模型返回为准。`
       : ` 当前页面启用：${enabledVoices.join(", ")}。`;
-    return `Kokoro 模型已加载（${backend} / ${dtype}），可用音色 ${message.voices.length} 个。${suffix}`;
+    return `Kokoro 模型已加载（${backend} / ${dtype}），可用音色 ${message.voices.length} 个。${suffix}${localModelLabel}${localVoiceLabel}`;
   }
-  return `Kokoro 模型已加载（${backend} / ${dtype}）。当前页面启用：${enabledVoices.join(", ")}。`;
+  return `Kokoro 模型已加载（${backend} / ${dtype}）。当前页面启用：${enabledVoices.join(", ")}。${localModelLabel}${localVoiceLabel}`;
 }
 
 function resolvePendingTtsJob(jobId, value) {
@@ -3225,6 +3345,10 @@ function setTtsBusy(isBusy, options = {}) {
   const allowCancel = Boolean(options.allowCancel);
   [
     els.loadTtsModel,
+    els.importTtsVoices,
+    els.clearTtsVoices,
+    els.importTtsModel,
+    els.clearTtsModel,
     els.generateTts,
     els.playTts,
     els.applyTtsTemplate,
@@ -3297,10 +3421,25 @@ function bindEvents() {
   els.ttsInput.addEventListener("input", markTtsDirty);
   els.ttsVoice.addEventListener("change", markTtsDirty);
   els.ttsModel.addEventListener("input", markTtsDirty);
+  els.ttsModel.addEventListener("input", () => {
+    if (state.tts.localModel && els.ttsModel.value !== state.tts.localModel.displayValue) {
+      clearLocalTtsModel({ reload: false });
+    }
+  });
   els.ttsModel.addEventListener("change", reloadTtsModelOnNextUse);
   els.ttsBackend.addEventListener("change", reloadTtsModelOnNextUse);
   els.ttsDtype.addEventListener("change", reloadTtsModelOnNextUse);
   els.ttsGenerationMode.addEventListener("change", markTtsDirty);
+  els.importTtsVoices.addEventListener("click", () => els.ttsVoiceFiles.click());
+  els.ttsVoiceFiles.addEventListener("change", importLocalTtsVoices);
+  els.clearTtsVoices.addEventListener("click", clearLocalTtsVoices);
+  els.importTtsModel.addEventListener("click", () => els.ttsModelFiles.click());
+  els.ttsModelFiles.addEventListener("change", () => {
+    const files = Array.from(els.ttsModelFiles.files || []);
+    if (files.length > 0) setLocalTtsModel(files);
+    els.ttsModelFiles.value = "";
+  });
+  els.clearTtsModel.addEventListener("click", () => clearLocalTtsModel());
   els.loadTtsModel.addEventListener("click", handleLoadTtsModel);
   els.generateTts.addEventListener("click", () => {
     generateTtsPreview().catch(() => {
@@ -3369,6 +3508,7 @@ function bindEvents() {
 
 renderAnnouncementTemplates();
 renderTtsTemplates();
+refreshTtsVoiceOptions();
 bindEvents();
 drawEmptyWaveform();
 drawTtsEmptyWaveform();

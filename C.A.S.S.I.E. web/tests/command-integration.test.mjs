@@ -26,7 +26,7 @@ function loadApp() {
     .replace(/^import[^\n]+\r?\n/gm, "")
     .replace("import.meta.url", '"http://localhost/app.js"');
   const context = vm.createContext({ document, URL, ...controls, ...inlineEffects, ...backgroundAudio });
-  vm.runInContext(`${source}\nthis.api = {state, els, ttsAnnouncementTemplates, buildTtsTemplateText, applyTextToSentence, buildTtsUnits, makeTtsRenderItem, prepareControlRenderItem, renderTtsPostProcessedBuffer};`, context);
+  vm.runInContext(`${source}\nthis.api = {state, els, ttsAnnouncementTemplates, buildTtsTemplateText, applyTextToSentence, buildTtsUnits, makeTtsRenderItem, prepareControlRenderItem, renderTtsPostProcessedBuffer, importLocalTtsVoices, clearLocalTtsVoices, setLocalTtsModel, clearLocalTtsModel};`, context);
   const api = context.api;
   api.state.clips = JSON.parse(readFileSync(new URL("../assets/audio/manifest.json", import.meta.url), "utf8")).clips;
   return { ...api, context };
@@ -46,6 +46,55 @@ test("original matching keeps SCP digits and phrase boundaries around wrapped co
   app.els.textInput.value = "detonation #{$SLEEP_500} sequence cancelled";
   app.applyTextToSentence();
   assert.ok(!app.state.selected.some((item) => /detonation sequence cancelled/i.test(item.clip?.name)));
+});
+
+test("local Kokoro voices can be imported in one selection and cleared", () => {
+  const app = loadApp();
+  const files = [
+    { name: "am_michael.bin", size: 101, lastModified: 1 },
+    { name: "bm_daniel.bin", size: 202, lastModified: 2 },
+    { name: "bf_emma.bin", size: 252, lastModified: 2 },
+    { name: "custom_voice.bin", size: 303, lastModified: 3 },
+  ];
+  app.els.ttsVoiceFiles.files = files;
+  app.importLocalTtsVoices();
+
+  assert.equal(app.state.tts.localVoiceFiles.length, 4);
+  assert.deepEqual(plain(app.state.tts.localVoiceFiles.map((voice) => voice.id)), [
+    "a_local_am_michael",
+    "b_local_bm_daniel",
+    "b_local_bf_emma",
+    "a_local_custom_voice",
+  ]);
+  assert.equal(app.els.ttsLocalVoiceStatus.textContent, "已添加 4 个本地音色；文件只在当前浏览器会话中使用");
+
+  app.clearLocalTtsVoices();
+  assert.equal(app.state.tts.localVoiceFiles.length, 0);
+  assert.equal(app.els.ttsLocalVoiceStatus.textContent, "使用模型内置音色");
+});
+
+test("local model folder strips the selected root and stays session-only", () => {
+  const app = loadApp();
+  const files = [
+    { name: "config.json", webkitRelativePath: "voice-model/config.json", size: 10 },
+    { name: "tokenizer.json", webkitRelativePath: "voice-model/tokenizer.json", size: 20 },
+    { name: "model_quantized.onnx", webkitRelativePath: "voice-model/model_quantized.onnx", size: 30 },
+  ];
+  app.setLocalTtsModel(files);
+
+  assert.equal(app.state.tts.localModel.id, "local-cassie-model");
+  assert.equal(app.state.tts.localModel.label, "voice-model");
+  assert.deepEqual(plain(app.state.tts.localModel.files.map((entry) => entry.path)), [
+    "config.json",
+    "tokenizer.json",
+    "model_quantized.onnx",
+  ]);
+  assert.match(app.els.ttsLocalModelStatus.textContent, /^已选择 voice-model · 3 个文件$/);
+  assert.equal(app.els.ttsModel.readOnly, true);
+
+  app.clearLocalTtsModel({ reload: false });
+  assert.equal(app.state.tts.localModel, null);
+  assert.equal(app.els.ttsModel.readOnly, false);
 });
 
 test("exact gap controls SCP designation pauses in original and TTS modes", () => {
@@ -201,4 +250,29 @@ test("worker returns effects and wrapped-command metadata while generating only 
   assert.equal(done.parts[0].trimLeadingSilence, true);
   assert.equal(done.parts[0].trimTrailingSilence, true);
   assert.ok(done.parts[0].wav.byteLength > 44);
+});
+
+test("worker does not reuse an engine when two local model folders change", async () => {
+  const loads = [];
+  const context = vm.createContext({
+    self: { postMessage() {} },
+    navigator: {},
+    loads,
+  });
+  vm.runInContext(readFileSync(new URL("../src/tts-worker.js", import.meta.url), "utf8"), context);
+  vm.runInContext(`
+    configureLocalModel = async (settings) => { state.localModelKey = settings.cacheKey; };
+    backendAttempts = async () => ["wasm"];
+    getKokoroTTS = async () => ({
+      from_pretrained: async (modelId, options) => {
+        this.loads.push({ modelId, options });
+        return { voices: { am_michael: {} } };
+      },
+    });
+    this.loadEngineForTest = loadEngine;
+  `, context);
+
+  await context.loadEngineForTest(1, { modelId: "local-cassie-model", device: "wasm", dtype: "q8", cacheKey: "model-a" });
+  await context.loadEngineForTest(2, { modelId: "local-cassie-model", device: "wasm", dtype: "q8", cacheKey: "model-b" });
+  assert.equal(context.loads.length, 2);
 });

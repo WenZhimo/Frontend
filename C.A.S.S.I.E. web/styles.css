@@ -537,6 +537,8 @@ button:disabled::before,
 .sentence-input,
 .speech-controls label,
 .control-grid label,
+.tts-voice-field,
+.tts-model-field,
 .range-line,
 .template-select,
 .template-fields label {
@@ -1020,6 +1022,38 @@ textarea::-webkit-scrollbar-thumb {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 11px;
+}
+
+.tts-voice-field,
+.tts-model-field {
+  min-width: 0;
+}
+
+.local-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.local-picker-actions button {
+  min-height: 32px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+.local-model-status {
+  display: block;
+  min-height: 31px;
+  margin-top: 7px;
+  color: var(--quiet);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.file-input-hidden {
+  display: none;
 }
 
 .tts-effects-grid {

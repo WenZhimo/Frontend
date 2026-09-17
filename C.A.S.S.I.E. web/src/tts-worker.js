@@ -1,4 +1,5 @@
 const KOKORO_IMPORT_URL = "https://cdn.jsdelivr.net/npm/kokoro-js/+esm";
+const TRANSFORMERS_IMPORT_URL = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1/+esm";
 const DEFAULT_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
 const DEFAULT_VOICES = ["am_michael", "bm_daniel", "am_adam"];
 const DEFAULT_SAMPLE_RATE = 24000;
@@ -13,6 +14,11 @@ const state = {
   cancelRequested: false,
   genChain: Promise.resolve(),
   KokoroTTS: null,
+  transformersEnv: null,
+  localModelKey: "",
+  localVoiceKey: "",
+  localVoices: new Map(),
+  localVoiceFetchInstalled: false,
 };
 
 function post(message, transfer) {
@@ -29,6 +35,150 @@ function normalizeVoiceList(value) {
     return Object.keys(value).filter((voice) => /^[a-z]{2}_[a-z0-9_]+$/i.test(voice));
   }
   return [];
+}
+
+function localFileName(entry) {
+  return String(entry?.path || entry?.file?.name || "").replaceAll("\\", "/");
+}
+
+function localFileSignature(entry) {
+  const file = entry?.file;
+  const byteLength = entry?.bytes?.byteLength || entry?.bytes?.buffer?.byteLength || 0;
+  return `${localFileName(entry)}|${file?.size || byteLength || 0}|${file?.lastModified || 0}`;
+}
+
+function localFileBytes(entry) {
+  if (entry?.bytes instanceof ArrayBuffer) return entry.bytes;
+  if (ArrayBuffer.isView(entry?.bytes)) {
+    return entry.bytes.buffer.slice(entry.bytes.byteOffset, entry.bytes.byteOffset + entry.bytes.byteLength);
+  }
+  return entry?.file?.arrayBuffer?.();
+}
+
+function normalizeLocalRequestPath(request) {
+  const value = typeof request === "string" ? request : request?.url || "";
+  try {
+    return decodeURIComponent(String(value).split("?")[0]).replaceAll("\\", "/").toLowerCase();
+  } catch {
+    return String(value).split("?")[0].replaceAll("\\", "/").toLowerCase();
+  }
+}
+
+function localRequestMatches(request, filePath) {
+  const requestPath = normalizeLocalRequestPath(request);
+  const normalizedFilePath = String(filePath || "").replaceAll("\\", "/").toLowerCase().replace(/^\/+/, "");
+  const requestName = requestPath.split("/").filter(Boolean).at(-1) || "";
+  return requestPath.endsWith(`/${normalizedFilePath}`)
+    || requestPath.endsWith(`/${requestName}`) && normalizedFilePath.endsWith(`/${requestName}`)
+    || requestName === normalizedFilePath;
+}
+
+async function getTransformersEnv() {
+  if (!state.transformersEnv) {
+    const module = await import(TRANSFORMERS_IMPORT_URL);
+    state.transformersEnv = module.env;
+  }
+  return state.transformersEnv;
+}
+
+async function configureLocalModel(settings = {}) {
+  const entries = Array.isArray(settings.localModelFiles) ? settings.localModelFiles : [];
+  const key = entries.length > 0
+    ? `${settings.modelId}|${entries.map(localFileSignature).join("|")}`
+    : "remote";
+  if (state.localModelKey === key) return;
+
+  if (entries.length === 0) {
+    const env = await getTransformersEnv();
+    env.allowRemoteModels = true;
+    env.allowLocalModels = false;
+    env.useCustomCache = false;
+    env.useBrowserCache = true;
+    state.localModelKey = "remote";
+    return;
+  }
+
+  const files = [];
+  for (const entry of entries) {
+    const bytes = await localFileBytes(entry);
+    if (!bytes) continue;
+    files.push({ path: localFileName(entry), bytes });
+  }
+  if (files.length === 0) throw new Error("本地模型目录中没有可读取的文件。");
+
+  const env = await getTransformersEnv();
+  const fileCache = {
+    async match(request) {
+      const entry = files.find((file) => localRequestMatches(request, file.path));
+      if (!entry) return undefined;
+      return new Response(entry.bytes.slice(0), {
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+    },
+    async put() {},
+  };
+  env.allowLocalModels = true;
+  env.allowRemoteModels = false;
+  env.useBrowserCache = false;
+  env.useFSCache = false;
+  env.useCustomCache = true;
+  env.customCache = fileCache;
+  state.localModelKey = key;
+}
+
+function installLocalVoiceFetch() {
+  if (state.localVoiceFetchInstalled) return;
+  const originalFetch = self.fetch.bind(self);
+  self.fetch = (input, init) => {
+    const url = typeof input === "string" ? input : input?.url || "";
+    const match = /\/voices\/([^/]+)\.bin(?:\?|$)/i.exec(String(url));
+    const requestedId = match ? decodeURIComponent(match[1]) : "";
+    const requestedKey = requestedId.toLowerCase();
+    const voiceId = [...state.localVoices.keys()].find((id) => {
+      const key = String(id).toLowerCase();
+      const baseId = key.replace(/^([ab])_local_/, "$1_");
+      return key === requestedKey || baseId === requestedKey;
+    }) || requestedId;
+    const bytes = voiceId && state.localVoices.get(voiceId);
+    if (bytes) {
+      return Promise.resolve(new Response(bytes.slice(0), {
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream" },
+      }));
+    }
+    return originalFetch(input, init);
+  };
+  state.localVoiceFetchInstalled = true;
+}
+
+async function configureLocalVoices(entries = []) {
+  const files = Array.isArray(entries) ? entries : [];
+  const key = files.map((entry) => `${entry.id}|${localFileName(entry)}|${entry.file?.size || 0}|${entry.file?.lastModified || 0}`).join("|");
+  if (state.localVoiceKey === key) return;
+  state.localVoiceKey = key;
+  state.localVoices.clear();
+  for (const entry of files) {
+    const bytes = await localFileBytes(entry);
+    if (bytes && entry.id) state.localVoices.set(String(entry.id), bytes);
+  }
+  if (state.localVoices.size === 0) return;
+
+  installLocalVoiceFetch();
+}
+
+function allowLocalVoiceIds(engine) {
+  if (!engine || engine.__cassieLocalVoiceValidation) return;
+  const originalValidate = typeof engine._validate_voice === "function"
+    ? engine._validate_voice.bind(engine)
+    : null;
+  if (!originalValidate) return;
+  engine._validate_voice = (voice) => {
+    const id = String(voice || "");
+    if (state.localVoices.has(id)) return id.toLowerCase().startsWith("b") ? "b" : "a";
+    return originalValidate(voice);
+  };
+  engine.__cassieLocalVoiceValidation = true;
 }
 
 async function getKokoroTTS() {
@@ -92,6 +242,7 @@ function dtypeFor(settings, backend) {
 
 async function loadEngine(jobId, settings = {}) {
   const modelId = String(settings.modelId || DEFAULT_MODEL_ID).trim() || DEFAULT_MODEL_ID;
+  await configureLocalModel(settings);
   const attempts = await backendAttempts(settings);
   const KokoroTTS = await getKokoroTTS();
   let lastError = null;
@@ -99,7 +250,7 @@ async function loadEngine(jobId, settings = {}) {
   for (let index = 0; index < attempts.length; index += 1) {
     const backend = attempts[index];
     const dtype = dtypeFor(settings, backend);
-    const engineKey = `${modelId}|${backend}|${dtype}`;
+    const engineKey = `${modelId}|${backend}|${dtype}|${state.localModelKey}`;
     if (state.tts && state.engineKey === engineKey) {
       return {
         backend: state.backend,
@@ -122,8 +273,9 @@ async function loadEngine(jobId, settings = {}) {
       state.backend = backend;
       state.dtype = dtype;
       state.engineKey = engineKey;
+      allowLocalVoiceIds(engine);
       state.voices = normalizeVoiceList(
-        typeof engine.list_voices === "function" ? await engine.list_voices() : [],
+        engine.voices || (typeof engine.list_voices === "function" ? await engine.list_voices() : []),
       );
 
       return {
@@ -155,6 +307,7 @@ async function loadEngine(jobId, settings = {}) {
 }
 
 async function ensureLoaded(jobId, settings) {
+  await configureLocalVoices(settings?.localVoiceFiles || []);
   if (!state.loadPromise) {
     state.loadPromise = loadEngine(jobId, settings).finally(() => {
       state.loadPromise = null;
@@ -216,7 +369,15 @@ async function audioToWavBuffer(audio) {
 async function handleLoad(jobId, settings) {
   try {
     const loaded = await ensureLoaded(jobId, settings);
-    post({ type: "loaded", jobId, ...loaded, enabledVoices: DEFAULT_VOICES });
+    post({
+      type: "loaded",
+      jobId,
+      ...loaded,
+      voices: [...new Set([...(loaded.voices || []), ...state.localVoices.keys()])],
+      enabledVoices: [...DEFAULT_VOICES, ...(settings?.localVoiceFiles || []).map((entry) => entry.id).filter(Boolean)],
+      localVoices: [...state.localVoices.keys()],
+      localModelLabel: settings?.localModelLabel || "",
+    });
   } catch (error) {
     post({ type: "error", jobId, message: error?.message || String(error) });
   }
@@ -231,7 +392,15 @@ async function handleGenerate(jobId, message) {
   let loaded;
   try {
     loaded = await ensureLoaded(jobId, message.settings);
-    post({ type: "loaded", jobId, ...loaded, enabledVoices: DEFAULT_VOICES });
+    post({
+      type: "loaded",
+      jobId,
+      ...loaded,
+      voices: [...new Set([...(loaded.voices || []), ...state.localVoices.keys()])],
+      enabledVoices: [...DEFAULT_VOICES, ...(message.settings?.localVoiceFiles || []).map((entry) => entry.id).filter(Boolean)],
+      localVoices: [...state.localVoices.keys()],
+      localModelLabel: message.settings?.localModelLabel || "",
+    });
   } catch (error) {
     post({ type: "error", jobId, message: error?.message || String(error) });
     return;
