@@ -524,7 +524,14 @@ function buildLayout(settings) {
     };
   });
   const lineWidths = lineBounds.map((bounds) => bounds.width);
-  const lineHeights = lines.map((line) => settings.lineHeight * lineScale(line));
+  const lineHeights = lines.map((line) => {
+    const baseHeight = settings.lineHeight * lineScale(line);
+    const maxVisualExtent = Math.max(
+      0,
+      ...line.map((token) => visualExtentForToken(token, settings))
+    );
+    return Math.max(baseHeight, maxVisualExtent * 2 + 8);
+  });
   const contentWidth = Math.max(1, ...lineWidths);
   const contentHeight = Math.max(settings.lineHeight, lineHeights.reduce((sum, height) => sum + height, 0));
   return {
@@ -625,7 +632,7 @@ function trimAudioSilence(buffer) {
 
 function shapeWaveSample(value, peak, gamma = 0.8) {
   if (!peak) return 0;
-  const magnitude = clamp(Math.abs(value) / peak, 0, 1);
+  const magnitude = Math.abs(value) / peak;
   return Math.sign(value) * Math.pow(magnitude, gamma);
 }
 
@@ -635,7 +642,7 @@ function mapWaveSample(value, peak, settings, gamma) {
   const intensity = clamp(Number(settings.nonlinearStrength) || 0, 0, 1);
   if (mode === "original" || intensity <= 0) return original;
 
-  const magnitude = clamp(Math.abs(original), 0, 1);
+  const magnitude = Math.abs(original);
   let target = magnitude;
   if (mode === "spike") {
     const exponent = 1 + intensity * 2.6;
@@ -660,7 +667,7 @@ function accentuateWaveEdges(values, roughness) {
     const next = values[Math.min(values.length - 1, i + 2)] || 0;
     const localTrend = (previous + next) * 0.5;
     const edgeDetail = current - localTrend;
-    output[i] = clamp(current + edgeDetail * amount, -1, 1);
+    output[i] = current + edgeDetail * amount;
   }
   return output;
 }
@@ -696,12 +703,12 @@ function sharpenMappedSeries(values, sharpness) {
 
     const shoulderAverage = shoulderCount ? shoulder / shoulderCount : neighborMax;
     const localContrast = magnitude - Math.max(neighborMax * 0.72, shoulderAverage);
-    const peakScore = clamp(localContrast / Math.max(0.05, magnitude), 0, 1);
+    const peakScore = Math.max(0, localContrast / Math.max(0.05, magnitude));
     if (peakScore <= 0.02) continue;
 
     peaks.push({ index: i, value, peakScore });
     for (let offset = 1; offset <= 3; offset += 1) {
-      const shrink = 1 - clamp(sharpness * peakScore * (offset === 1 ? 0.2 : offset === 2 ? 0.13 : 0.07), 0, 0.78);
+      const shrink = 1 - sharpness * peakScore * (offset === 1 ? 0.2 : offset === 2 ? 0.13 : 0.07);
       const left = i - offset;
       const right = i + offset;
       if (left >= 0) attenuation[left] = Math.min(attenuation[left], shrink);
@@ -715,7 +722,7 @@ function sharpenMappedSeries(values, sharpness) {
 
   peaks.forEach(({ index, value, peakScore }) => {
     const magnitude = Math.abs(value);
-    const boosted = clamp(magnitude * (1 + sharpness * peakScore * 2.5), 0, 1);
+    const boosted = magnitude * (1 + sharpness * peakScore * 2.5);
     output[index] = Math.sign(value) * boosted;
   });
 
@@ -798,9 +805,33 @@ function getWavePeaks(buffer, width, settings, seedText = "") {
   const detailMins = sharpenMappedSeries(roughMins, sharpness);
   const detailMaxs = sharpenMappedSeries(roughMaxs, sharpness);
 
-  const peaks = { mins, maxs, detailMins, detailMaxs, detailWidth: microWidth, width: safeWidth, peak };
+  let visualPeak = 0;
+  for (let i = 0; i < microWidth; i += 1) {
+    visualPeak = Math.max(visualPeak, Math.abs(detailMins[i]), Math.abs(detailMaxs[i]));
+  }
+
+  const peaks = {
+    mins,
+    maxs,
+    detailMins,
+    detailMaxs,
+    detailWidth: microWidth,
+    width: safeWidth,
+    peak,
+    visualPeak
+  };
   cache.set(cacheId, peaks);
   return peaks;
+}
+
+function visualExtentForToken(token, settings) {
+  if (!token.audio) return 0;
+  const width = Math.max(2, Math.round(token.width));
+  const peaks = getWavePeaks(token.audio, width, settings, token.label || token.text || "");
+  const amplitude = settings.amplitude
+    * (token.style?.scale || 1)
+    * (token.style?.bold ? 1.18 : 1);
+  return peaks.visualPeak * amplitude;
 }
 
 function tokenColor(token, settings) {
