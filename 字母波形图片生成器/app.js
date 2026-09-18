@@ -20,6 +20,7 @@ const controls = {
   roughness: document.querySelector("#roughness"),
   spikeBoost: document.querySelector("#spikeBoost"),
   waveformMapping: document.querySelector("#waveformMapping"),
+  waveformMappingHint: document.querySelector("#waveformMappingHint"),
   nonlinearStrength: document.querySelector("#nonlinearStrength"),
   waveformDetail: document.querySelector("#waveformDetail"),
   inkBleed: document.querySelector("#inkBleed"),
@@ -1386,6 +1387,12 @@ function updateControlOutputs() {
     const output = document.querySelector(`#${name}Out`);
     if (output) output.value = controls[name].value;
   });
+  const mappingHints = {
+    original: "当前为原版；调节非线性强度时会自动切换到峰值强调。",
+    spike: "峰值强调会压低普通幅度，保留真实尖峰的相对高度。",
+    log: "对数映射会展开较弱信号，适合观察细节。"
+  };
+  controls.waveformMappingHint.textContent = mappingHints[controls.waveformMapping.value] || mappingHints.original;
 }
 
 function getTheme() {
@@ -1450,10 +1457,16 @@ function bindEvents() {
 
   ["backgroundMode", "inkColor", "paperColor", "waveformMapping", "pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "nonlinearStrength", "waveformDetail", "inkBleed", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
     controls[name].addEventListener("input", () => {
+      if (name === "nonlinearStrength" && controls.waveformMapping.value === "original" && Number(controls.nonlinearStrength.value) > 0) {
+        controls.waveformMapping.value = "spike";
+      }
       updateControlOutputs();
       renderFromCache();
     });
     controls[name].addEventListener("change", () => {
+      if (name === "nonlinearStrength" && controls.waveformMapping.value === "original" && Number(controls.nonlinearStrength.value) > 0) {
+        controls.waveformMapping.value = "spike";
+      }
       updateControlOutputs();
       renderFromCache();
     });
