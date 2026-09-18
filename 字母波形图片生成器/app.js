@@ -19,11 +19,13 @@ const controls = {
   amplitude: document.querySelector("#amplitude"),
   roughness: document.querySelector("#roughness"),
   spikeBoost: document.querySelector("#spikeBoost"),
+  spikeSharpness: document.querySelector("#spikeSharpness"),
   waveformMapping: document.querySelector("#waveformMapping"),
   waveformMappingHint: document.querySelector("#waveformMappingHint"),
   nonlinearStrength: document.querySelector("#nonlinearStrength"),
   waveformDetail: document.querySelector("#waveformDetail"),
   inkBleed: document.querySelector("#inkBleed"),
+  waveformOpacity: document.querySelector("#waveformOpacity"),
   segmentGap: document.querySelector("#segmentGap"),
   unitGap: document.querySelector("#unitGap"),
   preserveStyle: document.querySelector("#preserveStyle"),
@@ -58,6 +60,18 @@ const sampleHtml = [
 const TTS_WORKER_URL = "./tts-worker.js";
 const TTS_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
 const THEME_STORAGE_KEY = "tts-wave-theme";
+const THEME_DEFAULTS = {
+  dark: {
+    paper: "#10191f",
+    ink: "#edf6f5",
+    text: "#edf6f5"
+  },
+  light: {
+    paper: "#fbfcfe",
+    ink: "#101820",
+    text: "#101820"
+  }
+};
 const SILENCE_TRIM = {
   floorThreshold: 0.0035,
   relativeThreshold: 0.018,
@@ -92,6 +106,8 @@ let latestAudioBuffer = null;
 let latestMeta = { width: 0, height: 0, units: 0, missing: 0, duration: 0 };
 let toastTimer = 0;
 let previewZoom = 1;
+let previewPan = { x: 0, y: 0 };
+let panSession = null;
 let generationState = {
   running: false,
   startedAt: 0,
@@ -115,6 +131,27 @@ editor.innerHTML = sampleHtml;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function controlNumber(control, fallback) {
+  const value = Number(control.value);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function applyThemeDefaults(theme) {
+  const next = THEME_DEFAULTS[theme] || THEME_DEFAULTS.dark;
+  const knownDefaults = new Set([
+    "#10191f",
+    "#edf6f5",
+    "#fbfcfe",
+    "#101820",
+    "#111111"
+  ]);
+  const shouldUpdate = (control) => knownDefaults.has(String(control.value).toLowerCase());
+
+  if (shouldUpdate(controls.paperColor)) controls.paperColor.value = next.paper;
+  if (shouldUpdate(controls.inkColor)) controls.inkColor.value = next.ink;
+  if (shouldUpdate(controls.textColor)) controls.textColor.value = next.text;
 }
 
 function fnv1a(text) {
@@ -219,7 +256,7 @@ function startProgress(label, detail) {
   generationState.running = true;
   generationState.startedAt = performance.now();
   controls.generationProgress.setAttribute("aria-busy", "true");
-  setProgress(label, { detail, ratio: 0.02, indeterminate: false });
+  setProgress(label, { detail, ratio: 0.02, indeterminate: true });
   clearInterval(generationState.timerId);
   generationState.timerId = setInterval(refreshElapsedProgress, 250);
 }
@@ -353,17 +390,23 @@ function getSettings() {
     ttsSpeed: clamp(Number(controls.ttsSpeed.value) || 100, 50, 180) / 100,
     format: controls.format.value,
     backgroundMode,
-    background: backgroundMode === "transparent" ? "transparent" : backgroundMode === "soft" ? "#eef2f6" : controls.paperColor.value,
+    background: backgroundMode === "transparent"
+      ? "transparent"
+      : backgroundMode === "soft"
+        ? (getTheme() === "dark" ? "#25343b" : "#eef2f6")
+        : controls.paperColor.value,
     inkColor: controls.inkColor.value,
     pixelsPerSecond: Number(controls.pixelsPerSecond.value),
     lineHeight: Number(controls.lineHeight.value),
     amplitude: Number(controls.amplitude.value),
     roughness: Number(controls.roughness.value) / 100,
-    spikeBoost: clamp(Number(controls.spikeBoost.value) || 160, 50, 400) / 100,
+    spikeBoost: clamp(controlNumber(controls.spikeBoost, 160), 50, 400) / 100,
+    spikeSharpness: clamp(controlNumber(controls.spikeSharpness, 100), 0, 300) / 100,
     waveformMapping: controls.waveformMapping.value,
     nonlinearStrength: clamp(Number(controls.nonlinearStrength.value), 0, 100) / 100,
-    waveformDetail: clamp(Number(controls.waveformDetail.value) || 3, 1, 6),
+    waveformDetail: clamp(controlNumber(controls.waveformDetail, 3), 1, 12),
     inkBleed: clamp(Number(controls.inkBleed.value) || 10, 0, 60) / 100,
+    waveformOpacity: clamp(controlNumber(controls.waveformOpacity, 100), 0, 100) / 100,
     segmentGapMs: Number(controls.segmentGap.value),
     unitGapMs: Number(controls.unitGap.value),
     preserveStyle: controls.preserveStyle.checked,
@@ -465,7 +508,22 @@ function buildLayout(settings) {
       ? segmentGap * (token.style?.scale || 1)
       : 0
   })));
-  const lineWidths = lines.map((line) => line.reduce((sum, token) => sum + token.width + (token.afterGap || 0), 0));
+  const lineBounds = lines.map((line) => {
+    let cursor = 0;
+    let minX = 0;
+    let maxX = 0;
+    line.forEach((token) => {
+      minX = Math.min(minX, cursor);
+      maxX = Math.max(maxX, cursor + token.width);
+      cursor += token.width + (token.afterGap || 0);
+    });
+    return {
+      minX,
+      maxX,
+      width: Math.max(0, maxX - minX)
+    };
+  });
+  const lineWidths = lineBounds.map((bounds) => bounds.width);
   const lineHeights = lines.map((line) => settings.lineHeight * lineScale(line));
   const contentWidth = Math.max(1, ...lineWidths);
   const contentHeight = Math.max(settings.lineHeight, lineHeights.reduce((sum, height) => sum + height, 0));
@@ -475,7 +533,8 @@ function buildLayout(settings) {
     width: Math.ceil(contentWidth + settings.padding * 2),
     height: Math.ceil(contentHeight + settings.padding * 2),
     lineWidths,
-    lineHeights
+    lineHeights,
+    lineOffsets: lineBounds.map((bounds) => -bounds.minX)
   };
 }
 
@@ -590,15 +649,89 @@ function mapWaveSample(value, peak, settings, gamma) {
   return Math.sign(original) * remapped;
 }
 
+function accentuateWaveEdges(values, roughness) {
+  if (roughness <= 0) return values;
+
+  const output = new Float32Array(values.length);
+  const amount = roughness * 2.4;
+  for (let i = 0; i < values.length; i += 1) {
+    const current = values[i] || 0;
+    const previous = values[Math.max(0, i - 2)] || 0;
+    const next = values[Math.min(values.length - 1, i + 2)] || 0;
+    const localTrend = (previous + next) * 0.5;
+    const edgeDetail = current - localTrend;
+    output[i] = clamp(current + edgeDetail * amount, -1, 1);
+  }
+  return output;
+}
+
+function sharpenMappedSeries(values, sharpness) {
+  if (sharpness <= 0) return values;
+
+  const length = values.length;
+  const output = new Float32Array(values);
+  const attenuation = new Float32Array(length);
+  attenuation.fill(1);
+  const peaks = [];
+
+  for (let i = 0; i < length; i += 1) {
+    const value = values[i] || 0;
+    const magnitude = Math.abs(value);
+    if (magnitude < 0.012) continue;
+
+    let shoulder = 0;
+    let shoulderCount = 0;
+    let neighborMax = 0;
+    for (let offset = -4; offset <= 4; offset += 1) {
+      if (offset === 0) continue;
+      const index = i + offset;
+      if (index < 0 || index >= length) continue;
+      const neighbor = Math.abs(values[index] || 0);
+      neighborMax = Math.max(neighborMax, neighbor);
+      if (Math.abs(offset) >= 2) {
+        shoulder += neighbor;
+        shoulderCount += 1;
+      }
+    }
+
+    const shoulderAverage = shoulderCount ? shoulder / shoulderCount : neighborMax;
+    const localContrast = magnitude - Math.max(neighborMax * 0.72, shoulderAverage);
+    const peakScore = clamp(localContrast / Math.max(0.05, magnitude), 0, 1);
+    if (peakScore <= 0.02) continue;
+
+    peaks.push({ index: i, value, peakScore });
+    for (let offset = 1; offset <= 3; offset += 1) {
+      const shrink = 1 - clamp(sharpness * peakScore * (offset === 1 ? 0.2 : offset === 2 ? 0.13 : 0.07), 0, 0.78);
+      const left = i - offset;
+      const right = i + offset;
+      if (left >= 0) attenuation[left] = Math.min(attenuation[left], shrink);
+      if (right < length) attenuation[right] = Math.min(attenuation[right], shrink);
+    }
+  }
+
+  for (let i = 0; i < length; i += 1) {
+    output[i] = values[i] * attenuation[i];
+  }
+
+  peaks.forEach(({ index, value, peakScore }) => {
+    const magnitude = Math.abs(value);
+    const boosted = clamp(magnitude * (1 + sharpness * peakScore * 2.5), 0, 1);
+    output[index] = Math.sign(value) * boosted;
+  });
+
+  return output;
+}
+
 function getWavePeaks(buffer, width, settings, seedText = "") {
   const safeWidth = Math.max(1, Math.round(width));
-  const detailScale = clamp(Math.round(settings.waveformDetail || 3), 1, 6);
+  const detailScale = clamp(Math.round(settings.waveformDetail || 3), 1, 12);
   const microWidth = Math.min(12000, Math.max(safeWidth, Math.round(safeWidth * detailScale)));
   const cacheId = [
     safeWidth,
     detailScale,
     settings.roughness.toFixed(3),
     Number(settings.spikeBoost || 1.6).toFixed(2),
+    Number(settings.spikeSharpness ?? 1).toFixed(2),
     settings.waveformMapping || "original",
     Number(settings.nonlinearStrength || 0).toFixed(3),
     seedText
@@ -653,12 +786,17 @@ function getWavePeaks(buffer, width, settings, seedText = "") {
   const safePeak = peak || 1;
   const spikeBoost = Number(settings.spikeBoost || 1.6);
   const detailGamma = clamp(0.96 - Math.max(0, spikeBoost - 1) * 0.05, 0.78, 0.96);
-  const detailMins = new Float32Array(microWidth);
-  const detailMaxs = new Float32Array(microWidth);
+  const sharpness = clamp(Number(settings.spikeSharpness) || 0, 0, 3);
+  const mappedMins = new Float32Array(microWidth);
+  const mappedMaxs = new Float32Array(microWidth);
   for (let i = 0; i < microWidth; i += 1) {
-    detailMins[i] = mapWaveSample(rawMins[i], safePeak, settings, detailGamma);
-    detailMaxs[i] = mapWaveSample(rawMaxs[i], safePeak, settings, detailGamma);
+    mappedMins[i] = mapWaveSample(rawMins[i], safePeak, settings, detailGamma);
+    mappedMaxs[i] = mapWaveSample(rawMaxs[i], safePeak, settings, detailGamma);
   }
+  const roughMins = accentuateWaveEdges(mappedMins, settings.roughness);
+  const roughMaxs = accentuateWaveEdges(mappedMaxs, settings.roughness);
+  const detailMins = sharpenMappedSeries(roughMins, sharpness);
+  const detailMaxs = sharpenMappedSeries(roughMaxs, sharpness);
 
   const peaks = { mins, maxs, detailMins, detailMaxs, detailWidth: microWidth, width: safeWidth, peak };
   cache.set(cacheId, peaks);
@@ -695,8 +833,9 @@ function buildWavePath(token, x, centerY, settings) {
   const fillPath = `M ${top.join(" L ")} L ${bottom.join(" L ")} Z`;
   const detailFillPath = `M ${detailTop.join(" L ")} L ${detailBottom.join(" L ")} Z`;
   const centerPath = `M ${x.toFixed(2)},${centerY.toFixed(2)} L ${(x + width).toFixed(2)},${centerY.toFixed(2)}`;
-  const bleed = settings.inkBleed > 0
-    ? `<path d="${detailFillPath}" fill="${escapeXml(color)}" opacity="${(0.04 + settings.inkBleed * 0.1).toFixed(3)}" filter="url(#inkBleedFilter)"/>`
+  const opacity = clamp(Number(settings.waveformOpacity) || 0, 0, 1);
+  const bleed = settings.inkBleed > 0 && opacity > 0
+    ? `<path d="${detailFillPath}" fill="${escapeXml(color)}" opacity="${((0.05 + settings.inkBleed * 0.45) * opacity).toFixed(3)}" filter="url(#inkBleedFilter)"/>`
     : "";
   const transform = token.style?.italic
     ? ` transform="translate(${(x + width / 2).toFixed(2)} ${centerY.toFixed(2)}) skewX(-8) translate(${(-x - width / 2).toFixed(2)} ${(-centerY).toFixed(2)})"`
@@ -708,8 +847,8 @@ function buildWavePath(token, x, centerY, settings) {
   return [
     `<g${transform}>`,
     bleed,
-    `<path d="${detailFillPath}" fill="${escapeXml(color)}" stroke="${escapeXml(color)}" stroke-width="${token.style?.bold ? "0.5" : "0.34"}" stroke-linejoin="round" opacity="${token.style?.bold ? "0.78" : "0.58"}"/>`,
-    `<path d="${centerPath}" stroke="${escapeXml(color)}" stroke-width="${token.style?.bold ? "1.2" : "0.75"}" stroke-linecap="round" opacity="0.32"/>`,
+    `<path d="${detailFillPath}" fill="${escapeXml(color)}" stroke="${escapeXml(color)}" stroke-width="${token.style?.bold ? "0.5" : "0.34"}" stroke-linejoin="miter" stroke-miterlimit="2" opacity="${opacity.toFixed(3)}"/>`,
+    `<path d="${centerPath}" stroke="${escapeXml(color)}" stroke-width="${token.style?.bold ? "1.2" : "0.75"}" stroke-linecap="butt" opacity="${opacity.toFixed(3)}"/>`,
     underline,
     `</g>`
   ].join("");
@@ -745,8 +884,8 @@ function buildSvgString() {
   parts.push(`<title>TTS waveform text export</title>`);
   parts.push(`<desc>Waveforms are rendered from Kokoro TTS generated audio buffers. Letter mode uses TTS-generated A-Z samples; word mode generates input speech units.</desc>`);
   if (settings.inkBleed > 0) {
-    const blur = (0.25 + settings.inkBleed * 0.8).toFixed(2);
-    parts.push(`<defs><filter id="inkBleedFilter" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="${blur}"/></filter></defs>`);
+    const blur = (0.3 + settings.inkBleed * 2.6).toFixed(2);
+    parts.push(`<defs><filter id="inkBleedFilter" x="-40%" y="-100%" width="180%" height="300%"><feGaussianBlur stdDeviation="${blur}"/></filter></defs>`);
   }
   if (settings.background !== "transparent") {
     parts.push(`<rect width="100%" height="100%" rx="10" fill="${escapeXml(settings.background)}"/>`);
@@ -756,7 +895,7 @@ function buildSvgString() {
   layout.lines.forEach((line, lineIndex) => {
     const lineHeight = layout.lineHeights[lineIndex];
     const centerY = y + lineHeight * 0.5;
-    let x = settings.padding;
+    let x = settings.padding + (layout.lineOffsets[lineIndex] || 0);
     if (settings.showGuides && line.length) {
       parts.push(`<line x1="${settings.padding}" y1="${centerY.toFixed(2)}" x2="${(settings.padding + layout.lineWidths[lineIndex]).toFixed(2)}" y2="${centerY.toFixed(2)}" stroke="${escapeXml(settings.inkColor)}" stroke-width="0.6" opacity="0.12"/>`);
     }
@@ -840,6 +979,15 @@ function applyPreviewZoom(options = {}) {
   }
 }
 
+function applyPreviewPan() {
+  preview.style.transform = `translate3d(${Math.round(previewPan.x)}px, ${Math.round(previewPan.y)}px, 0)`;
+}
+
+function resetPreviewPan() {
+  previewPan = { x: 0, y: 0 };
+  applyPreviewPan();
+}
+
 function setPreviewZoom(value, options = {}) {
   const previousZoom = previewZoom;
   const shell = controls.previewShell;
@@ -849,6 +997,7 @@ function setPreviewZoom(value, options = {}) {
   const beforeY = rect ? shell.scrollTop + anchor.y - rect.top : 0;
 
   previewZoom = clamp(Number(value) || 1, PREVIEW_ZOOM.min, PREVIEW_ZOOM.max);
+  if (options.resetPan) resetPreviewPan();
   applyPreviewZoom({ resetScroll: options.resetScroll });
 
   if (anchor && previousZoom > 0) {
@@ -867,7 +1016,7 @@ function fitPreviewToViewport() {
   const availableWidth = Math.max(80, shell.clientWidth - paddingX);
   const availableHeight = Math.max(80, shell.clientHeight - paddingY);
   const nextZoom = Math.min(1, availableWidth / latestMeta.width, availableHeight / latestMeta.height);
-  setPreviewZoom(nextZoom, { resetScroll: true });
+  setPreviewZoom(nextZoom, { resetScroll: true, resetPan: true });
 }
 
 function renderFromCache(message = "") {
@@ -875,6 +1024,7 @@ function renderFromCache(message = "") {
   stopPlayback({ resetOffset: true, silent: true });
   latestSvg = buildSvgString();
   preview.innerHTML = latestSvg;
+  resetPreviewPan();
   applyPreviewZoom({ resetScroll: true });
   latestAudioBuffer = latestLayout && latestMeta.units > 0 ? createPlaybackBuffer(latestLayout, settings) : null;
   updateMetrics();
@@ -890,6 +1040,7 @@ function renderPlaceholder(message, tone = "normal") {
   const bg = settings.background === "transparent" ? "" : `<rect width="100%" height="100%" rx="10" fill="${escapeXml(settings.background)}"/>`;
   latestSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${bg}<line x1="42" y1="115" x2="718" y2="115" stroke="${escapeXml(settings.inkColor)}" opacity="0.14"/><text x="380" y="105" text-anchor="middle" font-size="18" fill="${tone === "error" ? "#9b2335" : "#657282"}" font-family="Inter, Arial">${escapeXml(message)}</text><text x="380" y="134" text-anchor="middle" font-size="12" fill="#657282" font-family="Inter, Arial">所有可见波形都必须先由 TTS 音频生成</text></svg>`;
   preview.innerHTML = latestSvg;
+  resetPreviewPan();
   latestLayout = null;
   latestAudioBuffer = null;
   latestMeta = { width, height, units: 0, missing: 0, duration: 0 };
@@ -1393,7 +1544,7 @@ function updateToolbarState() {
 }
 
 function updateControlOutputs() {
-  ["pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "nonlinearStrength", "waveformDetail", "inkBleed", "segmentGap", "unitGap", "ttsSpeed"].forEach((name) => {
+  ["pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "spikeSharpness", "nonlinearStrength", "waveformDetail", "inkBleed", "waveformOpacity", "segmentGap", "unitGap", "ttsSpeed"].forEach((name) => {
     const output = document.querySelector(`#${name}Out`);
     if (output) output.value = controls[name].value;
   });
@@ -1423,6 +1574,7 @@ function updateThemeToggle() {
 function setTheme(theme, { persist = true } = {}) {
   const nextTheme = theme === "light" ? "light" : "dark";
   document.documentElement.dataset.theme = nextTheme;
+  applyThemeDefaults(nextTheme);
   if (persist) {
     try {
       localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
@@ -1455,6 +1607,7 @@ function bindEvents() {
 
   controls.themeToggle.addEventListener("click", () => {
     setTheme(getTheme() === "dark" ? "light" : "dark");
+    renderFromCache("已切换主题，并更新默认纸张与墨色。");
   });
 
   document.querySelectorAll("[data-command]").forEach((button) => {
@@ -1465,7 +1618,7 @@ function bindEvents() {
   controls.fontSize.addEventListener("change", (event) => applyFontSize(event.target.value));
   controls.synthesisMode.addEventListener("change", updateModeUi);
 
-  ["backgroundMode", "inkColor", "paperColor", "waveformMapping", "pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "nonlinearStrength", "waveformDetail", "inkBleed", "segmentGap", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
+  ["backgroundMode", "inkColor", "paperColor", "waveformMapping", "pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "spikeSharpness", "nonlinearStrength", "waveformDetail", "inkBleed", "waveformOpacity", "segmentGap", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
     controls[name].addEventListener("input", () => {
       if (name === "nonlinearStrength" && controls.waveformMapping.value === "original" && Number(controls.nonlinearStrength.value) > 0) {
         controls.waveformMapping.value = "spike";
@@ -1516,7 +1669,44 @@ function bindEvents() {
   controls.zoomFitBtn.addEventListener("click", fitPreviewToViewport);
 
   controls.zoomResetBtn.addEventListener("click", () => {
-    setPreviewZoom(1, { resetScroll: true });
+    setPreviewZoom(1, { resetScroll: true, resetPan: true });
+  });
+
+  controls.previewShell.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    panSession = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startPanX: previewPan.x,
+      startPanY: previewPan.y
+    };
+    controls.previewShell.classList.add("is-panning");
+    controls.previewShell.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  controls.previewShell.addEventListener("pointermove", (event) => {
+    if (!panSession || event.pointerId !== panSession.pointerId) return;
+    previewPan.x = panSession.startPanX + event.clientX - panSession.startX;
+    previewPan.y = panSession.startPanY + event.clientY - panSession.startY;
+    applyPreviewPan();
+  });
+
+  const endPan = (event) => {
+    if (!panSession || event.pointerId !== panSession.pointerId) return;
+    panSession = null;
+    controls.previewShell.classList.remove("is-panning");
+    if (controls.previewShell.hasPointerCapture(event.pointerId)) {
+      controls.previewShell.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  controls.previewShell.addEventListener("pointerup", endPan);
+  controls.previewShell.addEventListener("pointercancel", endPan);
+  controls.previewShell.addEventListener("lostpointercapture", () => {
+    panSession = null;
+    controls.previewShell.classList.remove("is-panning");
   });
 
   controls.previewShell.addEventListener("wheel", (event) => {

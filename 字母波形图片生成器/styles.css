@@ -398,6 +398,7 @@ input[type="range"] {
 .generation-progress {
   display: grid;
   gap: 8px;
+  margin-top: 1px;
   padding: 11px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -547,8 +548,11 @@ input[type="range"] {
 }
 
 .preview-shell {
+  position: relative;
   overflow: auto;
   padding: 26px;
+  cursor: grab;
+  touch-action: none;
   background:
     linear-gradient(45deg, var(--checker-a) 25%, var(--checker-b) 25%),
     linear-gradient(-45deg, var(--checker-a) 25%, var(--checker-b) 25%),
@@ -558,10 +562,18 @@ input[type="range"] {
   background-position: 0 0, 0 12px, 12px -12px, -12px 0;
 }
 
+.preview-shell.is-panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
 .preview {
   width: max-content;
   min-width: 0;
   display: block;
+  transform: translate3d(0, 0, 0);
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
 .preview svg {

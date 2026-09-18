@@ -38,7 +38,7 @@
           <button class="tool-btn" type="button" data-command="underline" title="下划线"><u>U</u></button>
           <label class="color-tool" title="文字颜色">
             <span>色</span>
-            <input id="textColor" type="color" value="#101820">
+            <input id="textColor" type="color" value="#edf6f5">
           </label>
           <select id="fontSize" class="select-inline" title="文字大小">
             <option value="3">标准</option>
@@ -67,6 +67,14 @@
             <button id="generateWordsBtn" class="primary-btn" type="button">生成输入单词波形</button>
             <small>以单词/连续文本块为单位生成，然后按原空格、换行拼接。</small>
           </div>
+          <section id="generationProgress" class="generation-progress" aria-live="polite" aria-busy="false">
+            <div class="progress-header">
+              <strong id="progressLabel">待生成</strong>
+              <span id="progressCount">0%</span>
+            </div>
+            <progress id="progressBar" max="1" value="0"></progress>
+            <small id="progressDetail">点击生成后会显示模型加载、当前语音单元和耗时。</small>
+          </section>
         </div>
 
         <div class="control-grid">
@@ -110,18 +118,18 @@
           <label>
             <span>背景</span>
             <select id="backgroundMode">
-              <option value="paper">纸白</option>
+              <option value="paper">纸张色</option>
               <option value="transparent">透明</option>
               <option value="soft">淡灰</option>
             </select>
           </label>
           <label>
             <span>全局墨色</span>
-            <input id="inkColor" type="color" value="#111111">
+            <input id="inkColor" type="color" value="#edf6f5">
           </label>
           <label>
             <span>纸张颜色</span>
-            <input id="paperColor" type="color" value="#fbfcfe">
+            <input id="paperColor" type="color" value="#10191f">
           </label>
           <label>
             <span>幅度映射</span>
@@ -156,20 +164,28 @@
             <input id="spikeBoost" type="range" min="50" max="400" step="10" value="160">
           </label>
           <label>
+            <span>尖峰锐化 % <output id="spikeSharpnessOut">100</output></span>
+            <input id="spikeSharpness" type="range" min="0" max="300" step="5" value="100">
+          </label>
+          <label>
             <span>非线性强度 % <output id="nonlinearStrengthOut">60</output></span>
             <input id="nonlinearStrength" type="range" min="0" max="100" step="5" value="60">
           </label>
           <label>
             <span>波形细节倍率 <output id="waveformDetailOut">3</output></span>
-            <input id="waveformDetail" type="range" min="1" max="6" step="1" value="3">
+            <input id="waveformDetail" type="range" min="1" max="12" step="1" value="3">
           </label>
           <label>
             <span>墨迹扩散 % <output id="inkBleedOut">10</output></span>
             <input id="inkBleed" type="range" min="0" max="60" value="10">
           </label>
           <label>
+            <span>波形不透明度 % <output id="waveformOpacityOut">100</output></span>
+            <input id="waveformOpacity" type="range" min="0" max="100" step="1" value="100">
+          </label>
+          <label>
             <span>波形段间距 ms <output id="segmentGapOut">0</output></span>
-            <input id="segmentGap" type="range" min="-240" max="240" step="5" value="0">
+            <input id="segmentGap" type="range" min="-1000" max="240" step="5" value="0">
           </label>
           <label>
             <span>单位间隔 ms <output id="unitGapOut">120</output></span>
@@ -186,15 +202,6 @@
           <label><input id="showGuides" type="checkbox" checked> 显示淡参考横线</label>
           <label><input id="tightCrop" type="checkbox"> 紧凑裁切</label>
         </div>
-
-        <section id="generationProgress" class="generation-progress" aria-live="polite" aria-busy="false">
-          <div class="progress-header">
-            <strong id="progressLabel">待生成</strong>
-            <span id="progressCount">0%</span>
-          </div>
-          <progress id="progressBar" max="1" value="0"></progress>
-          <small id="progressDetail">点击生成后会显示模型加载、当前语音单元和耗时。</small>
-        </section>
 
         <div class="actions">
           <button id="playAudioBtn" class="secondary-btn" type="button">试听拼接音频</button>
