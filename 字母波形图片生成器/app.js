@@ -24,6 +24,7 @@ const controls = {
   nonlinearStrength: document.querySelector("#nonlinearStrength"),
   waveformDetail: document.querySelector("#waveformDetail"),
   inkBleed: document.querySelector("#inkBleed"),
+  segmentGap: document.querySelector("#segmentGap"),
   unitGap: document.querySelector("#unitGap"),
   preserveStyle: document.querySelector("#preserveStyle"),
   showGuides: document.querySelector("#showGuides"),
@@ -363,6 +364,7 @@ function getSettings() {
     nonlinearStrength: clamp(Number(controls.nonlinearStrength.value), 0, 100) / 100,
     waveformDetail: clamp(Number(controls.waveformDetail.value) || 3, 1, 6),
     inkBleed: clamp(Number(controls.inkBleed.value) || 10, 0, 60) / 100,
+    segmentGapMs: Number(controls.segmentGap.value),
     unitGapMs: Number(controls.unitGap.value),
     preserveStyle: controls.preserveStyle.checked,
     showGuides: controls.showGuides.checked,
@@ -456,12 +458,20 @@ function buildWordLines(settings) {
 
 function buildLayout(settings) {
   const audioLines = settings.mode === "letters" ? buildLetterLines(settings) : buildWordLines(settings);
-  const lineWidths = audioLines.lines.map((line) => line.reduce((sum, token) => sum + token.width, 0));
-  const lineHeights = audioLines.lines.map((line) => settings.lineHeight * lineScale(line));
+  const segmentGap = (settings.segmentGapMs / 1000) * settings.pixelsPerSecond;
+  const lines = audioLines.lines.map((line) => line.map((token, index) => ({
+    ...token,
+    afterGap: token.audio && line[index + 1]?.audio
+      ? segmentGap * (token.style?.scale || 1)
+      : 0
+  })));
+  const lineWidths = lines.map((line) => line.reduce((sum, token) => sum + token.width + (token.afterGap || 0), 0));
+  const lineHeights = lines.map((line) => settings.lineHeight * lineScale(line));
   const contentWidth = Math.max(1, ...lineWidths);
   const contentHeight = Math.max(settings.lineHeight, lineHeights.reduce((sum, height) => sum + height, 0));
   return {
     ...audioLines,
+    lines,
     width: Math.ceil(contentWidth + settings.padding * 2),
     height: Math.ceil(contentHeight + settings.padding * 2),
     lineWidths,
@@ -752,7 +762,7 @@ function buildSvgString() {
     }
     line.forEach((token) => {
       parts.push(token.audio ? buildWavePath(token, x, centerY, settings) : buildPendingGlyph(token, x, centerY));
-      x += token.width;
+      x += token.width + (token.afterGap || 0);
     });
     y += lineHeight;
   });
@@ -1383,7 +1393,7 @@ function updateToolbarState() {
 }
 
 function updateControlOutputs() {
-  ["pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "nonlinearStrength", "waveformDetail", "inkBleed", "unitGap", "ttsSpeed"].forEach((name) => {
+  ["pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "nonlinearStrength", "waveformDetail", "inkBleed", "segmentGap", "unitGap", "ttsSpeed"].forEach((name) => {
     const output = document.querySelector(`#${name}Out`);
     if (output) output.value = controls[name].value;
   });
@@ -1455,7 +1465,7 @@ function bindEvents() {
   controls.fontSize.addEventListener("change", (event) => applyFontSize(event.target.value));
   controls.synthesisMode.addEventListener("change", updateModeUi);
 
-  ["backgroundMode", "inkColor", "paperColor", "waveformMapping", "pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "nonlinearStrength", "waveformDetail", "inkBleed", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
+  ["backgroundMode", "inkColor", "paperColor", "waveformMapping", "pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "nonlinearStrength", "waveformDetail", "inkBleed", "segmentGap", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
     controls[name].addEventListener("input", () => {
       if (name === "nonlinearStrength" && controls.waveformMapping.value === "original" && Number(controls.nonlinearStrength.value) > 0) {
         controls.waveformMapping.value = "spike";
