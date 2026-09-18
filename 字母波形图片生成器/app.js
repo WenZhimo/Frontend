@@ -12,6 +12,7 @@ const controls = {
   ttsDtype: document.querySelector("#ttsDtype"),
   ttsSpeed: document.querySelector("#ttsSpeed"),
   backgroundMode: document.querySelector("#backgroundMode"),
+  exportBackgroundMode: document.querySelector("#exportBackgroundMode"),
   inkColor: document.querySelector("#inkColor"),
   paperColor: document.querySelector("#paperColor"),
   pixelsPerSecond: document.querySelector("#pixelsPerSecond"),
@@ -383,6 +384,8 @@ function extractSpeechUnitLines() {
 
 function getSettings() {
   const backgroundMode = controls.backgroundMode.value;
+  const exportBackgroundMode = controls.exportBackgroundMode.value;
+  const background = backgroundColorForMode(backgroundMode);
   return {
     mode: controls.synthesisMode.value,
     ttsVoice: controls.ttsVoice.value,
@@ -391,11 +394,11 @@ function getSettings() {
     ttsSpeed: clamp(Number(controls.ttsSpeed.value) || 100, 50, 180) / 100,
     format: controls.format.value,
     backgroundMode,
-    background: backgroundMode === "transparent"
-      ? "transparent"
-      : backgroundMode === "soft"
-        ? (getTheme() === "dark" ? "#25343b" : "#eef2f6")
-        : controls.paperColor.value,
+    background,
+    exportBackgroundMode,
+    exportBackground: exportBackgroundMode === "follow"
+      ? background
+      : backgroundColorForMode(exportBackgroundMode),
     inkColor: controls.inkColor.value,
     pixelsPerSecond: Number(controls.pixelsPerSecond.value),
     lineHeight: Number(controls.lineHeight.value),
@@ -450,6 +453,12 @@ function visualWidthForAudio(buffer, style, settings) {
 
 function gapWidth(ms, style, settings) {
   return Math.max(4, (Math.max(0, ms) / 1000) * settings.pixelsPerSecond * (style?.scale || 1));
+}
+
+function backgroundColorForMode(mode) {
+  if (mode === "transparent") return "transparent";
+  if (mode === "soft") return getTheme() === "dark" ? "#25343b" : "#eef2f6";
+  return controls.paperColor.value;
 }
 
 function buildLetterLines(settings) {
@@ -924,9 +933,10 @@ function estimateDuration(layout, settings) {
   }, 0);
 }
 
-function buildSvgString() {
+function buildSvgString({ backgroundOverride = null, updateState = true } = {}) {
   const settings = getSettings();
   const layout = buildLayout(settings);
+  const background = backgroundOverride ?? settings.background;
   const parts = [];
 
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" role="img" aria-label="Generated TTS waveform text">`);
@@ -936,8 +946,8 @@ function buildSvgString() {
     const blur = (0.3 + settings.inkBleed * 2.6).toFixed(2);
     parts.push(`<defs><filter id="inkBleedFilter" x="-40%" y="-100%" width="180%" height="300%"><feGaussianBlur stdDeviation="${blur}"/></filter></defs>`);
   }
-  if (settings.background !== "transparent") {
-    parts.push(`<rect width="100%" height="100%" rx="10" fill="${escapeXml(settings.background)}"/>`);
+  if (background !== "transparent") {
+    parts.push(`<rect width="100%" height="100%" rx="10" fill="${escapeXml(background)}"/>`);
   }
   parts.push(`<g shape-rendering="geometricPrecision">`);
 
@@ -954,14 +964,16 @@ function buildSvgString() {
   });
 
   parts.push(`</g></svg>`);
-  latestLayout = layout;
-  latestMeta = {
-    width: layout.width,
-    height: layout.height,
-    units: layout.units,
-    missing: layout.missing,
-    duration: estimateDuration(layout, settings)
-  };
+  if (updateState) {
+    latestLayout = layout;
+    latestMeta = {
+      width: layout.width,
+      height: layout.height,
+      units: layout.units,
+      missing: layout.missing,
+      duration: estimateDuration(layout, settings)
+    };
+  }
   return parts.join("");
 }
 
@@ -1470,8 +1482,11 @@ function timestamp() {
 function svgToCanvas(format = "png") {
   return new Promise((resolve, reject) => {
     const settings = getSettings();
-    if (!latestSvg) latestSvg = buildSvgString();
-    const svgBlob = new Blob([latestSvg], { type: "image/svg+xml;charset=utf-8" });
+    const exportSvg = buildSvgString({
+      backgroundOverride: settings.exportBackground,
+      updateState: false
+    });
+    const svgBlob = new Blob([exportSvg], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(svgBlob);
     const image = new Image();
     const scale = 2;
@@ -1482,8 +1497,10 @@ function svgToCanvas(format = "png") {
       canvas.height = latestMeta.height * scale;
       const ctx = canvas.getContext("2d");
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
-      if (format === "jpeg" || settings.background !== "transparent") {
-        ctx.fillStyle = format === "jpeg" && settings.background === "transparent" ? "#ffffff" : settings.background;
+      if (format === "jpeg" || settings.exportBackground !== "transparent") {
+        ctx.fillStyle = format === "jpeg" && settings.exportBackground === "transparent"
+          ? "#ffffff"
+          : settings.exportBackground;
         ctx.fillRect(0, 0, latestMeta.width, latestMeta.height);
       }
       ctx.drawImage(image, 0, 0);
@@ -1507,7 +1524,12 @@ async function exportImage() {
   const format = controls.format.value;
   const name = `tts-wave-text-${timestamp()}.${format === "jpeg" ? "jpg" : format}`;
   if (format === "svg") {
-    downloadBlob(new Blob([latestSvg], { type: "image/svg+xml;charset=utf-8" }), name);
+    const settings = getSettings();
+    const exportSvg = buildSvgString({
+      backgroundOverride: settings.exportBackground,
+      updateState: false
+    });
+    downloadBlob(new Blob([exportSvg], { type: "image/svg+xml;charset=utf-8" }), name);
     showToast("SVG 已导出");
     return;
   }
@@ -1664,6 +1686,15 @@ function bindEvents() {
   controls.textColor.addEventListener("input", (event) => applyTextColor(event.target.value));
   controls.fontSize.addEventListener("change", (event) => applyFontSize(event.target.value));
   controls.synthesisMode.addEventListener("change", updateModeUi);
+  controls.exportBackgroundMode.addEventListener("change", () => {
+    const labels = {
+      follow: "跟随预览",
+      transparent: "透明",
+      paper: "纸张色",
+      soft: "淡灰"
+    };
+    setStatus(`导出背景已设为：${labels[controls.exportBackgroundMode.value] || "跟随预览"}`);
+  });
 
   ["backgroundMode", "inkColor", "paperColor", "waveformMapping", "pixelsPerSecond", "lineHeight", "lineSpacing", "amplitude", "roughness", "spikeBoost", "spikeSharpness", "nonlinearStrength", "waveformDetail", "inkBleed", "waveformOpacity", "segmentGap", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
     controls[name].addEventListener("input", () => {

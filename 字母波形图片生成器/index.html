@@ -116,12 +116,22 @@
             </select>
           </label>
           <label>
-            <span>背景</span>
+            <span>预览背景</span>
             <select id="backgroundMode">
               <option value="paper">纸张色</option>
               <option value="transparent">透明</option>
               <option value="soft">淡灰</option>
             </select>
+          </label>
+          <label>
+            <span>导出背景</span>
+            <select id="exportBackgroundMode">
+              <option value="follow">跟随预览</option>
+              <option value="transparent">透明</option>
+              <option value="paper">纸张色</option>
+              <option value="soft">淡灰</option>
+            </select>
+            <small class="control-hint">PNG、WEBP、SVG 支持透明；JPG 会自动使用白底。</small>
           </label>
           <label>
             <span>全局墨色</span>
