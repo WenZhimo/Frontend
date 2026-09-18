@@ -19,6 +19,8 @@ const controls = {
   amplitude: document.querySelector("#amplitude"),
   roughness: document.querySelector("#roughness"),
   spikeBoost: document.querySelector("#spikeBoost"),
+  waveformMapping: document.querySelector("#waveformMapping"),
+  nonlinearStrength: document.querySelector("#nonlinearStrength"),
   waveformDetail: document.querySelector("#waveformDetail"),
   inkBleed: document.querySelector("#inkBleed"),
   unitGap: document.querySelector("#unitGap"),
@@ -356,6 +358,8 @@ function getSettings() {
     amplitude: Number(controls.amplitude.value),
     roughness: Number(controls.roughness.value) / 100,
     spikeBoost: clamp(Number(controls.spikeBoost.value) || 160, 50, 400) / 100,
+    waveformMapping: controls.waveformMapping.value,
+    nonlinearStrength: clamp(Number(controls.nonlinearStrength.value), 0, 100) / 100,
     waveformDetail: clamp(Number(controls.waveformDetail.value) || 3, 1, 6),
     inkBleed: clamp(Number(controls.inkBleed.value) || 10, 0, 60) / 100,
     unitGapMs: Number(controls.unitGap.value),
@@ -555,6 +559,26 @@ function shapeWaveSample(value, peak, gamma = 0.8) {
   return Math.sign(value) * Math.pow(magnitude, gamma);
 }
 
+function mapWaveSample(value, peak, settings, gamma) {
+  const original = shapeWaveSample(value, peak, gamma);
+  const mode = settings.waveformMapping || "original";
+  const intensity = clamp(Number(settings.nonlinearStrength) || 0, 0, 1);
+  if (mode === "original" || intensity <= 0) return original;
+
+  const magnitude = clamp(Math.abs(original), 0, 1);
+  let target = magnitude;
+  if (mode === "spike") {
+    const exponent = 1 + intensity * 2.6;
+    target = Math.pow(magnitude, exponent);
+  } else if (mode === "log") {
+    const logGain = 1 + intensity * 24;
+    target = Math.log1p(logGain * magnitude) / Math.log1p(logGain);
+  }
+
+  const remapped = magnitude + (target - magnitude) * intensity;
+  return Math.sign(original) * remapped;
+}
+
 function getWavePeaks(buffer, width, settings, seedText = "") {
   const safeWidth = Math.max(1, Math.round(width));
   const detailScale = clamp(Math.round(settings.waveformDetail || 3), 1, 6);
@@ -564,6 +588,8 @@ function getWavePeaks(buffer, width, settings, seedText = "") {
     detailScale,
     settings.roughness.toFixed(3),
     Number(settings.spikeBoost || 1.6).toFixed(2),
+    settings.waveformMapping || "original",
+    Number(settings.nonlinearStrength || 0).toFixed(3),
     seedText
   ].join("|");
   let cache = audioPeakCache.get(buffer);
@@ -609,8 +635,8 @@ function getWavePeaks(buffer, width, settings, seedText = "") {
       if (rawMaxs[i] > max) max = rawMaxs[i];
     }
     const inkJitter = 1 + (random() - 0.5) * settings.roughness * 0.34;
-    mins[x] = shapeWaveSample(min === 1 ? 0 : min, peak, 0.88) * inkJitter;
-    maxs[x] = shapeWaveSample(max === -1 ? 0 : max, peak, 0.88) * inkJitter;
+    mins[x] = mapWaveSample(min === 1 ? 0 : min, peak, settings, 0.88) * inkJitter;
+    maxs[x] = mapWaveSample(max === -1 ? 0 : max, peak, settings, 0.88) * inkJitter;
   }
 
   const safePeak = peak || 1;
@@ -619,8 +645,8 @@ function getWavePeaks(buffer, width, settings, seedText = "") {
   const detailMins = new Float32Array(microWidth);
   const detailMaxs = new Float32Array(microWidth);
   for (let i = 0; i < microWidth; i += 1) {
-    detailMins[i] = shapeWaveSample(rawMins[i], safePeak, detailGamma);
-    detailMaxs[i] = shapeWaveSample(rawMaxs[i], safePeak, detailGamma);
+    detailMins[i] = mapWaveSample(rawMins[i], safePeak, settings, detailGamma);
+    detailMaxs[i] = mapWaveSample(rawMaxs[i], safePeak, settings, detailGamma);
   }
 
   const peaks = { mins, maxs, detailMins, detailMaxs, detailWidth: microWidth, width: safeWidth, peak };
@@ -1356,7 +1382,7 @@ function updateToolbarState() {
 }
 
 function updateControlOutputs() {
-  ["pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "waveformDetail", "inkBleed", "unitGap", "ttsSpeed"].forEach((name) => {
+  ["pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "nonlinearStrength", "waveformDetail", "inkBleed", "unitGap", "ttsSpeed"].forEach((name) => {
     const output = document.querySelector(`#${name}Out`);
     if (output) output.value = controls[name].value;
   });
@@ -1422,7 +1448,7 @@ function bindEvents() {
   controls.fontSize.addEventListener("change", (event) => applyFontSize(event.target.value));
   controls.synthesisMode.addEventListener("change", updateModeUi);
 
-  ["backgroundMode", "inkColor", "paperColor", "pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "waveformDetail", "inkBleed", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
+  ["backgroundMode", "inkColor", "paperColor", "waveformMapping", "pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "nonlinearStrength", "waveformDetail", "inkBleed", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
     controls[name].addEventListener("input", () => {
       updateControlOutputs();
       renderFromCache();

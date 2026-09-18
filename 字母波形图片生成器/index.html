@@ -123,6 +123,14 @@
             <span>纸张颜色</span>
             <input id="paperColor" type="color" value="#fbfcfe">
           </label>
+          <label>
+            <span>幅度映射</span>
+            <select id="waveformMapping" title="原版保留当前幅度比例；峰值强调会压低普通幅度并突出真实尖峰；对数模式会展开较弱信号。">
+              <option value="original">原版幅度比例</option>
+              <option value="spike">峰值强调 · 幂律</option>
+              <option value="log">对数动态范围 · 弱信号展开</option>
+            </select>
+          </label>
         </div>
 
         <div class="slider-stack">
@@ -145,6 +153,10 @@
           <label>
             <span>峰值对比度 % <output id="spikeBoostOut">160</output></span>
             <input id="spikeBoost" type="range" min="50" max="400" step="10" value="160">
+          </label>
+          <label>
+            <span>非线性强度 % <output id="nonlinearStrengthOut">60</output></span>
+            <input id="nonlinearStrength" type="range" min="0" max="100" step="5" value="60">
           </label>
           <label>
             <span>波形细节倍率 <output id="waveformDetailOut">3</output></span>
