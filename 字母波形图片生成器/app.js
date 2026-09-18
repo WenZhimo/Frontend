@@ -16,6 +16,7 @@ const controls = {
   paperColor: document.querySelector("#paperColor"),
   pixelsPerSecond: document.querySelector("#pixelsPerSecond"),
   lineHeight: document.querySelector("#lineHeight"),
+  lineSpacing: document.querySelector("#lineSpacing"),
   amplitude: document.querySelector("#amplitude"),
   roughness: document.querySelector("#roughness"),
   spikeBoost: document.querySelector("#spikeBoost"),
@@ -398,6 +399,7 @@ function getSettings() {
     inkColor: controls.inkColor.value,
     pixelsPerSecond: Number(controls.pixelsPerSecond.value),
     lineHeight: Number(controls.lineHeight.value),
+    lineSpacing: Number(controls.lineSpacing.value),
     amplitude: Number(controls.amplitude.value),
     roughness: Number(controls.roughness.value) / 100,
     spikeBoost: clamp(controlNumber(controls.spikeBoost, 160), 50, 400) / 100,
@@ -532,8 +534,24 @@ function buildLayout(settings) {
     );
     return Math.max(baseHeight, maxVisualExtent * 2 + 8);
   });
+  const lineSpacing = Number(settings.lineSpacing) || 0;
+  const lineCenters = [];
+  let rawCenter = lineHeights.length ? lineHeights[0] * 0.5 : 0;
+  lineHeights.forEach((height, index) => {
+    if (index > 0) {
+      const previousHeight = lineHeights[index - 1];
+      // Negative spacing may overlap rows, but must not reverse their order.
+      rawCenter += Math.max(0, previousHeight * 0.5 + lineSpacing + height * 0.5);
+    }
+    lineCenters.push(rawCenter);
+  });
+  const topBounds = lineCenters.map((center, index) => center - lineHeights[index] * 0.5);
+  const bottomBounds = lineCenters.map((center, index) => center + lineHeights[index] * 0.5);
+  const minY = Math.min(0, ...topBounds);
+  const maxY = Math.max(0, ...bottomBounds);
+  const lineCenterOffset = settings.padding - minY;
   const contentWidth = Math.max(1, ...lineWidths);
-  const contentHeight = Math.max(settings.lineHeight, lineHeights.reduce((sum, height) => sum + height, 0));
+  const contentHeight = Math.max(settings.lineHeight, maxY - minY);
   return {
     ...audioLines,
     lines,
@@ -541,6 +559,7 @@ function buildLayout(settings) {
     height: Math.ceil(contentHeight + settings.padding * 2),
     lineWidths,
     lineHeights,
+    lineCenters: lineCenters.map((center) => center + lineCenterOffset),
     lineOffsets: lineBounds.map((bounds) => -bounds.minX)
   };
 }
@@ -909,7 +928,6 @@ function buildSvgString() {
   const settings = getSettings();
   const layout = buildLayout(settings);
   const parts = [];
-  let y = settings.padding;
 
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" role="img" aria-label="Generated TTS waveform text">`);
   parts.push(`<title>TTS waveform text export</title>`);
@@ -924,8 +942,7 @@ function buildSvgString() {
   parts.push(`<g shape-rendering="geometricPrecision">`);
 
   layout.lines.forEach((line, lineIndex) => {
-    const lineHeight = layout.lineHeights[lineIndex];
-    const centerY = y + lineHeight * 0.5;
+    const centerY = layout.lineCenters[lineIndex];
     let x = settings.padding + (layout.lineOffsets[lineIndex] || 0);
     if (settings.showGuides && line.length) {
       parts.push(`<line x1="${settings.padding}" y1="${centerY.toFixed(2)}" x2="${(settings.padding + layout.lineWidths[lineIndex]).toFixed(2)}" y2="${centerY.toFixed(2)}" stroke="${escapeXml(settings.inkColor)}" stroke-width="0.6" opacity="0.12"/>`);
@@ -934,7 +951,6 @@ function buildSvgString() {
       parts.push(token.audio ? buildWavePath(token, x, centerY, settings) : buildPendingGlyph(token, x, centerY));
       x += token.width + (token.afterGap || 0);
     });
-    y += lineHeight;
   });
 
   parts.push(`</g></svg>`);
@@ -1575,7 +1591,7 @@ function updateToolbarState() {
 }
 
 function updateControlOutputs() {
-  ["pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "spikeSharpness", "nonlinearStrength", "waveformDetail", "inkBleed", "waveformOpacity", "segmentGap", "unitGap", "ttsSpeed"].forEach((name) => {
+  ["pixelsPerSecond", "lineHeight", "lineSpacing", "amplitude", "roughness", "spikeBoost", "spikeSharpness", "nonlinearStrength", "waveformDetail", "inkBleed", "waveformOpacity", "segmentGap", "unitGap", "ttsSpeed"].forEach((name) => {
     const output = document.querySelector(`#${name}Out`);
     if (output) output.value = controls[name].value;
   });
@@ -1649,7 +1665,7 @@ function bindEvents() {
   controls.fontSize.addEventListener("change", (event) => applyFontSize(event.target.value));
   controls.synthesisMode.addEventListener("change", updateModeUi);
 
-  ["backgroundMode", "inkColor", "paperColor", "waveformMapping", "pixelsPerSecond", "lineHeight", "amplitude", "roughness", "spikeBoost", "spikeSharpness", "nonlinearStrength", "waveformDetail", "inkBleed", "waveformOpacity", "segmentGap", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
+  ["backgroundMode", "inkColor", "paperColor", "waveformMapping", "pixelsPerSecond", "lineHeight", "lineSpacing", "amplitude", "roughness", "spikeBoost", "spikeSharpness", "nonlinearStrength", "waveformDetail", "inkBleed", "waveformOpacity", "segmentGap", "unitGap", "preserveStyle", "showGuides", "tightCrop"].forEach((name) => {
     controls[name].addEventListener("input", () => {
       if (name === "nonlinearStrength" && controls.waveformMapping.value === "original" && Number(controls.nonlinearStrength.value) > 0) {
         controls.waveformMapping.value = "spike";
