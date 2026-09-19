@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Playfair+Display:wght@500;600&display=swap');
-
 @font-face {
   font-family: 'ChaoHua Typewriter';
   src: url('./assets/chaohua-typewriter.woff2') format('woff2');
@@ -26,10 +24,10 @@
   --metal: #55564e;
   --metal-dark: #34352f;
   --accent: #974e3e;
-  --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --mono: 'Microsoft YaHei', 'PingFang SC', sans-serif;
   --typewriter: 'ChaoHua Typewriter', 'Courier New', monospace;
   --sheet-width: 760px;
-  --serif: 'Playfair Display', Georgia, serif;
+  --serif: 'Songti SC', 'SimSun', serif;
 }
 
 * { box-sizing: border-box; }
@@ -81,11 +79,23 @@ button { color: inherit; font: inherit; cursor: pointer; }
 kbd { font: inherit; color: var(--accent); }
 .printer-stage { flex: 1; min-height: 450px; position: relative; display: flex; align-items: center; justify-content: center; perspective: 800px; }
 .paper-preview { position: absolute; width: min(88%, 560px); top: -100vh; bottom: 27%; overflow: hidden; }
-.paper-preview .article-paper { position: absolute; left: 50%; bottom: 0; margin-left: calc(var(--sheet-width) / -2); transform: scale(var(--paper-scale, .6)); transform-origin: bottom center; }
+.paper-preview .article-paper { position: absolute; left: 50%; bottom: calc(-1 * var(--paper-tail, 0px)); margin-left: calc(var(--sheet-width) / -2); transform: scale(var(--paper-scale, .6)); transform-origin: bottom center; }
 .paper-log { position: relative; z-index: 1; color: #35332d; font: 400 23px/1.65 var(--typewriter); letter-spacing: 0; }
 .paper-line { white-space: pre-wrap; overflow-wrap: anywhere; }
 .paper-line__row { display: block; min-height: 1.65em; white-space: pre-wrap; }
 .paper-entry--article { padding-top: 26px; }
+.article-paper__separator {
+  display: block;
+  min-height: 1.65em;
+  margin: 1.35em 0 1.15em;
+  padding: .55em 0;
+  border-top: 1px dotted rgba(151,78,62,.72);
+  border-bottom: 1px dotted rgba(151,78,62,.72);
+  color: var(--accent);
+  text-align: center;
+  font: 400 16px/1.65 var(--typewriter);
+  letter-spacing: .08em;
+}
 [data-print-row] { white-space: pre-wrap; overflow-wrap: anywhere; }
 [data-print-row][hidden], [hidden] { display: none !important; }
 .roller { width: 82%; height: 25px; position: absolute; top: 70%; z-index: 2; filter: drop-shadow(0 4px 4px rgba(43,33,24,.25)); }
@@ -106,10 +116,19 @@ kbd { font: inherit; color: var(--accent); }
 .reader { display: none; min-height: calc(100vh - 83px); padding: 0 36px 70px; }
 .reader.is-visible { display: block; }
 .desktop.is-departing { position: fixed; top: var(--desktop-top); left: 0; width: 100%; height: var(--desktop-height); z-index: 3; pointer-events: none; }
+.desktop.is-returning { pointer-events: none; }
 .reader.is-entering { position: relative; z-index: 2; pointer-events: none; }
+.reader.is-returning { pointer-events: none; }
 .is-reading-transition { overflow: hidden; }
 html { scrollbar-gutter: stable; }
 .reader.is-entering .article-paper { will-change: transform; }
+.reader.is-entering .reader__paper-slot { overflow: visible; }
+.desktop.is-returning .roller,
+.desktop.is-returning .print-head,
+.desktop.is-returning .printer-base,
+.desktop.is-returning .folder-rail,
+.desktop.is-returning .workspace__topline,
+.desktop.is-returning .workspace__bottomline { will-change: transform, opacity; }
 .reader__toolbar { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid rgba(41,41,35,.18); color: #746e64; }
 .back-button { border: 0; background: none; color: var(--ink); font: 600 .65rem var(--mono); letter-spacing: .08em; padding: 0; }
 .back-button span { color: var(--accent); font-size: 1rem; margin-right: 5px; }
@@ -130,7 +149,8 @@ html { scrollbar-gutter: stable; }
 .article-paper__meta:has(span:not([hidden])) { margin-top: 22px; }
 .article-paper__meta { color: var(--ink); margin-top: 0; font: 400 16px/1.65 var(--typewriter); letter-spacing: 0; }
 .article-paper__meta span { display: block; min-height: 1.65em; }
-.article-paper__dek { color: #655f55; font: 1.08rem/1.6 var(--serif); margin: 27px 0 0; max-width: 37em; }
+.article-paper__reveal { padding-top: 56px; }
+.article-paper__dek { color: #655f55; font: 1.08rem/1.6 var(--serif); margin: 0; max-width: 37em; }
 .article-paper__rule { height: 1px; background: rgba(55,48,40,.28); margin: 35px 0 30px; }
 .article-paper__body { color: #403d35; font: 1.05rem/1.95 var(--serif); }
 .article-paper__body p { margin: 0 0 1.45em; }
