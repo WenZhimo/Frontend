@@ -6,6 +6,7 @@
     <meta name="description" content="My Archive — 一个由打字机驱动的个人数字档案室。" />
     <meta name="theme-color" content="#d9d1c2" />
     <title>My Archive — Typewriter Files</title>
+    <link rel="preload" href="./assets/chaohua-typewriter-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -42,9 +43,9 @@
         </div>
         <div class="printer-stage" data-printer-stage>
           <div class="paper-preview" data-paper-preview>
-            <div class="paper-log-viewport" data-paper-viewport>
-              <div class="paper-log" data-paper-log role="log" aria-label="打印记录，保留最近 100 条" aria-live="off"></div>
-            </div>
+            <article class="article-paper" data-article>
+              <div class="paper-log" data-paper-log aria-label="连续纸张，保留最近 100 条打印记录"></div>
+            </article>
           </div>
           <div class="roller" aria-hidden="true">
             <span class="roller__cap roller__cap--left"></span>
@@ -84,17 +85,7 @@
           <ol data-toc></ol>
           <button class="text-button text-button--small" data-replay-opening type="button">REPRINT WELCOME ↗</button>
         </aside>
-        <article class="article-paper" data-article>
-          <div class="article-paper__header">
-            <p class="mono article-paper__file" data-article-file>PROJECT-001 / FIELD NOTE</p>
-            <h1 data-article-title></h1>
-            <div class="article-paper__meta mono"><span data-article-author></span><span data-article-date></span><span data-article-category></span></div>
-            <p class="article-paper__dek" data-article-dek></p>
-          </div>
-          <div class="article-paper__rule"></div>
-          <div class="article-paper__body" data-article-body></div>
-          <footer class="article-paper__footer mono"><span>MY ARCHIVE / END OF FILE</span><span>✳</span><span data-article-footer-date>2026.09.19</span></footer>
-        </article>
+        <div class="reader__paper-slot" data-paper-slot></div>
         <aside class="reader__index">
           <p class="mono toc__label">INDEX</p>
           <p>ARCHIVE<br /><span>All field notes</span></p>
@@ -104,6 +95,22 @@
         </aside>
       </div>
     </section>
+
+    <template data-article-template>
+      <section class="paper-entry--article">
+        <header class="article-paper__header">
+          <p class="article-paper__file" data-article-file></p>
+          <h1 data-article-title tabindex="-1"></h1>
+          <div class="article-paper__meta"><span data-article-author></span><span data-article-date></span><span data-article-category></span></div>
+        </header>
+        <div class="article-paper__reveal" hidden>
+          <p class="article-paper__dek" data-article-dek></p>
+          <div class="article-paper__rule"></div>
+          <div class="article-paper__body" data-article-body></div>
+          <footer class="article-paper__footer mono"><span>MY ARCHIVE / END OF FILE</span><span>✳</span><span data-article-footer-date></span></footer>
+        </div>
+      </section>
+    </template>
 
     <div class="toast mono" data-toast role="status" aria-live="polite"></div>
     <script src="./app.js"></script>
