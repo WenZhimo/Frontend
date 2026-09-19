@@ -24,8 +24,20 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const desktop = $('[data-desktop]');
 const reader = $('[data-reader]');
-const opening = $('[data-opening]');
+const paper = $('[data-paper-preview]');
+const paperLog = $('[data-paper-log]');
+const printHead = $('.print-head');
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 let printTimer;
+let activePrint = null;
+let feedAnimation;
+let strikeAnimation;
+let soundEnabled = false;
+let soundContext;
+let keyNoise;
+let waitForPointerMove = true;
+const printHistory = [];
+const MAX_PRINT_MESSAGES = 100;
 
 function renderFolders() {
   $$('[data-folder-group]').forEach(group => {
@@ -36,49 +48,174 @@ function renderFolders() {
       </button>`).join('');
   });
   $$('.folder').forEach(folder => {
-    folder.addEventListener('mouseenter', () => previewFile(folder.dataset.file));
-    folder.addEventListener('focus', () => previewFile(folder.dataset.file));
-    folder.addEventListener('mouseleave', resetPreview);
-    folder.addEventListener('blur', resetPreview);
+    folder.addEventListener('mouseenter', () => {
+      if (!waitForPointerMove) previewFile(folder.dataset.file);
+    });
+    folder.addEventListener('pointermove', () => {
+      if (waitForPointerMove) {
+        waitForPointerMove = false;
+        previewFile(folder.dataset.file);
+      }
+    });
+    // Clicking a hovered folder also focuses it; that must not print twice.
+    folder.addEventListener('focus', () => {
+      if (!folder.matches(':hover') || !folder.classList.contains('is-active')) previewFile(folder.dataset.file);
+    });
+    folder.addEventListener('mouseleave', () => folder.classList.remove('is-active'));
+    folder.addEventListener('blur', () => folder.classList.remove('is-active'));
     folder.addEventListener('click', () => openFile(folder.dataset.file));
   });
 }
 
-function typeText(el, text, speed = 35) {
-  clearInterval(printTimer);
-  el.textContent = '';
-  let index = 0;
-  printTimer = setInterval(() => {
-    el.textContent = text.slice(0, ++index);
-    if (index >= text.length) clearInterval(printTimer);
-  }, speed);
+function feedPaper(update) {
+  const previousLine = paperLog.lastElementChild;
+  const previousTop = previousLine?.getBoundingClientRect().top;
+  update();
+  if (!previousLine || reducedMotion.matches) return;
+  if (previousTop === previousLine.getBoundingClientRect().top) return;
+
+  // Keep the visible position continuous even if another line interrupts a feed.
+  feedAnimation?.cancel();
+  const distance = previousTop - previousLine.getBoundingClientRect().top;
+  feedAnimation = paperLog.animate([
+    { transform: `translateY(${distance}px)` },
+    { transform: 'translateY(0)' },
+  ], { duration: 160, easing: 'ease-out' });
+}
+
+function stopPrinting() {
+  clearTimeout(printTimer);
+  activePrint = null;
+  paper.classList.remove('is-printing');
+  $('[data-print-state]').textContent = 'READY / SELECT A FILE';
+}
+
+function printMessage(message, label = message) {
+  stopPrinting();
+  const entry = { text: '', element: document.createElement('div') };
+  entry.element.className = 'paper-line';
+  feedPaper(() => {
+    printHistory.push(entry);
+    paperLog.append(entry.element);
+    if (printHistory.length > MAX_PRINT_MESSAGES) printHistory.shift().element.remove();
+  });
+  const job = { entry, characters: Array.from(message), index: 0 };
+  activePrint = job;
+  paper.classList.add('is-printing');
+  $('[data-print-state]').textContent = `PRINTING / ${label}`;
+  printHead.classList.add('is-returning');
+  movePrintHead();
+  if (printHistory.length > 1) playMechanicalSound(true);
+
+  if (reducedMotion.matches) {
+    entry.text = message;
+    entry.element.textContent = entry.text;
+    stopPrinting();
+    return;
+  }
+
+  function typeCharacter() {
+    if (activePrint !== job) return;
+    const character = job.characters[job.index++];
+    feedPaper(() => {
+      entry.text += character;
+      entry.element.textContent = entry.text;
+    });
+    const returning = character === '\n';
+    printHead.classList.toggle('is-returning', returning);
+    movePrintHead();
+    playMechanicalSound(returning);
+    if (!returning && character !== ' ') {
+      strikeAnimation?.cancel();
+      strikeAnimation = printHead.querySelector('span').animate([
+        { transform: 'translateY(0)' },
+        { transform: 'translateY(-7px)', offset: .3 },
+        { transform: 'translateY(0)' },
+      ], { duration: 65 });
+    }
+    if (job.index >= job.characters.length) stopPrinting();
+    else printTimer = setTimeout(typeCharacter, returning ? 180 : 42);
+  }
+  printTimer = setTimeout(typeCharacter, 160);
+}
+
+function movePrintHead() {
+  const line = paperLog.lastElementChild;
+  if (!line) return;
+  const range = document.createRange();
+  if (line.firstChild) range.setStart(line.firstChild, line.firstChild.length);
+  else range.selectNodeContents(line);
+  range.collapse(true);
+  const caret = range.getBoundingClientRect();
+  const stage = $('[data-printer-stage]').getBoundingClientRect();
+  const atLineStart = !line.textContent || line.textContent.endsWith('\n');
+  const x = (!atLineStart && (caret.width || caret.height) ? caret.left : line.getBoundingClientRect().left) - stage.left;
+  printHead.style.left = `${Math.min(stage.width - 50, Math.max(0, x - 25))}px`;
+}
+
+async function toggleSound() {
+  const button = $('[data-sound]');
+  if (!soundEnabled) {
+    try {
+      soundContext ??= new AudioContext();
+      await soundContext.resume();
+      if (!keyNoise) {
+        keyNoise = soundContext.createBuffer(1, soundContext.sampleRate * .12, soundContext.sampleRate);
+        const samples = keyNoise.getChannelData(0);
+        for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
+      }
+    } catch {
+      toast('SOUND UNAVAILABLE');
+      return;
+    }
+  }
+  soundEnabled = !soundEnabled;
+  button.setAttribute('aria-pressed', String(soundEnabled));
+  toast(soundEnabled ? 'SOUND ON' : 'SOUND OFF');
+  if (soundEnabled) playMechanicalSound();
+}
+
+function playMechanicalSound(returning = false) {
+  if (!soundEnabled || soundContext.state !== 'running') return;
+  const now = soundContext.currentTime;
+  const noise = soundContext.createBufferSource();
+  const filter = soundContext.createBiquadFilter();
+  const gain = soundContext.createGain();
+  noise.buffer = keyNoise;
+  filter.type = 'highpass';
+  filter.frequency.value = returning ? 500 : 1800;
+  const duration = returning ? .11 : .032;
+  gain.gain.setValueAtTime(returning ? .06 : .095, now);
+  gain.gain.exponentialRampToValueAtTime(.001, now + duration);
+  noise.connect(filter).connect(gain).connect(soundContext.destination);
+  noise.start(now);
+  noise.stop(now + duration);
+  noise.onended = () => { noise.disconnect(); filter.disconnect(); gain.disconnect(); };
+
+  if (returning) {
+    const bell = soundContext.createOscillator();
+    const envelope = soundContext.createGain();
+    bell.frequency.value = 1650;
+    envelope.gain.setValueAtTime(.025, now);
+    envelope.gain.exponentialRampToValueAtTime(.001, now + .22);
+    bell.connect(envelope).connect(soundContext.destination);
+    bell.start(now);
+    bell.stop(now + .22);
+    bell.onended = () => { bell.disconnect(); envelope.disconnect(); };
+  }
 }
 
 function previewFile(slug) {
   const file = files[slug];
-  const paper = $('[data-paper-preview]');
-  paper.classList.add('is-printing');
   $$('.folder').forEach(folder => folder.classList.toggle('is-active', folder.dataset.file === slug));
-  $('[data-print-state]').textContent = `PRINTING / ${file.title}`;
-  typeText($('[data-preview-title]'), file.title, 42);
-  $('[data-preview-sub]').textContent = file.description.toUpperCase();
-  $('.print-head').style.left = `${19 + (Object.keys(files).indexOf(slug) % 4) * 20}%`;
-}
-
-function resetPreview() {
-  clearInterval(printTimer);
-  $('[data-paper-preview]').classList.remove('is-printing');
-  $$('.folder').forEach(folder => folder.classList.remove('is-active'));
-  $('[data-print-state]').textContent = 'READY / SELECT A FILE';
-  $('[data-preview-title]').innerHTML = 'WELCOME TO<br />MY ARCHIVE<span class="cursor">▮</span>';
-  $('[data-preview-sub]').textContent = 'SELECT A FILE TO BEGIN';
+  printMessage(file.title);
 }
 
 function openFile(slug, replace = false) {
   const file = files[slug];
   const article = articles[file.article];
   if (!article) return;
-  clearInterval(printTimer);
+  stopPrinting();
   renderArticle(article);
   const url = `#/${file.slug}`;
   if (replace) history.replaceState({ slug }, '', url); else history.pushState({ slug }, '', url);
@@ -104,12 +241,15 @@ function renderArticle(article) {
 }
 
 function goHome(replace = false) {
-  clearInterval(printTimer);
+  stopPrinting();
+  // A layout change under a stationary pointer is not a new preview request.
+  waitForPointerMove = true;
   reader.classList.remove('is-visible');
   reader.setAttribute('aria-hidden', 'true');
   desktop.style.display = '';
   if (replace) history.replaceState({}, '', location.pathname + location.search); else history.pushState({}, '', location.pathname + location.search);
-  resetPreview();
+  $$('.folder').forEach(folder => folder.classList.remove('is-active'));
+  movePrintHead();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -123,28 +263,23 @@ function toast(message) {
   setTimeout(() => el.classList.remove('is-visible'), 2200);
 }
 
-function showOpening() {
-  opening.classList.remove('is-hidden'); opening.setAttribute('aria-hidden', 'false');
-  const status = $('[data-opening-status]'); const title = $('[data-opening-title]');
-  typeText(title, 'WELCOME TO\nMY ARCHIVE', 72);
-  status.textContent = 'BOOTING ARCHIVE SYSTEM';
-  setTimeout(() => { status.textContent = 'PAPER / ROLLER / MEMORY'; }, 920);
-  setTimeout(() => { status.textContent = 'SELECT A FILE TO BEGIN'; }, 1850);
-  setTimeout(hideOpening, 3100);
+function reprintWelcome() {
+  if (reader.classList.contains('is-visible')) goHome();
+  printMessage('WELCOME TO\nMY ARCHIVE', 'WELCOME');
 }
-function hideOpening() { opening.classList.add('is-hidden'); opening.setAttribute('aria-hidden', 'true'); localStorage.setItem('archive-opening-seen', '1'); }
 
 renderFolders();
+document.addEventListener('pointermove', () => { waitForPointerMove = false; });
 $$('[data-nav="home"]').forEach(button => button.addEventListener('click', () => goHome()));
-$('[data-skip-opening]').addEventListener('click', hideOpening);
-$('[data-replay-opening]').addEventListener('click', showOpening);
-$('[data-sound]').addEventListener('click', event => { const active = event.currentTarget.getAttribute('aria-pressed') === 'true'; event.currentTarget.setAttribute('aria-pressed', String(!active)); toast(active ? 'SOUND OFF' : 'SOUND ON / IMAGINED'); });
+$('[data-replay-opening]').addEventListener('click', reprintWelcome);
+$('[data-sound]').addEventListener('click', toggleSound);
+window.addEventListener('resize', movePrintHead);
 window.addEventListener('popstate', syncRoute);
 window.addEventListener('hashchange', syncRoute);
-window.addEventListener('keydown', event => { if (event.shiftKey && event.key === 'F5') { event.preventDefault(); localStorage.removeItem('archive-opening-seen'); showOpening(); } });
+window.addEventListener('keydown', event => { if (event.shiftKey && event.key === 'F5') { event.preventDefault(); reprintWelcome(); } });
 
 const now = new Date();
 $('[data-clock]').textContent = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}  ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 $('[data-weekday]').textContent = now.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
 if (location.hash) syncRoute();
-else if (!localStorage.getItem('archive-opening-seen')) showOpening(); else hideOpening();
+else reprintWelcome();

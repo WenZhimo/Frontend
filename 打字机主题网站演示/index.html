@@ -10,16 +10,6 @@
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
-    <div class="opening" data-opening aria-hidden="true">
-      <div class="opening__paper">
-        <div class="opening__rule"></div>
-        <p class="mono opening__status" data-opening-status>BOOTING ARCHIVE SYSTEM</p>
-        <div class="opening__title" data-opening-title></div>
-        <p class="opening__hint">A PERSONAL DIGITAL ARCHIVE</p>
-        <button class="text-button" data-skip-opening type="button">SKIP INTRO <span>↗</span></button>
-      </div>
-    </div>
-
     <header class="topbar">
       <button class="brand" data-nav="home" type="button" aria-label="返回首页">
         <span class="brand__mark"><img src="./assets/typewriter-mark.svg" alt="" /></span>
@@ -48,17 +38,12 @@
         <div class="workspace__topline mono">
           <span data-mode-label>DESKTOP VIEW</span>
           <span class="workspace__line"></span>
-          <span data-print-state>READY / SELECT A FILE</span>
+          <span data-print-state role="status">READY / SELECT A FILE</span>
         </div>
         <div class="printer-stage" data-printer-stage>
           <div class="paper-preview" data-paper-preview>
-            <div class="paper-preview__clip"></div>
-            <div class="paper-preview__content">
-              <p class="paper-preview__eyebrow mono">MY ARCHIVE / SYSTEM NOTE</p>
-              <h1 data-preview-title>WELCOME TO<br />MY ARCHIVE<span class="cursor">▮</span></h1>
-              <p class="paper-preview__sub" data-preview-sub>SELECT A FILE TO BEGIN</p>
-              <div class="paper-preview__stamp">FILED<br /><span>09·19</span></div>
-              <div class="paper-preview__holes"><i></i><i></i><i></i></div>
+            <div class="paper-log-viewport" data-paper-viewport>
+              <div class="paper-log" data-paper-log role="log" aria-label="打印记录，保留最近 100 条" aria-live="off"></div>
             </div>
           </div>
           <div class="roller" aria-hidden="true">
@@ -97,7 +82,7 @@
         <aside class="reader__toc">
           <p class="mono toc__label">CONTENTS</p>
           <ol data-toc></ol>
-          <button class="text-button text-button--small" data-replay-opening type="button">REPLAY OPENING ↗</button>
+          <button class="text-button text-button--small" data-replay-opening type="button">REPRINT WELCOME ↗</button>
         </aside>
         <article class="article-paper" data-article>
           <div class="article-paper__header">
