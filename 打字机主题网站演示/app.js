@@ -51,8 +51,8 @@ const fontReady = Promise.all([
 ]).catch(() => []);
 const printHistory = [];
 const MAX_PRINT_MESSAGES = 100;
-const RETURN_MS = 180;
-const STRIKE_MS = 25;
+const RETURN_MS = 110;
+const STRIKE_MS = 20;
 
 function renderFolders() {
   $$('[data-folder-group]').forEach(group => {
@@ -116,7 +116,7 @@ function feedPaper(update) {
   if (Math.abs(distance) < .1) return RETURN_MS;
   // Move the paper and its ink together. A retained article below the roller
   // must feed past it before we can strike the next free line.
-  const duration = Math.min(1800, Math.max(RETURN_MS, Math.abs(distance) * 2));
+  const duration = Math.min(850, Math.max(RETURN_MS, Math.abs(distance) * 1.15));
   feedAnimation = sheet.animate([
     { translate: `0 ${distance}px` },
     { translate: '0 0' },
@@ -143,7 +143,7 @@ function appendEntry(entry) {
 
 // Print into the final semantic nodes. Their width, font, and line breaks never
 // change between the printer and the reader; only the camera scale changes.
-function printFields(entry, fields, label, { interval = 55, immediate = false } = {}) {
+function printFields(entry, fields, label, { interval = 30, immediate = false } = {}) {
   stopPrinting();
   entry.text = '';
   fields.forEach(field => {
@@ -236,7 +236,7 @@ function printFields(entry, fields, label, { interval = 55, immediate = false } 
     printTimer = setTimeout(() => {
       if (activePrint !== job) return;
       movePrintHead();
-      scheduleStrike(Math.max(30, interval - STRIKE_MS));
+      scheduleStrike(Math.max(10, interval - STRIKE_MS));
     }, STRIKE_MS);
   }
 
@@ -263,7 +263,7 @@ function printFields(entry, fields, label, { interval = 55, immediate = false } 
       updatePaperScale();
       stopPrinting(true);
     } else {
-      printTimer = setTimeout(typeCharacter, 160);
+      printTimer = setTimeout(typeCharacter, 80);
     }
   });
   return completion;
@@ -528,7 +528,7 @@ async function focusReadingPaper(job, immediate = false) {
 }
 
 function animateCamera(job, paperFrames, { reverse = false, immediate = false, reveal, layerStates = new Map() } = {}) {
-  const duration = immediate || reducedMotion.matches ? 1 : 1250;
+  const duration = immediate || reducedMotion.matches ? 1 : 850;
   const animate = (element, frames, options = {}) => {
     if (layerStates.has(element)) frames[frames.length - 1] = layerStates.get(element);
     const animation = element.animate(frames, {
