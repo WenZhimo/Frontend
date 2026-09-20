@@ -8,7 +8,7 @@
     <title>我的档案 — 打字机文件</title>
     <link rel="preload" href="./assets/chaohua-typewriter-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="./assets/chaohua-typewriter.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="stylesheet" href="./styles.css?v=20260920-fast" />
+    <link rel="stylesheet" href="./styles.css?v=20260920-mechanics" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -48,17 +48,41 @@
               <div class="paper-log" data-paper-log aria-label="连续纸张，保留最近 100 条打印记录"></div>
             </article>
           </div>
-          <div class="roller" aria-hidden="true">
-            <span class="roller__cap roller__cap--left"></span>
-            <span class="roller__bar"></span>
-            <span class="roller__cap roller__cap--right"></span>
-            <span class="roller__knob roller__knob--left"></span>
-            <span class="roller__knob roller__knob--right"></span>
-          </div>
-          <div class="print-head" aria-hidden="true"><span></span></div>
-          <div class="printer-base" aria-hidden="true">
-            <div class="printer-base__slot"></div>
-            <div class="printer-base__keys"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="printer-machine" aria-hidden="true">
+            <div class="roller">
+              <span class="roller__cap roller__cap--left"></span>
+              <span class="roller__bar"><span class="roller__surface"></span></span>
+              <span class="roller__cap roller__cap--right"></span>
+              <span class="roller__knob roller__knob--left"><i></i></span>
+              <span class="roller__knob roller__knob--right"><i></i></span>
+              <span class="roller__bail"></span>
+            </div>
+            <div class="mechanism">
+              <span class="mechanism__ruler"></span>
+              <span class="mechanism__rail"></span>
+              <span class="mechanism__belt"></span>
+              <span class="mechanism__mount mechanism__mount--left"></span>
+              <span class="mechanism__mount mechanism__mount--right"></span>
+              <span class="mechanism__return-lever"></span>
+            </div>
+            <div class="print-head">
+              <div class="print-head__housing">
+                <span class="print-head__guide"></span>
+                <span class="print-head__ribbon"></span>
+                <span class="print-head__hammer"></span>
+                <span class="print-head__spool print-head__spool--left"><i></i></span>
+                <span class="print-head__spool print-head__spool--right"><i></i></span>
+                <span class="print-head__plate">色带</span>
+              </div>
+            </div>
+            <div class="printer-base">
+              <div class="printer-base__lip"></div>
+              <span class="printer-base__badge">档案室 <b>壹号</b></span>
+              <div class="printer-base__vents"></div>
+              <span class="printer-base__indicator"></span>
+              <span class="printer-base__screw printer-base__screw--left"></span>
+              <span class="printer-base__screw printer-base__screw--right"></span>
+            </div>
           </div>
         </div>
         <div class="workspace__bottomline mono">
@@ -115,6 +139,6 @@
     </template>
 
     <div class="toast mono" data-toast role="status" aria-live="polite"></div>
-    <script src="./app.js?v=20260920-fast"></script>
+    <script src="./app.js?v=20260920-mechanics"></script>
   </body>
 </html>

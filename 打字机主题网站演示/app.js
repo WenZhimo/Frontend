@@ -29,11 +29,24 @@ const paperLog = $('[data-paper-log]');
 const sheet = $('[data-article]');
 const paperSlot = $('[data-paper-slot]');
 const printHead = $('.print-head');
+const machine = $('.printer-machine');
+const hammer = $('.print-head__hammer');
+const ribbon = $('.print-head__ribbon');
+const returnLever = $('.mechanism__return-lever');
+const spools = $$('.print-head__spool i');
+const platenKnobs = $$('.roller__knob i');
+const platenSurface = $('.roller__surface');
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 let printTimer;
 let activePrint = null;
 let feedAnimation;
-let strikeAnimation;
+let strikeMotion = Promise.resolve();
+let platenAnimations = [];
+let platenAngle = 0;
+let ribbonAngle = 0;
+let headOrigin = 0;
+let cellPitch = 0;
+let printColumns = 1;
 let soundEnabled = false;
 let soundContext;
 let keyNoise;
@@ -90,6 +103,17 @@ function updatePaperScale() {
   // the sheet below it, out of sight, instead of being erased on the way back.
   const tail = Math.max(0, sheet.offsetHeight - printedSheetHeight());
   paper.style.setProperty('--paper-tail', `${tail * paperScale}px`);
+  // Read geometry once per row/resize, never once per character.
+  const stageRect = $('[data-printer-stage]').getBoundingClientRect();
+  const paperRect = paper.getBoundingClientRect();
+  const font = getComputedStyle(paperLog);
+  const sheetStyle = getComputedStyle(sheet);
+  cellPitch = parseFloat(font.fontSize) * paperScale;
+  printColumns = Math.max(1, Math.floor(paperLog.clientWidth / parseFloat(font.fontSize)));
+  headOrigin = paperRect.left - stageRect.left + parseFloat(sheetStyle.paddingLeft) * paperScale + cellPitch / 2 - 44;
+  const strikeY = paperRect.bottom - stageRect.top -
+    (parseFloat(sheetStyle.paddingBottom) + parseFloat(font.lineHeight) / 2) * paperScale;
+  machine.style.setProperty('--strike-y', `${strikeY}px`);
   movePrintHead();
 }
 
@@ -106,6 +130,7 @@ function feedPaper(update) {
   // Finish that physical feed before measuring the next line; cancelling it
   // would snap the paper backwards and violate the one-way platen motion.
   feedAnimation?.finish();
+  platenAnimations.forEach(animation => animation.finish());
   feedAnimation = null;
   const previousLine = lastPrintedRow;
   const previousTop = previousLine?.getBoundingClientRect().top;
@@ -121,7 +146,63 @@ function feedPaper(update) {
     { translate: `0 ${distance}px` },
     { translate: '0 0' },
   ], { duration, easing: 'ease-in-out' });
+  animateMechanicalFeed(distance, duration);
   return duration;
+}
+
+function animateMechanicalFeed(distance, duration) {
+  if (reducedMotion.matches) return;
+  // Angular displacement follows the actual feed, not the animation duration.
+  const start = platenAngle;
+  platenAngle += distance / 17 * 180 / Math.PI;
+  platenAnimations = platenKnobs.map(knob => {
+    knob.style.transform = `rotate(${platenAngle}deg)`;
+    return knob.animate([
+      { transform: `rotate(${start}deg)` },
+      { transform: `rotate(${platenAngle}deg)` },
+    ], { duration, easing: 'ease-in-out' });
+  });
+  // The rubber texture is periodic; the cylinder silhouette never flips flat.
+  const from = start * Math.PI / 180 * 17 % 8;
+  const to = platenAngle * Math.PI / 180 * 17 % 8;
+  platenSurface.style.backgroundPositionY = `${-to}px`;
+  platenAnimations.push(platenSurface.animate([
+    { backgroundPositionY: `${-from}px` },
+    { backgroundPositionY: `${-from - distance}px` },
+  ], { duration, easing: 'ease-in-out' }));
+}
+
+function animateMechanicalReturn() {
+  if (reducedMotion.matches) return;
+  returnLever.getAnimations().forEach(animation => animation.cancel());
+  returnLever.animate([
+    { transform: 'rotate(0deg)' },
+    { transform: 'rotate(-28deg)', offset: .3 },
+    { transform: 'rotate(0deg)' },
+  ], { duration: RETURN_MS + 90, easing: 'cubic-bezier(.2,.75,.25,1)' });
+}
+
+async function strikeType(leaveInk) {
+  const rest = 'translateZ(5px) rotateX(-38deg)';
+  const contact = 'translate3d(0, -7px, 5px) rotateX(0deg)';
+  ribbon.style.transform = 'translate3d(0, -5px, 3px)';
+  const impact = hammer.animate([{ transform: rest }, { transform: contact }], {
+    duration: reducedMotion.matches ? 1 : 8, fill: 'forwards', easing: 'ease-in',
+  });
+  await impact.finished;
+  // Cancellation before contact must not consume an empty prepared line.
+  const printed = leaveInk();
+  if (printed) {
+    playMechanicalSound('strike');
+    ribbonAngle += 12;
+    spools.forEach(spool => { spool.style.transform = `rotate(${ribbonAngle}deg)`; });
+  }
+  const recoil = hammer.animate([{ transform: contact }, { transform: rest }], {
+    duration: reducedMotion.matches ? 1 : STRIKE_MS - 8, easing: 'ease-out',
+  });
+  impact.cancel();
+  await recoil.finished;
+  ribbon.style.transform = '';
 }
 
 function stopPrinting(completed = false) {
@@ -159,9 +240,11 @@ function printFields(entry, fields, label, { interval = 30, immediate = false } 
 
   function scheduleStrike(delay) {
     printTimer = setTimeout(async () => {
+      await waitForVisiblePage();
       // CSS transitions can start a frame after their timer. Wait for actual
       // mechanical motion as well as the nominal delay before striking.
       await Promise.allSettled([
+        strikeMotion,
         feedAnimation?.finished,
         ...printHead.getAnimations().map(animation => animation.finished),
       ]);
@@ -169,7 +252,7 @@ function printFields(entry, fields, label, { interval = 30, immediate = false } 
     }, delay);
   }
 
-  function typeCharacter() {
+  async function typeCharacter() {
     if (activePrint !== job) return;
     if (job.fieldIndex === fields.length) {
       stopPrinting(true);
@@ -187,6 +270,7 @@ function printFields(entry, fields, label, { interval = 30, immediate = false } 
           lastPrintedRow = pendingRow;
         });
         playMechanicalSound('return');
+        animateMechanicalReturn();
       } else if (feedAnimation?.playState === 'running') {
         delay = Math.max(delay, feedAnimation.effect.getTiming().duration - feedAnimation.currentTime);
       }
@@ -196,16 +280,6 @@ function printFields(entry, fields, label, { interval = 30, immediate = false } 
       return;
     }
 
-    // The row reaches its final semantic field only at the first strike.
-    // Cancelling a task before this point simply lends this same row to the next.
-    if (job.row === pendingRow) {
-      if (!entry.element.isConnected) appendEntry(entry);
-      field.element.hidden = false;
-      field.element.append(job.row);
-      job.row.removeAttribute('aria-hidden');
-      pendingRow = null;
-      updatePaperScale();
-    }
     const characters = field.lines[job.lineIndex];
     if (job.index === characters.length) {
       job.lineIndex += 1;
@@ -219,28 +293,40 @@ function printFields(entry, fields, label, { interval = 30, immediate = false } 
       typeCharacter();
       return;
     }
-    const character = characters[job.index++];
-    job.row.append(createPrintCell(character));
-    entry.text += character;
+    const character = characters[job.index];
+    const started = performance.now();
+    const leaveInk = () => {
+      if (activePrint !== job) return false;
+      // Only a completed strike claims the row. Early cancellation reuses it.
+      if (job.row === pendingRow) {
+        if (!entry.element.isConnected) appendEntry(entry);
+        field.element.hidden = false;
+        field.element.append(job.row);
+        job.row.removeAttribute('aria-hidden');
+        pendingRow = null;
+        updatePaperScale();
+      }
+      job.row.append(createPrintCell(character));
+      entry.text += character;
+      job.index++;
+      return true;
+    };
     printHead.classList.remove('is-returning');
-    if (character !== ' ') {
-      strikeAnimation?.cancel();
-      strikeAnimation = printHead.querySelector('span').animate([
-        { transform: 'translateY(0)' },
-        { transform: 'translateY(-7px)', offset: .3 },
-        { transform: 'translateY(0)' },
-      ], { duration: STRIKE_MS });
+    if (character === ' ' || reducedMotion.matches) {
+      leaveInk();
+      playMechanicalSound('space');
+    } else {
+      strikeMotion = strikeType(leaveInk);
+      await strikeMotion;
     }
-    playMechanicalSound(character === ' ' ? 'space' : 'strike');
-    // Strike first, then advance by one fixed cell; never print while returning.
-    printTimer = setTimeout(() => {
-      if (activePrint !== job) return;
-      movePrintHead();
-      scheduleStrike(Math.max(10, interval - STRIKE_MS));
-    }, STRIKE_MS);
+    if (activePrint !== job) return;
+    movePrintHead();
+    scheduleStrike(Math.max(0, interval - (performance.now() - started)));
   }
 
-  fontReady.then(() => {
+  fontReady.then(async () => {
+    await strikeMotion;
+    await waitForVisiblePage();
     if (activePrint !== job) return;
     const columns = Math.max(1, Math.floor(paperLog.clientWidth / parseFloat(getComputedStyle(paperLog).fontSize)));
     fields.forEach(field => { field.lines = wrapPrintedText(field.text, columns); });
@@ -263,7 +349,7 @@ function printFields(entry, fields, label, { interval = 30, immediate = false } 
       updatePaperScale();
       stopPrinting(true);
     } else {
-      printTimer = setTimeout(typeCharacter, 80);
+      scheduleStrike(80);
     }
   });
   return completion;
@@ -307,20 +393,26 @@ function printMessage(message, label = message) {
 }
 
 function movePrintHead() {
-  const line = lastPrintedRow;
-  if (!line?.isConnected || sheet.parentElement !== paper) return;
-  const stage = $('[data-printer-stage]').getBoundingClientRect();
-  const cellWidth = parseFloat(getComputedStyle(paperLog).fontSize) * paperScale;
-  const columns = Math.floor(paperLog.clientWidth / parseFloat(getComputedStyle(paperLog).fontSize));
-  const x = line.getBoundingClientRect().left + (Math.min(line.childElementCount, columns - 1) + .5) * cellWidth - stage.left;
-  printHead.style.left = `${Math.min(stage.width - 50, Math.max(0, x - 25))}px`;
+  if (sheet.parentElement !== paper) return;
+  const column = Math.min(lastPrintedRow?.childElementCount || 0, printColumns);
+  printHead.style.transform = `translate3d(${headOrigin + column * cellPitch}px, 0, 0)`;
 }
 
 function movePrintHeadToStart() {
   if (sheet.parentElement !== paper) return;
-  const stage = $('[data-printer-stage]').getBoundingClientRect();
-  const lineStart = paperLog.getBoundingClientRect().left + parseFloat(getComputedStyle(paperLog).fontSize) * paperScale / 2 - stage.left;
-  printHead.style.left = `${Math.min(stage.width - 50, Math.max(0, lineStart - 25))}px`;
+  printHead.style.transform = `translate3d(${headOrigin}px, 0, 0)`;
+}
+
+function waitForVisiblePage() {
+  if (!document.hidden) return Promise.resolve();
+  return new Promise(resolve => {
+    const resume = () => {
+      if (document.hidden) return;
+      document.removeEventListener('visibilitychange', resume);
+      resolve();
+    };
+    document.addEventListener('visibilitychange', resume);
+  });
 }
 
 async function toggleSound() {
@@ -346,7 +438,7 @@ async function toggleSound() {
 }
 
 function playMechanicalSound(action = 'strike') {
-  if (!soundEnabled || soundContext.state !== 'running') return;
+  if (!soundEnabled || document.hidden || soundContext.state !== 'running') return;
   const returning = action === 'return';
   const now = soundContext.currentTime;
   const noise = soundContext.createBufferSource();
@@ -406,7 +498,7 @@ async function returnHome(immediate = false) {
   const interrupted = readingJob?.animations.length > 0;
   const layerStates = new Map();
   if (interrupted) {
-    $$('.roller, .print-head, .printer-base, .folder-rail, .workspace__topline, .workspace__bottomline, .reader__toolbar, .reader__toc, .reader__index').forEach(element => {
+    $$('.printer-machine, .folder-rail, .workspace__topline, .workspace__bottomline, .reader__toolbar, .reader__toc, .reader__index').forEach(element => {
       const style = getComputedStyle(element);
       layerStates.set(element, { transform: style.transform, opacity: style.opacity });
     });
@@ -481,7 +573,7 @@ function cancelReading() {
   job?.animations.forEach(animation => animation.cancel());
   feedAnimation?.finish();
   feedAnimation = null;
-  strikeAnimation?.cancel();
+  platenAnimations.forEach(animation => animation.finish());
   desktop.classList.remove('is-departing', 'is-returning');
   desktop.style.removeProperty('--desktop-top');
   desktop.style.removeProperty('--desktop-height');
@@ -539,7 +631,7 @@ function animateCamera(job, paperFrames, { reverse = false, immediate = false, r
     return animation;
   };
   animate(sheet, paperFrames);
-  $$('.roller, .print-head, .printer-base', desktop).forEach(element => animate(element, [
+  $$('.printer-machine', desktop).forEach(element => animate(element, [
     { transform: 'translateY(0) scale(1)' },
     { transform: `translateY(${window.innerHeight}px) scale(1.8)` },
   ]));
@@ -610,6 +702,21 @@ async function reprintWelcome() {
 
 renderFolders();
 updatePaperScale();
+let pausedAnimations = [];
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    pausedAnimations = document.getAnimations().filter(animation => animation.playState === 'running');
+    pausedAnimations.forEach(animation => animation.pause());
+  } else {
+    pausedAnimations.forEach(animation => {
+      if (animation.playState === 'paused') animation.play();
+    });
+    pausedAnimations = [];
+  }
+});
+reducedMotion.addEventListener('change', () => {
+  if (reducedMotion.matches) document.getAnimations().forEach(animation => animation.finish());
+});
 document.addEventListener('pointermove', () => { waitForPointerMove = false; });
 $$('[data-nav="home"]').forEach(button => button.addEventListener('click', () => goHome()));
 $('[data-replay-opening]').addEventListener('click', reprintWelcome);
