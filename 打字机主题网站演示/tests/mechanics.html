@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>打字机机械行为回归测试</title>
+<style>body{margin:24px;font:16px/1.7 sans-serif}iframe{width:1280px;height:720px;border:1px solid #ccc}.pass{color:#25643c}.fail{color:#a12424}</style>
+<h1>打字机机械行为回归测试</h1>
+<p id="status" role="status">测试中</p>
+<ol id="results"></ol>
+<iframe src="../index.html" title="受测工作台"></iframe>
+<script>
+const frame = document.querySelector('iframe');
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const assert = (ok, message) => { if (!ok) throw new Error(message); };
+let checks = 0;
+async function until(check, message) {
+  const start = performance.now();
+  while (!check()) {
+    if (performance.now() - start > 12000) throw new Error(message);
+    await delay(8);
+  }
+}
+async function test(name, run) {
+  const item = document.createElement('li');
+  item.textContent = name;
+  document.querySelector('#results').append(item);
+  try { await run(); item.className = 'pass'; item.textContent += '：通过'; checks++; }
+  catch (error) { item.className = 'fail'; item.textContent += `：失败 — ${error.message}`; throw error; }
+}
+async function run() {
+  await until(() => typeof frame.contentWindow.printMessage === 'function', '页面未加载');
+  const app = frame.contentWindow, doc = frame.contentDocument;
+  const log = doc.querySelector('[data-paper-log]'), sheet = doc.querySelector('[data-article]'), head = doc.querySelector('.print-head');
+  const idle = () => !doc.querySelector('[data-paper-preview]').classList.contains('is-printing');
+  const messages = () => [...log.children].filter(node => !node.classList.contains('print-row'));
+  const pending = () => log.querySelector(':scope > .print-row');
+  const hover = slug => doc.querySelector(`[data-file="${slug}"]`).dispatchEvent(new app.MouseEvent('mouseenter'));
+  doc.dispatchEvent(new app.Event('pointermove'));
+  await until(idle, '欢迎词超时');
+
+  await test('首页组件与固定字格', async () => {
+    assert(doc.querySelectorAll('.folder').length === 8, '导航未加载');
+    assert(log.innerText === '欢迎来到\n我的档案', '欢迎词缺失');
+    assert([...log.querySelectorAll('.print-cell')].every(cell => cell.offsetWidth === 23), '字距不一致');
+  });
+  await test('首字前快速切换不留下额外空行', async () => {
+    const count = messages().length;
+    hover('archive'); hover('projects'); hover('notes');
+    assert(messages().length === count, '提前建立打印记录');
+    await until(idle, '预览超时');
+    assert(messages().length === count + 1 && messages().at(-1).textContent === '笔记', '保留了取消的任务');
+  });
+  await test('重复悬停同一文件夹不打断任务', async () => {
+    const count = messages().length;
+    hover('about');
+    await until(() => messages().length > count, '首字未出现');
+    hover('about'); hover('about');
+    await until(idle, '重复悬停导致打印无法完成');
+    assert(messages().length === count + 1 && messages().at(-1).textContent === '关于', '重复打印');
+  });
+  await test('行间取消后复用空行，纸张不倒退', async () => {
+    const count = messages().length;
+    const original = app.printMessage('甲\n乙');
+    await until(() => messages().length === count + 1 && pending(), '未观察到回车');
+    const reserved = pending();
+    app.stopPrinting();
+    assert(pending() === reserved, '取消时移除了已送入的行');
+    assert(await original === false, '取消结果不正确');
+    const ink = messages().at(-1).querySelector('.print-cell');
+    const top = ink.getBoundingClientRect().top;
+    const next = app.printMessage('丙');
+    await delay(60);
+    assert(pending() === reserved, '新任务又生成空行');
+    assert(ink.getBoundingClientRect().top <= top + 1, '纸张倒退');
+    await next;
+    assert(messages().at(-1).querySelector('.print-row') === reserved && !pending(), '未复用空行');
+  });
+  await test('长文本换行不重排旧字，机械运动停止后才落字', async () => {
+    const text = '中文ABC123，。-- ______ · '.repeat(3), positions = new Map(), errors = [];
+    const position = cell => [cell.offsetLeft, cell.offsetTop, cell.parentElement];
+    log.querySelectorAll('.print-cell').forEach(cell => positions.set(cell, position(cell)));
+    const observer = new MutationObserver(() => {
+      for (const cell of log.querySelectorAll('.print-cell')) {
+        const next = position(cell), old = positions.get(cell);
+        if (old && old.some((value, i) => value !== next[i])) errors.push('旧字重排');
+        if (!old) {
+          if (sheet.getAnimations().some(a => a.playState === 'running')) errors.push('走纸时落字');
+          if (head.classList.contains('is-returning')) errors.push('回车时落字');
+          const ink = cell.getBoundingClientRect(), strike = head.getBoundingClientRect();
+          if (Math.abs(ink.left + ink.width / 2 - strike.left - 25) > 2) errors.push('打印头未到位');
+        }
+        positions.set(cell, next);
+      }
+    });
+    observer.observe(log, {childList:true, subtree:true});
+    await app.printMessage(text);
+    observer.disconnect();
+    const rows = [...messages().at(-1).querySelectorAll('.print-row')];
+    assert(rows.length === Math.ceil(Array.from(text).length / 26), '换行位置错误');
+    assert(rows.map(row => row.textContent).join('') === text, '打印内容改变');
+    assert(rows.every(row => row.scrollWidth <= row.clientWidth), '文字越过纸边');
+    assert(!errors.length, [...new Set(errors)].join('；'));
+  });
+  await test('分隔符和元信息字号一致，进入文章不替换纸张', async () => {
+    await app.openFile('recent');
+    const fields = [...messages().at(-1).querySelectorAll('[data-print-row]')];
+    assert(fields.every(field => app.getComputedStyle(field).fontSize === '23px'), '字号变化');
+    assert(fields.every(field => app.getComputedStyle(field).lineHeight === '37.95px'), '行距变化');
+    const separator = doc.querySelector('[data-article-separator]');
+    assert(separator.textContent === '· · · 文章信息 · · ·' && app.getComputedStyle(separator).borderTopWidth === '0px', '不可打印的分隔符');
+    assert(doc.querySelector('[data-paper-slot]').firstElementChild === sheet, '替换了纸张');
+  });
+  await test('倒放返回保留墨迹和正文，续打不覆盖正文', async () => {
+    const html = sheet.innerHTML;
+    await app.goHome();
+    assert(sheet.innerHTML === html, '返回改变内容');
+    assert(doc.querySelector('[data-paper-preview]').firstElementChild === sheet, '返回替换纸张');
+    const previous = messages().at(-1);
+    await app.printMessage('继续');
+    assert(!previous.querySelector('.article-paper__reveal').hidden, '旧正文被隐藏');
+    assert(messages().at(-1).textContent === '继续', '续打失败');
+    assert(messages().at(-1).getBoundingClientRect().top >= previous.getBoundingClientRect().bottom - 1, '续打覆盖正文');
+  });
+  await test('最多保留最后 100 条信息', async () => {
+    for (let i = 0; i < 105; i++) {
+      const element = doc.createElement('div'), field = doc.createElement('span');
+      element.className = 'paper-line'; element.append(field);
+      await app.printFields({element}, [{element:field, text:`测试${i}`}], '测试', {immediate:true});
+    }
+    assert(messages().length === 100, '记录数量不符');
+    assert(messages()[0].textContent === '测试5' && messages().at(-1).textContent === '测试104', '错误裁剪历史');
+  });
+  document.querySelector('#status').textContent = `全部通过：${checks} 项`;
+  document.querySelector('#status').dataset.result = 'pass';
+}
+run().catch(error => {
+  document.querySelector('#status').textContent = `测试失败：${error.message}`;
+  document.querySelector('#status').dataset.result = 'fail';
+  console.error(error);
+});
+</script>
+</html>
