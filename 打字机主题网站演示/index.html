@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="我的档案 — 一个由打字机驱动的个人数字档案室。" />
+    <meta name="theme-color" content="#d9d1c2" />
+    <title>我的档案 — 打字机文件</title>
+    <link rel="preload" href="./assets/chaohua-typewriter-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="./assets/chaohua-typewriter.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="topbar">
+      <button class="brand" data-nav="home" type="button" aria-label="返回首页">
+        <span class="brand__mark"><img src="./assets/typewriter-mark.svg" alt="" /></span>
+        <span class="brand__name">我的档案</span>
+        <span class="brand__dash">—</span>
+        <span class="brand__descriptor">个人博客</span>
+      </button>
+      <div class="topbar__meta mono">
+        <span data-clock>2026.09.19&nbsp;&nbsp;10:24</span>
+        <span class="slash">/</span>
+        <span data-weekday>星期日</span>
+        <button class="sound" data-sound type="button" aria-label="切换音效" aria-pressed="false">
+          <span class="sound__waves"></span><span class="sound__stem"></span>
+        </button>
+      </div>
+    </header>
+
+    <main class="desktop" data-desktop>
+      <aside class="folder-rail folder-rail--left" aria-label="主要导航">
+        <div class="rail-label mono">文件 / 04</div>
+        <div class="folders" data-folder-group="left"></div>
+        <p class="rail-footer mono">移动鼠标探索<br />始于 2019</p>
+      </aside>
+
+      <section class="workspace" aria-label="档案工作台">
+        <div class="workspace__topline mono">
+          <span data-mode-label>桌面视图</span>
+          <span class="workspace__line"></span>
+          <span data-print-state role="status">准备就绪 / 选择文件</span>
+        </div>
+        <div class="printer-stage" data-printer-stage>
+          <div class="paper-preview" data-paper-preview>
+            <article class="article-paper" data-article>
+              <div class="paper-log" data-paper-log aria-label="连续纸张，保留最近 100 条打印记录"></div>
+            </article>
+          </div>
+          <div class="roller" aria-hidden="true">
+            <span class="roller__cap roller__cap--left"></span>
+            <span class="roller__bar"></span>
+            <span class="roller__cap roller__cap--right"></span>
+            <span class="roller__knob roller__knob--left"></span>
+            <span class="roller__knob roller__knob--right"></span>
+          </div>
+          <div class="print-head" aria-hidden="true"><span></span></div>
+          <div class="printer-base" aria-hidden="true">
+            <div class="printer-base__slot"></div>
+            <div class="printer-base__keys"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+        <div class="workspace__bottomline mono">
+          <span>打字机终端 / 001</span>
+          <span><kbd>悬停</kbd> 预览&nbsp;&nbsp; <kbd>点击</kbd> 阅读</span>
+        </div>
+      </section>
+
+      <aside class="folder-rail folder-rail--right" aria-label="档案索引">
+        <div class="rail-label mono">索引 / 04</div>
+        <div class="folders" data-folder-group="right"></div>
+        <p class="rail-footer mono">纸张记住一切<br />手指持续移动</p>
+      </aside>
+    </main>
+
+    <section class="reader" data-reader aria-hidden="true">
+      <div class="reader__toolbar mono">
+        <button class="back-button" data-nav="home" type="button"><span>←</span> 返回桌面</button>
+        <span data-reader-status>打印完成 / 阅读模式</span>
+        <span data-reader-count>共 1 节</span>
+      </div>
+      <div class="reader__layout">
+        <aside class="reader__toc">
+          <p class="mono toc__label">目录</p>
+          <ol data-toc></ol>
+          <button class="text-button text-button--small" data-replay-opening type="button">重新打印欢迎词 ↗</button>
+        </aside>
+        <div class="reader__paper-slot" data-paper-slot></div>
+        <aside class="reader__index">
+          <p class="mono toc__label">索引</p>
+          <p>档案<br /><span>全部随笔</span></p>
+          <p>状态<br /><span>可供阅读</span></p>
+          <p>媒介<br /><span>纸张 / 屏幕</span></p>
+          <div class="reader__seal">档<br /><small>已归档</small></div>
+        </aside>
+      </div>
+    </section>
+
+    <template data-article-template>
+      <section class="paper-entry--article">
+        <div class="article-paper__separator" data-article-separator aria-label="文章信息开始"></div>
+        <header class="article-paper__header">
+          <p class="article-paper__file" data-article-file></p>
+          <h1 data-article-title tabindex="-1"></h1>
+          <div class="article-paper__meta"><span data-article-author></span><span data-article-date></span><span data-article-category></span></div>
+        </header>
+        <div class="article-paper__reveal" hidden>
+          <p class="article-paper__dek" data-article-dek></p>
+          <div class="article-paper__rule"></div>
+          <div class="article-paper__body" data-article-body></div>
+          <footer class="article-paper__footer mono"><span>我的档案 / 文件结束</span><span>✳</span><span data-article-footer-date></span></footer>
+        </div>
+      </section>
+    </template>
+
+    <div class="toast mono" data-toast role="status" aria-live="polite"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>
