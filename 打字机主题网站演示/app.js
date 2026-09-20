@@ -102,9 +102,13 @@ function printedSheetHeight() {
 }
 
 function feedPaper(update) {
+  // A new job can arrive while the previous sheet movement is still running.
+  // Finish that physical feed before measuring the next line; cancelling it
+  // would snap the paper backwards and violate the one-way platen motion.
+  feedAnimation?.finish();
+  feedAnimation = null;
   const previousLine = lastPrintedRow;
   const previousTop = previousLine?.getBoundingClientRect().top;
-  feedAnimation?.cancel();
   update();
   updatePaperScale();
   if (!previousLine?.isConnected || reducedMotion.matches) return RETURN_MS;
@@ -250,7 +254,8 @@ function printFields(entry, fields, label, { interval = 55, immediate = false } 
         });
       });
       entry.text = fields.map(field => field.text).join('\n');
-      feedAnimation?.cancel();
+      feedAnimation?.finish();
+      feedAnimation = null;
       appendEntry(entry);
       pendingRow?.remove();
       pendingRow = null;
@@ -474,7 +479,8 @@ function cancelReading() {
   const job = readingJob;
   readingJob = null;
   job?.animations.forEach(animation => animation.cancel());
-  feedAnimation?.cancel();
+  feedAnimation?.finish();
+  feedAnimation = null;
   strikeAnimation?.cancel();
   desktop.classList.remove('is-departing', 'is-returning');
   desktop.style.removeProperty('--desktop-top');
