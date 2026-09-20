@@ -99,20 +99,50 @@ kbd { font: inherit; color: var(--accent); }
 }
 [data-print-row] { white-space: pre; overflow-wrap: normal; }
 [data-print-row][hidden], [hidden] { display: none !important; }
-.roller { width: 82%; height: 25px; position: absolute; top: 70%; z-index: 2; filter: drop-shadow(0 4px 4px rgba(43,33,24,.25)); }
-.roller__bar { display: block; height: 13px; margin: 6px 23px 0; border-radius: 7px; background: linear-gradient(#9f9889, #494a44 47%, #837b6c 55%, #40413c); }
-.roller__cap { position: absolute; top: 2px; width: 26px; height: 22px; border: 3px solid #3a3a34; background: #756e60; border-radius: 50%; }
-.roller__cap--left { left: 0; } .roller__cap--right { right: 0; }
-.roller__knob { position: absolute; top: -3px; width: 34px; height: 31px; border-radius: 50%; background: radial-gradient(circle at 34% 33%, #aaa28f, #353630 63%); border: 2px solid #2b2c28; }
-.roller__knob--left { left: -12px; } .roller__knob--right { right: -12px; }
-.print-head { width: 50px; height: 64px; position: absolute; top: 68%; left: 48%; z-index: 3; transition: left 8ms linear; }
-.print-head.is-returning { transition: left 110ms cubic-bezier(.25,.7,.25,1); }
-.print-head::before { content: ''; display: block; width: 48px; height: 40px; border-radius: 5px 5px 2px 2px; background: linear-gradient(105deg, #41423c, #777263 55%, #383a35); box-shadow: 0 4px 0 #292a26; }
-.print-head span { display: block; width: 8px; height: 23px; margin: -4px auto 0; background: #242521; box-shadow: 0 5px 4px rgba(32,26,21,.38); }
-.printer-base { width: 100%; height: 26%; min-height: 110px; position: absolute; bottom: 0; z-index: 1; border-radius: 50% 50% 0 0 / 30% 30% 0 0; background: linear-gradient(145deg, #68685e, #3d3e38 65%, #2f302c); box-shadow: 0 -6px 0 rgba(39,37,32,.25), 0 18px 28px rgba(48,38,26,.25); }
-.printer-base__slot { width: 56%; height: 18px; position: absolute; left: 22%; top: 17px; background: #20211e; border-radius: 50%; box-shadow: inset 0 3px 6px rgba(0,0,0,.6); }
-.printer-base__keys { display: flex; gap: 7px; position: absolute; bottom: 19px; left: 17%; right: 17%; justify-content: center; opacity: .5; }
-.printer-base__keys i { width: 7%; max-width: 34px; height: 19px; border-radius: 3px 3px 7px 7px; background: #252620; box-shadow: inset 0 3px 2px rgba(255,255,255,.1); }
+/* A shallow mechanical assembly: perspective stays on the housing, while the
+   camera owns the outer wrapper and the carriage only translates along X. */
+.printer-machine { position: absolute; inset: 0; z-index: 2; pointer-events: none; --strike-y: 64%; }
+.roller { position: absolute; left: 3%; right: 3%; top: calc(var(--strike-y) + 13px); height: 25px; z-index: 1; }
+.roller__bar { position: absolute; inset: 0 26px; overflow: hidden; border-radius: 9px; background: linear-gradient(#20231f, #53544b 30%, #252822 64%, #10130f); box-shadow: inset 0 1px 1px #ada18c, 0 6px 6px #27251c45; }
+.roller__surface { position: absolute; inset: -16px 0; opacity: .24; background: repeating-linear-gradient(0deg, transparent 0 7px, #a7a28c 7px 8px); }
+.roller__bar::after { content: ''; position: absolute; inset: 0; background: linear-gradient(#12150f66, transparent 30%, #11160dbb); }
+.roller__cap { position: absolute; top: -1px; width: 24px; height: 27px; border: 3px solid #363932; background: linear-gradient(90deg, #544f43, #b2a893 40%, #48493f); border-radius: 6px; }
+.roller__cap--left { left: 13px; } .roller__cap--right { right: 13px; }
+.roller__knob { position: absolute; top: -7px; width: 33px; height: 40px; border-radius: 45%; background: linear-gradient(90deg, #20251e, #575a4c 40%, #242b20); border: 2px solid #24291e; box-shadow: inset 2px 0 2px #aaa08366, 0 4px 4px #302d2240; }
+.roller__knob--left { left: -8px; } .roller__knob--right { right: -8px; }
+.roller__knob i { position: absolute; inset: 5px 3px; border-radius: 50%; background: repeating-conic-gradient(#797969 0deg 9deg, #343c30 10deg 27deg); border: 1px solid #1f251c; }
+.roller__knob i::after { content: ''; position: absolute; inset: 9px 6px; border: 1px solid #91907a; border-radius: 50%; background: #393f33; }
+.roller__bail { position: absolute; left: 11%; right: 11%; top: 1px; height: 4px; border-radius: 3px; background: linear-gradient(#d6d0bc, #5a6052); box-shadow: 0 2px 1px #2a2e2440; }
+.roller__bail::before, .roller__bail::after { content: ''; position: absolute; top: -3px; width: 17px; height: 10px; border-radius: 3px; background: linear-gradient(#767a68, #292f24); }
+.roller__bail::before { left: 8%; } .roller__bail::after { right: 8%; }
+.mechanism { position: absolute; left: 3%; right: 3%; top: calc(var(--strike-y) + 27px); height: 61px; z-index: 2; border-radius: 3px; background: linear-gradient(#171e17, #343c2f); box-shadow: inset 0 4px 6px #090e08aa; }
+.mechanism__ruler { position: absolute; left: 5%; right: 5%; top: 1px; height: 10px; border-bottom: 1px solid #a09b7b66; background: repeating-linear-gradient(90deg, #c9c0a466 0 1px, transparent 1px 9px); }
+.mechanism__rail { position: absolute; left: 2%; right: 2%; top: 23px; height: 10px; border: 1px solid #282e22; border-radius: 6px; background: linear-gradient(#dad5c1, #969b87 24%, #363f32 70%, #aaa48e); box-shadow: 0 4px 4px #080e0880; }
+.mechanism__belt { position: absolute; left: 4%; right: 4%; top: 46px; height: 6px; background: repeating-linear-gradient(90deg, #11190f 0 3px, #75765b 3px 4px); }
+.mechanism__mount { position: absolute; top: 16px; width: 20px; height: 38px; border-radius: 4px; border: 1px solid #1d2519; background: linear-gradient(100deg, #68705a, #323e2a); box-shadow: 2px 2px 2px #0d160880; }
+.mechanism__mount--left { left: 1%; } .mechanism__mount--right { right: 1%; }
+.mechanism__return-lever { position: absolute; right: 2.5%; top: -27px; width: 8px; height: 68px; border: 1px solid #1c2518; border-radius: 5px; background: linear-gradient(90deg, #343f2b, #c1bda2 45%, #465039); transform-origin: 50% 100%; box-shadow: 2px 3px 4px #0d150b80; }
+.mechanism__return-lever::before { content: ''; position: absolute; top: -8px; left: -4px; width: 16px; height: 12px; border-radius: 4px; background: linear-gradient(#7f896e, #2b3523); box-shadow: 0 1px 2px #10180d; }
+.print-head { position: absolute; left: 0; top: var(--strike-y); width: 88px; height: 83px; z-index: 3; transition: transform 8ms linear; }
+.print-head.is-returning { transition-duration: 110ms; transition-timing-function: cubic-bezier(.3,.65,.25,1); }
+.print-head__housing { position: absolute; inset: 15px 0 0; border: 1px solid #1a2117; border-radius: 7px 7px 4px 4px; background: linear-gradient(110deg, #56614c, #2b3725 55%, #182314); box-shadow: inset 0 2px 1px #abb39788, 2px 7px 5px #0a120780; transform: perspective(450px) rotateX(12deg); transform-style: preserve-3d; }
+.print-head__guide { position: absolute; top: -16px; left: 34px; width: 18px; height: 24px; border: 2px solid #b6b4a0; border-top: 0; border-radius: 0 0 5px 5px; transform: translateZ(2px); }
+.print-head__ribbon { position: absolute; left: 27px; top: -7px; width: 32px; height: 7px; background: linear-gradient(#26251f 0 50%, #703f33 50%); transform: translateZ(3px); }
+.print-head__hammer { position: absolute; top: -5px; left: 39px; width: 8px; height: 25px; border-radius: 2px; background: linear-gradient(90deg, #50584b, #c8c9b3 45%, #39412f); box-shadow: 1px 2px 2px #121b0c88; transform: translateZ(5px) rotateX(-38deg); transform-origin: 50% 100%; }
+.print-head__hammer::before { content: ''; position: absolute; top: 0; left: -2px; width: 12px; height: 6px; border-radius: 2px; background: #b1b49c; border-top: 1px solid #e1dfc5; }
+.print-head__spool { position: absolute; top: 8px; width: 29px; height: 29px; border: 2px solid #152110; border-radius: 50%; background: #222e1e; box-shadow: inset 0 1px 2px #a3ad8580; transform: translateZ(3px); }
+.print-head__spool--left { left: 5px; } .print-head__spool--right { right: 5px; }
+.print-head__spool i { position: absolute; inset: 5px; border: 1px solid #788566; border-radius: 50%; background: repeating-conic-gradient(#778466 0deg 22deg, #25371d 24deg 90deg); }
+.print-head__spool i::after { content: ''; position: absolute; inset: 5px; background: #bdc1a2; border-radius: 50%; }
+.print-head__plate { position: absolute; left: 27px; bottom: 6px; width: 32px; text-align: center; color: #c4c7aa; font: 8px var(--mono); letter-spacing: 2px; }
+.printer-base { position: absolute; top: calc(var(--strike-y) + 65px); left: 0; right: 0; height: 102px; z-index: 2; border: 1px solid #414c36; border-radius: 15px 15px 9px 9px; background: linear-gradient(170deg, #7e8a6b, #536044 35%, #3c4930 80%); box-shadow: inset 0 2px 1px #d0d1ae80, inset 0 -7px 0 #27361fa0, 0 14px 20px #3d382f40; }
+.printer-base__lip { position: absolute; left: 3%; right: 3%; top: 0; height: 12px; border-radius: 0 0 4px 4px; background: linear-gradient(#171f13, #414e35); box-shadow: 0 2px 1px #a8af8866; }
+.printer-base__badge { position: absolute; top: 34px; left: 7%; color: #c7c9ad; font: 10px var(--mono); letter-spacing: 3px; text-shadow: 0 1px 1px #1a2910; }
+.printer-base__badge b { margin-left: 12px; color: #acb698; font-size: 8px; font-weight: 400; }
+.printer-base__vents { position: absolute; right: 12%; top: 39px; width: 25%; height: 17px; transform: skewX(-13deg); background: repeating-linear-gradient(90deg, #25321b 0 3px, #94a17766 3px 4px, transparent 4px 9px); }
+.printer-base__indicator { position: absolute; right: 7%; top: 42px; width: 5px; height: 5px; border-radius: 50%; background: #bca56e; box-shadow: 0 0 0 2px #39452c; }
+.printer-base__screw { position: absolute; bottom: 16px; width: 8px; height: 8px; border-radius: 50%; background: linear-gradient(135deg, #a5ae8d 43%, #334225 44% 56%, #a5ae8d 57%); box-shadow: 0 1px 2px #1b2914; }
+.printer-base__screw--left { left: 4%; } .printer-base__screw--right { right: 4%; }
 
 .reader { display: none; min-height: calc(100vh - 83px); padding: 0 36px 70px; }
 .reader.is-visible { display: block; }
@@ -124,9 +154,7 @@ kbd { font: inherit; color: var(--accent); }
 html { scrollbar-gutter: stable; }
 .reader.is-entering .article-paper { will-change: transform; }
 .reader.is-entering .reader__paper-slot { overflow: visible; }
-.desktop.is-returning .roller,
-.desktop.is-returning .print-head,
-.desktop.is-returning .printer-base,
+.desktop.is-returning .printer-machine,
 .desktop.is-returning .folder-rail,
 .desktop.is-returning .workspace__topline,
 .desktop.is-returning .workspace__bottomline { will-change: transform, opacity; }
