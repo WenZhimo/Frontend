@@ -143,7 +143,7 @@ function printFields(entry, fields, label, { interval = 38, returnDelay = 150, i
     field.element.dataset.printRow = '';
     field.characters = Array.from(field.text);
   });
-  const job = { entry, fields, fieldIndex: 0, index: 0 };
+  const job = { entry, fields, fieldIndex: 0, index: 0, awaitingInitialReturn: true };
   const completion = new Promise(resolve => { job.resolve = resolve; });
   activePrint = job;
   paper.classList.add('is-printing');
@@ -151,6 +151,16 @@ function printFields(entry, fields, label, { interval = 38, returnDelay = 150, i
 
   function typeCharacter() {
     if (activePrint !== job) return;
+    // A real carriage returns before the first strike on a fresh line. Keep
+    // the pending entry out of the DOM during that movement so cancelling a
+    // fast hover cannot leave a blank printed row.
+    if (job.awaitingInitialReturn) {
+      job.awaitingInitialReturn = false;
+      printHead.classList.add('is-returning');
+      movePrintHeadToStart();
+      printTimer = setTimeout(typeCharacter, returnDelay);
+      return;
+    }
     const field = fields[job.fieldIndex];
     let returning = false;
     if (job.index >= field.characters.length) {
@@ -168,10 +178,9 @@ function printFields(entry, fields, label, { interval = 38, returnDelay = 150, i
       returning = true;
     } else {
       const character = field.characters[job.index++];
-      const starting = !entry.element.isConnected;
       const previousHeight = field.element.offsetHeight;
       feedPaper(() => {
-        if (starting) {
+        if (!entry.element.isConnected) {
           field.element.hidden = false;
           appendEntry(entry);
           lastPrintedRow = field.element;
@@ -179,7 +188,7 @@ function printFields(entry, fields, label, { interval = 38, returnDelay = 150, i
         field.element.textContent += character;
         entry.text += character;
       });
-      returning = starting || field.element.offsetHeight > previousHeight + 1;
+      returning = field.element.offsetHeight > previousHeight + 1;
       if (character !== ' ') {
         strikeAnimation?.cancel();
         strikeAnimation = printHead.querySelector('span').animate([
@@ -236,6 +245,13 @@ function movePrintHead() {
   const stage = $('[data-printer-stage]').getBoundingClientRect();
   const x = (line.textContent && caret.height ? caret.left : line.getBoundingClientRect().left) - stage.left;
   printHead.style.left = `${Math.min(stage.width - 50, Math.max(0, x - 25))}px`;
+}
+
+function movePrintHeadToStart() {
+  if (sheet.parentElement !== paper) return;
+  const stage = $('[data-printer-stage]').getBoundingClientRect();
+  const lineStart = paperLog.getBoundingClientRect().left - stage.left;
+  printHead.style.left = `${Math.min(stage.width - 50, Math.max(0, lineStart - 25))}px`;
 }
 
 async function toggleSound() {
