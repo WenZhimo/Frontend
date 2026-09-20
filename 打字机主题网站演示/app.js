@@ -37,6 +37,21 @@ const spools = $$('.print-head__spool i');
 const platenKnobs = $$('.roller__knob i');
 const platenSurface = $('.roller__surface');
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const SOUND_PREFERENCE_KEY = 'typewriter-sound-enabled';
+
+function loadSoundPreference() {
+  try {
+    const saved = localStorage.getItem(SOUND_PREFERENCE_KEY);
+    return saved === null ? true : saved === 'true';
+  } catch {
+    return true;
+  }
+}
+
+function saveSoundPreference(enabled) {
+  try { localStorage.setItem(SOUND_PREFERENCE_KEY, String(enabled)); } catch { /* storage may be blocked */ }
+}
+
 let printTimer;
 let activePrint = null;
 let feedAnimation;
@@ -47,9 +62,10 @@ let ribbonAngle = 0;
 let headOrigin = 0;
 let cellPitch = 0;
 let printColumns = 1;
-let soundEnabled = false;
+let soundEnabled = loadSoundPreference();
 let soundContext;
 let keyNoise;
+let soundReadyPromise;
 let waitForPointerMove = true;
 let readingJob = null;
 let returnJob = null;
@@ -415,30 +431,49 @@ function waitForVisiblePage() {
   });
 }
 
-async function toggleSound() {
-  const button = $('[data-sound]');
-  if (!soundEnabled) {
+function updateSoundButton() {
+  $('[data-sound]').setAttribute('aria-pressed', String(soundEnabled));
+}
+
+async function ensureSoundReady() {
+  if (!soundEnabled) return false;
+  if (soundContext?.state === 'running' && keyNoise) return true;
+  if (soundReadyPromise) return soundReadyPromise;
+  soundReadyPromise = (async () => {
     try {
-      soundContext ??= new AudioContext();
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return false;
+      soundContext ??= new AudioContextClass();
       await soundContext.resume();
       if (!keyNoise) {
         keyNoise = soundContext.createBuffer(1, soundContext.sampleRate * .12, soundContext.sampleRate);
         const samples = keyNoise.getChannelData(0);
         for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
       }
+      return soundContext.state === 'running';
     } catch {
-      toast('音效不可用');
-      return;
+      return false;
     }
-  }
+  })();
+  const ready = await soundReadyPromise;
+  soundReadyPromise = null;
+  return ready;
+}
+
+async function toggleSound() {
   soundEnabled = !soundEnabled;
-  button.setAttribute('aria-pressed', String(soundEnabled));
-  toast(soundEnabled ? '音效已开启' : '音效已关闭');
-  if (soundEnabled) playMechanicalSound();
+  saveSoundPreference(soundEnabled);
+  updateSoundButton();
+  let ready = true;
+  if (soundEnabled) {
+    ready = await ensureSoundReady();
+  }
+  toast(soundEnabled ? (ready ? '音效已开启' : '音效已开启 / 浏览器暂未允许播放') : '音效已关闭');
+  if (soundEnabled && ready) playMechanicalSound();
 }
 
 function playMechanicalSound(action = 'strike') {
-  if (!soundEnabled || document.hidden || soundContext.state !== 'running') return;
+  if (!soundEnabled || document.hidden || !soundContext || !keyNoise || soundContext.state !== 'running') return;
   const returning = action === 'return';
   const now = soundContext.currentTime;
   const noise = soundContext.createBufferSource();
@@ -702,6 +737,10 @@ async function reprintWelcome() {
 
 renderFolders();
 updatePaperScale();
+updateSoundButton();
+const primeSound = () => { if (soundEnabled) void ensureSoundReady(); };
+window.addEventListener('pointerdown', primeSound, { passive: true });
+window.addEventListener('keydown', primeSound, { passive: true });
 let pausedAnimations = [];
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
