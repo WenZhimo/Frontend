@@ -105,8 +105,8 @@ kbd { font: inherit; color: var(--accent); }
 .roller__cap--left { left: 0; } .roller__cap--right { right: 0; }
 .roller__knob { position: absolute; top: -3px; width: 34px; height: 31px; border-radius: 50%; background: radial-gradient(circle at 34% 33%, #aaa28f, #353630 63%); border: 2px solid #2b2c28; }
 .roller__knob--left { left: -12px; } .roller__knob--right { right: -12px; }
-.print-head { width: 50px; height: 64px; position: absolute; top: 68%; left: 48%; z-index: 3; transition: left 25ms linear; }
-.print-head.is-returning { transition: left 180ms cubic-bezier(.25,.7,.25,1); }
+.print-head { width: 50px; height: 64px; position: absolute; top: 68%; left: 48%; z-index: 3; transition: left 8ms linear; }
+.print-head.is-returning { transition: left 110ms cubic-bezier(.25,.7,.25,1); }
 .print-head::before { content: ''; display: block; width: 48px; height: 40px; border-radius: 5px 5px 2px 2px; background: linear-gradient(105deg, #41423c, #777263 55%, #383a35); box-shadow: 0 4px 0 #292a26; }
 .print-head span { display: block; width: 8px; height: 23px; margin: -4px auto 0; background: #242521; box-shadow: 0 5px 4px rgba(32,26,21,.38); }
 .printer-base { width: 100%; height: 26%; min-height: 110px; position: absolute; bottom: 0; z-index: 1; border-radius: 50% 50% 0 0 / 30% 30% 0 0; background: linear-gradient(145deg, #68685e, #3d3e38 65%, #2f302c); box-shadow: 0 -6px 0 rgba(39,37,32,.25), 0 18px 28px rgba(48,38,26,.25); }
