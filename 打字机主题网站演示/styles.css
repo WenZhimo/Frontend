@@ -83,13 +83,13 @@ kbd { font: inherit; color: var(--accent); }
 .paper-preview { position: absolute; width: min(88%, 560px); top: -100vh; bottom: 27%; overflow: hidden; }
 .paper-preview .article-paper { position: absolute; left: 50%; bottom: calc(-1 * var(--paper-tail, 0px)); margin-left: calc(var(--sheet-width) / -2); transform: scale(var(--paper-scale, .6)); transform-origin: bottom center; }
 .paper-log { position: relative; z-index: 1; color: #35332d; font: 400 var(--print-size)/var(--print-leading) var(--typewriter); letter-spacing: 0; }
-.paper-line { white-space: pre-wrap; overflow-wrap: anywhere; }
-.paper-line__row { display: block; min-height: 1.65em; white-space: pre-wrap; }
-.paper-entry--article { padding-top: 26px; }
+.paper-line__row, .print-row { display: block; }
+.print-row { height: calc(var(--print-size) * var(--print-leading)); white-space: pre; }
+.print-cell { display: inline-block; width: 1em; text-align: center; font-kerning: none; font-variant-ligatures: none; }
 .article-paper__separator {
   display: block;
   min-height: calc(1em * var(--print-leading));
-  margin: calc(1em * var(--print-leading)) 0;
+  margin: 0;
   padding: 0;
   color: var(--accent);
   text-align: left;
@@ -97,7 +97,7 @@ kbd { font: inherit; color: var(--accent); }
   letter-spacing: 0;
   white-space: pre;
 }
-[data-print-row] { white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-print-row] { white-space: pre; overflow-wrap: normal; }
 [data-print-row][hidden], [hidden] { display: none !important; }
 .roller { width: 82%; height: 25px; position: absolute; top: 70%; z-index: 2; filter: drop-shadow(0 4px 4px rgba(43,33,24,.25)); }
 .roller__bar { display: block; height: 13px; margin: 6px 23px 0; border-radius: 7px; background: linear-gradient(#9f9889, #494a44 47%, #837b6c 55%, #40413c); }
@@ -105,8 +105,8 @@ kbd { font: inherit; color: var(--accent); }
 .roller__cap--left { left: 0; } .roller__cap--right { right: 0; }
 .roller__knob { position: absolute; top: -3px; width: 34px; height: 31px; border-radius: 50%; background: radial-gradient(circle at 34% 33%, #aaa28f, #353630 63%); border: 2px solid #2b2c28; }
 .roller__knob--left { left: -12px; } .roller__knob--right { right: -12px; }
-.print-head { width: 50px; height: 64px; position: absolute; top: 68%; left: 48%; z-index: 3; transition: left 35ms linear; }
-.print-head.is-returning { transition: left 160ms cubic-bezier(.25,.7,.25,1); }
+.print-head { width: 50px; height: 64px; position: absolute; top: 68%; left: 48%; z-index: 3; transition: left 25ms linear; }
+.print-head.is-returning { transition: left 180ms cubic-bezier(.25,.7,.25,1); }
 .print-head::before { content: ''; display: block; width: 48px; height: 40px; border-radius: 5px 5px 2px 2px; background: linear-gradient(105deg, #41423c, #777263 55%, #383a35); box-shadow: 0 4px 0 #292a26; }
 .print-head span { display: block; width: 8px; height: 23px; margin: -4px auto 0; background: #242521; box-shadow: 0 5px 4px rgba(32,26,21,.38); }
 .printer-base { width: 100%; height: 26%; min-height: 110px; position: absolute; bottom: 0; z-index: 1; border-radius: 50% 50% 0 0 / 30% 30% 0 0; background: linear-gradient(145deg, #68685e, #3d3e38 65%, #2f302c); box-shadow: 0 -6px 0 rgba(39,37,32,.25), 0 18px 28px rgba(48,38,26,.25); }
@@ -147,9 +147,8 @@ html { scrollbar-gutter: stable; }
 .article-paper__file { color: var(--ink); font: 400 var(--print-size)/var(--print-leading) var(--typewriter); margin: 0; }
 .article-paper h1 { color: var(--ink); font: 400 var(--print-size)/var(--print-leading) var(--typewriter); letter-spacing: 0; margin: 0; }
 .article-paper h1:focus { outline: none; }
-.article-paper__meta:has(span:not([hidden])) { margin-top: 0; }
 .article-paper__meta { color: var(--ink); margin-top: 0; font: 400 var(--print-size)/var(--print-leading) var(--typewriter); letter-spacing: 0; }
-.article-paper__meta span { display: block; min-height: calc(1em * var(--print-leading)); }
+.article-paper__meta > span { display: block; }
 .article-paper__reveal { padding-top: 56px; }
 .article-paper__dek { color: #655f55; font: 1.08rem/1.6 var(--serif); margin: 0; max-width: 37em; }
 .article-paper__rule { height: 1px; background: rgba(55,48,40,.28); margin: 35px 0 30px; }

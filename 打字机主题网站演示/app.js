@@ -42,11 +42,17 @@ let readingJob = null;
 let returnJob = null;
 let currentArticle = null;
 let lastPrintedRow = null;
+let pendingRow = null;
 let lastPreviewSlug = null;
 let paperScale = 1;
-const fontReady = document.fonts.load('23px "ChaoHua Typewriter"', '欢迎来到我的档案文章信息').catch(() => []);
+const fontReady = Promise.all([
+  document.fonts.load('23px "ChaoHua Typewriter"', '欢迎来到我的档案文章信息'),
+  document.fonts.load('23px "ChaoHua Typewriter"', '0123456789 /-.'),
+]).catch(() => []);
 const printHistory = [];
 const MAX_PRINT_MESSAGES = 100;
+const RETURN_MS = 180;
+const STRIKE_MS = 25;
 
 function renderFolders() {
   $$('[data-folder-group]').forEach(group => {
@@ -96,18 +102,22 @@ function printedSheetHeight() {
 }
 
 function feedPaper(update) {
-  const previousLine = paperLog.lastElementChild;
+  const previousLine = lastPrintedRow;
   const previousTop = previousLine?.getBoundingClientRect().top;
   feedAnimation?.cancel();
   update();
   updatePaperScale();
-  if (!previousLine?.isConnected || reducedMotion.matches) return;
-  const distance = (previousTop - previousLine.getBoundingClientRect().top) / paperScale;
-  if (Math.abs(distance) < .1) return;
-  feedAnimation = paperLog.animate([
-    { transform: `translateY(${distance}px)` },
-    { transform: 'translateY(0)' },
-  ], { duration: 150, easing: 'ease-out' });
+  if (!previousLine?.isConnected || reducedMotion.matches) return RETURN_MS;
+  const distance = previousTop - previousLine.getBoundingClientRect().top;
+  if (Math.abs(distance) < .1) return RETURN_MS;
+  // Move the paper and its ink together. A retained article below the roller
+  // must feed past it before we can strike the next free line.
+  const duration = Math.min(1800, Math.max(RETURN_MS, Math.abs(distance) * 2));
+  feedAnimation = sheet.animate([
+    { translate: `0 ${distance}px` },
+    { translate: '0 0' },
+  ], { duration, easing: 'ease-in-out' });
+  return duration;
 }
 
 function stopPrinting(completed = false) {
@@ -116,110 +126,167 @@ function stopPrinting(completed = false) {
   activePrint = null;
   paper.classList.remove('is-printing');
   $('[data-print-state]').textContent = '准备就绪 / 选择文件';
-  if (job && !completed && job.entry.element.isConnected) {
-    // Reuse a pending blank line if cancellation happened during a carriage
-    // return between fields. A task without ink has never reached the DOM.
-    job.fields.filter(field => !field.element.textContent).forEach(field => { field.element.hidden = true; });
-    lastPrintedRow = job.fields.filter(field => field.element.textContent).at(-1)?.element ?? lastPrintedRow;
-    updatePaperScale();
-  }
+  // Leave a prepared but unstruck line in place for the next task. Removing it
+  // would reverse the paper; adding another would leave an unwanted blank.
   job?.resolve(completed);
 }
 
 function appendEntry(entry) {
   printHistory.push(entry);
-  paperLog.append(entry.element);
+  paperLog.insertBefore(entry.element, pendingRow);
   if (printHistory.length > MAX_PRINT_MESSAGES) printHistory.shift().element.remove();
 }
 
 // Print into the final semantic nodes. Their width, font, and line breaks never
 // change between the printer and the reader; only the camera scale changes.
-function printFields(entry, fields, label, { interval = 38, returnDelay = 150, immediate = false } = {}) {
+function printFields(entry, fields, label, { interval = 55, immediate = false } = {}) {
   stopPrinting();
   entry.text = '';
   fields.forEach(field => {
     field.element.textContent = '';
     field.element.hidden = true;
     field.element.dataset.printRow = '';
-    field.characters = Array.from(field.text);
   });
-  const job = { entry, fields, fieldIndex: 0, index: 0, awaitingInitialReturn: true };
+  const job = { entry, fields, fieldIndex: 0, lineIndex: 0, index: 0, row: null };
   const completion = new Promise(resolve => { job.resolve = resolve; });
   activePrint = job;
   paper.classList.add('is-printing');
   $('[data-print-state]').textContent = `打印中 / ${label}`;
 
+  function scheduleStrike(delay) {
+    printTimer = setTimeout(async () => {
+      // CSS transitions can start a frame after their timer. Wait for actual
+      // mechanical motion as well as the nominal delay before striking.
+      await Promise.allSettled([
+        feedAnimation?.finished,
+        ...printHead.getAnimations().map(animation => animation.finished),
+      ]);
+      typeCharacter();
+    }, delay);
+  }
+
   function typeCharacter() {
     if (activePrint !== job) return;
-    // A real carriage returns before the first strike on a fresh line. Keep
-    // the pending entry out of the DOM during that movement so cancelling a
-    // fast hover cannot leave a blank printed row.
-    if (job.awaitingInitialReturn) {
-      job.awaitingInitialReturn = false;
-      printHead.classList.add('is-returning');
-      movePrintHeadToStart();
-      printTimer = setTimeout(typeCharacter, returnDelay);
+    if (job.fieldIndex === fields.length) {
+      stopPrinting(true);
       return;
     }
     const field = fields[job.fieldIndex];
-    let returning = false;
-    if (job.index >= field.characters.length) {
-      if (job.fieldIndex === fields.length - 1) {
-        stopPrinting(true);
-        return;
+    if (!job.row) {
+      printHead.classList.add('is-returning');
+      let delay = RETURN_MS;
+      if (!pendingRow) {
+        delay = feedPaper(() => {
+          pendingRow = createPrintRow();
+          pendingRow.setAttribute('aria-hidden', 'true');
+          paperLog.append(pendingRow);
+          lastPrintedRow = pendingRow;
+        });
+        playMechanicalSound('return');
+      } else if (feedAnimation?.playState === 'running') {
+        delay = Math.max(delay, feedAnimation.effect.getTiming().duration - feedAnimation.currentTime);
       }
-      job.fieldIndex += 1;
-      job.index = 0;
-      entry.text += '\n';
-      feedPaper(() => {
-        fields[job.fieldIndex].element.hidden = false;
-        lastPrintedRow = fields[job.fieldIndex].element;
-      });
-      returning = true;
-    } else {
-      const character = field.characters[job.index++];
-      const previousHeight = field.element.offsetHeight;
-      feedPaper(() => {
-        if (!entry.element.isConnected) {
-          field.element.hidden = false;
-          appendEntry(entry);
-          lastPrintedRow = field.element;
-        }
-        field.element.textContent += character;
-        entry.text += character;
-      });
-      returning = field.element.offsetHeight > previousHeight + 1;
-      if (character !== ' ') {
-        strikeAnimation?.cancel();
-        strikeAnimation = printHead.querySelector('span').animate([
-          { transform: 'translateY(0)' },
-          { transform: 'translateY(-7px)', offset: .3 },
-          { transform: 'translateY(0)' },
-        ], { duration: 65 });
-      }
+      job.row = pendingRow;
+      movePrintHeadToStart();
+      scheduleStrike(delay);
+      return;
     }
-    printHead.classList.toggle('is-returning', returning);
-    movePrintHead();
-    playMechanicalSound(returning);
-    printTimer = setTimeout(typeCharacter, returning ? returnDelay : interval);
+
+    // The row reaches its final semantic field only at the first strike.
+    // Cancelling a task before this point simply lends this same row to the next.
+    if (job.row === pendingRow) {
+      if (!entry.element.isConnected) appendEntry(entry);
+      field.element.hidden = false;
+      field.element.append(job.row);
+      job.row.removeAttribute('aria-hidden');
+      pendingRow = null;
+      updatePaperScale();
+    }
+    const characters = field.lines[job.lineIndex];
+    if (job.index === characters.length) {
+      job.lineIndex += 1;
+      if (job.lineIndex === field.lines.length) {
+        job.fieldIndex += 1;
+        job.lineIndex = 0;
+      }
+      job.index = 0;
+      job.row = null;
+      entry.text += '\n';
+      typeCharacter();
+      return;
+    }
+    const character = characters[job.index++];
+    job.row.append(createPrintCell(character));
+    entry.text += character;
+    printHead.classList.remove('is-returning');
+    if (character !== ' ') {
+      strikeAnimation?.cancel();
+      strikeAnimation = printHead.querySelector('span').animate([
+        { transform: 'translateY(0)' },
+        { transform: 'translateY(-7px)', offset: .3 },
+        { transform: 'translateY(0)' },
+      ], { duration: STRIKE_MS });
+    }
+    playMechanicalSound(character === ' ' ? 'space' : 'strike');
+    // Strike first, then advance by one fixed cell; never print while returning.
+    printTimer = setTimeout(() => {
+      if (activePrint !== job) return;
+      movePrintHead();
+      scheduleStrike(Math.max(30, interval - STRIKE_MS));
+    }, STRIKE_MS);
   }
 
   fontReady.then(() => {
     if (activePrint !== job) return;
+    const columns = Math.max(1, Math.floor(paperLog.clientWidth / parseFloat(getComputedStyle(paperLog).fontSize)));
+    fields.forEach(field => { field.lines = wrapPrintedText(field.text, columns); });
     if (immediate || reducedMotion.matches) {
       fields.forEach(field => {
         field.element.hidden = false;
-        field.element.textContent = field.text;
+        field.lines.forEach(characters => {
+          const row = createPrintRow();
+          characters.forEach(character => row.append(createPrintCell(character)));
+          field.element.append(row);
+        });
       });
       entry.text = fields.map(field => field.text).join('\n');
-      lastPrintedRow = fields.at(-1).element;
-      feedPaper(() => appendEntry(entry));
+      feedAnimation?.cancel();
+      appendEntry(entry);
+      pendingRow?.remove();
+      pendingRow = null;
+      lastPrintedRow = fields.at(-1).element.lastElementChild;
+      updatePaperScale();
       stopPrinting(true);
     } else {
       printTimer = setTimeout(typeCharacter, 160);
     }
   });
   return completion;
+}
+
+function createPrintRow() {
+  const row = document.createElement('span');
+  row.className = 'print-row';
+  return row;
+}
+
+function createPrintCell(character) {
+  const cell = document.createElement('span');
+  cell.className = 'print-cell';
+  cell.textContent = character;
+  return cell;
+}
+
+// Fixed type pitch and explicit line breaks keep all existing ink in place.
+function wrapPrintedText(text, columns) {
+  return text.split('\n').flatMap(line => {
+    const characters = Array.from(line);
+    const rows = [];
+    for (let start = 0; start < characters.length; start += columns) {
+      rows.push(characters.slice(start, start + columns));
+    }
+    return rows.length ? rows : [[]];
+  });
 }
 
 function printMessage(message, label = message) {
@@ -237,20 +304,17 @@ function printMessage(message, label = message) {
 function movePrintHead() {
   const line = lastPrintedRow;
   if (!line?.isConnected || sheet.parentElement !== paper) return;
-  const range = document.createRange();
-  if (line.firstChild) range.setStart(line.firstChild, line.firstChild.length);
-  else range.selectNodeContents(line);
-  range.collapse(true);
-  const caret = range.getBoundingClientRect();
   const stage = $('[data-printer-stage]').getBoundingClientRect();
-  const x = (line.textContent && caret.height ? caret.left : line.getBoundingClientRect().left) - stage.left;
+  const cellWidth = parseFloat(getComputedStyle(paperLog).fontSize) * paperScale;
+  const columns = Math.floor(paperLog.clientWidth / parseFloat(getComputedStyle(paperLog).fontSize));
+  const x = line.getBoundingClientRect().left + (Math.min(line.childElementCount, columns - 1) + .5) * cellWidth - stage.left;
   printHead.style.left = `${Math.min(stage.width - 50, Math.max(0, x - 25))}px`;
 }
 
 function movePrintHeadToStart() {
   if (sheet.parentElement !== paper) return;
   const stage = $('[data-printer-stage]').getBoundingClientRect();
-  const lineStart = paperLog.getBoundingClientRect().left - stage.left;
+  const lineStart = paperLog.getBoundingClientRect().left + parseFloat(getComputedStyle(paperLog).fontSize) * paperScale / 2 - stage.left;
   printHead.style.left = `${Math.min(stage.width - 50, Math.max(0, lineStart - 25))}px`;
 }
 
@@ -276,8 +340,9 @@ async function toggleSound() {
   if (soundEnabled) playMechanicalSound();
 }
 
-function playMechanicalSound(returning = false) {
+function playMechanicalSound(action = 'strike') {
   if (!soundEnabled || soundContext.state !== 'running') return;
+  const returning = action === 'return';
   const now = soundContext.currentTime;
   const noise = soundContext.createBufferSource();
   const filter = soundContext.createBiquadFilter();
@@ -286,24 +351,13 @@ function playMechanicalSound(returning = false) {
   filter.type = 'highpass';
   filter.frequency.value = returning ? 500 : 1800;
   const duration = returning ? .11 : .032;
-  gain.gain.setValueAtTime(returning ? .06 : .095, now);
+  gain.gain.setValueAtTime(returning ? .06 : action === 'space' ? .025 : .095, now);
   gain.gain.exponentialRampToValueAtTime(.001, now + duration);
   noise.connect(filter).connect(gain).connect(soundContext.destination);
   noise.start(now);
   noise.stop(now + duration);
   noise.onended = () => { noise.disconnect(); filter.disconnect(); gain.disconnect(); };
 
-  if (returning) {
-    const bell = soundContext.createOscillator();
-    const envelope = soundContext.createGain();
-    bell.frequency.value = 1650;
-    envelope.gain.setValueAtTime(.025, now);
-    envelope.gain.exponentialRampToValueAtTime(.001, now + .22);
-    bell.connect(envelope).connect(soundContext.destination);
-    bell.start(now);
-    bell.stop(now + .22);
-    bell.onended = () => { bell.disconnect(); envelope.disconnect(); };
-  }
 }
 
 function previewFile(slug) {
@@ -407,7 +461,7 @@ async function openFile(slug, replace = false) {
   document.title = `${article.title} — 我的档案`;
   window.scrollTo({ top: 0, behavior: 'instant' });
   const completed = await printFields(entry, entry.fields, `${file.title} / 文章信息`, {
-    interval: 14, returnDelay: 140, immediate: replace,
+    immediate: replace,
   });
   if (!completed || readingJob !== job) return;
   await focusReadingPaper(job, replace || reducedMotion.matches);
