@@ -27,6 +27,7 @@ const scenes = [
 
 const frame = document.querySelector('#scene-frame');
 const outputCanvas = document.querySelector('#output-canvas');
+const pointCanvas = document.querySelector('#point-canvas');
 const fxCanvas = document.querySelector('#fx-canvas');
 const videoSource = document.querySelector('#video-source');
 const demoCanvas = document.querySelector('#demo-canvas');
@@ -48,6 +49,9 @@ const sourceTabs = [...document.querySelectorAll('[data-source-kind]')];
 const playButton = document.querySelector('[data-action="toggle-play"]');
 const playLabel = document.querySelector('[data-play-label]');
 const meterBars = document.querySelector('#meter-bars');
+const pointJitterRange = document.querySelector('#point-jitter-range');
+const pointJitterOutput = document.querySelector('#point-jitter-output');
+const pointNote = document.querySelector('#point-note');
 
 const filter = window.OEmpireFilter.create({
   canvas: outputCanvas,
@@ -78,6 +82,7 @@ let needsRender = true;
 let dustWidth = 0;
 let dustHeight = 0;
 let demoFrame = 0;
+let pointField = window.OEmpirePointField || null;
 
 const random = (min, max) => Math.random() * (max - min) + min;
 
@@ -111,8 +116,28 @@ function updateSourceChrome(label) {
     const isReference = tab.dataset.sourceKind === 'reference' && sourceType === 'reference';
     const isFile = tab.dataset.sourceKind === 'file' && sourceType.startsWith('file');
     const isCanvas = tab.dataset.sourceKind === 'canvas' && sourceType === 'canvas';
-    tab.classList.toggle('is-active', isReference || isFile || isCanvas);
+    const is3d = tab.dataset.sourceKind === 'scene3d' && sourceType === '3d';
+    tab.classList.toggle('is-active', isReference || isFile || isCanvas || is3d);
   });
+}
+
+function showFilteredCanvas() {
+  frame.classList.remove('is-3d');
+  pointField?.stop();
+  if (sourceType !== 'video') {
+    playing = false;
+    playButton.setAttribute('aria-pressed', 'false');
+    playLabel.textContent = 'PLAY LOOP';
+    playButton.querySelector('.play-glyph').textContent = '▶';
+  }
+}
+
+function showPointField() {
+  frame.classList.add('is-3d');
+  if (!pointField) {
+    return;
+  }
+  pointField.mount().start().setOptions({ jitter: Number(pointJitterRange.value) / 100 });
 }
 
 function resizeOverlay() {
@@ -211,11 +236,11 @@ function renderLoop(time) {
   const elapsed = time - lastFrame;
   lastFrame = time;
   if (sourceType === 'canvas' && playing) drawDemoCanvas(time);
-  if (sourceType === 'video' || sourceType === 'canvas' || needsRender || elapsed > 1000) {
+  if (sourceType !== '3d' && (sourceType === 'video' || sourceType === 'canvas' || needsRender || elapsed > 1000)) {
     filter.render(time);
     needsRender = false;
   }
-  paintFilmOverlay(time);
+  if (sourceType !== '3d') paintFilmOverlay(time);
   rafId = requestAnimationFrame(renderLoop);
 }
 
@@ -239,7 +264,18 @@ function updateBloom(value) {
   }
 }
 
-function updateMode(mode) {
+function updatePointJitter(value) {
+  const jitter = Math.max(0, Math.min(100, Number(value)));
+  pointJitterRange.value = String(jitter);
+  pointJitterRange.style.setProperty('--range-fill', `${jitter}%`);
+  pointJitterOutput.textContent = `${String(jitter).padStart(2, '0')}%`;
+  pointField?.setOptions({ jitter: jitter / 100 });
+  if (jitter < 18) pointNote.textContent = 'The point field is nearly still. Geometry remains visible as discrete dots.';
+  else if (jitter < 58) pointNote.textContent = 'Every point is geometry. The camera and points drift independently.';
+  else pointNote.textContent = 'A nervous signal: each point breathes around its real 3D surface.';
+}
+
+function updateMode(mode, announce = true) {
   document.body.dataset.mode = mode;
   modeButtons.forEach((button) => {
     const active = button.dataset.mode === mode;
@@ -249,13 +285,13 @@ function updateMode(mode) {
   filter.setOptions({ mode });
   if (mode === 'ward') {
     updateBloom(Math.min(bloom, 40));
-    showToast('WARD PASS / PETAL COLOR HELD');
+    if (announce) showToast('WARD PASS / PETAL COLOR HELD');
   } else if (mode === 'bloom') {
     updateBloom(Math.max(bloom, 72));
-    showToast('BLOOM PASS / FLOWERS LIFTED');
+    if (announce) showToast('BLOOM PASS / FLOWERS LIFTED');
   } else {
     needsRender = true;
-    showToast('RAW PASS / SOURCE COLOR');
+    if (announce) showToast('RAW PASS / SOURCE COLOR');
   }
 }
 
@@ -264,12 +300,29 @@ async function useReference(index, announce = true) {
   const image = await loadImage(scenes[normalized].src);
   activeSource = image;
   sourceType = 'reference';
+  showFilteredCanvas();
   filter.setSource(image);
   updateSceneChrome(normalized);
   updateSourceChrome(`REFERENCE / ${String(normalized + 1).padStart(2, '0')}`);
   fileName.textContent = 'or choose a local file';
   needsRender = true;
   if (announce) showToast(`${scenes[normalized].kicker} / FILTERED`);
+}
+
+function usePointField(announce = true) {
+  sourceType = '3d';
+  showPointField();
+  playing = true;
+  playButton.setAttribute('aria-pressed', 'true');
+  playLabel.textContent = 'PAUSE LOOP';
+  playButton.querySelector('.play-glyph').textContent = 'Ⅱ';
+  updateSourceChrome('3D / POINT FIELD');
+  sceneIndex.textContent = '3D';
+  signalCode.textContent = 'LIVE / 3D';
+  sceneKicker.textContent = 'THE POINT FIELD';
+  sceneDescription.textContent = 'Four low-poly forms, sampled into a breathing monochrome dot matrix.';
+  sourceKind.textContent = '3D / POINT FIELD';
+  if (announce) showToast('3D MODELS / DOT FIELD LIVE');
 }
 
 function attachCanvasSource(canvas, label = 'CANVAS / THREE') {
@@ -279,6 +332,7 @@ function attachCanvasSource(canvas, label = 'CANVAS / THREE') {
   }
   activeSource = canvas;
   sourceType = 'canvas';
+  showFilteredCanvas();
   filter.setSource(canvas);
   updateSourceChrome(label);
   playing = true;
@@ -299,6 +353,7 @@ async function useFile(file) {
     const image = await loadImage(sourceFileUrl);
     activeSource = image;
     sourceType = 'file-image';
+    showFilteredCanvas();
     filter.setSource(image);
     updateSourceChrome('FILE / IMAGE');
     needsRender = true;
@@ -312,6 +367,7 @@ async function useFile(file) {
     await videoSource.play().catch(() => {});
     activeSource = videoSource;
     sourceType = 'video';
+    showFilteredCanvas();
     filter.setSource(videoSource);
     updateSourceChrome('FILE / VIDEO');
     playing = true;
@@ -334,6 +390,11 @@ function togglePlay(force) {
   if (sourceType === 'video') {
     if (playing) videoSource.play().catch(() => {});
     else videoSource.pause();
+  }
+
+  if (sourceType === '3d') {
+    if (playing) pointField?.start();
+    else pointField?.stop();
   }
 
   playButton.setAttribute('aria-pressed', String(playing));
@@ -362,6 +423,12 @@ function resetField() {
 }
 
 function randomize() {
+  if (sourceType === '3d') {
+    pointField?.randomize();
+    updatePointJitter(14 + Math.floor(Math.random() * 78));
+    showToast('3D FIELD / CAMERA PHASE SHIFTED');
+    return;
+  }
   const next = Math.floor(Math.random() * scenes.length);
   const nextBloom = Math.floor(random(12, 96));
   useReference(next);
@@ -406,10 +473,12 @@ sourceTabs.forEach((tab) => {
     if (tab.dataset.sourceKind === 'reference') useReference(activeScene);
     if (tab.dataset.sourceKind === 'file') fileInput.click();
     if (tab.dataset.sourceKind === 'canvas') attachCanvasSource(demoCanvas, 'CANVAS / THREE');
+    if (tab.dataset.sourceKind === 'scene3d') usePointField();
   });
 });
 
 bloomRange.addEventListener('input', (event) => updateBloom(event.target.value));
+pointJitterRange.addEventListener('input', (event) => updatePointJitter(event.target.value));
 fileInput.addEventListener('change', (event) => useFile(event.target.files?.[0]));
 
 ['dragenter', 'dragover'].forEach((eventName) => {
@@ -454,6 +523,10 @@ document.addEventListener('keydown', (event) => {
 });
 
 window.addEventListener('resize', resizeOverlay);
+window.addEventListener('o-empire-point-field-ready', (event) => {
+  pointField = event.detail;
+  if (sourceType === '3d') showPointField();
+});
 
 // Public bridge for a Three.js renderer or another canvas on the host page.
 window.OEmpireFilterPanel = {
@@ -466,12 +539,15 @@ window.OEmpireFilterPanel = {
     needsRender = true;
   },
   getOutputCanvas: () => outputCanvas,
+  usePointField,
+  getPointField: () => pointField,
 };
 
 resizeOverlay();
 updateBloom(bloom);
-updateMode('ward');
-useReference(activeScene, false);
+updatePointJitter(pointJitterRange.value);
+updateMode('ward', false);
+usePointField(false);
 rafId = requestAnimationFrame(renderLoop);
 
 window.addEventListener('beforeunload', () => {

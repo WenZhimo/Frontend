@@ -1,6 +1,6 @@
 # O EMPIRE! — WARD OFF THY ROT
 
-这是一个根据 `C:\Users\LENOVO\Desktop\TODO\image.png`、`image-1.png`、`image-2.png`、`image-3.png` 制作的浏览器滤镜。它把参考图里的灰阶 CRT、网点抖动、暗角、扫描线和红色花朵绽放做成了可操作的小型视觉研究台。红色只从输入帧里提取并增强，不会凭空叠加红色噪声。
+这是一个根据 `C:\Users\LENOVO\Desktop\TODO\image.png`、`image-1.png`、`image-2.png`、`image-3.png` 制作的浏览器滤镜与 3D 点阵演示。输入图像/视频仍可走灰阶花朵提取滤镜；**3D POINT FIELD** 则直接用 Three.js 渲染几个低多边形模型，再把模型表面采样成真实的 WebGL 点几何。最终画面不是叠加滤镜，而是每个点都来自模型表面并由 shader 实时抖动。
 
 ## 使用
 
@@ -11,11 +11,13 @@
 - **WARD / BLOOM / RAW** 切换三种滤镜通道。
 - 在 **INPUT SOURCE** 中拖入图片或视频；视频会实时逐帧处理。
 - **CANVAS / THREE** 会接入内置 Canvas 演示。Three.js 的 `renderer.domElement` 也是同一种 Canvas 输入。
+- **3D POINT FIELD** 会显示村屋、瞭望塔、石碑、碎石和花簇几个黑白灰低多边形模型。
+- **DOT JITTER** 控制真实点几何的 shader 抖动；**RANDOMIZE SIGNAL** 在 3D 模式下改变相机相位和抖动强度。
 - **PLAY LOOP** 或按空格键自动循环播放；方向键切换画面，`R` 恢复初始状态。
 - **EXPORT FILTERED PNG** 下载当前输出 Canvas。
 - `assets/references` 保存了本次使用的四张参考图副本。
 
-页面只依赖浏览器原生 HTML、CSS 和 Canvas。
+页面只依赖浏览器原生 HTML、CSS、Canvas 和随项目保存的 Three.js 模块（`assets/vendor/three.module.js`）。
 
 ## 在 Canvas / Three.js 项目中接入
 
@@ -27,6 +29,11 @@ window.OEmpireFilterPanel.attachCanvas(renderer.domElement, 'THREE / LIVE');
 
 // 需要把输出继续接到自己的合成流程时：
 const filteredCanvas = window.OEmpireFilterPanel.getOutputCanvas();
+
+// 直接打开项目内置的 3D 点阵模型：
+window.OEmpireFilterPanel.usePointField();
+const pointField = window.OEmpireFilterPanel.getPointField();
+pointField.setOptions({ jitter: 0.48, pointSize: 2.8 });
 ```
 
 如果不需要这个界面，也可以直接使用 `filter-core.js`：

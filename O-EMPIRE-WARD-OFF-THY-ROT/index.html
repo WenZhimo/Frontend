@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="styles.css" />
     <script src="filter-core.js" defer></script>
     <script src="script.js" defer></script>
+    <script type="module" src="three-dot-field.js"></script>
   </head>
   <body data-mode="ward">
     <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -50,6 +51,7 @@
         <div class="scene-column">
           <div class="scene-frame" id="scene-frame">
             <canvas class="scene-image" id="output-canvas" aria-label="Filtered output canvas"></canvas>
+            <canvas class="scene-image point-canvas" id="point-canvas" aria-label="Live 3D point field canvas"></canvas>
             <canvas id="fx-canvas" aria-hidden="true"></canvas>
             <div class="grain-layer" aria-hidden="true"></div>
             <div class="scanline-layer" aria-hidden="true"></div>
@@ -99,6 +101,7 @@
               <button class="source-tab is-active" type="button" data-source-kind="reference">REFERENCE</button>
               <button class="source-tab" type="button" data-source-kind="file">IMAGE / VIDEO</button>
               <button class="source-tab" type="button" data-source-kind="canvas">CANVAS / THREE</button>
+              <button class="source-tab" type="button" data-source-kind="scene3d">3D POINT FIELD</button>
             </div>
             <label class="dropzone" id="dropzone" for="file-input">
               <span class="dropzone-title">DROP IMAGE OR VIDEO</span>
@@ -159,6 +162,18 @@
               <button class="mode-button" type="button" data-mode="bloom">BLOOM</button>
               <button class="mode-button" type="button" data-mode="raw">RAW</button>
             </div>
+          </div>
+
+          <div class="control-block point-block">
+            <div class="block-heading">
+              <label for="point-jitter-range">DOT JITTER</label>
+              <output id="point-jitter-output" for="point-jitter-range">34%</output>
+            </div>
+            <div class="range-wrap">
+              <input id="point-jitter-range" type="range" min="0" max="100" value="34" />
+              <div class="range-labels" aria-hidden="true"><span>STILL</span><span>UNSTEADY</span></div>
+            </div>
+            <p class="control-note" id="point-note">Every point is geometry. The camera and points drift independently.</p>
           </div>
 
           <div class="panel-actions">
