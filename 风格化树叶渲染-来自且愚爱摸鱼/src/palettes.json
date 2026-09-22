@@ -157,7 +157,12 @@
     "power": -0.3999999761581421,
     "offset": 0.5,
     "hue": 0.050000011920928955,
-    "value": 0.10000000894069672
+    "value": 0.10000000894069672,
+    "maxDelta": 8.0
+  },
+  "distribution": {
+    "method": "fibonacci-sphere",
+    "preserveRadialDistance": true
   },
   "geometry": {
     "sourceVertices": 171522,

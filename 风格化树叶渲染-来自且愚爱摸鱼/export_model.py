@@ -3,6 +3,7 @@ Run with Blender 5.2. The source .blend is never saved.
 """
 import colorsys
 import json
+import math
 from pathlib import Path
 import bpy
 from mathutils import Vector
@@ -27,6 +28,13 @@ config = {
         'offset': nodes['Math'].inputs[1].default_value,
         'hue': nodes['Math.001'].inputs[1].default_value,
         'value': nodes['Math.002'].inputs[1].default_value,
+        # Keep the source negative-power variation bounded. Without this,
+        # near-zero ID random values become unbounded hue/value outliers.
+        'maxDelta': 8.0,
+    },
+    'distribution': {
+        'method': 'fibonacci-sphere',
+        'preserveRadialDistance': True,
     },
 }
 depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -63,8 +71,10 @@ for vertex_index in range(len(mesh.vertices)):
 leaf_centers = [(0.0, 0.0, 0.0)] * len(mesh.vertices)
 leaf_normals = [(0.0, 1.0, 0.0)] * len(mesh.vertices)
 leaf_tangents = [(1.0, 0.0, 0.0)] * len(mesh.vertices)
+leaf_shade_normals = [(0.0, 0.0, 1.0)] * len(mesh.vertices)
 leaf_billboards = [0.0] * len(mesh.vertices)
 billboard_count = 0
+leaf_records = []
 for indices in components.values():
     # The 482-vertex component is the source sphere/core. Keep it as a normal
     # 3D surface; only the disconnected 32-vertex leaf polygons billboard.
@@ -80,13 +90,49 @@ for indices in components.values():
     tangent = (tangent - normal * tangent.dot(normal)).normalized()
     if tangent.length < 0.001:
         tangent = normal.orthogonal().normalized()
-    center_tuple, normal_tuple, tangent_tuple = tuple(center), tuple(normal), tuple(tangent)
-    for index in indices:
+    leaf_records.append({
+        'indices': indices,
+        'center': center,
+        'normal': normal,
+        'tangent': tangent,
+    })
+    billboard_count += 1
+
+# The source sphere uses a regular face topology, so points sampled from it
+# can form visible latitude bands when the cluster is viewed from the side.
+# Keep each leaf's radial depth, but assign its angular direction with a
+# deterministic Fibonacci sphere. Use a stable index hash for the order so the
+# density mask and HSV random seed stay statistically independent of position.
+# This removes topology-aligned layers while preserving the original cluster
+# volume and leaf meshes.
+core_indices = [indices for indices in components.values() if len(indices) != 32]
+if len(core_indices) != 1:
+    raise RuntimeError(f'Expected one source sphere component, found {len(core_indices)}.')
+sphere_center = sum((mesh.vertices[index].co for index in core_indices[0]), start=Vector()) / len(core_indices[0])
+golden_angle = math.pi * (3.0 - math.sqrt(5.0))
+def direction_order_key(item):
+    index = item['indices'][0]
+    return (index * 1664525 + 1013904223) & 0xffffffff
+
+for order, record in enumerate(sorted(leaf_records, key=direction_order_key)):
+    z = 1.0 - 2.0 * (order + 0.5) / len(leaf_records)
+    radial = math.sqrt(max(0.0, 1.0 - z * z))
+    theta = golden_angle * order
+    direction = Vector((math.cos(theta) * radial, math.sin(theta) * radial, z))
+    radius = (record['center'] - sphere_center).length
+    target = sphere_center + direction * radius
+    translation = target - record['center']
+    center_tuple = tuple(target)
+    normal_tuple, tangent_tuple = tuple(record['normal']), tuple(record['tangent'])
+    shade_tuple = tuple(direction)
+    for index in record['indices']:
+        mesh.vertices[index].co += translation
         leaf_centers[index] = center_tuple
         leaf_normals[index] = normal_tuple
         leaf_tangents[index] = tangent_tuple
+        leaf_shade_normals[index] = shade_tuple
         leaf_billboards[index] = 1.0
-    billboard_count += 1
+mesh.update()
 
 def add_vector_attribute(name, values):
     attribute = mesh.attributes.new(name, 'FLOAT_VECTOR', 'POINT')
@@ -96,19 +142,15 @@ def add_vector_attribute(name, values):
 add_vector_attribute('_LEAF_CENTER', leaf_centers)
 add_vector_attribute('_LEAF_NORMAL', leaf_normals)
 add_vector_attribute('_LEAF_TANGENT', leaf_tangents)
-# The material uses Geometry Nodes' stored surface normal, not the polygon
-# normal after the leaf has been oriented toward the Blender camera. Preserve
-# both: one defines the billboard basis, the other drives directional color.
-shade_normal_matrix = source.matrix_world.to_3x3().inverted().transposed()
-shade_normals = [tuple(shade_normal_matrix @ n.vector)
-    for n in mesh.attributes['normal'].data]
-add_vector_attribute('_LEAF_SHADE_NORMAL', shade_normals)
+# The material uses the redistributed sphere direction for stylized lighting,
+# not the polygon normal used only as the billboard's local basis.
+add_vector_attribute('_LEAF_SHADE_NORMAL', leaf_shade_normals)
 billboard_attribute = mesh.attributes.new('_LEAF_BILLBOARD', 'FLOAT', 'POINT')
 for index, value in enumerate(leaf_billboards):
     billboard_attribute.data[index].value = value
 
-light_values = [max(0.0, min(1.0, (n.vector.dot(s.vector) + 1.0) / 2.0))
-    for n, s in zip(mesh.attributes['normal'].data, mesh.attributes['sun vector'].data)]
+light_values = [max(0.0, min(1.0, (Vector(leaf_shade_normals[i]).dot(s.vector) + 1.0) / 2.0))
+    for i, s in enumerate(mesh.attributes['sun vector'].data)]
 randoms = [v.value for v in mesh.attributes['ID random'].data]
 
 # Custom glTF attributes retain the source's light factor and per-leaf random seed.
@@ -123,6 +165,7 @@ variation = config['variation']
 for i, (light, seed) in enumerate(zip(light_values, randoms)):
     h, s, v = colorsys.rgb_to_hsv(*ramp.evaluate(light)[:3])
     delta = (seed ** variation['power'] if seed > 0 else 0) - variation['offset']
+    delta = max(-variation['maxDelta'], min(variation['maxDelta'], delta))
     rgb = colorsys.hsv_to_rgb((h + delta * variation['hue']) % 1.0, s,
         v * (1.0 + delta * variation['value']))
     color.data[i].color = (*rgb, 1.0)

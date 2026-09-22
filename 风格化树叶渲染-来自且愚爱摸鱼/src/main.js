@@ -34,8 +34,12 @@ let animationFrame;
 let lastTime = 0;
 let autoRotateModel = false;
 let draggingModel = false;
-let lastPointerX = 0;
-let lastPointerY = 0;
+const trackballPrevious = new THREE.Vector3();
+const trackballCurrent = new THREE.Vector3();
+const dragRotation = new THREE.Quaternion();
+const autoRotation = new THREE.Quaternion();
+const worldUp = new THREE.Vector3(0, 1, 0);
+const modelBaseQuaternion = new THREE.Quaternion();
 
 function decodeBase64(base64) {
   const binary = atob(base64);
@@ -106,6 +110,7 @@ const fragmentShader = `
   uniform float uVariationOffset;
   uniform float uVariationHue;
   uniform float uVariationValue;
+  uniform float uVariationMaxDelta;
   uniform vec3 uLightColor;
   uniform float uLightIntensity;
   uniform float uAmbient;
@@ -159,7 +164,11 @@ const fragmentShader = `
 
   vec3 leafColor(float light) {
     vec3 hsv = rgbToHsv(rampColor(light));
+    // The source node graph uses a negative power for subtle per-leaf accents.
+    // A few seeds are almost zero, which would otherwise turn that power into
+    // an unbounded hue/value jump and create a single neon-pink outlier.
     float seedDelta = (vLeafRandom > 0.0 ? pow(vLeafRandom, uVariationPower) : 0.0) - uVariationOffset;
+    seedDelta = clamp(seedDelta, -uVariationMaxDelta, uVariationMaxDelta);
     hsv.x = fract(hsv.x + seedDelta * uVariationHue);
     hsv.z = max(0.0, hsv.z * (1.0 + seedDelta * uVariationValue));
     return hsvToRgb(hsv);
@@ -193,6 +202,7 @@ function createLeafMaterial() {
       uVariationOffset: { value: variation.offset },
       uVariationHue: { value: variation.hue },
       uVariationValue: { value: variation.value },
+      uVariationMaxDelta: { value: variation.maxDelta ?? 8.0 },
       uLightDirection: { value: lightDirection },
       uLightColor: { value: lightColor },
       uLightIntensity: { value: 1.15 },
@@ -235,6 +245,7 @@ function setPalette(name) {
     leafMaterial.uniforms.uVariationOffset.value = variation.offset;
     leafMaterial.uniforms.uVariationHue.value = variation.hue;
     leafMaterial.uniforms.uVariationValue.value = variation.value;
+    leafMaterial.uniforms.uVariationMaxDelta.value = variation.maxDelta ?? 8.0;
   }
   setStatus(`${palette.label} · 实时风格光影`);
 }
@@ -277,10 +288,22 @@ function fitDistance() {
 }
 
 function resetView() {
-  if (model) model.rotation.set(0, 0, 0);
+  if (model) model.quaternion.copy(modelBaseQuaternion);
   controls.target.set(0, 0, 0);
   camera.position.copy(viewDirection).multiplyScalar(fitDistance());
   controls.update(0);
+}
+
+function pointerToTrackball(event, target) {
+  const rect = canvas.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1;
+  const y = 1 - ((event.clientY - rect.top) / Math.max(rect.height, 1)) * 2;
+  const lengthSquared = x * x + y * y;
+  if (lengthSquared <= 1) {
+    target.set(x, y, Math.sqrt(1 - lengthSquared));
+  } else {
+    target.set(x, y, 0).normalize();
+  }
 }
 
 function resize() {
@@ -321,19 +344,18 @@ function setupModelRotation() {
   canvas.addEventListener('pointerdown', event => {
     if (!model || (event.pointerType === 'mouse' && event.button !== 0)) return;
     draggingModel = true;
-    lastPointerX = event.clientX;
-    lastPointerY = event.clientY;
+    pointerToTrackball(event, trackballPrevious);
     canvas.setPointerCapture(event.pointerId);
     canvas.classList.add('is-dragging');
   });
   canvas.addEventListener('pointermove', event => {
     if (!draggingModel || !model) return;
-    const deltaX = event.clientX - lastPointerX;
-    const deltaY = event.clientY - lastPointerY;
-    lastPointerX = event.clientX;
-    lastPointerY = event.clientY;
-    model.rotation.y += deltaX * 0.008;
-    model.rotation.x = THREE.MathUtils.clamp(model.rotation.x + deltaY * 0.006, -Math.PI / 2, Math.PI / 2);
+    pointerToTrackball(event, trackballCurrent);
+    dragRotation.setFromUnitVectors(trackballPrevious, trackballCurrent);
+    // Accumulate rotations as quaternions in world space. This keeps the
+    // model fully rotatable without Euler-angle limits or gimbal lock.
+    model.quaternion.premultiply(dragRotation).normalize();
+    trackballPrevious.copy(trackballCurrent);
     event.preventDefault();
   });
   const endDrag = event => {
@@ -348,7 +370,10 @@ function setupModelRotation() {
 function animate(time = 0) {
   const delta = Math.min((time - lastTime) / 1000, 0.1);
   lastTime = time;
-  if (model && autoRotateModel) model.rotation.y += delta * 0.35;
+  if (model && autoRotateModel) {
+    autoRotation.setFromAxisAngle(worldUp, delta * 0.35);
+    model.quaternion.premultiply(autoRotation).normalize();
+  }
   controls.update(delta);
   renderer.render(scene, camera);
   animationFrame = requestAnimationFrame(animate);
@@ -390,6 +415,7 @@ async function init() {
     model.scale.setScalar(3.45 / Math.max(...bounds.getSize(new THREE.Vector3()).toArray()));
     model.position.multiplyScalar(model.scale.x);
     scene.add(model);
+    modelBaseQuaternion.copy(model.quaternion);
     model.updateMatrixWorld(true);
     frameRadius = 0;
     const point = new THREE.Vector3();
