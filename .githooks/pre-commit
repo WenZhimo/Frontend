@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+
+CHANGED=$(git diff --cached --name-only --diff-filter=ACMRTUXB)
+NEEDS_INDEX=false
+while IFS= read -r PATHNAME; do
+    [ -z "$PATHNAME" ] && continue
+    [ "$PATHNAME" = "index.html" ] && continue
+    NEEDS_INDEX=true
+    break
+done <<EOF
+$CHANGED
+EOF
+
+if [ "$NEEDS_INDEX" != "true" ]; then
+    exit 0
+fi
+
+echo "Regenerating repository index..."
+if command -v py >/dev/null 2>&1; then
+    py -3 generate_full_index.py
+elif command -v python >/dev/null 2>&1; then
+    python generate_full_index.py
+else
+    echo "Cannot find Python (py or python); index.html was not regenerated." >&2
+    exit 1
+fi
+
+git add -- index.html
+echo "Repository index staged."

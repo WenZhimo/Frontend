@@ -1,6 +1,6 @@
 import os
 import urllib.parse
-import datetime
+import subprocess
 
 # ================= 配置区域 =================
 # 你的 GitHub Pages 基础 URL
@@ -28,6 +28,21 @@ def get_web_url(relative_path, is_markdown=False):
         
     safe_path = urllib.parse.quote(path)
     return BASE_URL + safe_path
+
+def get_last_updated():
+    """Use the latest non-index commit so automated regeneration is stable."""
+    try:
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%cs", "--", ".", ":!index.html"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except OSError:
+        pass
+    return "automatic"
 
 def generate_tree_html(current_dir):
     """递归生成 HTML 结构"""
@@ -97,6 +112,7 @@ def main():
     print("正在生成暗黑模式 HTML 目录树 (Markdown 自动渲染版)...")
     
     tree_content = generate_tree_html(".")
+    last_updated = get_last_updated()
     
     full_html = f"""
 <!DOCTYPE html>
@@ -235,7 +251,7 @@ def main():
         <h1>🗂️ Frontend Project Index</h1>
         <div class="meta-info">
             <strong>Base URL:</strong> {BASE_URL} <br>
-            <strong>Last Updated:</strong> {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} <br>
+            <strong>Last Updated:</strong> {last_updated} <br>
             <span style="font-size:12px; opacity:0.7">Note: .md files are automatically linked to their rendered .html versions.</span>
         </div>
         
