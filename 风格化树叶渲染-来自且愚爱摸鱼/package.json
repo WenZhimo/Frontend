@@ -1,0 +1,14 @@
+{
+  "name": "stylized-leaf-viewer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --format=iife --target=es2020 --loader:.glb=base64 --outfile=app.js --minify"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9"
+  }
+}

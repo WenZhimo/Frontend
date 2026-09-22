@@ -1,0 +1,67 @@
+# 风格化树叶：真实网格浏览器预览
+
+双击 `index.html` 即可打开；需要把 `app.js` 保留在同一目录。无需安装 Blender、Node.js 或联网。支持新版 Chrome、Edge、Firefox（WebGL 2）。
+
+- 页面加载的是 `leaf-cluster.glb` 的真实三角网格，不是截图或纹理平面。
+- 5,345 片叶子在顶点着色器中逐片朝向当前摄像机；相机旋转时叶片会持续 billboard。
+- 拖拽旋转模型本身，滚轮或双指缩放；“重置”恢复初始姿态和视角。
+- “叶片参数”可以实时调整叶片大小和显示密度，密度按整片叶子筛选。
+- 四种配色取自原作 Blender 材质的 Color Ramp，可随时切换。
+- “实时光源”可以改变方向（水平角度、垂直角度）、颜色和强度；颜色会按原作的风格化光影规则实时重算。
+- “下载 GLB”可导出已转换的模型，供其他三维工具使用。
+
+原作：且愚爱摸鱼。源文件 `20260904-树叶节点-5.2.blend` 和配图均保留原样。
+
+## 实现方式
+
+使用 Blender 5.2.1 求值 `Sphere.001` 的 Geometry Nodes，把生成结果转换为 171,522 个顶点、161,310 个三角形的 GLB 网格。每片叶子仍是独立的几何连通块；导出时写入每片叶子的中心、法线、切线和 billboard 标记。
+
+Three.js 的自定义顶点着色器根据这些几何属性，把叶片局部坐标旋转到摄像机方向，再交给片元着色器做方向光计算。GLB 不包含叶片纹理图片；每片叶子仍由真实网格顶点组成。模型同时保存 `_LEAF_NORMAL`（billboard 几何 basis）和 `_LEAF_SHADE_NORMAL`（原材质的 Geometry Nodes 光照法线），两者不会混用。
+
+片元着色器实时计算：
+
+- 方向光向量：由水平角度和垂直角度转换。
+- 光源颜色：直接乘到漫反射和边缘光。
+- 光源强度：控制方向光贡献。
+- 叶片法线：billboard 叶片朝向摄像机；源文件里的球体核心在网页预览中隐藏，只保留真实叶片网格。
+- 风格化色彩：读取 `src/palettes.json` 中的四段 Color Ramp，并用当前世界光源与叶片源法线的点积作为渐变输入；随后按 Blender 的 HSV 色相和值偏移规则应用每片叶子的随机种子。色带本身负责风格化明暗，网页只叠加可调方向光的颜色和强度。
+
+原作的颜色渐变和随机色偏被保留为可切换的着色器规则，不再依赖 GLB 中烘焙的旧光照顶点色；因此旋转模型时，颜色会按照模型旋转后的源法线重新匹配固定在世界空间的光源。网页没有移植完整的 Eevee / Cycles 节点图，透明叠加、透光、反弹光和色彩管理细节仍可能不同。Geometry Nodes 已固定成网格，网页不支持编辑源节点或实时改变叶片分布。
+
+模型约 8.8 MB，预览脚本约 20.5 MB，包含 Three.js 和内嵌模型，因此可离线打开。对低性能手机较重，目前以保留原模型为优先。
+
+## 文件
+
+| 文件 | 用途 |
+| --- | --- |
+| `index.html` + `app.js` | 可直接离线打开的预览 |
+| `leaf-cluster.glb` | 真实网格、叶片 basis 属性及 billboard 标记 |
+| `src/main.js` | Three.js 交互、billboard 顶点着色器和实时风格光影 |
+| `src/palettes.json` | 从 Blender 原材质导出的 Color Ramp 与 HSV 规则参数 |
+| `export_model.py` | 可重复运行的 Blender 导出脚本 |
+
+分享完整目录可保留模型下载和原图查看功能；只分享 `index.html` + `app.js` 仍能查看模型，但这两个附加链接需要对应文件。
+
+## 重新构建
+
+修改网页逻辑后：
+
+```powershell
+npm ci
+npm run build
+```
+
+如果改动 `.blend`，先在 Blender 5.2 或更新兼容版本中执行导出，再重新构建。以下示例需替换为实际 Blender 安装路径：
+
+```powershell
+& "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" --background "20260904-树叶节点-5.2.blend" --python "export_model.py"
+npm run build
+```
+
+也可通过本地服务器访问（非必需）：
+
+```powershell
+python -m http.server 8000 --bind 127.0.0.1
+```
+
+然后打开 http://127.0.0.1:8000 。

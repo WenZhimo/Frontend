@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#20211f" />
+    <title>风格化树叶 · Leaf Lab</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #f2f1ea;
+        --muted: #969891;
+        --faint: #666963;
+        --line: rgba(232, 234, 222, 0.13);
+        --panel: #252724;
+        --canvas: #30322f;
+        --accent: #bedf78;
+        --accent-strong: #d9ef9a;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body { min-height: 100%; }
+
+      body {
+        margin: 0;
+        background: #20211f;
+        color: var(--ink);
+        font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button, a { font: inherit; }
+
+      button { color: inherit; }
+      button:disabled { opacity: .4; cursor: wait; }
+      button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+
+      .app-shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        background:
+          radial-gradient(circle at 78% 46%, rgba(190, 223, 120, 0.06), transparent 27rem),
+          #20211f;
+      }
+
+      .topbar, .footer {
+        width: min(1500px, calc(100% - 64px));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        min-height: 76px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--line);
+        letter-spacing: 0.02em;
+      }
+
+      .brand, .top-actions, .live-state, .download-link, .stage-tools, .hint, .footer {
+        display: flex;
+        align-items: center;
+      }
+
+      .brand { gap: 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.13em; }
+
+      .brand-mark {
+        width: 25px;
+        height: 25px;
+        display: grid;
+        place-items: center;
+        color: #1f241d;
+        background: var(--accent);
+        border-radius: 50% 50% 50% 12%;
+        transform: rotate(-12deg);
+        box-shadow: 0 0 0 5px rgba(190, 223, 120, 0.08);
+      }
+
+      .brand-mark svg { width: 15px; height: 15px; transform: rotate(12deg); }
+      .brand-slash { color: var(--faint); font-weight: 400; }
+      .brand-sub { color: var(--muted); font-weight: 500; letter-spacing: 0.04em; }
+      .top-actions { gap: 22px; }
+
+      .live-state { gap: 8px; color: var(--muted); font-size: 12px; }
+      .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 5px rgba(190, 223, 120, 0.08); }
+
+      .download-link {
+        gap: 8px;
+        color: var(--ink);
+        text-decoration: none;
+        font-size: 12px;
+        padding: 9px 13px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        transition: border-color .2s ease, background .2s ease;
+      }
+
+      .download-link:hover { border-color: rgba(190, 223, 120, .55); background: rgba(190, 223, 120, .08); }
+      .download-link svg { width: 14px; height: 14px; }
+
+      .workspace {
+        width: min(1500px, calc(100% - 64px));
+        margin: 0 auto;
+        padding: clamp(44px, 7vh, 96px) 0 48px;
+        display: grid;
+        grid-template-columns: minmax(280px, .73fr) minmax(560px, 1.85fr);
+        gap: clamp(34px, 6vw, 110px);
+        align-items: center;
+      }
+
+      .copy-panel { padding: 12px 0 8px; }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(62px, 8vw, 130px);
+        line-height: .88;
+        font-weight: 800;
+        letter-spacing: -.08em;
+      }
+
+      h1 em { color: var(--accent); font-style: normal; }
+
+      .intro {
+        max-width: 360px;
+        margin: 34px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.9;
+      }
+
+      .spec-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        max-width: 360px;
+        margin-top: 42px;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .spec { padding: 14px 0; }
+      .spec:nth-child(2n) { padding-left: 18px; border-left: 1px solid var(--line); }
+      .spec-label { color: var(--faint); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+      .spec-value { margin-top: 7px; color: var(--ink); font-size: 14px; }
+
+      .palette-block { max-width: 360px; margin-top: 32px; }
+      .palette-title { color: var(--faint); font-size: 11px; letter-spacing: .12em; }
+      .palette-row { display: flex; gap: 9px; margin-top: 14px; }
+
+      .light-block { max-width: 420px; margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--line); }
+      .light-heading { display: flex; justify-content: space-between; align-items: baseline; }
+      .light-title { color: var(--faint); font-size: 11px; letter-spacing: .12em; }
+      .light-note { color: var(--faint); font-size: 10px; }
+      .light-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; margin-top: 16px; }
+      .light-control { min-width: 0; }
+      .light-control-wide { grid-column: 1 / -1; }
+      .light-control-label { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; }
+      .light-control-value { color: var(--ink); font-variant-numeric: tabular-nums; }
+      .light-color-row { display: flex; align-items: center; gap: 10px; }
+      .light-color { width: 34px; height: 26px; padding: 2px; border: 1px solid var(--line); border-radius: 7px; background: transparent; cursor: pointer; }
+      .light-color::-webkit-color-swatch-wrapper { padding: 0; }
+      .light-color::-webkit-color-swatch { border: 0; border-radius: 4px; }
+      .light-range { width: 100%; height: 18px; margin: 8px 0 0; accent-color: var(--accent); cursor: pointer; }
+      .light-direction { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+      .palette-button {
+        width: 34px;
+        height: 34px;
+        padding: 3px;
+        border: 1px solid transparent;
+        border-radius: 50%;
+        background: transparent;
+        cursor: pointer;
+        transition: border-color .2s ease, transform .2s ease;
+      }
+
+      .palette-button:hover { transform: translateY(-2px); }
+      .palette-button[aria-pressed="true"] { border-color: var(--ink); }
+      .palette-swatch { display: block; width: 100%; height: 100%; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+
+      .stage-panel { min-width: 0; }
+
+      .stage-head, .stage-foot { display: flex; justify-content: space-between; align-items: center; }
+      .stage-head { margin-bottom: 14px; }
+      .stage-title { color: var(--muted); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+      .stage-tools { gap: 8px; }
+
+      .tool-button {
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 0 11px;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: transparent;
+        cursor: pointer;
+        font-size: 11px;
+        transition: color .2s ease, border-color .2s ease, background .2s ease;
+      }
+
+      .tool-button:hover, .tool-button[aria-pressed="true"] { color: var(--ink); border-color: rgba(190,223,120,.55); background: rgba(190,223,120,.08); }
+      .tool-button svg { width: 14px; height: 14px; }
+
+      .stage {
+        position: relative;
+        min-height: min(64vh, 700px);
+        height: clamp(520px, 68vh, 760px);
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background:
+          radial-gradient(circle at 56% 42%, rgba(188, 219, 123, .13), transparent 25%),
+          linear-gradient(145deg, #353834 0%, #2c2e2b 52%, #252724 100%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 25px 70px rgba(0,0,0,.18);
+      }
+
+      .stage::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: .23;
+        background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+        background-size: 56px 56px;
+        mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 72%, transparent 100%);
+      }
+
+      .stage-glow {
+        position: absolute;
+        width: 60%;
+        height: 22%;
+        left: 20%;
+        bottom: 12%;
+        pointer-events: none;
+        background: radial-gradient(ellipse, rgba(9, 12, 10, .62), transparent 68%);
+        filter: blur(16px);
+      }
+
+      #model-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+      #model-canvas:active { cursor: grabbing; }
+      #model-canvas.is-dragging { cursor: grabbing; }
+
+      .stage-label, .stage-corner { position: absolute; z-index: 1; color: rgba(242,241,234,.6); font-size: 11px; pointer-events: none; }
+      .stage-label { left: 22px; bottom: 20px; letter-spacing: .08em; }
+      .stage-corner { right: 22px; top: 20px; color: rgba(242,241,234,.4); font-variant-numeric: tabular-nums; }
+
+      .stage-foot { margin-top: 13px; color: var(--faint); font-size: 11px; }
+      .hint { gap: 7px; }
+      .hint svg { width: 14px; height: 14px; }
+      .model-status { color: var(--muted); }
+
+      .footer {
+        min-height: 62px;
+        justify-content: space-between;
+        border-top: 1px solid var(--line);
+        color: var(--faint);
+        font-size: 11px;
+        letter-spacing: .04em;
+      }
+
+      .footer a { color: var(--muted); text-decoration: none; }
+      .footer a:hover { color: var(--ink); }
+
+      .error-message { position: absolute; inset: 0; display: grid; place-items: center; padding: 30px; color: #f2c4b9; text-align: center; font-size: 13px; line-height: 1.7; }
+
+      @media (max-width: 960px) {
+        .topbar, .workspace, .footer { width: min(100% - 36px, 720px); }
+        .workspace { grid-template-columns: 1fr; gap: 42px; padding-top: 48px; }
+        .copy-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+        h1, .intro { grid-column: 1 / -1; }
+        .spec-list, .palette-block { max-width: none; }
+        .light-block { max-width: none; }
+        .stage { height: min(66vh, 660px); min-height: 460px; }
+      }
+
+      @media (max-width: 600px) {
+        .topbar, .workspace, .footer { width: calc(100% - 28px); }
+        .topbar { min-height: 66px; }
+        .brand-sub, .live-state { display: none; }
+        .top-actions { gap: 0; }
+        .workspace { padding: 34px 0 36px; gap: 30px; }
+        .copy-panel { display: block; }
+        h1 { font-size: clamp(64px, 22vw, 100px); }
+        .intro { margin-top: 25px; }
+        .spec-list { margin-top: 30px; }
+        .light-controls { grid-template-columns: 1fr; gap: 13px; }
+        .light-direction { grid-template-columns: 1fr 1fr; gap: 14px; }
+        .stage { min-height: 430px; height: 60vh; border-radius: 18px; }
+        .stage-tools .tool-button span { display: none; }
+        .tool-button { width: 34px; justify-content: center; padding: 0; }
+        .footer { min-height: 54px; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand" aria-label="Leaf Lab">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.8 4.2C12.6 4 6.4 6.2 5.1 11.7c-.9 3.8 1.4 6.4 4.9 6.8 4.8.5 8.8-3.9 9.8-14.3Z"/><path d="M4.5 20c2.8-5.4 6.7-8.5 11.2-10.5"/></svg>
+          </span>
+          <span>LEAF LAB</span>
+          <span class="brand-slash">/</span>
+          <span class="brand-sub">风格化节点</span>
+        </div>
+        <div class="top-actions">
+          <span class="live-state"><i class="live-dot"></i>实时预览</span>
+          <a class="download-link" href="./leaf-cluster.glb" download="leaf-cluster.glb">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            <span>下载 GLB</span>
+          </a>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="copy-panel" aria-labelledby="page-title">
+          <h1 id="page-title">风格化<br /><em>树叶</em></h1>
+          <p class="intro">一簇叶片，四种色彩。拖拽旋转，滚轮缩放，细看每片树叶的形状与层次。<br />原作：且愚爱摸鱼</p>
+          <div class="spec-list" aria-label="模型信息">
+            <div class="spec"><div class="spec-label">Geometry</div><div class="spec-value">171,522 vertices</div></div>
+            <div class="spec"><div class="spec-label">Format</div><div class="spec-value">glTF 2.0 / GLB</div></div>
+            <div class="spec"><div class="spec-label">Lighting</div><div class="spec-value">实时方向光</div></div>
+            <div class="spec"><div class="spec-label">Input</div><div class="spec-value">Blender 5.2 scene</div></div>
+          </div>
+          <div class="palette-block">
+            <div class="palette-title">材质色调</div>
+            <div class="palette-row" role="group" aria-label="选择材质色调">
+              <button class="palette-button" data-palette="moss" aria-label="苔绿" aria-pressed="true"><span class="palette-swatch" style="background:#abc978"></span></button>
+              <button class="palette-button" data-palette="lime" aria-label="柠黄" aria-pressed="false"><span class="palette-swatch" style="background:#d6e88e"></span></button>
+              <button class="palette-button" data-palette="rose" aria-label="玫瑰" aria-pressed="false"><span class="palette-swatch" style="background:#d5aca6"></span></button>
+              <button class="palette-button" data-palette="mist" aria-label="雾白" aria-pressed="false"><span class="palette-swatch" style="background:#e8e8dd"></span></button>
+            </div>
+          </div>
+          <div class="light-block" aria-label="实时光源控制">
+            <div class="light-heading">
+              <span class="light-title">实时光源</span>
+              <span class="light-note">实时风格光影</span>
+            </div>
+            <div class="light-controls">
+              <div class="light-control">
+                <div class="light-control-label"><span>颜色</span><span class="light-control-value">RGB</span></div>
+                <div class="light-color-row"><input class="light-color" id="light-color" type="color" value="#ffd8a3" aria-label="光源颜色" /><span class="light-control-value">选择任意颜色</span></div>
+              </div>
+              <div class="light-control">
+                <div class="light-control-label"><span>强度</span><span class="light-control-value" id="light-intensity-value">1.15</span></div>
+                <input class="light-range" id="light-intensity" type="range" min="0" max="3" step="0.01" value="1.15" aria-label="光源强度" />
+              </div>
+              <div class="light-control light-control-wide light-direction">
+                <div>
+                  <div class="light-control-label"><span>水平角度</span><span class="light-control-value" id="light-azimuth-value">35°</span></div>
+                  <input class="light-range" id="light-azimuth" type="range" min="-180" max="180" step="1" value="35" aria-label="光源水平角度" />
+                </div>
+                <div>
+                  <div class="light-control-label"><span>垂直角度</span><span class="light-control-value" id="light-elevation-value">45°</span></div>
+                  <input class="light-range" id="light-elevation" type="range" min="-80" max="80" step="1" value="45" aria-label="光源垂直角度" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="light-block" aria-label="叶片参数控制">
+            <div class="light-heading">
+              <span class="light-title">叶片参数</span>
+              <span class="light-note">实时几何控制</span>
+            </div>
+            <div class="light-controls">
+              <div class="light-control">
+                <div class="light-control-label"><span>叶片大小</span><span class="light-control-value" id="leaf-size-value">0.78×</span></div>
+                <input class="light-range" id="leaf-size" type="range" min="0.35" max="1.35" step="0.01" value="0.78" aria-label="叶片大小" />
+              </div>
+              <div class="light-control">
+                <div class="light-control-label"><span>叶片密度</span><span class="light-control-value" id="leaf-density-value">82%</span></div>
+                <input class="light-range" id="leaf-density" type="range" min="0.15" max="1" step="0.01" value="0.82" aria-label="叶片密度" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="stage-panel" aria-label="3D 模型预览">
+          <div class="stage-head">
+            <span class="stage-title">Leaf cluster / live scene</span>
+            <div class="stage-tools">
+              <button class="tool-button" id="auto-rotate" aria-pressed="false" aria-label="切换自动旋转" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14-4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0 0 14 4l2-2"/><path d="M20 20v-5h-5"/></svg><span>自动旋转</span>
+              </button>
+              <button class="tool-button" id="reset-view" aria-label="重置视角" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/></svg><span>重置</span>
+              </button>
+            </div>
+          </div>
+          <div class="stage" id="stage">
+            <div class="stage-glow" aria-hidden="true"></div>
+            <canvas id="model-canvas" aria-label="可交互的风格化树叶模型"></canvas>
+            <span class="stage-corner">01 / 01</span>
+            <span class="stage-label">DRAG TO ROTATE MODEL · SCROLL TO ZOOM</span>
+          </div>
+          <div class="stage-foot">
+            <span class="hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V6a2 2 0 0 1 4 0v5"/><path d="M12 10V4a2 2 0 0 1 4 0v7"/><path d="M16 11V7a2 2 0 0 1 4 0v7c0 4-3 7-7 7h-1c-3 0-5-2-6-4l-2-4a2 2 0 0 1 3-2l1 2V8a2 2 0 0 1 4 0v3"/></svg>拖拽旋转模型</span>
+            <span class="model-status" id="model-status" role="status">正在加载模型…</span>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span>原作：且愚爱摸鱼 · 网页实时预览</span>
+        <a href="./20260904-树叶节点-5.2.png" target="_blank" rel="noreferrer">查看原始效果图 ↗</a>
+      </footer>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>
