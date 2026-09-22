@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A tactile CRT / halftone visual study inspired by O EMPIRE! WARD OFF THY ROT."
+    />
+    <title>O EMPIRE! — Ward Off Thy Rot</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="filter-core.js" defer></script>
+    <script src="script.js" defer></script>
+  </head>
+  <body data-mode="ward">
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+
+    <main class="app-shell" id="app-shell">
+      <header class="masthead">
+        <a class="brand" href="#field" aria-label="O Empire visual study home">
+          <span class="brand-mark">O</span>
+          <span class="brand-copy">
+            <strong>EMPIRE!</strong>
+            <small>WARD OFF THY ROT</small>
+          </span>
+        </a>
+
+        <div class="signal-status" aria-live="polite">
+          <span class="signal-dot"></span>
+          <span class="signal-label">SIGNAL LOCKED</span>
+          <span class="signal-code" id="signal-code">03 / 04</span>
+        </div>
+
+        <div class="masthead-actions">
+          <button class="text-button" type="button" data-action="toggle-play" aria-pressed="false">
+            <span class="play-glyph">▶</span>
+            <span data-play-label>PLAY LOOP</span>
+          </button>
+          <button class="icon-button" type="button" data-action="fullscreen" aria-label="Enter fullscreen mode">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <section class="hero-layout" id="field" aria-label="Visual study field">
+        <div class="scene-column">
+          <div class="scene-frame" id="scene-frame">
+            <canvas class="scene-image" id="output-canvas" aria-label="Filtered output canvas"></canvas>
+            <canvas id="fx-canvas" aria-hidden="true"></canvas>
+            <div class="grain-layer" aria-hidden="true"></div>
+            <div class="scanline-layer" aria-hidden="true"></div>
+            <div class="vignette-layer" aria-hidden="true"></div>
+            <div class="frame-edge" aria-hidden="true"></div>
+
+            <div class="scene-chrome scene-chrome-top" aria-hidden="true">
+              <span>FIELD / <b id="scene-index">03</b></span>
+              <span class="scene-coordinates">42° 18' N · 17° 04' W</span>
+            </div>
+
+            <div class="scene-chrome scene-chrome-bottom">
+              <div>
+                <p class="eyebrow" id="scene-kicker">THE SETTLEMENT</p>
+                <p class="scene-description" id="scene-description">Keep the hearths lit. Keep the black snow out.</p>
+              </div>
+              <div class="scene-meter" aria-label="Signal strength">
+                <span class="meter-label">SYNC</span>
+                <span class="meter-bars" id="meter-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="scene-toolbar">
+            <p><span class="keycap">←</span><span class="keycap">→</span> cycle field</p>
+            <p><span class="keycap">space</span> toggle loop</p>
+            <p><span class="keycap">R</span> restore ward</p>
+          </div>
+        </div>
+
+        <aside class="control-panel" aria-label="Visual controls">
+          <div class="panel-heading">
+            <span class="panel-index">VISUAL STUDY / 01</span>
+            <h1>Hold the line.<br /><em>Keep the rot out.</em></h1>
+            <p>
+              A small, playable signal board for the grey map, the soft CRT bloom, and the red flowers
+              opening underneath it all.
+            </p>
+          </div>
+
+          <div class="control-block source-block">
+            <div class="block-heading">
+              <span>INPUT SOURCE</span>
+              <span class="block-count" id="source-kind">REFERENCE / 03</span>
+            </div>
+            <div class="source-tabs" role="tablist" aria-label="Input source type">
+              <button class="source-tab is-active" type="button" data-source-kind="reference">REFERENCE</button>
+              <button class="source-tab" type="button" data-source-kind="file">IMAGE / VIDEO</button>
+              <button class="source-tab" type="button" data-source-kind="canvas">CANVAS / THREE</button>
+            </div>
+            <label class="dropzone" id="dropzone" for="file-input">
+              <span class="dropzone-title">DROP IMAGE OR VIDEO</span>
+              <span class="dropzone-subtitle" id="file-name">or choose a local file</span>
+              <input id="file-input" type="file" accept="image/*,video/*" />
+            </label>
+            <button class="source-button" type="button" data-action="use-demo-canvas">
+              <span>USE DEMO CANVAS SOURCE</span><span>↗</span>
+            </button>
+            <p class="source-help">A Three.js renderer is already a canvas. Pass <code>renderer.domElement</code> to the public API.</p>
+          </div>
+
+          <div class="control-block field-block">
+            <div class="block-heading">
+              <span>FIELD STATE</span>
+              <span class="block-count">04 FRAMES</span>
+            </div>
+            <div class="state-list" role="list" aria-label="Field states">
+              <button class="state-button" type="button" data-scene="0" role="listitem">
+                <span class="state-thumb"><img src="assets/references/image.png" alt="" /></span>
+                <span class="state-copy"><b>01</b><span>THE WARD</span></span>
+                <span class="state-arrow">↗</span>
+              </button>
+              <button class="state-button" type="button" data-scene="1" role="listitem">
+                <span class="state-thumb"><img src="assets/references/image-1.png" alt="" /></span>
+                <span class="state-copy"><b>02</b><span>THE SPREAD</span></span>
+                <span class="state-arrow">↗</span>
+              </button>
+              <button class="state-button is-active" type="button" data-scene="2" role="listitem" aria-current="true">
+                <span class="state-thumb"><img src="assets/references/image-2.png" alt="" /></span>
+                <span class="state-copy"><b>03</b><span>THE SETTLEMENT</span></span>
+                <span class="state-arrow">↗</span>
+              </button>
+              <button class="state-button" type="button" data-scene="3" role="listitem">
+                <span class="state-thumb"><img src="assets/references/image-3.png" alt="" /></span>
+                <span class="state-copy"><b>04</b><span>THE ABYSS</span></span>
+                <span class="state-arrow">↗</span>
+              </button>
+            </div>
+          </div>
+
+            <div class="control-block bloom-block">
+            <div class="block-heading">
+            <label for="bloom-range">BLOOM DENSITY</label>
+              <output id="bloom-output" for="bloom-range">38%</output>
+            </div>
+            <div class="range-wrap">
+              <input id="bloom-range" type="range" min="0" max="100" value="38" />
+              <div class="range-labels" aria-hidden="true"><span>CLEAR</span><span>BLOOM</span></div>
+            </div>
+            <p class="control-note" id="rot-note">A thin red flower line is opening through the snow.</p>
+          </div>
+
+          <div class="control-block mode-block">
+            <div class="block-heading"><span>FILTER PASS</span><span class="block-count">LUMA / 01</span></div>
+            <div class="mode-switch" role="group" aria-label="Filter pass">
+              <button class="mode-button is-active" type="button" data-mode="ward">WARD</button>
+              <button class="mode-button" type="button" data-mode="bloom">BLOOM</button>
+              <button class="mode-button" type="button" data-mode="raw">RAW</button>
+            </div>
+          </div>
+
+          <div class="panel-actions">
+            <button class="action-button" type="button" data-action="randomize">
+              <span>RANDOMIZE SIGNAL</span><span>↗</span>
+            </button>
+            <button class="action-button is-quiet" type="button" data-action="reset">
+              <span>RESTORE WARD</span><span>R</span>
+            </button>
+            <button class="action-button is-quiet" type="button" data-action="export">
+              <span>EXPORT FILTERED PNG</span><span>↓</span>
+            </button>
+          </div>
+
+          <div class="panel-footer">
+            <span>NO EXTERNAL DEPENDENCIES</span>
+            <span>CRT STUDY 2026</span>
+          </div>
+        </aside>
+      </section>
+
+      <video id="video-source" playsinline muted loop hidden></video>
+      <canvas id="demo-canvas" width="960" height="540" hidden></canvas>
+
+      <footer class="page-footer">
+        <p><span class="footer-mark">✦</span> Visual replica / supplied reference frames preserved in <code>assets/references</code>.</p>
+        <p>Best viewed in a dark room.</p>
+      </footer>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
