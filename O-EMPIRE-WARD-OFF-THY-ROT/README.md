@@ -11,7 +11,7 @@
 - **WARD / BLOOM / RAW** 切换三种滤镜通道。
 - 在 **INPUT SOURCE** 中拖入图片或视频；视频会实时逐帧处理。
 - **CANVAS / THREE** 会接入内置 Canvas 演示。Three.js 的 `renderer.domElement` 也是同一种 Canvas 输入。
-- **3D DITHERED SCENE** 会显示村屋、瞭望塔、石碑、碎石和花簇几个黑白灰低多边形模型；模型本身保持实体形状，不由点阵组成。
+- **3D DITHERED SCENE** 默认显示一座黑白灰石桥：桥身两侧是带三个真实拱洞的连续挤出 Mesh，桥面、桥台与护栏也是实体模型。切换 **BRIDGE / SETTLEMENT** 可检查桥或原有村落模型。
 - **IMAGE DITHER** 控制最终画面层的方形 ordered dithering。深黑和高亮区域保持稳定，只有中间灰阶参与灰度重建；**RANDOMIZE SIGNAL** 只更新 dither 强度。
 - **PLAY LOOP** 或按空格键自动循环播放；方向键切换画面，`R` 恢复初始状态。
 - **EXPORT FILTERED PNG** 下载当前输出 Canvas。
@@ -34,6 +34,7 @@ const filteredCanvas = window.OEmpireFilterPanel.getOutputCanvas();
 window.OEmpireFilterPanel.useDitheredScene();
 const ditheredScene = window.OEmpireFilterPanel.getDitheredScene();
 ditheredScene.setOptions({ dither: 0.72 });
+ditheredScene.setScene('bridge'); // or 'map' for the settlement study
 ```
 
 如果不需要这个界面，也可以直接使用 `filter-core.js`：

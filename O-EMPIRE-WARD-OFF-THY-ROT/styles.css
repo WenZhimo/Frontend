@@ -853,6 +853,40 @@ input[type='range']::-moz-range-thumb {
   border-top: 1px solid var(--line);
 }
 
+.model-switch {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px;
+  margin-top: 13px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  background: rgba(232, 229, 219, 0.03);
+}
+
+.model-button {
+  min-height: 31px;
+  padding: 8px 7px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  transition: color 180ms ease, background 180ms ease;
+}
+
+.model-button:hover,
+.model-button.is-active {
+  color: var(--paper);
+  background: rgba(232, 229, 219, 0.09);
+}
+
+.model-button:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
 .scene-frame.is-3d .scene-description {
   color: rgba(238, 237, 230, 0.9);
 }

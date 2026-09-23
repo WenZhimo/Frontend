@@ -52,6 +52,8 @@ const meterBars = document.querySelector('#meter-bars');
 const pointDitherRange = document.querySelector('#point-dither-range');
 const pointDitherOutput = document.querySelector('#point-dither-output');
 const pointNote = document.querySelector('#point-note');
+const modelButtons = [...document.querySelectorAll('[data-model-scene]')];
+const modelSwitch = document.querySelector('.model-switch');
 
 const filter = window.OEmpireFilter.create({
   canvas: outputCanvas,
@@ -123,6 +125,8 @@ function updateSourceChrome(label) {
 
 function showFilteredCanvas() {
   frame.classList.remove('is-3d');
+  modelSwitch.hidden = true;
+  modelButtons.forEach((button) => { button.disabled = true; });
   pointField?.stop();
   if (sourceType !== 'video') {
     playing = false;
@@ -134,6 +138,8 @@ function showFilteredCanvas() {
 
 function showPointField() {
   frame.classList.add('is-3d');
+  modelSwitch.hidden = false;
+  modelButtons.forEach((button) => { button.disabled = false; });
   if (!pointField) {
     return;
   }
@@ -317,10 +323,22 @@ function usePointField(announce = true) {
   updateSourceChrome('3D / DITHERED SCENE');
   sceneIndex.textContent = '3D';
   signalCode.textContent = 'LIVE / 3D';
-  sceneKicker.textContent = 'THE DITHERED SCENE';
-  sceneDescription.textContent = 'Four low-poly forms, rendered as continuous surfaces with screen-space grey dithering.';
+  updateModelScene(pointField?.getActiveScene?.() || 'bridge');
   sourceKind.textContent = '3D / DITHERED SCENE';
   if (announce) showToast('3D MODELS / DITHERED SCENE LIVE');
+}
+
+function updateModelScene(sceneName) {
+  pointField?.setScene(sceneName);
+  modelButtons.forEach((button) => {
+    const active = button.dataset.modelScene === sceneName;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  sceneKicker.textContent = sceneName === 'bridge' ? 'THE BRIDGE' : 'THE SETTLEMENT';
+  sceneDescription.textContent = sceneName === 'bridge'
+    ? 'A continuous stone crossing with three open arches, raised above the grey field.'
+    : 'The original low-poly settlement, rendered as solid monochrome forms.';
 }
 
 function attachCanvasSource(canvas, label = 'CANVAS / THREE') {
@@ -445,7 +463,10 @@ function exportPng() {
     }
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `o-empire-${sourceType === '3d' ? 'dithered-scene' : 'filter'}-${String(activeScene + 1).padStart(2, '0')}.png`;
+    const exportName = sourceType === '3d'
+      ? `dithered-${pointField?.getActiveScene?.() || 'scene'}`
+      : `filter-${String(activeScene + 1).padStart(2, '0')}`;
+    link.download = `o-empire-${exportName}.png`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 500);
     showToast(`${sourceType === '3d' ? 'DITHERED SCENE' : 'FILTERED'} PNG EXPORTED`);
@@ -461,6 +482,10 @@ function showToast(message) {
 
 stateButtons.forEach((button) => {
   button.addEventListener('click', () => useReference(Number(button.dataset.scene)));
+});
+
+modelButtons.forEach((button) => {
+  button.addEventListener('click', () => updateModelScene(button.dataset.modelScene));
 });
 
 modeButtons.forEach((button) => {

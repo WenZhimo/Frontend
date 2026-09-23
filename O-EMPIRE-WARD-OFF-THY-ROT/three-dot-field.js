@@ -119,6 +119,10 @@ root.rotation.y = -0.18;
 scene.add(root);
 
 const solidMeshes = [];
+const mapModels = [];
+const bridgeModels = [];
+let activeModelCollection = mapModels;
+let activeModel = 'bridge';
 let mounted = false;
 let running = false;
 
@@ -138,10 +142,13 @@ function addPrimitive(geometry, matrix, tone) {
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   solidMeshes.push(mesh);
+  activeModelCollection.push(mesh);
   root.add(mesh);
 }
 
 function buildPointField() {
+  activeModelCollection = mapModels;
+
   // The floor establishes the isometric map plane.
   addPrimitive(new THREE.PlaneGeometry(15.5, 11.5, 18, 14), transform(new THREE.Vector3(0, 0, 0), new THREE.Euler(-Math.PI / 2, 0, 0)), 0.48);
 
@@ -169,6 +176,62 @@ function buildPointField() {
     }
     addPrimitive(new THREE.IcosahedronGeometry(0.13, 1), transform(new THREE.Vector3(x, y + 0.8, z)), 0.48);
   });
+
+  // A large bridge study inspired by image-3: the side walls are one
+  // continuous extruded profile, with real arch openings cut into the mesh.
+  activeModelCollection = bridgeModels;
+  addPrimitive(new THREE.PlaneGeometry(15.5, 11.5, 18, 14), transform(new THREE.Vector3(0, 0, 0), new THREE.Euler(-Math.PI / 2, 0, 0)), 0.48);
+  const bridgeZ = 0.95;
+  const bridgeY = 2.45;
+  const bridgeLength = 11.8;
+  const bridgeWidth = 2.35;
+  const archCenters = [-3.55, 0, 3.55];
+  const archRadius = 1.2;
+  const archSpring = 1.22;
+  const archWallShape = new THREE.Shape();
+  archWallShape.moveTo(-bridgeLength / 2, 0.28);
+  archWallShape.lineTo(bridgeLength / 2, 0.28);
+  archWallShape.lineTo(bridgeLength / 2, 2.28);
+  archWallShape.lineTo(-bridgeLength / 2, 2.28);
+  archWallShape.closePath();
+  archCenters.forEach((center) => {
+    const opening = new THREE.Path();
+    opening.moveTo(center - archRadius, 0.28);
+    opening.lineTo(center - archRadius, archSpring);
+    opening.absarc(center, archSpring, archRadius, Math.PI, 0, true);
+    opening.lineTo(center + archRadius, 0.28);
+    opening.closePath();
+    archWallShape.holes.push(opening);
+  });
+  const archWallGeometry = new THREE.ExtrudeGeometry(archWallShape, {
+    depth: 0.18,
+    bevelEnabled: false,
+    curveSegments: 12,
+    steps: 1,
+  });
+  archWallGeometry.translate(0, 0, -0.09);
+  [-1, 1].forEach((side) => {
+    addPrimitive(
+      archWallGeometry.clone(),
+      transform(new THREE.Vector3(0, 0, bridgeZ + side * (bridgeWidth / 2 - 0.09))),
+      0.34,
+    );
+  });
+  addPrimitive(new THREE.BoxGeometry(12.4, 0.52, bridgeWidth), transform(new THREE.Vector3(0, bridgeY, bridgeZ)), 0.38);
+  addPrimitive(new THREE.BoxGeometry(12.6, 0.24, 0.2), transform(new THREE.Vector3(0, bridgeY + 0.38, bridgeZ - (bridgeWidth / 2 - 0.2))), 0.62);
+  addPrimitive(new THREE.BoxGeometry(12.6, 0.24, 0.2), transform(new THREE.Vector3(0, bridgeY + 0.38, bridgeZ + (bridgeWidth / 2 - 0.2))), 0.62);
+
+  [-5.95, 5.95].forEach((x) => {
+    addPrimitive(new THREE.BoxGeometry(0.86, 2.75, 2.78), transform(new THREE.Vector3(x, 1.48, bridgeZ)), 0.24);
+    addPrimitive(new THREE.ConeGeometry(0.74, 0.6, 4), transform(new THREE.Vector3(x, 3.16, bridgeZ), new THREE.Euler(0, Math.PI / 4, 0)), 0.2);
+  });
+
+  for (let x = -5.1; x <= 5.1; x += 1.3) {
+    [-1, 1].forEach((side) => {
+      addPrimitive(new THREE.BoxGeometry(0.16, 0.82, 0.16), transform(new THREE.Vector3(x, bridgeY + 0.7, bridgeZ + side * (bridgeWidth / 2 - 0.2))), 0.52);
+    });
+  }
+
 }
 
 function resize() {
@@ -200,6 +263,7 @@ function render(time = performance.now()) {
 function mount() {
   if (mounted) return api;
   buildPointField();
+  setScene(activeModel);
   mounted = true;
   resize();
   render();
@@ -231,6 +295,16 @@ function randomize() {
   return api;
 }
 
+function setScene(sceneName) {
+  if (sceneName !== 'bridge' && sceneName !== 'map') return api;
+  const showBridge = sceneName === 'bridge';
+  activeModel = showBridge ? 'bridge' : 'map';
+  mapModels.forEach((mesh) => { mesh.visible = !showBridge; });
+  bridgeModels.forEach((mesh) => { mesh.visible = showBridge; });
+  render();
+  return api;
+}
+
 const api = {
   canvas,
   scene,
@@ -243,8 +317,10 @@ const api = {
   stop,
   resize,
   setOptions,
+  setScene,
   randomize,
   getModelCount: () => solidMeshes.length,
+  getActiveScene: () => activeModel,
 };
 
 window.OEmpirePointField = api;
