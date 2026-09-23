@@ -94,14 +94,33 @@ const renderer = new THREE.WebGLRenderer({
 });
 renderer.setClearColor(0x000000, 0);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+// Model geometry and lights stay fixed; refresh this map on mount or scene switch.
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 
 const scene = new THREE.Scene();
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.08);
-const keyLight = new THREE.DirectionalLight(0xffffff, 1.05);
-keyLight.position.set(5.5, 9, 7);
-const fillLight = new THREE.DirectionalLight(0xffffff, 0.52);
-fillLight.position.set(-7, 4, -5);
-scene.add(ambientLight, keyLight, fillLight);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.34);
+const skyLight = new THREE.HemisphereLight(0xe9e5dc, 0x24262c, 0.72);
+const keyLight = new THREE.DirectionalLight(0xfff8eb, 1.45);
+keyLight.position.set(-6, 11, 8);
+keyLight.target.position.set(0, 1.3, 0);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.left = -10;
+keyLight.shadow.camera.right = 10;
+keyLight.shadow.camera.top = 8;
+keyLight.shadow.camera.bottom = -8;
+keyLight.shadow.camera.near = 0.5;
+keyLight.shadow.camera.far = 32;
+keyLight.shadow.camera.updateProjectionMatrix();
+keyLight.shadow.bias = -0.00045;
+keyLight.shadow.normalBias = 0.025;
+keyLight.shadow.radius = 1.5;
+const fillLight = new THREE.DirectionalLight(0xdce5f5, 0.28);
+fillLight.position.set(7, 5, -8);
+scene.add(ambientLight, skyLight, keyLight, keyLight.target, fillLight);
 const ditherScene = new THREE.Scene();
 const ditherCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const ditherQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ditherMaterial);
@@ -153,16 +172,16 @@ function transform(position, rotation = new THREE.Euler(), scale = new THREE.Vec
 }
 
 function addPrimitive(geometry, matrix, tone) {
-  // Keep the actual low-poly surface. The fullscreen pass below handles all
-  // tonal dithering after this continuous mesh has been rasterized.
+  // Keep the actual low-poly surface and feed real lighting into the
+  // low-resolution scene render before the fullscreen pixel/dither pass.
   const material = new THREE.MeshLambertMaterial({
     color: new THREE.Color(tone, tone, tone),
     flatShading: true,
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.applyMatrix4(matrix);
-  mesh.castShadow = false;
-  mesh.receiveShadow = false;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
   solidMeshes.push(mesh);
   activeModelCollection.push(mesh);
   root.add(mesh);
@@ -341,6 +360,7 @@ function setScene(sceneName) {
   activeModel = showBridge ? 'bridge' : 'map';
   mapModels.forEach((mesh) => { mesh.visible = !showBridge; });
   bridgeModels.forEach((mesh) => { mesh.visible = showBridge; });
+  renderer.shadowMap.needsUpdate = true;
   render();
   return api;
 }
