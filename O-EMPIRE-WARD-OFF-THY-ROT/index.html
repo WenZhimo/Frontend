@@ -166,14 +166,14 @@
 
           <div class="control-block point-block">
             <div class="block-heading">
-              <label for="point-jitter-range">DOT JITTER</label>
-              <output id="point-jitter-output" for="point-jitter-range">34%</output>
+              <label for="point-dither-range">IMAGE DITHER</label>
+              <output id="point-dither-output" for="point-dither-range">72%</output>
             </div>
             <div class="range-wrap">
-              <input id="point-jitter-range" type="range" min="0" max="100" value="34" />
-              <div class="range-labels" aria-hidden="true"><span>STILL</span><span>UNSTEADY</span></div>
+              <input id="point-dither-range" type="range" min="0" max="100" value="72" />
+              <div class="range-labels" aria-hidden="true"><span>FLAT</span><span>GRAINED</span></div>
             </div>
-            <p class="control-note" id="point-note">Every point is geometry. The camera and points drift independently.</p>
+            <p class="control-note" id="point-note">Screen-space dither enriches mid-grey. Near-black and near-white stay quiet.</p>
           </div>
 
           <div class="panel-actions">

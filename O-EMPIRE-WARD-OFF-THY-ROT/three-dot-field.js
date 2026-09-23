@@ -3,22 +3,14 @@ import * as THREE from './assets/vendor/three.module.js';
 const canvas = document.querySelector('#point-canvas');
 
 const vertexShader = `
-  uniform float uTime;
-  uniform float uJitter;
   uniform float uPointSize;
-  attribute float aSeed;
   attribute float aSize;
   attribute float aTone;
   varying float vTone;
 
   void main() {
-    vec3 p = position;
-    float waveA = sin(uTime * 1.35 + aSeed * 31.7);
-    float waveB = cos(uTime * 1.03 + aSeed * 17.1);
-    float waveC = sin(uTime * 1.82 + aSeed * 7.4);
-    p += vec3(waveA, waveB, waveC) * uJitter * (0.018 + aSize * 0.007);
-
-    vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
+    // Geometry is deliberately static. Dithering happens in the fullscreen pass below.
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     gl_PointSize = clamp(aSize * uPointSize * (112.0 / max(1.0, -mvPosition.z)), 1.15, 8.0);
     vTone = aTone;
@@ -37,11 +29,74 @@ const fragmentShader = `
   }
 `;
 
+const screenVertexShader = `
+  varying vec2 vUv;
+
+  void main() {
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`;
+
+const screenFragmentShader = `
+  uniform sampler2D uScene;
+  uniform float uDitherAmount;
+  uniform float uDitherScale;
+  varying vec2 vUv;
+
+  float bayer4(vec2 pixel) {
+    int x = int(mod(pixel.x, 4.0));
+    int y = int(mod(pixel.y, 4.0));
+    int index = x + y * 4;
+    if (index == 0) return 0.0;
+    if (index == 1) return 8.0;
+    if (index == 2) return 2.0;
+    if (index == 3) return 10.0;
+    if (index == 4) return 12.0;
+    if (index == 5) return 4.0;
+    if (index == 6) return 14.0;
+    if (index == 7) return 6.0;
+    if (index == 8) return 3.0;
+    if (index == 9) return 11.0;
+    if (index == 10) return 1.0;
+    if (index == 11) return 9.0;
+    if (index == 12) return 15.0;
+    if (index == 13) return 7.0;
+    if (index == 14) return 13.0;
+    return 5.0;
+  }
+
+  void main() {
+    vec4 source = texture2D(uScene, vUv);
+    if (source.a < 0.02) discard;
+
+    // The render target stores the point color with coverage in RGB. Recover
+    // the plate tone before dithering so antialiased square edges stay edges.
+    vec3 plateColor = source.rgb / max(source.a, 0.0001);
+    float luminance = clamp(dot(plateColor, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
+    float darkLock = 1.0 - smoothstep(0.08, 0.22, luminance);
+    float lightLock = smoothstep(0.78, 0.92, luminance);
+    float midtone = (1.0 - darkLock) * (1.0 - lightLock);
+    float levels = 4.0;
+    float quantized = luminance * levels;
+    float lower = floor(quantized) / levels;
+    float fraction = fract(quantized);
+    // Use square screen cells. The pattern is deterministic: no point or
+    // model moves, and only middle tones are reconstructed between levels.
+    vec2 ditherPixel = floor(gl_FragCoord.xy / max(uDitherScale, 1.0));
+    float threshold = (bayer4(ditherPixel) + 0.5) / 16.0;
+    float stepToUpper = step(threshold, fraction);
+    float dithered = lower + stepToUpper * (1.0 / levels);
+    float value = mix(luminance, dithered, uDitherAmount * midtone);
+    value = mix(value, 0.055, darkLock);
+    value = mix(value, 0.95, lightLock);
+    gl_FragColor = vec4(vec3(value), source.a);
+  }
+`;
+
 const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 const pointMaterial = new THREE.ShaderMaterial({
   uniforms: {
-    uTime: { value: 0 },
-    uJitter: { value: 0.34 },
     uPointSize: { value: 2.55 },
   },
   vertexShader,
@@ -50,6 +105,19 @@ const pointMaterial = new THREE.ShaderMaterial({
   depthTest: true,
   depthWrite: false,
   blending: THREE.NormalBlending,
+});
+
+const ditherMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    uScene: { value: null },
+    uDitherAmount: { value: 0.86 },
+    uDitherScale: { value: 2 },
+  },
+  vertexShader: screenVertexShader,
+  fragmentShader: screenFragmentShader,
+  transparent: true,
+  depthTest: false,
+  depthWrite: false,
 });
 
 const renderer = new THREE.WebGLRenderer({
@@ -63,6 +131,18 @@ renderer.setClearColor(0x000000, 0);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 
 const scene = new THREE.Scene();
+const ditherScene = new THREE.Scene();
+const ditherCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const ditherQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ditherMaterial);
+ditherScene.add(ditherQuad);
+const sceneTarget = new THREE.WebGLRenderTarget(960, 540, {
+  minFilter: THREE.NearestFilter,
+  magFilter: THREE.NearestFilter,
+  format: THREE.RGBAFormat,
+  type: THREE.UnsignedByteType,
+  depthBuffer: true,
+  stencilBuffer: false,
+});
 const camera = new THREE.OrthographicCamera(-8, 8, 5, -5, 0.1, 100);
 camera.position.set(8.4, 6.8, 10.5);
 camera.lookAt(0, 1.05, 0);
@@ -74,8 +154,6 @@ scene.add(root);
 const points = [];
 let pointGeometry = null;
 let pointCloud = null;
-let clockStart = performance.now();
-let scenePhase = 0;
 let mounted = false;
 let running = false;
 
@@ -85,8 +163,7 @@ function transform(position, rotation = new THREE.Euler(), scale = new THREE.Vec
 
 function pushSample(position, normal, tone, seed, size) {
   const light = clamp(normal.dot(new THREE.Vector3(0.38, 0.82, 0.42)) * 0.38 + 0.57);
-  const dither = (Math.sin(seed * 91.37) * 0.5 + 0.5) * 0.11 - 0.055;
-  points.push({ position: position.clone(), tone: clamp(tone * (0.72 + light * 0.42) + dither, 0.12, 0.94), seed, size });
+  points.push({ position: position.clone(), tone: clamp(tone * (0.72 + light * 0.42), 0.12, 0.94), seed, size });
 }
 
 function sampleGeometry(geometry, matrix, tone, density = 13, seedOffset = 0) {
@@ -198,14 +275,18 @@ function resize() {
   camera.bottom = -viewHeight / 2;
   camera.updateProjectionMatrix();
   renderer.setSize(width, height, false);
+  const drawingSize = renderer.getDrawingBufferSize(new THREE.Vector2());
+  sceneTarget.setSize(drawingSize.x, drawingSize.y);
 }
 
 function render(time = performance.now()) {
   if (!mounted) return;
-  pointMaterial.uniforms.uTime.value = (time - clockStart) * 0.001;
-  root.rotation.y = -0.18 + Math.sin(time * 0.00019) * 0.035;
-  root.rotation.x = Math.cos(time * 0.00023) * 0.012;
+  ditherMaterial.uniforms.uScene.value = sceneTarget.texture;
+  renderer.setRenderTarget(sceneTarget);
+  renderer.clear();
   renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+  renderer.render(ditherScene, ditherCamera);
   if (running) requestAnimationFrame(render);
 }
 
@@ -222,7 +303,6 @@ function start() {
   mount();
   if (running) return api;
   running = true;
-  clockStart = performance.now();
   requestAnimationFrame(render);
   return api;
 }
@@ -233,15 +313,15 @@ function stop() {
 }
 
 function setOptions(options = {}) {
-  if (typeof options.jitter === 'number') pointMaterial.uniforms.uJitter.value = clamp(options.jitter, 0, 1.6);
+  // Keep the old option name as a compatibility alias for screen dither.
+  if (typeof options.jitter === 'number') ditherMaterial.uniforms.uDitherAmount.value = clamp(options.jitter, 0, 1);
+  if (typeof options.dither === 'number') ditherMaterial.uniforms.uDitherAmount.value = clamp(options.dither, 0, 1);
   if (typeof options.pointSize === 'number') pointMaterial.uniforms.uPointSize.value = clamp(options.pointSize, 0.8, 6);
   return api;
 }
 
 function randomize() {
-  scenePhase += 1;
-  root.rotation.y = -0.18 + (scenePhase % 5 - 2) * 0.065;
-  pointMaterial.uniforms.uPointSize.value = 2.2 + (scenePhase % 3) * 0.24;
+  // Kept as a stable API hook; the scene geometry is intentionally immutable.
   return api;
 }
 
@@ -250,6 +330,8 @@ const api = {
   scene,
   camera,
   renderer,
+  ditherMaterial,
+  sceneTarget,
   mount,
   start,
   stop,

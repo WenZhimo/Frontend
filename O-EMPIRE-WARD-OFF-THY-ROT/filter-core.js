@@ -103,11 +103,10 @@
       for (let x = step / 2; x < width; x += step) {
         const index = (Math.floor(y) * width + Math.floor(x)) * 4;
         const luminance = (pixels[index] + pixels[index + 1] + pixels[index + 2]) / (255 * 3);
-        const radius = (1 - luminance) * step * 0.46 * strength;
-        if (radius < 0.42) continue;
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fill();
+        const rawSize = (1 - luminance) * step * 0.72 * strength;
+        if (rawSize < 0.8) continue;
+        const size = Math.max(1, Math.round(rawSize));
+        ctx.fillRect(Math.round(x - size / 2), Math.round(y - size / 2), size, size);
       }
     }
     ctx.restore();

@@ -266,7 +266,6 @@ input:focus-visible {
 
 .scene-frame {
   --rot: 0.38;
-  --jitter: 0px;
   position: relative;
   aspect-ratio: 16 / 9;
   overflow: hidden;
@@ -313,7 +312,7 @@ input:focus-visible {
   object-fit: cover;
   object-position: center;
   filter: grayscale(79%) contrast(1.18) brightness(0.84) saturate(0.64);
-  transform: translate3d(var(--jitter), 0, 0) scale(1.015);
+  transform: scale(1.015);
   transition: filter 450ms ease, opacity 250ms ease;
 }
 

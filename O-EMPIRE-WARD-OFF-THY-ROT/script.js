@@ -49,8 +49,8 @@ const sourceTabs = [...document.querySelectorAll('[data-source-kind]')];
 const playButton = document.querySelector('[data-action="toggle-play"]');
 const playLabel = document.querySelector('[data-play-label]');
 const meterBars = document.querySelector('#meter-bars');
-const pointJitterRange = document.querySelector('#point-jitter-range');
-const pointJitterOutput = document.querySelector('#point-jitter-output');
+const pointDitherRange = document.querySelector('#point-dither-range');
+const pointDitherOutput = document.querySelector('#point-dither-output');
 const pointNote = document.querySelector('#point-note');
 
 const filter = window.OEmpireFilter.create({
@@ -137,7 +137,7 @@ function showPointField() {
   if (!pointField) {
     return;
   }
-  pointField.mount().start().setOptions({ jitter: Number(pointJitterRange.value) / 100 });
+  pointField.mount().start().setOptions({ dither: Number(pointDitherRange.value) / 100 });
 }
 
 function resizeOverlay() {
@@ -159,8 +159,6 @@ function paintFilmOverlay(time) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, dustWidth, dustHeight);
-  const jitter = Math.sin(time * 0.00055) * 0.42;
-  frame.style.setProperty('--jitter', `${jitter.toFixed(2)}px`);
 
   // Only neutral film dust lives in this overlay. Red is reserved for source
   // pixels that the filter identifies as flower color.
@@ -264,15 +262,15 @@ function updateBloom(value) {
   }
 }
 
-function updatePointJitter(value) {
-  const jitter = Math.max(0, Math.min(100, Number(value)));
-  pointJitterRange.value = String(jitter);
-  pointJitterRange.style.setProperty('--range-fill', `${jitter}%`);
-  pointJitterOutput.textContent = `${String(jitter).padStart(2, '0')}%`;
-  pointField?.setOptions({ jitter: jitter / 100 });
-  if (jitter < 18) pointNote.textContent = 'The point field is nearly still. Geometry remains visible as discrete dots.';
-  else if (jitter < 58) pointNote.textContent = 'Every point is geometry. The camera and points drift independently.';
-  else pointNote.textContent = 'A nervous signal: each point breathes around its real 3D surface.';
+function updatePointDither(value) {
+  const dither = Math.max(0, Math.min(100, Number(value)));
+  pointDitherRange.value = String(dither);
+  pointDitherRange.style.setProperty('--range-fill', `${dither}%`);
+  pointDitherOutput.textContent = `${String(dither).padStart(2, '0')}%`;
+  pointField?.setOptions({ dither: dither / 100 });
+  if (dither < 18) pointNote.textContent = 'Flat tones stay flat. Only the model’s natural square pixels remain.';
+  else if (dither < 58) pointNote.textContent = 'Screen-space dither enriches mid-grey. Near-black and near-white stay quiet.';
+  else pointNote.textContent = 'A stronger plate texture, still locked to the image plane rather than the models.';
 }
 
 function updateMode(mode, announce = true) {
@@ -320,7 +318,7 @@ function usePointField(announce = true) {
   sceneIndex.textContent = '3D';
   signalCode.textContent = 'LIVE / 3D';
   sceneKicker.textContent = 'THE POINT FIELD';
-  sceneDescription.textContent = 'Four low-poly forms, sampled into a breathing monochrome dot matrix.';
+  sceneDescription.textContent = 'Four low-poly forms, sampled into a static square point field with screen-space grey dithering.';
   sourceKind.textContent = '3D / POINT FIELD';
   if (announce) showToast('3D MODELS / DOT FIELD LIVE');
 }
@@ -425,8 +423,8 @@ function resetField() {
 function randomize() {
   if (sourceType === '3d') {
     pointField?.randomize();
-    updatePointJitter(14 + Math.floor(Math.random() * 78));
-    showToast('3D FIELD / CAMERA PHASE SHIFTED');
+    updatePointDither(14 + Math.floor(Math.random() * 78));
+    showToast('3D FIELD / DITHER SETTINGS UPDATED');
     return;
   }
   const next = Math.floor(Math.random() * scenes.length);
@@ -438,18 +436,19 @@ function randomize() {
 }
 
 function exportPng() {
-  filter.render(performance.now());
-  outputCanvas.toBlob((blob) => {
+  const exportCanvas = sourceType === '3d' ? pointCanvas : outputCanvas;
+  if (sourceType !== '3d') filter.render(performance.now());
+  exportCanvas.toBlob((blob) => {
     if (!blob) {
       showToast('EXPORT FAILED');
       return;
     }
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `o-empire-filter-${String(activeScene + 1).padStart(2, '0')}.png`;
+    link.download = `o-empire-${sourceType === '3d' ? 'point-field' : 'filter'}-${String(activeScene + 1).padStart(2, '0')}.png`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 500);
-    showToast('FILTERED PNG EXPORTED');
+    showToast(`${sourceType === '3d' ? 'POINT FIELD' : 'FILTERED'} PNG EXPORTED`);
   }, 'image/png');
 }
 
@@ -478,7 +477,7 @@ sourceTabs.forEach((tab) => {
 });
 
 bloomRange.addEventListener('input', (event) => updateBloom(event.target.value));
-pointJitterRange.addEventListener('input', (event) => updatePointJitter(event.target.value));
+pointDitherRange.addEventListener('input', (event) => updatePointDither(event.target.value));
 fileInput.addEventListener('change', (event) => useFile(event.target.files?.[0]));
 
 ['dragenter', 'dragover'].forEach((eventName) => {
@@ -538,14 +537,14 @@ window.OEmpireFilterPanel = {
     updateSourceChrome('EXTERNAL / IMAGE');
     needsRender = true;
   },
-  getOutputCanvas: () => outputCanvas,
+  getOutputCanvas: () => (sourceType === '3d' ? pointCanvas : outputCanvas),
   usePointField,
   getPointField: () => pointField,
 };
 
 resizeOverlay();
 updateBloom(bloom);
-updatePointJitter(pointJitterRange.value);
+updatePointDither(pointDitherRange.value);
 updateMode('ward', false);
 usePointField(false);
 rafId = requestAnimationFrame(renderLoop);
