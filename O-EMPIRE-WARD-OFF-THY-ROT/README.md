@@ -1,6 +1,6 @@
 # O EMPIRE! — WARD OFF THY ROT
 
-这是一个根据 `C:\Users\LENOVO\Desktop\TODO\image.png`、`image-1.png`、`image-2.png`、`image-3.png` 制作的浏览器滤镜与 3D 点阵演示。输入图像/视频仍可走灰阶花朵提取滤镜；**3D POINT FIELD** 则直接用 Three.js 渲染几个低多边形模型，再把模型表面采样成真实的 WebGL 方形点几何。模型位置和采样结果保持静态，最终画面通过全屏 ordered dithering 在中间灰阶之间重建更多层次。
+这是一个根据 `C:\Users\LENOVO\Desktop\TODO\image.png`、`image-1.png`、`image-2.png`、`image-3.png` 制作的浏览器滤镜与 3D 场景演示。输入图像/视频仍可走灰阶花朵提取滤镜；**3D DITHERED SCENE** 直接用 Three.js 渲染连续的低多边形 Mesh，再把已经栅格化的画面交给全屏 ordered dithering，在中间灰阶之间重建更多层次。
 
 ## 使用
 
@@ -11,7 +11,7 @@
 - **WARD / BLOOM / RAW** 切换三种滤镜通道。
 - 在 **INPUT SOURCE** 中拖入图片或视频；视频会实时逐帧处理。
 - **CANVAS / THREE** 会接入内置 Canvas 演示。Three.js 的 `renderer.domElement` 也是同一种 Canvas 输入。
-- **3D POINT FIELD** 会显示村屋、瞭望塔、石碑、碎石和花簇几个黑白灰低多边形模型。
+- **3D DITHERED SCENE** 会显示村屋、瞭望塔、石碑、碎石和花簇几个黑白灰低多边形模型；模型本身保持实体形状，不由点阵组成。
 - **IMAGE DITHER** 控制最终画面层的方形 ordered dithering。深黑和高亮区域保持稳定，只有中间灰阶参与灰度重建；**RANDOMIZE SIGNAL** 只更新 dither 强度。
 - **PLAY LOOP** 或按空格键自动循环播放；方向键切换画面，`R` 恢复初始状态。
 - **EXPORT FILTERED PNG** 下载当前输出 Canvas。
@@ -30,10 +30,10 @@ window.OEmpireFilterPanel.attachCanvas(renderer.domElement, 'THREE / LIVE');
 // 需要把输出继续接到自己的合成流程时：
 const filteredCanvas = window.OEmpireFilterPanel.getOutputCanvas();
 
-// 直接打开项目内置的 3D 点阵模型：
-window.OEmpireFilterPanel.usePointField();
-const pointField = window.OEmpireFilterPanel.getPointField();
-pointField.setOptions({ dither: 0.72, pointSize: 2.8 });
+// 直接打开项目内置的 3D 实体模型与画面层 dither：
+window.OEmpireFilterPanel.useDitheredScene();
+const ditheredScene = window.OEmpireFilterPanel.getDitheredScene();
+ditheredScene.setOptions({ dither: 0.72 });
 ```
 
 如果不需要这个界面，也可以直接使用 `filter-core.js`：

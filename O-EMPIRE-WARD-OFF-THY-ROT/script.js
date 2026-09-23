@@ -268,9 +268,9 @@ function updatePointDither(value) {
   pointDitherRange.style.setProperty('--range-fill', `${dither}%`);
   pointDitherOutput.textContent = `${String(dither).padStart(2, '0')}%`;
   pointField?.setOptions({ dither: dither / 100 });
-  if (dither < 18) pointNote.textContent = 'Flat tones stay flat. Only the model’s natural square pixels remain.';
-  else if (dither < 58) pointNote.textContent = 'Screen-space dither enriches mid-grey. Near-black and near-white stay quiet.';
-  else pointNote.textContent = 'A stronger plate texture, still locked to the image plane rather than the models.';
+  if (dither < 18) pointNote.textContent = 'Flat tones stay flat. The low-poly model remains a continuous surface.';
+  else if (dither < 58) pointNote.textContent = 'Screen-space dither enriches mid-grey while the model keeps its concrete shape.';
+  else pointNote.textContent = 'A stronger plate texture, still locked to the image plane rather than the model geometry.';
 }
 
 function updateMode(mode, announce = true) {
@@ -314,13 +314,13 @@ function usePointField(announce = true) {
   playButton.setAttribute('aria-pressed', 'true');
   playLabel.textContent = 'PAUSE LOOP';
   playButton.querySelector('.play-glyph').textContent = 'Ⅱ';
-  updateSourceChrome('3D / POINT FIELD');
+  updateSourceChrome('3D / DITHERED SCENE');
   sceneIndex.textContent = '3D';
   signalCode.textContent = 'LIVE / 3D';
-  sceneKicker.textContent = 'THE POINT FIELD';
-  sceneDescription.textContent = 'Four low-poly forms, sampled into a static square point field with screen-space grey dithering.';
-  sourceKind.textContent = '3D / POINT FIELD';
-  if (announce) showToast('3D MODELS / DOT FIELD LIVE');
+  sceneKicker.textContent = 'THE DITHERED SCENE';
+  sceneDescription.textContent = 'Four low-poly forms, rendered as continuous surfaces with screen-space grey dithering.';
+  sourceKind.textContent = '3D / DITHERED SCENE';
+  if (announce) showToast('3D MODELS / DITHERED SCENE LIVE');
 }
 
 function attachCanvasSource(canvas, label = 'CANVAS / THREE') {
@@ -445,10 +445,10 @@ function exportPng() {
     }
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `o-empire-${sourceType === '3d' ? 'point-field' : 'filter'}-${String(activeScene + 1).padStart(2, '0')}.png`;
+    link.download = `o-empire-${sourceType === '3d' ? 'dithered-scene' : 'filter'}-${String(activeScene + 1).padStart(2, '0')}.png`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 500);
-    showToast(`${sourceType === '3d' ? 'POINT FIELD' : 'FILTERED'} PNG EXPORTED`);
+    showToast(`${sourceType === '3d' ? 'DITHERED SCENE' : 'FILTERED'} PNG EXPORTED`);
   }, 'image/png');
 }
 
@@ -538,6 +538,9 @@ window.OEmpireFilterPanel = {
     needsRender = true;
   },
   getOutputCanvas: () => (sourceType === '3d' ? pointCanvas : outputCanvas),
+  useDitheredScene: usePointField,
+  getDitheredScene: () => pointField,
+  // Legacy aliases kept for existing integrations.
   usePointField,
   getPointField: () => pointField,
 };

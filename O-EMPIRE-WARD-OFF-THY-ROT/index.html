@@ -51,7 +51,7 @@
         <div class="scene-column">
           <div class="scene-frame" id="scene-frame">
             <canvas class="scene-image" id="output-canvas" aria-label="Filtered output canvas"></canvas>
-            <canvas class="scene-image point-canvas" id="point-canvas" aria-label="Live 3D point field canvas"></canvas>
+            <canvas class="scene-image point-canvas" id="point-canvas" aria-label="Live 3D dithered scene canvas"></canvas>
             <canvas id="fx-canvas" aria-hidden="true"></canvas>
             <div class="grain-layer" aria-hidden="true"></div>
             <div class="scanline-layer" aria-hidden="true"></div>
@@ -101,7 +101,7 @@
               <button class="source-tab is-active" type="button" data-source-kind="reference">REFERENCE</button>
               <button class="source-tab" type="button" data-source-kind="file">IMAGE / VIDEO</button>
               <button class="source-tab" type="button" data-source-kind="canvas">CANVAS / THREE</button>
-              <button class="source-tab" type="button" data-source-kind="scene3d">3D POINT FIELD</button>
+              <button class="source-tab" type="button" data-source-kind="scene3d">3D DITHERED SCENE</button>
             </div>
             <label class="dropzone" id="dropzone" for="file-input">
               <span class="dropzone-title">DROP IMAGE OR VIDEO</span>
@@ -173,7 +173,7 @@
               <input id="point-dither-range" type="range" min="0" max="100" value="72" />
               <div class="range-labels" aria-hidden="true"><span>FLAT</span><span>GRAINED</span></div>
             </div>
-            <p class="control-note" id="point-note">Screen-space dither enriches mid-grey. Near-black and near-white stay quiet.</p>
+            <p class="control-note" id="point-note">Screen-space dither enriches mid-grey. The model remains a continuous surface.</p>
           </div>
 
           <div class="panel-actions">
