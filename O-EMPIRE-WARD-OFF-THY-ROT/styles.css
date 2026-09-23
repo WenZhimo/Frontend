@@ -330,24 +330,42 @@ input:focus-visible {
   cursor: grabbing;
 }
 
+.scene-frame.is-dithered:not(.is-3d) .point-canvas {
+  cursor: default;
+  touch-action: auto;
+}
+
 .model-switch[hidden],
 .camera-reset[hidden] {
   display: none;
 }
 
-.scene-frame.is-3d #output-canvas {
+.bloom-block[hidden],
+.mode-block[hidden] {
   display: none;
 }
 
-.scene-frame.is-3d #point-canvas {
+.scene-frame.is-dithered #output-canvas {
+  display: none;
+}
+
+.scene-frame.is-dithered #point-canvas {
   display: block;
 }
 
-.scene-frame.is-3d .grain-layer,
-.scene-frame.is-3d .scanline-layer,
-.scene-frame.is-3d .vignette-layer,
-.scene-frame.is-3d #fx-canvas,
-.scene-frame.is-3d::after {
+.scene-frame.is-dithered .grain-layer,
+.scene-frame.is-dithered .scanline-layer,
+.scene-frame.is-dithered .vignette-layer,
+.scene-frame.is-dithered #fx-canvas,
+.scene-frame.is-dithered::after {
+  display: none;
+}
+
+.scene-frame.is-dithered .scene-chrome {
+  display: none;
+}
+
+.scene-frame.is-dithered:not(.is-3d) + .scene-toolbar p {
   display: none;
 }
 
@@ -951,7 +969,7 @@ input[type='range']::-moz-range-thumb {
   margin-top: 8px;
 }
 
-.scene-frame.is-3d .scene-description {
+.scene-frame.is-dithered .scene-description {
   color: rgba(238, 237, 230, 0.9);
 }
 

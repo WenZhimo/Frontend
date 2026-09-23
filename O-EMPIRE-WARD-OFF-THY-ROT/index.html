@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="A tactile CRT / halftone visual study inspired by O EMPIRE! WARD OFF THY ROT."
+      content="A monochrome square-pixel and ordered-dither study inspired by O EMPIRE! WARD OFF THY ROT."
     />
     <title>O EMPIRE! — Ward Off Thy Rot</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -111,7 +111,7 @@
             <button class="source-button" type="button" data-action="use-demo-canvas">
               <span>USE DEMO CANVAS SOURCE</span><span>↗</span>
             </button>
-            <p class="source-help">A Three.js renderer is already a canvas. Pass <code>renderer.domElement</code> to the public API.</p>
+            <p class="source-help">Images, video and canvas inputs all use the monochrome pixel and dither pass. Pass <code>renderer.domElement</code> to connect Three.js.</p>
           </div>
 
           <div class="control-block field-block">
@@ -165,7 +165,7 @@
           </div>
 
           <div class="control-block point-block">
-            <div class="block-heading"><span>3D MODEL</span><span class="block-count">MONOCHROME</span></div>
+            <div class="block-heading"><span>PIXEL SOURCE</span><span class="block-count">MONOCHROME</span></div>
             <div class="model-switch" role="group" aria-label="3D model" hidden>
               <button class="model-button is-active" type="button" data-model-scene="bridge" aria-pressed="true">BRIDGE</button>
               <button class="model-button" type="button" data-model-scene="map" aria-pressed="false">SETTLEMENT</button>
@@ -179,7 +179,7 @@
               <input id="point-dither-range" type="range" min="0" max="100" value="72" />
               <div class="range-labels" aria-hidden="true"><span>FLAT</span><span>GRAINED</span></div>
             </div>
-            <p class="control-note" id="point-note">Mapped source pixels resolve into square monochrome cells before screen-space dithering.</p>
+            <p class="control-note" id="point-note">Model and media pixels resolve into square monochrome cells before screen-space dithering.</p>
             <div class="block-heading pixel-size-heading">
               <label for="point-pixel-range">PIXEL SIZE</label>
               <output id="point-pixel-output" for="point-pixel-range">06 PX</output>

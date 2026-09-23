@@ -57,6 +57,8 @@ const pointPixelOutput = document.querySelector('#point-pixel-output');
 const modelButtons = [...document.querySelectorAll('[data-model-scene]')];
 const modelSwitch = document.querySelector('.model-switch');
 const cameraReset = document.querySelector('[data-action="reset-camera"]');
+const bloomBlock = document.querySelector('.bloom-block');
+const modeBlock = document.querySelector('.mode-block');
 
 const filter = window.OEmpireFilter.create({
   canvas: outputCanvas,
@@ -88,6 +90,12 @@ let dustWidth = 0;
 let dustHeight = 0;
 let demoFrame = 0;
 let pointField = window.OEmpirePointField || null;
+let sourceContinuous = false;
+let isDemoCanvasSource = false;
+
+function usesDitherPass() {
+  return sourceType === '3d' || sourceType === 'file-image' || sourceType === 'video' || sourceType === 'canvas' || sourceType === 'external-image';
+}
 
 const random = (min, max) => Math.random() * (max - min) + min;
 
@@ -127,11 +135,15 @@ function updateSourceChrome(label) {
 }
 
 function showFilteredCanvas() {
-  frame.classList.remove('is-3d');
+  frame.classList.remove('is-3d', 'is-dithered');
   modelSwitch.hidden = true;
   cameraReset.hidden = true;
+  bloomBlock.hidden = false;
+  modeBlock.hidden = false;
   modelButtons.forEach((button) => { button.disabled = true; });
   pointField?.stop();
+  pointField?.setInputSource(null);
+  sourceContinuous = false;
   if (sourceType !== 'video') {
     playing = false;
     playButton.setAttribute('aria-pressed', 'false');
@@ -141,17 +153,43 @@ function showFilteredCanvas() {
 }
 
 function showPointField() {
-  frame.classList.add('is-3d');
+  frame.classList.add('is-3d', 'is-dithered');
   modelSwitch.hidden = false;
   cameraReset.hidden = false;
+  bloomBlock.hidden = true;
+  modeBlock.hidden = true;
   modelButtons.forEach((button) => { button.disabled = false; });
   if (!pointField) {
     return;
   }
-  pointField.mount().start().setOptions({
+  pointField.mount().setOptions({
     dither: Number(pointDitherRange.value) / 100,
     pixelSize: Number(pointPixelRange.value),
   });
+  pointField.setInputSource(null).start();
+}
+
+function showDitheredInput(continuous = false) {
+  sourceContinuous = continuous;
+  frame.classList.remove('is-3d');
+  frame.classList.add('is-dithered');
+  modelSwitch.hidden = true;
+  cameraReset.hidden = true;
+  bloomBlock.hidden = true;
+  modeBlock.hidden = true;
+  modelButtons.forEach((button) => { button.disabled = true; });
+  sceneKicker.textContent = sourceType === 'video' ? 'VIDEO INPUT' : sourceType === 'canvas' ? 'CANVAS INPUT' : 'IMAGE INPUT';
+  sceneDescription.textContent = 'Each source cell is mapped to monochrome square pixels, then ordered dither rebuilds the middle grey tones.';
+  sceneIndex.textContent = 'IN';
+  signalCode.textContent = 'PIXEL / IN';
+  pointField?.stop();
+  if (!pointField) return;
+  pointField.mount().setOptions({
+    dither: Number(pointDitherRange.value) / 100,
+    pixelSize: Number(pointPixelRange.value),
+  });
+  pointField.setInputSource(activeSource);
+  if (continuous) pointField.start();
 }
 
 function resizeOverlay() {
@@ -247,12 +285,12 @@ function drawCanvasFlower(ctx, x, y, size) {
 function renderLoop(time) {
   const elapsed = time - lastFrame;
   lastFrame = time;
-  if (sourceType === 'canvas' && playing) drawDemoCanvas(time);
-  if (sourceType !== '3d' && (sourceType === 'video' || sourceType === 'canvas' || needsRender || elapsed > 1000)) {
+  if (sourceType === 'canvas' && playing && isDemoCanvasSource) drawDemoCanvas(time);
+  if (!usesDitherPass() && (sourceType === 'video' || sourceType === 'canvas' || needsRender || elapsed > 1000)) {
     filter.render(time);
     needsRender = false;
   }
-  if (sourceType !== '3d') paintFilmOverlay(time);
+  if (!usesDitherPass()) paintFilmOverlay(time);
   rafId = requestAnimationFrame(renderLoop);
 }
 
@@ -331,6 +369,9 @@ async function useReference(index, announce = true) {
 
 function usePointField(announce = true) {
   sourceType = '3d';
+  activeSource = null;
+  sourceContinuous = true;
+  isDemoCanvasSource = false;
   showPointField();
   playing = true;
   playButton.setAttribute('aria-pressed', 'true');
@@ -354,7 +395,7 @@ function updateModelScene(sceneName) {
   sceneKicker.textContent = sceneName === 'bridge' ? 'THE BRIDGE' : 'THE SETTLEMENT';
   sceneDescription.textContent = sceneName === 'bridge'
     ? 'A continuous stone crossing with three open arches, suspended above the abyss.'
-    : 'The original low-poly settlement, rendered as solid monochrome forms.';
+    : 'A snowfield village cut into a ridge: timber cottages, a chapel, watchtower, lane and dark pines.';
 }
 
 function attachCanvasSource(canvas, label = 'CANVAS / THREE') {
@@ -364,8 +405,8 @@ function attachCanvasSource(canvas, label = 'CANVAS / THREE') {
   }
   activeSource = canvas;
   sourceType = 'canvas';
-  showFilteredCanvas();
-  filter.setSource(canvas);
+  isDemoCanvasSource = canvas === demoCanvas;
+  showDitheredInput(true);
   updateSourceChrome(label);
   playing = true;
   playButton.setAttribute('aria-pressed', 'true');
@@ -377,6 +418,7 @@ function attachCanvasSource(canvas, label = 'CANVAS / THREE') {
 
 async function useFile(file) {
   if (!file) return;
+  if (sourceType === 'video') videoSource.pause();
   if (sourceFileUrl) URL.revokeObjectURL(sourceFileUrl);
   sourceFileUrl = URL.createObjectURL(file);
   fileName.textContent = file.name;
@@ -385,29 +427,35 @@ async function useFile(file) {
     const image = await loadImage(sourceFileUrl);
     activeSource = image;
     sourceType = 'file-image';
-    showFilteredCanvas();
-    filter.setSource(image);
+    isDemoCanvasSource = false;
+    playing = false;
+    playButton.setAttribute('aria-pressed', 'false');
+    playLabel.textContent = 'PLAY LOOP';
+    playButton.querySelector('.play-glyph').textContent = '▶';
+    showDitheredInput(false);
     updateSourceChrome('FILE / IMAGE');
     needsRender = true;
-    showToast('IMAGE SOURCE / FILTERED');
+    showToast('IMAGE SOURCE / SQUARE PIXEL DITHER');
     return;
   }
 
   if (file.type.startsWith('video/')) {
     videoSource.src = sourceFileUrl;
     videoSource.load();
-    await videoSource.play().catch(() => {});
     activeSource = videoSource;
     sourceType = 'video';
-    showFilteredCanvas();
-    filter.setSource(videoSource);
+    isDemoCanvasSource = false;
+    showDitheredInput(true);
     updateSourceChrome('FILE / VIDEO');
     playing = true;
     playButton.setAttribute('aria-pressed', 'true');
     playLabel.textContent = 'PAUSE LOOP';
     playButton.querySelector('.play-glyph').textContent = 'Ⅱ';
     needsRender = true;
-    showToast('VIDEO SOURCE / LIVE FILTER');
+    showToast('VIDEO SOURCE / LIVE PIXEL DITHER');
+    videoSource.play().catch(() => {
+      if (activeSource === videoSource) showToast('VIDEO READY / PRESS PLAY IF NEEDED');
+    });
     return;
   }
 
@@ -427,6 +475,10 @@ function togglePlay(force) {
   if (sourceType === '3d') {
     if (playing) pointField?.start();
     else pointField?.stop();
+  }
+  if (usesDitherPass() && sourceType !== '3d') {
+    if (playing && sourceContinuous) pointField?.start();
+    if (!playing) pointField?.stop();
   }
 
   playButton.setAttribute('aria-pressed', String(playing));
@@ -470,8 +522,8 @@ function randomize() {
 }
 
 function exportPng() {
-  const exportCanvas = sourceType === '3d' ? pointCanvas : outputCanvas;
-  if (sourceType !== '3d') filter.render(performance.now());
+  const exportCanvas = usesDitherPass() ? pointCanvas : outputCanvas;
+  if (!usesDitherPass()) filter.render(performance.now());
   exportCanvas.toBlob((blob) => {
     if (!blob) {
       showToast('EXPORT FAILED');
@@ -481,11 +533,13 @@ function exportPng() {
     link.href = URL.createObjectURL(blob);
     const exportName = sourceType === '3d'
       ? `dithered-${pointField?.getActiveScene?.() || 'scene'}`
-      : `filter-${String(activeScene + 1).padStart(2, '0')}`;
+      : sourceType === 'reference'
+        ? `filter-${String(activeScene + 1).padStart(2, '0')}`
+        : `dithered-${sourceType.replace(/[^a-z0-9-]/gi, '-')}`;
     link.download = `o-empire-${exportName}.png`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 500);
-    showToast(`${sourceType === '3d' ? 'DITHERED SCENE' : 'FILTERED'} PNG EXPORTED`);
+    showToast(`${usesDitherPass() ? 'SQUARE PIXEL' : 'FILTERED'} PNG EXPORTED`);
   }, 'image/png');
 }
 
@@ -568,6 +622,7 @@ window.addEventListener('resize', resizeOverlay);
 window.addEventListener('o-empire-point-field-ready', (event) => {
   pointField = event.detail;
   if (sourceType === '3d') showPointField();
+  else if (usesDitherPass()) showDitheredInput(sourceContinuous);
 });
 
 // Public bridge for a Three.js renderer or another canvas on the host page.
@@ -575,12 +630,14 @@ window.OEmpireFilterPanel = {
   attachCanvas: (canvas, label = 'CANVAS / THREE') => attachCanvasSource(canvas, label),
   attachImage: (image) => {
     activeSource = image;
-    sourceType = 'file-image';
-    filter.setSource(image);
+    sourceType = 'external-image';
+    isDemoCanvasSource = false;
+    playing = false;
+    showDitheredInput(false);
     updateSourceChrome('EXTERNAL / IMAGE');
     needsRender = true;
   },
-  getOutputCanvas: () => (sourceType === '3d' ? pointCanvas : outputCanvas),
+  getOutputCanvas: () => (usesDitherPass() ? pointCanvas : outputCanvas),
   useDitheredScene: usePointField,
   getDitheredScene: () => pointField,
   // Legacy aliases kept for existing integrations.
