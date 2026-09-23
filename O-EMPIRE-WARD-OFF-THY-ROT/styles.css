@@ -321,6 +321,18 @@ input:focus-visible {
   filter: none !important;
   opacity: 1;
   transform: none;
+  touch-action: none;
+  cursor: grab;
+}
+
+.point-canvas.is-orbiting,
+.point-canvas.is-panning {
+  cursor: grabbing;
+}
+
+.model-switch[hidden],
+.camera-reset[hidden] {
+  display: none;
 }
 
 .scene-frame.is-3d #output-canvas {
@@ -487,6 +499,23 @@ input:focus-visible {
 
 .scene-toolbar p {
   margin: 0;
+}
+
+.scene-toolbar .camera-help {
+  display: none;
+}
+
+.scene-frame.is-3d .scene-chrome {
+  display: none;
+}
+
+.scene-frame.is-3d + .scene-toolbar p:not(.camera-help) {
+  display: none;
+}
+
+.scene-frame.is-3d + .scene-toolbar .camera-help {
+  display: block;
+  color: var(--muted-strong);
 }
 
 .keycap {
@@ -885,6 +914,41 @@ input[type='range']::-moz-range-thumb {
 .model-button:disabled {
   cursor: default;
   opacity: 0.38;
+}
+
+.camera-reset {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 7px;
+  padding: 9px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-align: left;
+}
+
+.camera-reset:hover {
+  color: var(--paper);
+}
+
+.camera-reset span:last-child {
+  color: var(--red);
+  font-size: 14px;
+}
+
+.pixel-size-heading {
+  margin-top: 20px;
+}
+
+.pixel-size-range {
+  margin-top: 8px;
 }
 
 .scene-frame.is-3d .scene-description {

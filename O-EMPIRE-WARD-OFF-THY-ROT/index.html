@@ -62,7 +62,6 @@
               <span>FIELD / <b id="scene-index">03</b></span>
               <span class="scene-coordinates">42° 18' N · 17° 04' W</span>
             </div>
-
             <div class="scene-chrome scene-chrome-bottom">
               <div>
                 <p class="eyebrow" id="scene-kicker">THE SETTLEMENT</p>
@@ -79,6 +78,7 @@
             <p><span class="keycap">←</span><span class="keycap">→</span> cycle field</p>
             <p><span class="keycap">space</span> toggle loop</p>
             <p><span class="keycap">R</span> restore ward</p>
+            <p class="camera-help">Drag to orbit · scroll to zoom · shift/right drag to pan</p>
           </div>
         </div>
 
@@ -170,6 +170,7 @@
               <button class="model-button is-active" type="button" data-model-scene="bridge" aria-pressed="true">BRIDGE</button>
               <button class="model-button" type="button" data-model-scene="map" aria-pressed="false">SETTLEMENT</button>
             </div>
+            <button class="camera-reset" type="button" data-action="reset-camera" hidden><span>RESET CAMERA</span><span>↺</span></button>
             <div class="block-heading">
               <label for="point-dither-range">IMAGE DITHER</label>
               <output id="point-dither-output" for="point-dither-range">72%</output>
@@ -178,7 +179,15 @@
               <input id="point-dither-range" type="range" min="0" max="100" value="72" />
               <div class="range-labels" aria-hidden="true"><span>FLAT</span><span>GRAINED</span></div>
             </div>
-            <p class="control-note" id="point-note">Screen-space dither enriches mid-grey. The model remains a continuous surface.</p>
+            <p class="control-note" id="point-note">Mapped source pixels resolve into square monochrome cells before screen-space dithering.</p>
+            <div class="block-heading pixel-size-heading">
+              <label for="point-pixel-range">PIXEL SIZE</label>
+              <output id="point-pixel-output" for="point-pixel-range">06 PX</output>
+            </div>
+            <div class="range-wrap pixel-size-range">
+              <input id="point-pixel-range" type="range" min="2" max="12" value="6" />
+              <div class="range-labels" aria-hidden="true"><span>FINE</span><span>COARSE</span></div>
+            </div>
           </div>
 
           <div class="panel-actions">

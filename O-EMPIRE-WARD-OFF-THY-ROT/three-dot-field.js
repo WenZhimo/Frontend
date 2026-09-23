@@ -14,7 +14,7 @@ const screenVertexShader = `
 const screenFragmentShader = `
   uniform sampler2D uScene;
   uniform float uDitherAmount;
-  uniform float uDitherScale;
+  uniform vec2 uSceneResolution;
   varying vec2 vUv;
 
   float bayer4(vec2 pixel) {
@@ -40,30 +40,34 @@ const screenFragmentShader = `
   }
 
   void main() {
-    vec4 source = texture2D(uScene, vUv);
+    // Resolve one source sample per output block. The low-resolution target
+    // and nearest-neighbour sampling make the scene itself pixel art before
+    // its monochrome tone is reconstructed.
+    vec2 sourcePixel = floor(vUv * uSceneResolution);
+    vec2 sourceUv = (sourcePixel + 0.5) / uSceneResolution;
+    vec4 source = texture2D(uScene, sourceUv);
     if (source.a < 0.02) discard;
 
-    // The render target stores the mesh color with coverage in RGB. Recover
-    // the plate tone before dithering so antialiased mesh edges stay edges.
     vec3 plateColor = source.rgb / max(source.a, 0.0001);
     float luminance = clamp(dot(plateColor, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
-    float darkLock = 1.0 - smoothstep(0.08, 0.22, luminance);
-    float lightLock = smoothstep(0.78, 0.92, luminance);
+    // Expand the model's material range across a compact five-step stone
+    // palette instead of leaving most Lambert-lit surfaces in one dark band.
+    float mappedTone = clamp((luminance - 0.14) / 0.22, 0.0, 1.0);
+    float darkLock = 1.0 - step(0.155, luminance);
+    float lightLock = step(0.35, luminance);
     float midtone = (1.0 - darkLock) * (1.0 - lightLock);
     float levels = 4.0;
-    float quantized = luminance * levels;
+    float quantized = mappedTone * levels;
     float lower = floor(quantized) / levels;
     float fraction = fract(quantized);
-    // Use square screen cells. The pattern is deterministic: no point or
-    // model moves, and only middle tones are reconstructed between levels.
-    vec2 ditherPixel = floor(gl_FragCoord.xy / max(uDitherScale, 1.0));
-    float threshold = (bayer4(ditherPixel) + 0.5) / 16.0;
-    float stepToUpper = step(threshold, fraction);
-    float dithered = lower + stepToUpper * (1.0 / levels);
-    float value = mix(luminance, dithered, uDitherAmount * midtone);
+    vec2 ditherPixel = mod(sourcePixel, 4.0);
+    float orderedThreshold = (bayer4(ditherPixel) + 0.5) / 16.0;
+    float threshold = mix(0.5, orderedThreshold, uDitherAmount * midtone);
+    float toneStep = step(threshold, fraction);
+    float value = lower + toneStep * (1.0 / levels);
     value = mix(value, 0.055, darkLock);
     value = mix(value, 0.95, lightLock);
-    gl_FragColor = vec4(vec3(value), source.a);
+    gl_FragColor = vec4(vec3(value), 1.0);
   }
 `;
 
@@ -72,7 +76,7 @@ const ditherMaterial = new THREE.ShaderMaterial({
   uniforms: {
     uScene: { value: null },
     uDitherAmount: { value: 0.86 },
-    uDitherScale: { value: 2 },
+    uSceneResolution: { value: new THREE.Vector2(1, 1) },
   },
   vertexShader: screenVertexShader,
   fragmentShader: screenFragmentShader,
@@ -102,7 +106,7 @@ const ditherScene = new THREE.Scene();
 const ditherCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const ditherQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), ditherMaterial);
 ditherScene.add(ditherQuad);
-const sceneTarget = new THREE.WebGLRenderTarget(960, 540, {
+const sceneTarget = new THREE.WebGLRenderTarget(192, 108, {
   minFilter: THREE.NearestFilter,
   magFilter: THREE.NearestFilter,
   format: THREE.RGBAFormat,
@@ -111,8 +115,13 @@ const sceneTarget = new THREE.WebGLRenderTarget(960, 540, {
   stencilBuffer: false,
 });
 const camera = new THREE.OrthographicCamera(-8, 8, 5, -5, 0.1, 100);
-camera.position.set(8.4, 6.8, 10.5);
-camera.lookAt(0, 1.05, 0);
+const cameraTarget = new THREE.Vector3(0, 1.55, 0);
+const cameraDefaults = { theta: 0.35, phi: 1.3, distance: 18, zoom: 1 };
+let cameraTheta = cameraDefaults.theta;
+let cameraPhi = cameraDefaults.phi;
+let cameraDistance = cameraDefaults.distance;
+let cameraZoom = cameraDefaults.zoom;
+let pixelSize = 6;
 
 const root = new THREE.Group();
 root.rotation.y = -0.18;
@@ -125,6 +134,19 @@ let activeModelCollection = mapModels;
 let activeModel = 'bridge';
 let mounted = false;
 let running = false;
+let frameRequest = 0;
+
+function positionCamera() {
+  const sinPhi = Math.sin(cameraPhi);
+  camera.position.set(
+    cameraTarget.x + cameraDistance * sinPhi * Math.sin(cameraTheta),
+    cameraTarget.y + cameraDistance * Math.cos(cameraPhi),
+    cameraTarget.z + cameraDistance * sinPhi * Math.cos(cameraTheta),
+  );
+  camera.zoom = cameraZoom;
+  camera.lookAt(cameraTarget);
+  camera.updateProjectionMatrix();
+}
 
 function transform(position, rotation = new THREE.Euler(), scale = new THREE.Vector3(1, 1, 1)) {
   return new THREE.Matrix4().compose(position, new THREE.Quaternion().setFromEuler(rotation), scale);
@@ -177,61 +199,63 @@ function buildPointField() {
     addPrimitive(new THREE.IcosahedronGeometry(0.13, 1), transform(new THREE.Vector3(x, y + 0.8, z)), 0.48);
   });
 
-  // A large bridge study inspired by image-3: the side walls are one
-  // continuous extruded profile, with real arch openings cut into the mesh.
+  // A masonry bridge over a void: paired spandrel walls have three full
+  // semicircular openings; there is deliberately no ground beneath them.
   activeModelCollection = bridgeModels;
-  addPrimitive(new THREE.PlaneGeometry(15.5, 11.5, 18, 14), transform(new THREE.Vector3(0, 0, 0), new THREE.Euler(-Math.PI / 2, 0, 0)), 0.48);
-  const bridgeZ = 0.95;
-  const bridgeY = 2.45;
-  const bridgeLength = 11.8;
-  const bridgeWidth = 2.35;
-  const archCenters = [-3.55, 0, 3.55];
-  const archRadius = 1.2;
-  const archSpring = 1.22;
+  const bridgeZ = 0.15;
+  const bridgeY = 2.58;
+  const bridgeLength = 12.4;
+  const bridgeWidth = 3.1;
+  const wallThickness = 0.3;
+  const archCenters = [-3.7, 0, 3.7];
+  const archRadius = 1.28;
+  const archSpring = 1.18;
+  const wallBottom = 0.18;
+  const wallTop = 2.42;
   const archWallShape = new THREE.Shape();
-  archWallShape.moveTo(-bridgeLength / 2, 0.28);
-  archWallShape.lineTo(bridgeLength / 2, 0.28);
-  archWallShape.lineTo(bridgeLength / 2, 2.28);
-  archWallShape.lineTo(-bridgeLength / 2, 2.28);
+  archWallShape.moveTo(-bridgeLength / 2, wallBottom);
+  archWallShape.lineTo(bridgeLength / 2, wallBottom);
+  archWallShape.lineTo(bridgeLength / 2, wallTop);
+  archWallShape.lineTo(-bridgeLength / 2, wallTop);
   archWallShape.closePath();
   archCenters.forEach((center) => {
     const opening = new THREE.Path();
-    opening.moveTo(center - archRadius, 0.28);
+    opening.moveTo(center - archRadius, wallBottom);
     opening.lineTo(center - archRadius, archSpring);
     opening.absarc(center, archSpring, archRadius, Math.PI, 0, true);
-    opening.lineTo(center + archRadius, 0.28);
+    opening.lineTo(center + archRadius, wallBottom);
     opening.closePath();
     archWallShape.holes.push(opening);
   });
   const archWallGeometry = new THREE.ExtrudeGeometry(archWallShape, {
-    depth: 0.18,
+    depth: wallThickness,
     bevelEnabled: false,
-    curveSegments: 12,
+    curveSegments: 16,
     steps: 1,
   });
-  archWallGeometry.translate(0, 0, -0.09);
+  archWallGeometry.translate(0, 0, -wallThickness / 2);
   [-1, 1].forEach((side) => {
+    const sideZ = bridgeZ + side * (bridgeWidth / 2 - wallThickness / 2);
     addPrimitive(
       archWallGeometry.clone(),
-      transform(new THREE.Vector3(0, 0, bridgeZ + side * (bridgeWidth / 2 - 0.09))),
-      0.34,
+      transform(new THREE.Vector3(0, 0, sideZ)),
+      0.38,
     );
-  });
-  addPrimitive(new THREE.BoxGeometry(12.4, 0.52, bridgeWidth), transform(new THREE.Vector3(0, bridgeY, bridgeZ)), 0.38);
-  addPrimitive(new THREE.BoxGeometry(12.6, 0.24, 0.2), transform(new THREE.Vector3(0, bridgeY + 0.38, bridgeZ - (bridgeWidth / 2 - 0.2))), 0.62);
-  addPrimitive(new THREE.BoxGeometry(12.6, 0.24, 0.2), transform(new THREE.Vector3(0, bridgeY + 0.38, bridgeZ + (bridgeWidth / 2 - 0.2))), 0.62);
-
-  [-5.95, 5.95].forEach((x) => {
-    addPrimitive(new THREE.BoxGeometry(0.86, 2.75, 2.78), transform(new THREE.Vector3(x, 1.48, bridgeZ)), 0.24);
-    addPrimitive(new THREE.ConeGeometry(0.74, 0.6, 4), transform(new THREE.Vector3(x, 3.16, bridgeZ), new THREE.Euler(0, Math.PI / 4, 0)), 0.2);
-  });
-
-  for (let x = -5.1; x <= 5.1; x += 1.3) {
-    [-1, 1].forEach((side) => {
-      addPrimitive(new THREE.BoxGeometry(0.16, 0.82, 0.16), transform(new THREE.Vector3(x, bridgeY + 0.7, bridgeZ + side * (bridgeWidth / 2 - 0.2))), 0.52);
+    archCenters.forEach((center) => {
+      addPrimitive(
+        new THREE.TorusGeometry(archRadius, 0.13, 5, 18, Math.PI),
+        transform(new THREE.Vector3(center, archSpring, sideZ + side * (wallThickness / 2 + 0.025))),
+        0.52,
+      );
     });
-  }
-
+  });
+  addPrimitive(new THREE.BoxGeometry(bridgeLength + 0.7, 0.5, bridgeWidth), transform(new THREE.Vector3(0, bridgeY, bridgeZ)), 0.42);
+  const parapetCenterY = bridgeY + 0.4;
+  [-1, 1].forEach((side) => {
+    const sideZ = bridgeZ + side * (bridgeWidth / 2 - 0.2);
+    addPrimitive(new THREE.BoxGeometry(bridgeLength + 0.8, 0.55, 0.24), transform(new THREE.Vector3(0, parapetCenterY, sideZ)), 0.36);
+    addPrimitive(new THREE.BoxGeometry(bridgeLength + 0.94, 0.15, 0.34), transform(new THREE.Vector3(0, parapetCenterY + 0.35, sideZ)), 0.56);
+  });
 }
 
 function resize() {
@@ -243,13 +267,19 @@ function resize() {
   camera.right = (viewHeight * aspect) / 2;
   camera.top = viewHeight / 2;
   camera.bottom = -viewHeight / 2;
-  camera.updateProjectionMatrix();
+  positionCamera();
   renderer.setSize(width, height, false);
   const drawingSize = renderer.getDrawingBufferSize(new THREE.Vector2());
-  sceneTarget.setSize(drawingSize.x, drawingSize.y);
+  const pixelPitch = pixelSize * renderer.getPixelRatio();
+  sceneTarget.setSize(
+    Math.max(1, Math.round(drawingSize.x / pixelPitch)),
+    Math.max(1, Math.round(drawingSize.y / pixelPitch)),
+  );
+  ditherMaterial.uniforms.uSceneResolution.value.set(sceneTarget.width, sceneTarget.height);
+  if (mounted) render();
 }
 
-function render(time = performance.now()) {
+function render() {
   if (!mounted) return;
   ditherMaterial.uniforms.uScene.value = sceneTarget.texture;
   renderer.setRenderTarget(sceneTarget);
@@ -257,7 +287,12 @@ function render(time = performance.now()) {
   renderer.render(scene, camera);
   renderer.setRenderTarget(null);
   renderer.render(ditherScene, ditherCamera);
-  if (running) requestAnimationFrame(render);
+}
+
+function animate() {
+  if (!running) return;
+  render();
+  frameRequest = requestAnimationFrame(animate);
 }
 
 function mount() {
@@ -274,12 +309,13 @@ function start() {
   mount();
   if (running) return api;
   running = true;
-  requestAnimationFrame(render);
+  frameRequest = requestAnimationFrame(animate);
   return api;
 }
 
 function stop() {
   running = false;
+  cancelAnimationFrame(frameRequest);
   return api;
 }
 
@@ -287,6 +323,10 @@ function setOptions(options = {}) {
   // Keep the old option name as a compatibility alias for screen dither.
   if (typeof options.jitter === 'number') ditherMaterial.uniforms.uDitherAmount.value = clamp(options.jitter, 0, 1);
   if (typeof options.dither === 'number') ditherMaterial.uniforms.uDitherAmount.value = clamp(options.dither, 0, 1);
+  if (typeof options.pixelSize === 'number') {
+    pixelSize = clamp(options.pixelSize, 2, 12);
+    resize();
+  }
   return api;
 }
 
@@ -305,6 +345,61 @@ function setScene(sceneName) {
   return api;
 }
 
+function resetCamera() {
+  cameraTarget.set(0, 1.55, 0);
+  cameraTheta = cameraDefaults.theta;
+  cameraPhi = cameraDefaults.phi;
+  cameraDistance = cameraDefaults.distance;
+  cameraZoom = cameraDefaults.zoom;
+  positionCamera();
+  render();
+  return api;
+}
+
+let pointerState = null;
+canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+canvas.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0 && event.button !== 2) return;
+  pointerState = { x: event.clientX, y: event.clientY, action: event.button === 2 || event.shiftKey ? 'pan' : 'orbit' };
+  canvas.setPointerCapture(event.pointerId);
+  canvas.classList.add(pointerState.action === 'pan' ? 'is-panning' : 'is-orbiting');
+});
+canvas.addEventListener('pointermove', (event) => {
+  if (!pointerState) return;
+  const dx = event.clientX - pointerState.x;
+  const dy = event.clientY - pointerState.y;
+  pointerState.x = event.clientX;
+  pointerState.y = event.clientY;
+  if (pointerState.action === 'orbit') {
+    cameraTheta -= dx * 0.008;
+    cameraPhi = clamp(cameraPhi + dy * 0.008, 0.12, Math.PI - 0.12);
+    positionCamera();
+  } else {
+    const rect = canvas.getBoundingClientRect();
+    const unitsPerPixel = 7.8 / Math.max(1, rect.height * cameraZoom);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+    cameraTarget.addScaledVector(right, -dx * unitsPerPixel);
+    cameraTarget.addScaledVector(up, dy * unitsPerPixel);
+    positionCamera();
+  }
+  render();
+});
+const endPointerGesture = (event) => {
+  if (!pointerState) return;
+  pointerState = null;
+  canvas.classList.remove('is-panning', 'is-orbiting');
+  if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+};
+canvas.addEventListener('pointerup', endPointerGesture);
+canvas.addEventListener('pointercancel', endPointerGesture);
+canvas.addEventListener('wheel', (event) => {
+  event.preventDefault();
+  cameraZoom = clamp(cameraZoom * Math.exp(-event.deltaY * 0.001), 0.55, 3.5);
+  positionCamera();
+  render();
+}, { passive: false });
+
 const api = {
   canvas,
   scene,
@@ -318,9 +413,11 @@ const api = {
   resize,
   setOptions,
   setScene,
+  resetCamera,
   randomize,
   getModelCount: () => solidMeshes.length,
   getActiveScene: () => activeModel,
+  getPixelSize: () => pixelSize,
 };
 
 window.OEmpirePointField = api;

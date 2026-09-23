@@ -52,8 +52,11 @@ const meterBars = document.querySelector('#meter-bars');
 const pointDitherRange = document.querySelector('#point-dither-range');
 const pointDitherOutput = document.querySelector('#point-dither-output');
 const pointNote = document.querySelector('#point-note');
+const pointPixelRange = document.querySelector('#point-pixel-range');
+const pointPixelOutput = document.querySelector('#point-pixel-output');
 const modelButtons = [...document.querySelectorAll('[data-model-scene]')];
 const modelSwitch = document.querySelector('.model-switch');
+const cameraReset = document.querySelector('[data-action="reset-camera"]');
 
 const filter = window.OEmpireFilter.create({
   canvas: outputCanvas,
@@ -126,6 +129,7 @@ function updateSourceChrome(label) {
 function showFilteredCanvas() {
   frame.classList.remove('is-3d');
   modelSwitch.hidden = true;
+  cameraReset.hidden = true;
   modelButtons.forEach((button) => { button.disabled = true; });
   pointField?.stop();
   if (sourceType !== 'video') {
@@ -139,11 +143,15 @@ function showFilteredCanvas() {
 function showPointField() {
   frame.classList.add('is-3d');
   modelSwitch.hidden = false;
+  cameraReset.hidden = false;
   modelButtons.forEach((button) => { button.disabled = false; });
   if (!pointField) {
     return;
   }
-  pointField.mount().start().setOptions({ dither: Number(pointDitherRange.value) / 100 });
+  pointField.mount().start().setOptions({
+    dither: Number(pointDitherRange.value) / 100,
+    pixelSize: Number(pointPixelRange.value),
+  });
 }
 
 function resizeOverlay() {
@@ -274,9 +282,17 @@ function updatePointDither(value) {
   pointDitherRange.style.setProperty('--range-fill', `${dither}%`);
   pointDitherOutput.textContent = `${String(dither).padStart(2, '0')}%`;
   pointField?.setOptions({ dither: dither / 100 });
-  if (dither < 18) pointNote.textContent = 'Flat tones stay flat. The low-poly model remains a continuous surface.';
-  else if (dither < 58) pointNote.textContent = 'Screen-space dither enriches mid-grey while the model keeps its concrete shape.';
-  else pointNote.textContent = 'A stronger plate texture, still locked to the image plane rather than the model geometry.';
+  if (dither < 18) pointNote.textContent = 'Mapped square pixels use steady grey steps with almost no ordered dithering.';
+  else if (dither < 58) pointNote.textContent = 'Ordered dithering reconstructs mid-grey from the mapped square pixels.';
+  else pointNote.textContent = 'High contrast pixels stay stable while mid-grey breaks into the square Bayer pattern.';
+}
+
+function updatePointPixelSize(value) {
+  const pixelSize = Math.max(2, Math.min(12, Number(value)));
+  pointPixelRange.value = String(pixelSize);
+  pointPixelRange.style.setProperty('--range-fill', `${((pixelSize - 2) / 10) * 100}%`);
+  pointPixelOutput.textContent = `${String(pixelSize).padStart(2, '0')} PX`;
+  pointField?.setOptions({ pixelSize });
 }
 
 function updateMode(mode, announce = true) {
@@ -337,7 +353,7 @@ function updateModelScene(sceneName) {
   });
   sceneKicker.textContent = sceneName === 'bridge' ? 'THE BRIDGE' : 'THE SETTLEMENT';
   sceneDescription.textContent = sceneName === 'bridge'
-    ? 'A continuous stone crossing with three open arches, raised above the grey field.'
+    ? 'A continuous stone crossing with three open arches, suspended above the abyss.'
     : 'The original low-poly settlement, rendered as solid monochrome forms.';
 }
 
@@ -503,6 +519,7 @@ sourceTabs.forEach((tab) => {
 
 bloomRange.addEventListener('input', (event) => updateBloom(event.target.value));
 pointDitherRange.addEventListener('input', (event) => updatePointDither(event.target.value));
+pointPixelRange.addEventListener('input', (event) => updatePointPixelSize(event.target.value));
 fileInput.addEventListener('change', (event) => useFile(event.target.files?.[0]));
 
 ['dragenter', 'dragover'].forEach((eventName) => {
@@ -524,6 +541,7 @@ document.querySelector('[data-action="toggle-play"]').addEventListener('click', 
 document.querySelector('[data-action="reset"]').addEventListener('click', resetField);
 document.querySelector('[data-action="randomize"]').addEventListener('click', randomize);
 document.querySelector('[data-action="export"]').addEventListener('click', exportPng);
+cameraReset.addEventListener('click', () => pointField?.resetCamera());
 document.querySelector('[data-action="use-demo-canvas"]').addEventListener('click', () => attachCanvasSource(demoCanvas));
 
 document.querySelector('[data-action="fullscreen"]').addEventListener('click', async () => {
@@ -573,6 +591,7 @@ window.OEmpireFilterPanel = {
 resizeOverlay();
 updateBloom(bloom);
 updatePointDither(pointDitherRange.value);
+updatePointPixelSize(pointPixelRange.value);
 updateMode('ward', false);
 usePointField(false);
 rafId = requestAnimationFrame(renderLoop);
