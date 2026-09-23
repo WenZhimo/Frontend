@@ -53,13 +53,13 @@ const screenFragmentShader = `
 
     vec3 plateColor = source.rgb / max(source.a, 0.0001);
     float luminance = clamp(dot(plateColor, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
-    // Expand the model's material range across a compact five-step stone
-    // palette instead of leaving most Lambert-lit surfaces in one dark band.
-    float mappedTone = clamp((luminance - 0.14) / 0.22, 0.0, 1.0);
-    float darkLock = 1.0 - step(0.155, luminance);
-    float lightLock = step(0.35, luminance);
+    // Spread model lighting across ten stable grayscale levels, reserving
+    // ordered dithering for the middle tones between locked black and white.
+    float mappedTone = clamp((luminance - 0.06) / 0.45, 0.0, 1.0);
+    float darkLock = 1.0 - smoothstep(0.045, 0.11, luminance);
+    float lightLock = smoothstep(0.43, 0.56, luminance);
     float midtone = (1.0 - darkLock) * (1.0 - lightLock);
-    float levels = 4.0;
+    float levels = 9.0;
     float quantized = mappedTone * levels;
     float lower = floor(quantized) / levels;
     float fraction = fract(quantized);
@@ -138,7 +138,8 @@ const sceneTarget = new THREE.WebGLRenderTarget(192, 108, {
   depthBuffer: true,
   stencilBuffer: false,
 });
-const camera = new THREE.OrthographicCamera(-8, 8, 5, -5, 0.1, 100);
+// Use perspective depth so closer geometry projects larger than distant geometry.
+const camera = new THREE.PerspectiveCamera(25, 1, 0.1, 100);
 const cameraDefaults = {
   bridge: { theta: 0.35, phi: 1.3, distance: 18, zoom: 0.82, target: new THREE.Vector3(0, 1.45, 0) },
   map: { theta: 0.35, phi: 0.64, distance: 18, zoom: 0.82, target: new THREE.Vector3(0, 0.82, 0) },
@@ -148,7 +149,7 @@ let cameraTheta = cameraDefaults.bridge.theta;
 let cameraPhi = cameraDefaults.bridge.phi;
 let cameraDistance = cameraDefaults.bridge.distance;
 let cameraZoom = cameraDefaults.bridge.zoom;
-let pixelSize = 6;
+let pixelSize = 2;
 
 const root = new THREE.Group();
 root.rotation.y = -0.18;
@@ -167,6 +168,7 @@ let inputSource = null;
 let inputTexture = null;
 let inputSourceSize = new THREE.Vector2(1, 1);
 let inputIsCanvas = false;
+let lastVideoTime = -1;
 
 function updateSourceCrop() {
   if (!inputSource) {
@@ -196,6 +198,7 @@ function setInputSource(source) {
   inputSource = source || null;
   inputTexture = null;
   inputIsCanvas = false;
+  lastVideoTime = -1;
   if (inputSource) {
     const isVideo = typeof HTMLVideoElement !== 'undefined' && inputSource instanceof HTMLVideoElement;
     inputIsCanvas = typeof HTMLCanvasElement !== 'undefined' && inputSource instanceof HTMLCanvasElement;
@@ -231,14 +234,61 @@ function transform(position, rotation = new THREE.Euler(), scale = new THREE.Vec
   return new THREE.Matrix4().compose(position, new THREE.Quaternion().setFromEuler(rotation), scale);
 }
 
-function getStoneMaterial(tone, side = THREE.FrontSide, flatShading = true) {
-  const key = `${tone.toFixed(3)}:${side}:${flatShading}`;
+const surfaceStyleIds = { stone: 0, snow: 1, timber: 2, foliage: 3, shingle: 4 };
+
+function getSurfaceMaterial(tone, side = THREE.FrontSide, flatShading = true, surfaceStyle = 'stone') {
+  const styleId = surfaceStyleIds[surfaceStyle] ?? surfaceStyleIds.stone;
+  const key = `${tone.toFixed(3)}:${side}:${flatShading}:${styleId}`;
   if (!materialCache.has(key)) {
-    materialCache.set(key, new THREE.MeshLambertMaterial({
+    const material = new THREE.MeshLambertMaterial({
       color: new THREE.Color(tone, tone, tone),
       flatShading,
       side,
-    }));
+    });
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uOESurfaceStyle = { value: styleId };
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vOESurfacePosition;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvOESurfacePosition = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          `#include <common>
+          varying vec3 vOESurfacePosition;
+          uniform float uOESurfaceStyle;
+          float oeSurfaceHash(vec3 p) {
+            return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+          }`,
+        )
+        .replace(
+          '#include <color_fragment>',
+          `#include <color_fragment>
+          vec3 oeLargeCell = floor(vOESurfacePosition * vec3(2.7, 3.4, 2.7));
+          vec3 oeFineCell = floor(vOESurfacePosition * vec3(11.0, 15.0, 11.0));
+          float oeLargeGrain = oeSurfaceHash(oeLargeCell);
+          float oeFineGrain = oeSurfaceHash(oeFineCell);
+          vec3 oeStoneCell = fract(vOESurfacePosition * vec3(1.8, 3.0, 1.8));
+          float oeStoneEdge = min(min(oeStoneCell.x, 1.0 - oeStoneCell.x), min(min(oeStoneCell.y, 1.0 - oeStoneCell.y), min(oeStoneCell.z, 1.0 - oeStoneCell.z)));
+          float oeStoneJoint = 1.0 - 0.19 * (1.0 - smoothstep(0.025, 0.075, oeStoneEdge));
+          float oeStoneTexture = oeStoneJoint * (0.94 + (oeLargeGrain - 0.5) * 0.18 + (oeFineGrain - 0.5) * 0.08);
+          float oeSnowTexture = 0.985 + (oeLargeGrain - 0.5) * 0.07 + (oeFineGrain - 0.5) * 0.035;
+          float oeTimberBand = fract(vOESurfacePosition.y * 7.0);
+          float oeTimberJoint = 1.0 - 0.11 * (1.0 - smoothstep(0.025, 0.085, min(oeTimberBand, 1.0 - oeTimberBand)));
+          float oeTimberTexture = oeTimberJoint * (0.96 + (oeLargeGrain - 0.5) * 0.12 + 0.025 * sin(vOESurfacePosition.x * 18.0 + vOESurfacePosition.z * 11.0));
+          float oeFoliageTexture = 0.93 + (oeLargeGrain - 0.5) * 0.15 + (oeFineGrain - 0.5) * 0.08;
+          vec2 oeRoofCell = fract(vOESurfacePosition.xz * vec2(2.8, 3.8));
+          float oeRoofEdge = min(min(oeRoofCell.x, 1.0 - oeRoofCell.x), min(oeRoofCell.y, 1.0 - oeRoofCell.y));
+          float oeShingleTexture = (0.95 + (oeLargeGrain - 0.5) * 0.12) * (1.0 - 0.13 * (1.0 - smoothstep(0.035, 0.09, oeRoofEdge)));
+          float oeSurfaceTexture = oeStoneTexture;
+          if (uOESurfaceStyle > 0.5 && uOESurfaceStyle < 1.5) oeSurfaceTexture = oeSnowTexture;
+          else if (uOESurfaceStyle > 1.5 && uOESurfaceStyle < 2.5) oeSurfaceTexture = oeTimberTexture;
+          else if (uOESurfaceStyle > 2.5 && uOESurfaceStyle < 3.5) oeSurfaceTexture = oeFoliageTexture;
+          else if (uOESurfaceStyle > 3.5) oeSurfaceTexture = oeShingleTexture;
+          diffuseColor.rgb *= oeSurfaceTexture;`,
+        );
+    };
+    material.customProgramCacheKey = () => `oe-monochrome-surface-${styleId}`;
+    materialCache.set(key, material);
   }
   return materialCache.get(key);
 }
@@ -250,8 +300,8 @@ function registerMesh(mesh) {
   return mesh;
 }
 
-function addPrimitive(geometry, matrix, tone, side = THREE.FrontSide, flatShading = true) {
-  const material = getStoneMaterial(tone, side, flatShading);
+function addPrimitive(geometry, matrix, tone, side = THREE.FrontSide, flatShading = true, surfaceStyle = 'stone') {
+  const material = getSurfaceMaterial(tone, side, flatShading, surfaceStyle);
   const mesh = new THREE.Mesh(geometry, material);
   mesh.applyMatrix4(matrix);
   registerMesh(mesh);
@@ -267,8 +317,8 @@ function addModelGroup(collection = activeModelCollection) {
   return group;
 }
 
-function addGroupPart(group, geometry, position, tone, rotation = new THREE.Euler(), side = THREE.FrontSide) {
-  const mesh = registerMesh(new THREE.Mesh(geometry, getStoneMaterial(tone, side)));
+function addGroupPart(group, geometry, position, tone, rotation = new THREE.Euler(), side = THREE.FrontSide, surfaceStyle = 'stone') {
+  const mesh = registerMesh(new THREE.Mesh(geometry, getSurfaceMaterial(tone, side, true, surfaceStyle)));
   mesh.position.copy(position);
   mesh.rotation.copy(rotation);
   group.add(mesh);
@@ -308,7 +358,7 @@ function makeRoofSnowGeometry(width, depth, wallHeight, roofHeight, side) {
   return geometry;
 }
 
-function addGableFace(group, width, depth, wallHeight, roofHeight, front, tone) {
+function addGableFace(group, width, depth, wallHeight, roofHeight, front, tone, surfaceStyle = 'timber') {
   const half = width / 2;
   const z = (depth / 2 + 0.012) * (front ? 1 : -1);
   const vertices = front
@@ -318,7 +368,7 @@ function addGableFace(group, width, depth, wallHeight, roofHeight, front, tone) 
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setIndex([0, 1, 2]);
   geometry.computeVertexNormals();
-  addGroupPart(group, geometry, new THREE.Vector3(), tone, new THREE.Euler(), THREE.DoubleSide);
+  addGroupPart(group, geometry, new THREE.Vector3(), tone, new THREE.Euler(), THREE.DoubleSide, surfaceStyle);
 }
 
 function placeCottage({ x, z, width = 1.5, depth = 1.3, wallHeight = 0.95, roofHeight = 0.62, rotation = 0, tone = 0.22, y = 0, chapel = false }) {
@@ -329,14 +379,14 @@ function placeCottage({ x, z, width = 1.5, depth = 1.3, wallHeight = 0.95, roofH
   const roofTone = tone * 0.74;
   const w = width;
   const d = depth;
-  addGroupPart(group, new THREE.BoxGeometry(w, wallHeight, d), new THREE.Vector3(0, wallHeight / 2, 0), wallTone);
+  addGroupPart(group, new THREE.BoxGeometry(w, wallHeight, d), new THREE.Vector3(0, wallHeight / 2, 0), wallTone, new THREE.Euler(), THREE.FrontSide, 'timber');
   addGableFace(group, w, d, wallHeight * 0.96, roofHeight, true, wallTone * 1.12);
   addGableFace(group, w, d, wallHeight * 0.96, roofHeight, false, wallTone * 0.92);
-  addGroupPart(group, makeRoofGeometry(w + 0.18, d + 0.2, wallHeight, roofHeight), new THREE.Vector3(), roofTone, new THREE.Euler(), THREE.DoubleSide);
+  addGroupPart(group, makeRoofGeometry(w + 0.18, d + 0.2, wallHeight, roofHeight), new THREE.Vector3(), roofTone, new THREE.Euler(), THREE.DoubleSide, 'shingle');
 
   // Raised snow patches and eaves make each roof plane legible at a distance.
   [-1, 1].forEach((side) => {
-    addGroupPart(group, makeRoofSnowGeometry(w + 0.18, d + 0.2, wallHeight, roofHeight, side), new THREE.Vector3(), 0.61, new THREE.Euler(), THREE.DoubleSide);
+    addGroupPart(group, makeRoofSnowGeometry(w + 0.18, d + 0.2, wallHeight, roofHeight, side), new THREE.Vector3(), 0.61, new THREE.Euler(), THREE.DoubleSide, 'snow');
     addGroupPart(group, new THREE.BoxGeometry(0.12, 0.075, d + 0.27), new THREE.Vector3(side * (w / 2 + 0.035), wallHeight + 0.02, 0), 0.62);
   });
   addGroupPart(group, new THREE.BoxGeometry(0.12, 0.1, d + 0.12), new THREE.Vector3(0, wallHeight + roofHeight + 0.02, 0), 0.58);
@@ -392,7 +442,7 @@ function createRibbon(points, width, heightAt, tone, targetCollection = activeMo
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-  const mesh = new THREE.Mesh(geometry, getStoneMaterial(tone, THREE.DoubleSide));
+  const mesh = new THREE.Mesh(geometry, getSurfaceMaterial(tone, THREE.DoubleSide));
   registerMesh(mesh);
   targetCollection.push(mesh);
   root.add(mesh);
@@ -424,7 +474,7 @@ function createIslandTerrain(heightAt) {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-  addPrimitive(geometry, new THREE.Matrix4(), 0.46, THREE.DoubleSide, false);
+  addPrimitive(geometry, new THREE.Matrix4(), 0.46, THREE.DoubleSide, false, 'snow');
 
   // A dark, broken cliff skirt gives the snowfield an edge without flattening it.
   const edgePoints = [];
@@ -526,10 +576,10 @@ function buildPointField() {
   treeSites.forEach(([x, z], index) => {
     const y = terrainHeight(x, z);
     const height = 1.55 + (index % 3) * 0.24;
-    addPrimitive(new THREE.CylinderGeometry(0.075, 0.13, height * 0.58, 5), transform(new THREE.Vector3(x, y + height * 0.29, z)), 0.22);
+    addPrimitive(new THREE.CylinderGeometry(0.075, 0.13, height * 0.58, 5), transform(new THREE.Vector3(x, y + height * 0.29, z)), 0.22, THREE.FrontSide, true, 'timber');
     [0, 1, 2].forEach((tier) => {
       const tierHeight = height * (0.55 - tier * 0.1);
-      addPrimitive(new THREE.ConeGeometry(0.63 - tier * 0.1, tierHeight, 6), transform(new THREE.Vector3(x, y + height * (0.42 + tier * 0.22), z), new THREE.Euler(0, index * 0.37, 0)), 0.16 + tier * 0.035);
+      addPrimitive(new THREE.ConeGeometry(0.63 - tier * 0.1, tierHeight, 6), transform(new THREE.Vector3(x, y + height * (0.42 + tier * 0.22), z), new THREE.Euler(0, index * 0.37, 0)), 0.16 + tier * 0.035, THREE.FrontSide, true, 'foliage');
     });
   });
 
@@ -703,11 +753,8 @@ function resize() {
   const width = Math.max(1, canvas.clientWidth || 960);
   const height = Math.max(1, canvas.clientHeight || 540);
   const aspect = width / height;
-  const viewHeight = 7.8;
-  camera.left = -(viewHeight * aspect) / 2;
-  camera.right = (viewHeight * aspect) / 2;
-  camera.top = viewHeight / 2;
-  camera.bottom = -viewHeight / 2;
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
   positionCamera();
   renderer.setSize(width, height, false);
   const drawingSize = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -726,6 +773,12 @@ function render() {
   if (inputTexture) {
     if (inputIsCanvas) inputTexture.needsUpdate = true;
     if (typeof HTMLVideoElement !== 'undefined' && inputSource instanceof HTMLVideoElement) {
+      // Keep the mapped video frame fresh even when requestVideoFrameCallback
+      // is throttled or skipped by the browser's VideoTexture path.
+      if (inputSource.readyState >= HTMLVideoElement.HAVE_CURRENT_DATA && inputSource.currentTime !== lastVideoTime) {
+        inputTexture.needsUpdate = true;
+        lastVideoTime = inputSource.currentTime;
+      }
       const width = inputSource.videoWidth || 1;
       const height = inputSource.videoHeight || 1;
       if (width !== inputSourceSize.x || height !== inputSourceSize.y) {
@@ -840,7 +893,8 @@ canvas.addEventListener('pointermove', (event) => {
     positionCamera();
   } else {
     const rect = canvas.getBoundingClientRect();
-    const unitsPerPixel = 7.8 / Math.max(1, rect.height * cameraZoom);
+    const viewHeightAtTarget = 2 * cameraDistance * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+    const unitsPerPixel = viewHeightAtTarget / Math.max(1, rect.height * cameraZoom);
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
     cameraTarget.addScaledVector(right, -dx * unitsPerPixel);
