@@ -81,7 +81,7 @@
         vFrame = mod(aFrameOffset + floor(frameAge * frameCount), frameCount);
         vec4 viewPosition = modelViewMatrix * vec4(particlePosition, 1.0);
         float depth = max(0.1, -viewPosition.z);
-        gl_PointSize = clamp(aSize * 1.82 * shrink * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 2.0, 74.0);
+        gl_PointSize = clamp(aSize * 2.5 * shrink * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 4.0, 112.0);
         gl_Position = projectionMatrix * viewPosition;
       }
     `;
@@ -130,7 +130,7 @@
         vActive = step(age, 0.995) * step(0.02, shrink);
         vec4 viewPosition = modelViewMatrix * vec4(particlePosition, 1.0);
         float depth = max(0.1, -viewPosition.z);
-        gl_PointSize = clamp(aSize * 1.7 * shrink * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 2.0, 74.0);
+        gl_PointSize = clamp(aSize * 2.8 * shrink * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 4.0, 128.0);
         gl_Position = projectionMatrix * viewPosition;
       }
     `;
@@ -184,11 +184,11 @@
 
     function makeSmokeGeometry() {
       const positions = [], sizes = [], phases = [], speeds = [], heights = [], spreads = [], seeds = [];
-      for (let i = 0; i < 82; i += 1) {
+      for (let i = 0; i < 30; i += 1) {
         const angle = Math.random() * Math.PI * 2;
         const radius = Math.sqrt(Math.random()) * 0.78;
         positions.push(Math.cos(angle) * radius, 0.62 + Math.random() * 0.42, -0.2);
-        sizes.push(1.72 + Math.random() * 1.0);
+        sizes.push(2.8 + Math.random() * 1.6);
         phases.push(Math.random());
         speeds.push(0.12 + Math.random() * 0.12);
         heights.push(4.8 + Math.random() * 2.2);

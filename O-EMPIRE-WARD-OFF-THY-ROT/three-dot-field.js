@@ -762,7 +762,7 @@ function makeFireParticleMaterial(viewportHeight) {
         vec4 mvPosition = modelViewMatrix * vec4(particlePosition, 1.0);
         float depth = max(0.1, -mvPosition.z);
         float modelScale = length(modelMatrix[0].xyz);
-        gl_PointSize = clamp(aSize * 1.18 * modelScale * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 1.0, 24.0);
+        gl_PointSize = clamp(aSize * 2.15 * modelScale * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 3.0, 52.0);
         vAlpha = alpha;
         vBrightness = aBrightness * (0.84 + 0.16 * sin(uTime * aSpeed * 6.0 + aPhase * 17.0));
         vPhase = aPhase;
@@ -805,46 +805,39 @@ function makeFireParticleMaterial(viewportHeight) {
   });
 }
 
-function makeSmokeGeometry() {
-  const radialSegments = 28;
-  const rings = [
-    [0.0, 0.09, 0.0],
-    [0.08, 0.17, 0.01],
-    [0.19, 0.24, 0.015],
-    [0.32, 0.38, 0.06],
-    [0.45, 0.5, 0.12],
-    [0.58, 0.63, 0.17],
-    [0.71, 0.76, 0.28],
-    [0.84, 0.98, 0.39],
-    [0.96, 0.92, 0.55],
-    [1.08, 1.08, 0.68],
-    [1.16, 0.84, 0.71],
-    [1.2, 0.08, 0.66],
-  ];
+function makeSmokeGeometry(sourceY = 0) {
   const positions = [];
-  const indices = [];
-  rings.forEach(([height, radius, centerX], ringIndex) => {
-    for (let segment = 0; segment < radialSegments; segment += 1) {
-      const angle = segment / radialSegments * Math.PI * 2;
-      const ripple = 1 + 0.075 * Math.sin(angle * 3 + height * 17) + 0.045 * Math.cos(angle * 5 - height * 11);
-      positions.push(
-        centerX + Math.cos(angle) * radius * ripple,
-        height,
-        Math.sin(angle) * radius * ripple * 0.76,
-      );
-      if (ringIndex > 0) {
-        const current = ringIndex * radialSegments + segment;
-        const next = ringIndex * radialSegments + (segment + 1) % radialSegments;
-        const previous = (ringIndex - 1) * radialSegments + segment;
-        const previousNext = (ringIndex - 1) * radialSegments + (segment + 1) % radialSegments;
-        indices.push(previous, previousNext, current, previousNext, next, current);
-      }
-    }
-  });
+  const sizes = [];
+  const phases = [];
+  const speeds = [];
+  const heights = [];
+  const spreads = [];
+  const seeds = [];
+  const count = 34;
+  for (let i = 0; i < count; i += 1) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.sqrt(Math.random());
+    const heightBand = Math.random();
+    positions.push(
+      Math.cos(angle) * radius * 0.24,
+      sourceY + heightBand * 0.28,
+      Math.sin(angle) * radius * 0.18,
+    );
+    sizes.push(0.24 + Math.random() * 0.34);
+    phases.push(Math.random());
+    speeds.push(0.13 + Math.random() * 0.12);
+    heights.push(2.7 + Math.random() * 1.7);
+    spreads.push(0.16 + Math.random() * 0.3);
+    seeds.push(Math.random());
+  }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
+  geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1));
+  geometry.setAttribute('aPhase', new THREE.Float32BufferAttribute(phases, 1));
+  geometry.setAttribute('aSpeed', new THREE.Float32BufferAttribute(speeds, 1));
+  geometry.setAttribute('aHeight', new THREE.Float32BufferAttribute(heights, 1));
+  geometry.setAttribute('aSpread', new THREE.Float32BufferAttribute(spreads, 1));
+  geometry.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 1));
   return geometry;
 }
 
@@ -855,86 +848,59 @@ function makeSmokeMaterial(windScale = 1) {
       uPhase: { value: Math.random() * 6.28 },
       uWind: { value: new THREE.Vector2(0.72, -0.24) },
       uWindScale: { value: windScale },
+      uViewportHeight: { value: sceneTarget.height },
     },
     vertexShader: `
       uniform float uTime;
       uniform float uPhase;
       uniform vec2 uWind;
       uniform float uWindScale;
-      varying vec3 vSmokePosition;
-      varying float vSmokeHeight;
+      uniform float uViewportHeight;
+      attribute float aSize;
+      attribute float aPhase;
+      attribute float aSpeed;
+      attribute float aHeight;
+      attribute float aSpread;
+      attribute float aSeed;
+      varying float vAge;
+      varying float vSeed;
       void main() {
+        float age = fract(aPhase + uTime * aSpeed);
+        float rise = age * aHeight;
+        float gust = 0.86 + 0.14 * sin(uTime * 0.8 + uPhase + aSeed * 8.0);
         vec3 smokePosition = position;
-        float rise = smoothstep(0.02, 1.18, position.y);
-        float gust = 0.9 + 0.1 * sin(uTime * 0.8 + uPhase);
-        smokePosition.x += rise * (0.11 * sin(uTime * 0.72 + position.y * 7.2 + position.z * 2.1)
-          + 0.045 * sin(uTime * 1.7 - position.y * 18.0 + position.x * 4.0));
-        smokePosition.z += rise * (0.08 * cos(uTime * 0.61 + position.y * 6.3 + position.x * 3.0)
-          + 0.035 * sin(uTime * 1.35 + position.y * 16.0));
-        smokePosition.x += uWind.x * uWindScale * gust * rise * (0.65 + 0.95 * rise);
-        smokePosition.z += uWind.y * uWindScale * gust * rise * (0.65 + 0.95 * rise);
-        float billow = 1.0 + rise * (0.045 * sin(uTime * 0.9 + position.y * 12.0 + position.x * 6.0));
-        smokePosition.xz *= billow;
-        vSmokePosition = smokePosition;
-        vSmokeHeight = clamp(position.y / 1.2, 0.0, 1.0);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(smokePosition, 1.0);
+        smokePosition.x += uWind.x * uWindScale * rise * gust
+          + sin(uTime * 0.74 + aSeed * 17.0 + age * 5.0) * aSpread * age;
+        smokePosition.z += uWind.y * uWindScale * rise * gust
+          + cos(uTime * 0.58 + aSeed * 13.0 + age * 4.0) * aSpread * age * 0.58;
+        smokePosition.y += rise;
+        float shrink = 1.0 - smoothstep(0.84, 1.0, age);
+        vec4 viewPosition = modelViewMatrix * vec4(smokePosition, 1.0);
+        float depth = max(0.1, -viewPosition.z);
+        float modelScale = length(modelMatrix[0].xyz);
+        gl_PointSize = clamp(aSize * shrink * modelScale * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 1.0, 32.0);
+        vAge = age;
+        vSeed = aSeed;
+        gl_Position = projectionMatrix * viewPosition;
       }
     `,
     fragmentShader: `
-      uniform float uTime;
-      varying vec3 vSmokePosition;
-      varying float vSmokeHeight;
-      float hashSmoke(vec3 p) {
-        return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
-      }
-      float noiseSmoke(vec3 p) {
-        vec3 i = floor(p);
-        vec3 f = fract(p);
-        f = f * f * (3.0 - 2.0 * f);
-        float n000 = hashSmoke(i + vec3(0.0, 0.0, 0.0));
-        float n100 = hashSmoke(i + vec3(1.0, 0.0, 0.0));
-        float n010 = hashSmoke(i + vec3(0.0, 1.0, 0.0));
-        float n110 = hashSmoke(i + vec3(1.0, 1.0, 0.0));
-        float n001 = hashSmoke(i + vec3(0.0, 0.0, 1.0));
-        float n101 = hashSmoke(i + vec3(1.0, 0.0, 1.0));
-        float n011 = hashSmoke(i + vec3(0.0, 1.0, 1.0));
-        float n111 = hashSmoke(i + vec3(1.0, 1.0, 1.0));
-        float nx00 = mix(n000, n100, f.x);
-        float nx10 = mix(n010, n110, f.x);
-        float nx01 = mix(n001, n101, f.x);
-        float nx11 = mix(n011, n111, f.x);
-        return mix(mix(nx00, nx10, f.y), mix(nx01, nx11, f.y), f.z);
-      }
-      float fbmSmoke(vec3 p) {
-        float value = 0.0;
-        float amplitude = 0.52;
-        for (int octave = 0; octave < 4; octave++) {
-          value += noiseSmoke(p) * amplitude;
-          p = p * 2.03 + vec3(7.1, 3.7, 5.3);
-          amplitude *= 0.48;
-        }
-        return value;
-      }
+      varying float vAge;
+      varying float vSeed;
       void main() {
-        vec3 flow = vSmokePosition * vec3(3.0, 2.0, 3.0);
-        flow.y -= uTime * 0.34;
-        flow.x += sin(uTime * 0.22 + flow.y * 0.4) * 0.55;
-        float broadNoise = fbmSmoke(flow);
-        float fineNoise = fbmSmoke(flow * 1.85 + vec3(2.4, -uTime * 0.2, 4.1));
-        float wisps = smoothstep(0.28, 0.73, broadNoise * 0.68 + fineNoise * 0.32);
-        float lowerFade = smoothstep(0.0, 0.11, vSmokeHeight);
-        float upperFade = 1.0 - smoothstep(0.86, 1.0, vSmokeHeight) * 0.42;
-        float density = wisps * lowerFade * upperFade;
-        float tone = mix(0.04, 0.28, smoothstep(0.24, 0.78, fineNoise));
-        float opacity = (0.08 + density * 0.62) * lowerFade * upperFade;
-        if (opacity < 0.018) discard;
-        gl_FragColor = vec4(vec3(tone), opacity);
+        vec2 cell = floor(gl_PointCoord * 5.0);
+        float randomCell = fract(sin(dot(cell + vSeed * 17.0, vec2(12.9898, 78.233))) * 43758.5453);
+        float edge = step(0.18, randomCell);
+        float bottomDensity = 1.0 - smoothstep(0.18, 0.85, vAge);
+        float opacity = edge * mix(0.9, 0.42, vAge) * (0.82 + 0.18 * bottomDensity);
+        if (opacity < 0.12) discard;
+        gl_FragColor = vec4(vec3(0.012), opacity);
       }
     `,
     transparent: true,
     depthTest: true,
     depthWrite: false,
-    side: THREE.DoubleSide,
+    blending: THREE.NormalBlending,
   });
 }
 
@@ -977,7 +943,7 @@ function addRoofFire(group, width, depth, wallHeight, roofHeight) {
   const smokePoints = clusters.filter((cluster) => cluster.radius > 0.25).slice(0, 7);
   smokePoints.forEach((cluster, index) => {
     const smokeMaterial = makeSmokeMaterial(0.86 + index * 0.1);
-    const smoke = new THREE.Mesh(makeSmokeGeometry(), smokeMaterial);
+    const smoke = new THREE.Points(makeSmokeGeometry(), smokeMaterial);
     const x = cluster.x * roofWidth;
     const z = Number.isFinite(cluster.baseZ) ? cluster.baseZ : cluster.z * roofDepth;
     const y = Number.isFinite(cluster.baseY) ? cluster.baseY : roofY(x);
