@@ -632,7 +632,7 @@ function makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, ro
     spreads.push(spread);
     brightnesses.push(brightness);
     speeds.push(speed);
-    frameOffsets.push(Math.floor(Math.random() * (kind === 0 ? 60 : 14)));
+    frameOffsets.push(kind === 0 ? Math.floor(Math.random() * 60) : Math.floor(Math.random() * 10));
     atlasKinds.push(kind);
   };
 
@@ -767,7 +767,7 @@ function makeFireParticleMaterial(viewportHeight) {
         vPhase = aPhase;
         vAtlasKind = aAtlasKind;
         float atlasAge = aKind > 0.5 ? age : fract(uTime * aSpeed * 0.22 + aPhase);
-        float frameCount = aAtlasKind < 0.5 ? 60.0 : 14.0;
+        float frameCount = aAtlasKind < 0.5 ? 60.0 : 10.0;
         vFrame = mod(aFrameOffset + floor(atlasAge * frameCount), frameCount);
         gl_Position = projectionMatrix * mvPosition;
       }

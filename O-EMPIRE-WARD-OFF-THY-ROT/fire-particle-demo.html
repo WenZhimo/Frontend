@@ -76,7 +76,7 @@
         vActive = aAtlasKind < 0.5 ? 1.0 : step(age, 0.965) * step(0.015, shrink);
         vSeed = aSeed;
         vAtlasKind = aAtlasKind;
-        float frameCount = aAtlasKind < 0.5 ? 60.0 : 14.0;
+        float frameCount = aAtlasKind < 0.5 ? 60.0 : 10.0;
         float frameAge = aAtlasKind < 0.5 ? fract(uTime * aSpeed * 0.16 + aPhase) : age;
         vFrame = mod(aFrameOffset + floor(frameAge * frameCount), frameCount);
         vec4 viewPosition = modelViewMatrix * vec4(particlePosition, 1.0);
@@ -168,7 +168,7 @@
           seeds.push(Math.random());
           const atlasKind = isTongue ? 1 : 0;
           atlasKinds.push(atlasKind);
-          frameOffsets.push(Math.floor(Math.random() * (atlasKind < 0.5 ? 60 : 14)));
+          frameOffsets.push(atlasKind < 0.5 ? Math.floor(Math.random() * 60) : Math.floor(Math.random() * 10));
         }
       });
       const geometry = new THREE.BufferGeometry();
