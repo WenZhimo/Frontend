@@ -149,12 +149,12 @@ keyLight.position.set(-6, 11, 8);
 keyLight.target.position.set(0, 1.3, 0);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(2048, 2048);
-keyLight.shadow.camera.left = -10;
-keyLight.shadow.camera.right = 10;
-keyLight.shadow.camera.top = 8;
-keyLight.shadow.camera.bottom = -8;
+keyLight.shadow.camera.left = -44;
+keyLight.shadow.camera.right = 44;
+keyLight.shadow.camera.top = 18;
+keyLight.shadow.camera.bottom = -62;
 keyLight.shadow.camera.near = 0.5;
-keyLight.shadow.camera.far = 32;
+keyLight.shadow.camera.far = 180;
 keyLight.shadow.camera.updateProjectionMatrix();
 keyLight.shadow.bias = -0.00045;
 keyLight.shadow.normalBias = 0.025;
@@ -175,9 +175,9 @@ const sceneTarget = new THREE.WebGLRenderTarget(192, 108, {
   stencilBuffer: false,
 });
 // Use perspective depth so closer geometry projects larger than distant geometry.
-const camera = new THREE.PerspectiveCamera(25, 1, 0.1, 100);
+const camera = new THREE.PerspectiveCamera(25, 1, 0.1, 220);
 const cameraDefaults = {
-  bridge: { theta: 0.35, phi: 1.3, distance: 18, zoom: 0.82, target: new THREE.Vector3(0, 1.45, 0) },
+  bridge: { theta: 0.45, phi: 1.12, distance: 90, zoom: 0.88, target: new THREE.Vector3(0, 1.55, 0) },
   map: { theta: 0.35, phi: 0.64, distance: 18, zoom: 0.82, target: new THREE.Vector3(0, 0.82, 0) },
 };
 const cameraTarget = cameraDefaults.bridge.target.clone();
@@ -194,6 +194,7 @@ scene.add(root);
 const solidMeshes = [];
 const mapModels = [];
 const bridgeModels = [];
+const animatedVillageFires = [];
 let activeModelCollection = mapModels;
 let activeModel = 'bridge';
 const materialCache = new Map();
@@ -470,7 +471,134 @@ function addGableFace(group, width, depth, wallHeight, roofHeight, front, tone, 
   addGroupPart(group, geometry, new THREE.Vector3(), tone, new THREE.Euler(), THREE.DoubleSide, surfaceStyle);
 }
 
-function placeCottage({ x, z, width = 1.5, depth = 1.3, wallHeight = 0.95, roofHeight = 0.62, rotation = 0, tone = 0.22, y = 0, chapel = false }) {
+function makeFlameGeometry() {
+  const radialSegments = 9;
+  const rings = [
+    [0.0, 0.12, 0.0],
+    [0.13, 0.34, 0.0],
+    [0.34, 0.3, -0.035],
+    [0.56, 0.235, 0.025],
+    [0.76, 0.16, 0.065],
+    [0.92, 0.07, 0.025],
+    [1.0, 0.0, 0.13],
+  ];
+  const positions = [];
+  const indices = [];
+  rings.forEach(([height, radius, centerX], ringIndex) => {
+    for (let segment = 0; segment < radialSegments; segment += 1) {
+      const angle = segment / radialSegments * Math.PI * 2;
+      positions.push(centerX + Math.cos(angle) * radius, height, Math.sin(angle) * radius * 0.68);
+      if (ringIndex > 0) {
+        const current = ringIndex * radialSegments + segment;
+        const next = ringIndex * radialSegments + (segment + 1) % radialSegments;
+        const previous = (ringIndex - 1) * radialSegments + segment;
+        const previousNext = (ringIndex - 1) * radialSegments + (segment + 1) % radialSegments;
+        indices.push(previous, previousNext, current, previousNext, next, current);
+      }
+    }
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function makeFireMaterial(brightness) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uBrightness: { value: brightness } },
+    vertexShader: `
+      uniform float uTime;
+      varying float vFlameHeight;
+      varying float vFlameCore;
+      varying float vFlamePhase;
+      void main() {
+        vec3 flamePosition = position;
+        float sway = position.y * position.y;
+        flamePosition.x += sin(uTime * 5.7 + position.y * 11.0 + position.z * 6.0) * 0.15 * sway;
+        flamePosition.z += cos(uTime * 4.3 + position.y * 8.0 + position.x * 7.0) * 0.09 * sway;
+        vFlameHeight = position.y;
+        vFlameCore = 1.0 - smoothstep(0.025, 0.21, length(position.xz));
+        vFlamePhase = position.x * 19.0 + position.z * 23.0;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(flamePosition, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform float uBrightness;
+      varying float vFlameHeight;
+      varying float vFlameCore;
+      varying float vFlamePhase;
+      void main() {
+        float tongue = 0.5 + 0.5 * sin(vFlamePhase + uTime * 8.0 + vFlameHeight * 21.0);
+        float body = mix(0.12, 0.66, smoothstep(0.0, 0.63, vFlameHeight));
+        body *= 1.0 - 0.24 * smoothstep(0.72, 1.0, vFlameHeight);
+        float core = vFlameCore * (1.0 - smoothstep(0.35, 0.94, vFlameHeight));
+        float value = mix(body, 0.98, core);
+        value *= 0.78 + 0.22 * tongue;
+        value *= uBrightness;
+        gl_FragColor = vec4(vec3(clamp(value, 0.0, 1.0)), 1.0);
+      }
+    `,
+    side: THREE.DoubleSide,
+    depthWrite: true,
+  });
+}
+
+function addRoofFire(group, width, depth, wallHeight, roofHeight) {
+  const peakX = -width * 0.08;
+  const peakY = wallHeight + roofHeight * (1 - Math.abs(peakX) / (width / 2)) - 0.04;
+  const baseY = peakY + 0.025;
+  const flameGeometry = makeFlameGeometry();
+  const flames = [
+    { x: 0, y: baseY, z: 0, radius: 0.62, height: 3.05, brightness: 1.0 },
+    { x: -0.22, y: baseY + 0.035, z: 0.06, radius: 0.37, height: 2.25, brightness: 0.84 },
+    { x: 0.24, y: baseY + 0.02, z: -0.05, radius: 0.34, height: 2.45, brightness: 0.9 },
+  ];
+  const materials = [];
+  flames.forEach(({ x, y, z, radius, height, brightness }) => {
+    const material = makeFireMaterial(brightness);
+    const flame = new THREE.Mesh(flameGeometry, material);
+    flame.position.set(peakX + x, y, z);
+    flame.scale.set(radius, height, radius);
+    flame.castShadow = false;
+    flame.receiveShadow = false;
+    group.add(flame);
+    materials.push(material);
+  });
+
+  const smokeMaterial = new THREE.MeshBasicMaterial({
+    color: 0x777777,
+    transparent: true,
+    opacity: 0.48,
+    depthWrite: false,
+  });
+  const smokeGeometry = new THREE.SphereGeometry(1, 8, 6);
+  const smokePuffs = [];
+  [
+    { x: -0.08, y: 2.45, z: 0.02, size: 0.28 },
+    { x: 0.11, y: 3.05, z: -0.03, size: 0.35 },
+    { x: 0.34, y: 3.7, z: 0.04, size: 0.42 },
+    { x: 0.49, y: 4.38, z: -0.04, size: 0.49 },
+    { x: 0.32, y: 5.0, z: 0.02, size: 0.53 },
+  ].forEach(({ x, y, z, size }, index) => {
+    const puff = new THREE.Mesh(smokeGeometry, smokeMaterial);
+    puff.position.set(peakX + x, baseY + y, z);
+    puff.scale.set(size * 1.0, size * 1.24, size * 0.9);
+    puff.renderOrder = 2;
+    puff.castShadow = false;
+    puff.receiveShadow = false;
+    group.add(puff);
+    smokePuffs.push({ mesh: puff, x: peakX + x, y: baseY + y, z, index });
+  });
+
+  const fireLight = new THREE.PointLight(0xffffff, 2.2, 5.5, 2);
+  fireLight.position.set(peakX, baseY + 0.42, 0);
+  group.add(fireLight);
+  animatedVillageFires.push({ materials, smokePuffs, fireLight });
+}
+
+function placeCottage({ x, z, width = 1.5, depth = 1.3, wallHeight = 0.95, roofHeight = 0.62, rotation = 0, tone = 0.22, y = 0, chapel = false, scale = 0.7, burning = false }) {
   const group = addModelGroup(mapModels);
   group.position.set(x, y + 0.025, z);
   group.rotation.y = rotation;
@@ -515,6 +643,8 @@ function placeCottage({ x, z, width = 1.5, depth = 1.3, wallHeight = 0.95, roofH
     addGroupPart(group, new THREE.ConeGeometry(0.39, 0.88, 4), new THREE.Vector3(0, wallHeight + roofHeight + 1.02, -d * 0.14), 0.22, new THREE.Euler(0, Math.PI / 4, 0));
     addGroupPart(group, new THREE.BoxGeometry(0.055, 0.55, 0.06), new THREE.Vector3(0, wallHeight + roofHeight + 1.64, -d * 0.14), 0.64);
   }
+  if (burning) addRoofFire(group, w, d, wallHeight, roofHeight);
+  group.scale.setScalar(scale);
   return group;
 }
 
@@ -527,8 +657,9 @@ function createRibbon(points, width, heightAt, tone, targetCollection = activeMo
     const dx = next[0] - previous[0];
     const dz = next[1] - previous[1];
     const length = Math.max(0.001, Math.hypot(dx, dz));
-    const offsetX = (-dz / length) * width / 2;
-    const offsetZ = (dx / length) * width / 2;
+    const ribbonWidth = typeof width === 'function' ? width(index, points.length) : width;
+    const offsetX = (-dz / length) * ribbonWidth / 2;
+    const offsetZ = (dx / length) * ribbonWidth / 2;
     [[x - offsetX, z - offsetZ], [x + offsetX, z + offsetZ]].forEach(([px, pz]) => {
       positions.push(px, heightAt(px, pz) + 0.055, pz);
     });
@@ -617,24 +748,54 @@ function buildPointField() {
   ridgeGeometry.translate(0, 0, -5.45);
   addPrimitive(ridgeGeometry, new THREE.Matrix4(), 0.2, THREE.DoubleSide);
 
-  // The village follows a snow-cut lane along the uneven ridge.
-  const lane = [[-6.5, 2.3], [-4.8, 1.7], [-3.3, 1.1], [-1.8, 1.45], [-0.4, 0.85], [1.15, 1.15], [2.8, 0.2], [4.6, -0.25], [6.5, -1.2]];
-  createRibbon(lane, 0.76, terrainHeight, 0.34, mapModels);
-  createRibbon(lane, 0.13, terrainHeight, 0.5, mapModels);
-
   const cottages = [
-    { x: -5.0, z: 0.35, width: 1.48, depth: 1.32, wallHeight: 0.95, roofHeight: 0.72, rotation: 0.2, tone: 0.21 },
-    { x: -4.0, z: -2.15, width: 1.72, depth: 1.45, wallHeight: 1.06, roofHeight: 0.8, rotation: -0.35, tone: 0.25 },
-    { x: -2.75, z: -0.28, width: 1.62, depth: 1.35, wallHeight: 0.98, roofHeight: 0.75, rotation: 0.26, tone: 0.18 },
-    { x: -1.85, z: -3.0, width: 1.3, depth: 1.18, wallHeight: 0.88, roofHeight: 0.69, rotation: 0.08, tone: 0.24 },
-    { x: 0.1, z: -1.38, width: 1.85, depth: 1.58, wallHeight: 1.12, roofHeight: 0.86, rotation: -0.2, tone: 0.2, chapel: true },
-    { x: 1.65, z: -3.0, width: 1.52, depth: 1.25, wallHeight: 0.92, roofHeight: 0.7, rotation: 0.18, tone: 0.26 },
-    { x: 3.25, z: -1.42, width: 1.74, depth: 1.4, wallHeight: 1.0, roofHeight: 0.78, rotation: -0.28, tone: 0.22 },
-    { x: 4.8, z: 0.8, width: 1.42, depth: 1.24, wallHeight: 0.91, roofHeight: 0.68, rotation: 0.34, tone: 0.19 },
-    { x: 2.65, z: 2.45, width: 1.34, depth: 1.15, wallHeight: 0.84, roofHeight: 0.66, rotation: 0.1, tone: 0.24 },
-    { x: -1.0, z: 2.8, width: 1.55, depth: 1.24, wallHeight: 0.96, roofHeight: 0.74, rotation: -0.16, tone: 0.2 },
+    { x: -4.65, z: 0.75, width: 1.48, depth: 1.32, wallHeight: 0.95, roofHeight: 0.72, rotation: 0.2, tone: 0.21, scale: 0.68 },
+    { x: -4.3, z: -3.45, width: 1.72, depth: 1.45, wallHeight: 1.06, roofHeight: 0.8, rotation: -0.35, tone: 0.25, scale: 0.68 },
+    { x: -2.05, z: 1.5, width: 1.62, depth: 1.35, wallHeight: 0.98, roofHeight: 0.75, rotation: 0.26, tone: 0.18, scale: 0.68 },
+    { x: -1.35, z: -3.55, width: 1.3, depth: 1.18, wallHeight: 0.88, roofHeight: 0.69, rotation: 0.08, tone: 0.24, scale: 0.68 },
+    { x: 0.45, z: -0.9, width: 1.85, depth: 1.58, wallHeight: 1.12, roofHeight: 0.86, rotation: -0.2, tone: 0.2, chapel: true, scale: 0.76 },
+    { x: 2.2, z: -3.1, width: 1.52, depth: 1.25, wallHeight: 0.92, roofHeight: 0.7, rotation: 0.18, tone: 0.26, scale: 0.68 },
+    { x: 3.8, z: -0.65, width: 1.74, depth: 1.4, wallHeight: 1.0, roofHeight: 0.78, rotation: -0.28, tone: 0.22, scale: 0.68, burning: true },
+    { x: 5.55, z: 1.35, width: 1.42, depth: 1.24, wallHeight: 0.91, roofHeight: 0.68, rotation: 0.34, tone: 0.19, scale: 0.68 },
+    { x: 3.05, z: 3.45, width: 1.34, depth: 1.15, wallHeight: 0.84, roofHeight: 0.66, rotation: 0.1, tone: 0.24, scale: 0.68 },
+    { x: -1.35, z: 3.55, width: 1.55, depth: 1.24, wallHeight: 0.96, roofHeight: 0.74, rotation: -0.16, tone: 0.2, scale: 0.68 },
   ];
   cottages.forEach((house) => placeCottage({ ...house, y: terrainHeight(house.x, house.z) }));
+
+  // One narrow, wandering footpath reaches each front step. Its spline follows
+  // the houses rather than imposing a straight, evenly paved village street.
+  const pathOrder = [0, 1, 3, 5, 6, 4, 2, 9, 8, 7];
+  const pathAnchors = [[-7.15, 2.75]];
+  pathOrder.forEach((houseIndex) => {
+    const house = cottages[houseIndex];
+    const stepDistance = (house.depth / 2 + 0.28) * house.scale;
+    pathAnchors.push([
+      house.x + Math.sin(house.rotation) * stepDistance,
+      house.z + Math.cos(house.rotation) * stepDistance,
+    ]);
+  });
+  pathAnchors.push([7.15, -0.45]);
+  const pathCurve = new THREE.CatmullRomCurve3(
+    pathAnchors.map(([x, z]) => new THREE.Vector3(x, 0, z)),
+    false,
+    'centripetal',
+    0.22,
+  );
+  const pathSegments = (pathAnchors.length - 1) * 9;
+  const footpath = [];
+  for (let step = 0; step <= pathSegments; step += 1) {
+    const point = pathCurve.getPoint(step / pathSegments);
+    footpath.push([point.x, point.z]);
+  }
+  const pathWidths = [0.64, 0.43, 0.72, 0.48, 0.68, 0.4, 0.76, 0.46, 0.63, 0.42, 0.68, 0.5];
+  const widthAt = (index, count) => {
+    const position = index / Math.max(1, count - 1) * (pathWidths.length - 1);
+    const anchor = Math.floor(position);
+    const fraction = position - anchor;
+    const width = THREE.MathUtils.lerp(pathWidths[anchor], pathWidths[Math.min(anchor + 1, pathWidths.length - 1)], fraction);
+    return clamp(width + 0.045 * Math.sin(index * 1.91) + 0.028 * Math.cos(index * 0.67), 0.34, 0.79);
+  };
+  createRibbon(footpath, widthAt, terrainHeight, 0.29, mapModels);
 
   // A squat timber watchtower and a bell cote anchor the settlement skyline.
   const towerX = -6.0;
@@ -704,12 +865,17 @@ function buildPointField() {
 
   // A cambered three-span stone bridge crosses an unfilled ravine.
   activeModelCollection = bridgeModels;
-  const bridgeLength = 14.2;
+  const bridgeLength = 71.0;
   const bridgeWidth = 3.35;
   const bridgeZ = 0.15;
   const halfLength = bridgeLength / 2;
   const roadY = (x) => 2.62 + 0.32 * (1 - (x / halfLength) ** 2);
-  const archCenters = [-4.05, 0, 4.05];
+  const archCount = 15;
+  const archEdgeMargin = 3.05;
+  const archSpacing = (bridgeLength - archEdgeMargin * 2) / (archCount - 1);
+  const archCenters = Array.from({ length: archCount }, (_, index) => (
+    (index - (archCount - 1) / 2) * archSpacing
+  ));
   const archRadius = 1.43;
   const archSpring = 0.73;
   const wallBottom = 0.08;
@@ -789,7 +955,14 @@ function buildPointField() {
     });
 
     // Heavy piers interrupt the spandrels and carry the upper parapet.
-    const pierXs = [-6.7, -5.48, -2.62, -1.48, 1.48, 2.62, 5.48, 6.7];
+    const pierXs = [
+      -halfLength + 0.4,
+      ...archCenters.flatMap((center) => [
+        center - archRadius - 0.2,
+        center + archRadius + 0.2,
+      ]),
+      halfLength - 0.4,
+    ];
     pierXs.forEach((x, index) => {
       const bottomY = index === 0 || index === pierXs.length - 1 ? 0.55 : 0.88;
       const top = roadY(x) - 0.13;
@@ -798,6 +971,44 @@ function buildPointField() {
       ), index % 2 ? 0.4 : 0.35);
       addPrimitive(new THREE.BoxGeometry(0.56, 0.18, 0.62), transform(new THREE.Vector3(x, top + 0.01, side * (bridgeZ + bridgeWidth / 2 + 0.02))), 0.56);
     });
+  });
+
+  // Four massive masonry supports continue far below the bridge deck. Their
+  // lower shafts are deliberately outside the camera's visible depth and fade
+  // into the near-black abyss fog rather than ending on a visible ground plane.
+  const deepPierXs = [
+    -halfLength + 0.32,
+    ...Array.from({ length: archCount - 1 }, (_, index) => (
+      (archCenters[index] + archCenters[index + 1]) / 2
+    )),
+    halfLength - 0.32,
+  ];
+  deepPierXs.forEach((x, index) => {
+    const top = roadY(x) - 0.47;
+    const bottom = -58;
+    const width = index === 0 || index === deepPierXs.length - 1 ? 0.78 : 1.12;
+    const depth = index === 0 || index === deepPierXs.length - 1 ? 2.55 : 2.9;
+    const shaft = addPrimitive(
+      new THREE.BoxGeometry(width, top - bottom, depth),
+      transform(new THREE.Vector3(x, (top + bottom) / 2, bridgeZ)),
+      0.23,
+      THREE.DoubleSide,
+      true,
+      'stone',
+    );
+    shaft.castShadow = false;
+
+    for (let bandY = -1.8; bandY >= -19; bandY -= 4.3) {
+      const band = addPrimitive(
+        new THREE.BoxGeometry(width + 0.14, 0.18, depth + 0.16),
+        transform(new THREE.Vector3(x, bandY, bridgeZ)),
+        0.37,
+        THREE.DoubleSide,
+        true,
+        'stone',
+      );
+      band.castShadow = false;
+    }
   });
 
   // Crenellated parapets rise on both sides, following the shallow road crown.
@@ -841,7 +1052,7 @@ function buildPointField() {
 
   // Rock shoulders grip the bridge ends; the center beneath every arch remains empty.
   [-1, 1].forEach((side) => {
-    const x = side * 8.2;
+    const x = side * (halfLength + 1.1);
     addPrimitive(new THREE.DodecahedronGeometry(1.9, 1), transform(new THREE.Vector3(x, -0.04, bridgeZ - 0.15), new THREE.Euler(0.16, side * 0.2, 0.12), new THREE.Vector3(1.1, 1.8, 1.5)), 0.19);
     addPrimitive(new THREE.DodecahedronGeometry(1.35, 1), transform(new THREE.Vector3(x + side * 0.4, 1.05, bridgeZ + 0.85), new THREE.Euler(0.08, side * 0.4, -0.1), new THREE.Vector3(1.25, 1.25, 1.15)), 0.29);
     addPrimitive(new THREE.DodecahedronGeometry(1.2, 1), transform(new THREE.Vector3(x - side * 0.45, -1.15, bridgeZ - 1.05), new THREE.Euler(-0.14, side * 0.35, 0.1), new THREE.Vector3(1.3, 1.6, 1.2)), 0.13);
@@ -869,6 +1080,18 @@ function resize() {
 
 function render() {
   if (!mounted) return;
+  const fireTime = performance.now() * 0.001;
+  animatedVillageFires.forEach(({ materials, smokePuffs, fireLight }) => {
+    materials.forEach((material) => { material.uniforms.uTime.value = fireTime; });
+    smokePuffs.forEach(({ mesh, x, y, z, index }) => {
+      mesh.position.set(
+        x + Math.sin(fireTime * 0.72 + index * 1.7) * 0.075,
+        y + Math.sin(fireTime * 1.1 + index * 1.3) * 0.055,
+        z + Math.cos(fireTime * 0.65 + index) * 0.045,
+      );
+    });
+    fireLight.intensity = 2.1 + 0.45 * Math.sin(fireTime * 7.0) + 0.2 * Math.sin(fireTime * 11.3);
+  });
   if (inputTexture) {
     if (inputIsCanvas) inputTexture.needsUpdate = true;
     if (typeof HTMLVideoElement !== 'undefined' && inputSource instanceof HTMLVideoElement) {
@@ -956,6 +1179,7 @@ function setScene(sceneName) {
   const showBridge = sceneName === 'bridge';
   activeModel = showBridge ? 'bridge' : 'map';
   scene.background = showBridge ? null : new THREE.Color(0xb5b5b5);
+  scene.fog = showBridge ? new THREE.FogExp2(0x060708, 0.0045) : null;
   mapModels.forEach((mesh) => { mesh.visible = !showBridge; });
   bridgeModels.forEach((mesh) => { mesh.visible = showBridge; });
   if (changed) resetCamera();
