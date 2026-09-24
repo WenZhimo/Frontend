@@ -786,7 +786,7 @@ function makeFireParticleMaterial(viewportHeight) {
       void main() {
         if (uAtlasReady < 0.5 || vAlpha < 0.01) discard;
         vec2 atlasSize = vAtlasKind < 0.5 ? vec2(10.0, 6.0) : vec2(14.0, 6.0);
-        float spriteAspect = vAtlasKind < 0.5 ? (10.0 / 26.0) : (14.0 / 45.0);
+        float spriteAspect = vAtlasKind < 0.5 ? (10.0 / 26.0) : (10.0 / 45.0);
         float localX = (gl_PointCoord.x - 0.5) / spriteAspect + 0.5;
         if (localX < 0.0 || localX > 1.0) discard;
         float column = mod(vFrame, atlasSize.x);
