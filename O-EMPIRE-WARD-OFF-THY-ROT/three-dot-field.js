@@ -60,11 +60,17 @@ const screenFragmentShader = `
     // from bottom to top, so invert the displayed position here.
     float focusY = 1.0 - uFocusPosition;
     float outOfFocus = smoothstep(uFocusRange, 0.5, abs(vUv.y - focusY));
-    float blurAmount = clamp(max(uCameraBlur, uTiltShift * outOfFocus), 0.0, 1.0);
+    // Tilt-shift uses a wider sampling radius and sheds the sharp center
+    // sample faster than the global lens blur. This makes the falloff easy
+    // to read even after the result is rebuilt as two-pixel square cells.
+    float tiltBlur = clamp(uTiltShift * outOfFocus * 1.35, 0.0, 1.0);
+    float blurAmount = clamp(max(uCameraBlur, tiltBlur), 0.0, 1.0);
+    float blurRadius = 0.65 + uCameraBlur * 2.8 + tiltBlur * 7.5;
     vec2 sourceTexel = 1.0 / max(uSceneResolution, vec2(1.0));
-    vec2 blurStep = sourceTexel * (0.65 + blurAmount * 2.8) / max(uSourceCropScale, vec2(0.02));
+    vec2 blurStep = sourceTexel * blurRadius / max(uSourceCropScale, vec2(0.02));
     vec4 centerSample = texture2D(uScene, clamp(sourceUv, 0.0, 1.0));
-    vec4 blurredSample = centerSample * 4.0;
+    float centerWeight = mix(4.0, 1.25, tiltBlur);
+    vec4 blurredSample = centerSample * centerWeight;
     blurredSample += texture2D(uScene, clamp(sourceUv + vec2( blurStep.x, 0.0), 0.0, 1.0));
     blurredSample += texture2D(uScene, clamp(sourceUv + vec2(-blurStep.x, 0.0), 0.0, 1.0));
     blurredSample += texture2D(uScene, clamp(sourceUv + vec2(0.0,  blurStep.y), 0.0, 1.0));
@@ -73,7 +79,7 @@ const screenFragmentShader = `
     blurredSample += texture2D(uScene, clamp(sourceUv - blurStep * vec2(0.72, 0.72), 0.0, 1.0));
     blurredSample += texture2D(uScene, clamp(sourceUv + blurStep * vec2(0.72, -0.72), 0.0, 1.0));
     blurredSample += texture2D(uScene, clamp(sourceUv - blurStep * vec2(0.72, -0.72), 0.0, 1.0));
-    blurredSample /= 12.0;
+    blurredSample /= centerWeight + 8.0;
     vec4 source = mix(centerSample, blurredSample, blurAmount);
     if (source.a < 0.02) discard;
 
