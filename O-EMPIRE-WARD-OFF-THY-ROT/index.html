@@ -189,6 +189,14 @@
             </div>
             <div class="camera-effects" aria-label="相机效果">
               <div class="block-heading"><span>相机效果</span><span class="block-count">镜头 / 03</span></div>
+              <div class="block-heading blur-mode-heading">
+                <span>虚化方式</span>
+                <span class="block-count">效果 / 02</span>
+              </div>
+              <div class="blur-mode-switch" role="group" aria-label="虚化方式">
+                <button class="blur-mode-button is-active" type="button" data-blur-mode="photo" aria-pressed="true">照片模糊</button>
+                <button class="blur-mode-button" type="button" data-blur-mode="pixel" aria-pressed="false">像素扩散</button>
+              </div>
               <div class="block-heading">
                 <label for="camera-blur-range">镜头虚化</label>
                 <output id="camera-blur-output" for="camera-blur-range">00%</output>
@@ -213,7 +221,7 @@
                 <input id="focus-position-range" type="range" min="20" max="80" value="50" />
                 <div class="range-labels" aria-hidden="true"><span>上方</span><span>下方</span></div>
               </div>
-              <p class="control-note" id="camera-note">虚化作用于最终像素画面；移轴保留一条水平清晰带。</p>
+              <p class="control-note" id="camera-note">照片模糊发生在像素重建之后；像素扩散保留旧有移轴效果。</p>
             </div>
           </div>
 

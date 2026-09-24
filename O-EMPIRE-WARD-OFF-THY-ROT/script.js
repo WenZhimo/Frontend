@@ -61,6 +61,8 @@ const tiltShiftOutput = document.querySelector('#tilt-shift-output');
 const focusPositionRange = document.querySelector('#focus-position-range');
 const focusPositionOutput = document.querySelector('#focus-position-output');
 const cameraNote = document.querySelector('#camera-note');
+const cameraHelp = document.querySelector('.camera-help');
+const blurModeButtons = [...document.querySelectorAll('[data-blur-mode]')];
 const modelButtons = [...document.querySelectorAll('[data-model-scene]')];
 const modelSwitch = document.querySelector('.model-switch');
 const cameraReset = document.querySelector('[data-action="reset-camera"]');
@@ -102,6 +104,7 @@ let isDemoCanvasSource = false;
 let cameraBlur = Number(cameraBlurRange?.value || 0);
 let tiltShift = Number(tiltShiftRange?.value || 0);
 let focusPosition = Number(focusPositionRange?.value || 50);
+let blurMode = 'photo';
 
 function usesDitherPass() {
   return sourceType === '3d' || sourceType === 'file-image' || sourceType === 'video' || sourceType === 'canvas' || sourceType === 'external-image';
@@ -148,6 +151,7 @@ function showFilteredCanvas() {
   frame.classList.remove('is-3d', 'is-dithered');
   modelSwitch.hidden = true;
   cameraReset.hidden = true;
+  cameraReset.querySelector('span:first-child').textContent = '重置相机';
   bloomBlock.hidden = false;
   modeBlock.hidden = false;
   modelButtons.forEach((button) => { button.disabled = true; });
@@ -166,6 +170,8 @@ function showPointField() {
   frame.classList.add('is-3d', 'is-dithered');
   modelSwitch.hidden = false;
   cameraReset.hidden = false;
+  cameraReset.querySelector('span:first-child').textContent = '重置相机';
+  cameraHelp.textContent = '拖动旋转 · 滚轮缩放 · Shift / 右键拖动平移';
   bloomBlock.hidden = true;
   modeBlock.hidden = true;
   modelButtons.forEach((button) => { button.disabled = false; });
@@ -178,6 +184,7 @@ function showPointField() {
     cameraBlur: cameraBlur / 100,
     tiltShift: tiltShift / 100,
     focusPosition: focusPosition / 100,
+    blurMode,
   });
   pointField.setInputSource(null).start();
 }
@@ -187,12 +194,14 @@ function showDitheredInput(continuous = false) {
   frame.classList.remove('is-3d');
   frame.classList.add('is-dithered');
   modelSwitch.hidden = true;
-  cameraReset.hidden = true;
+  cameraReset.hidden = false;
+  cameraReset.querySelector('span:first-child').textContent = '重置视图';
+  cameraHelp.textContent = '拖动平移 · 滚轮缩放 · 重置视图恢复自动适配';
   bloomBlock.hidden = true;
   modeBlock.hidden = true;
   modelButtons.forEach((button) => { button.disabled = true; });
   sceneKicker.textContent = sourceType === 'video' ? '视频输入' : sourceType === 'canvas' ? '画布输入' : '图像输入';
-  sceneDescription.textContent = '每个来源单元都会映射为黑白灰方形像素，再用有序抖动重建中间灰阶。';
+  sceneDescription.textContent = '来源会按比例完整适配画面；拖动平移、滚轮缩放，像素灰阶由有序抖动重建。';
   sceneIndex.textContent = '输入';
   signalCode.textContent = '像素 / 输入';
   pointField?.stop();
@@ -203,8 +212,10 @@ function showDitheredInput(continuous = false) {
     cameraBlur: cameraBlur / 100,
     tiltShift: tiltShift / 100,
     focusPosition: focusPosition / 100,
+    blurMode,
   });
   pointField.setInputSource(activeSource);
+  pointField.resetInputView();
   if (continuous) pointField.start();
 }
 
@@ -354,14 +365,8 @@ function updateCameraBlur(value) {
   cameraBlurRange.value = String(cameraBlur);
   cameraBlurRange.style.setProperty('--range-fill', `${cameraBlur}%`);
   cameraBlurOutput.textContent = `${String(cameraBlur).padStart(2, '0')}%`;
-  pointField?.setOptions({ cameraBlur: cameraBlur / 100 });
-  cameraNote.textContent = cameraBlur > 0 && tiltShift > 0
-    ? '全局虚化与移轴焦带同时生效，最终仍保持方形像素边缘。'
-    : cameraBlur > 0
-      ? '虚化作用于最终像素画面，越高越柔和。'
-      : tiltShift > 0
-        ? '移轴会保留一条水平清晰带，远离焦平面的位置逐渐虚化。'
-        : '虚化作用于最终像素画面；移轴保留一条水平清晰带。';
+  pointField?.setOptions({ cameraBlur: cameraBlur / 100, blurMode });
+  updateCameraNote();
 }
 
 function updateTiltShift(value) {
@@ -369,7 +374,7 @@ function updateTiltShift(value) {
   tiltShiftRange.value = String(tiltShift);
   tiltShiftRange.style.setProperty('--range-fill', `${tiltShift}%`);
   tiltShiftOutput.textContent = `${String(tiltShift).padStart(2, '0')}%`;
-  pointField?.setOptions({ tiltShift: tiltShift / 100 });
+  pointField?.setOptions({ tiltShift: tiltShift / 100, blurMode });
   updateCameraBlur(cameraBlur);
 }
 
@@ -378,7 +383,29 @@ function updateFocusPosition(value) {
   focusPositionRange.value = String(focusPosition);
   focusPositionRange.style.setProperty('--range-fill', `${((focusPosition - 20) / 60) * 100}%`);
   focusPositionOutput.textContent = `${String(focusPosition).padStart(2, '0')}%`;
-  pointField?.setOptions({ focusPosition: focusPosition / 100 });
+  pointField?.setOptions({ focusPosition: focusPosition / 100, blurMode });
+}
+
+function updateCameraNote() {
+  cameraNote.textContent = blurMode === 'photo'
+    ? '照片模糊在像素重建后按镜头方式融合；像素扩散会保留原有灰阶扩散效果。'
+    : '像素扩散在灰阶重建前生效，移轴边缘也会由方形像素组成。';
+}
+
+function updateBlurMode(mode) {
+  blurMode = mode === 'pixel' ? 'pixel' : 'photo';
+  blurModeButtons.forEach((button) => {
+    const active = button.dataset.blurMode === blurMode;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  pointField?.setOptions({
+    blurMode,
+    cameraBlur: cameraBlur / 100,
+    tiltShift: tiltShift / 100,
+    focusPosition: focusPosition / 100,
+  });
+  updateCameraNote();
 }
 
 function updateMode(mode, announce = true) {
@@ -442,7 +469,7 @@ function updateModelScene(sceneName) {
   });
   sceneKicker.textContent = sceneName === 'bridge' ? '大桥' : '村庄';
   sceneDescription.textContent = sceneName === 'bridge'
-    ? '连续的石桥以三座拱洞跨越深渊。'
+    ? '十五跨石桥横越深渊，深墩没入桥下黑雾。'
     : '雪地村庄嵌入山脊，木屋、礼拜堂、瞭望塔、小路与深色松林彼此相连。';
 }
 
@@ -610,6 +637,10 @@ modeButtons.forEach((button) => {
   button.addEventListener('click', () => updateMode(button.dataset.mode));
 });
 
+blurModeButtons.forEach((button) => {
+  button.addEventListener('click', () => updateBlurMode(button.dataset.blurMode));
+});
+
 sourceTabs.forEach((tab) => {
   tab.addEventListener('click', () => {
     if (tab.dataset.sourceKind === 'reference') useReference(activeScene);
@@ -646,7 +677,10 @@ document.querySelector('[data-action="toggle-play"]').addEventListener('click', 
 document.querySelector('[data-action="reset"]').addEventListener('click', resetField);
 document.querySelector('[data-action="randomize"]').addEventListener('click', randomize);
 document.querySelector('[data-action="export"]').addEventListener('click', exportPng);
-cameraReset.addEventListener('click', () => pointField?.resetCamera());
+cameraReset.addEventListener('click', () => {
+  if (sourceType === '3d') pointField?.resetCamera();
+  else pointField?.resetInputView();
+});
 document.querySelector('[data-action="use-demo-canvas"]').addEventListener('click', () => attachCanvasSource(demoCanvas));
 
 document.querySelector('[data-action="fullscreen"]').addEventListener('click', async () => {
@@ -703,6 +737,7 @@ updatePointPixelSize(pointPixelRange.value);
 updateCameraBlur(cameraBlurRange.value);
 updateTiltShift(tiltShiftRange.value);
 updateFocusPosition(focusPositionRange.value);
+updateBlurMode(blurMode);
 updateMode('ward', false);
 usePointField(false);
 rafId = requestAnimationFrame(renderLoop);

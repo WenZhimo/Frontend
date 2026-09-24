@@ -331,8 +331,8 @@ input:focus-visible {
 }
 
 .scene-frame.is-dithered:not(.is-3d) .point-canvas {
-  cursor: default;
-  touch-action: auto;
+  cursor: grab;
+  touch-action: none;
 }
 
 .model-switch[hidden],
@@ -367,6 +367,11 @@ input:focus-visible {
 
 .scene-frame.is-dithered:not(.is-3d) + .scene-toolbar p {
   display: none;
+}
+
+.scene-frame.is-dithered:not(.is-3d) + .scene-toolbar .camera-help {
+  display: block;
+  color: var(--muted-strong);
 }
 
 .scene-frame.is-changing .scene-image {
@@ -551,12 +556,31 @@ input:focus-visible {
 }
 
 .control-panel {
-  position: relative;
+  position: sticky;
+  top: 18px;
   display: flex;
-  min-height: 100%;
+  height: min(780px, calc(100vh - 172px));
+  min-height: 0;
   flex-direction: column;
   padding: 5px 0 0 25px;
   border-left: 1px solid var(--line);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(230, 59, 46, 0.7) transparent;
+}
+
+.control-panel::-webkit-scrollbar {
+  width: 5px;
+}
+
+.control-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.control-panel::-webkit-scrollbar-thumb {
+  background: rgba(230, 59, 46, 0.7);
+  border-radius: 8px;
 }
 
 .panel-index {
@@ -983,6 +1007,37 @@ input[type='range']::-moz-range-thumb {
   margin-top: 8px;
 }
 
+.blur-mode-heading {
+  margin-top: 13px;
+}
+
+.blur-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  margin-top: 8px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  background: rgba(232, 229, 219, 0.03);
+}
+
+.blur-mode-button {
+  padding: 8px 6px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.blur-mode-button:hover,
+.blur-mode-button.is-active {
+  color: var(--paper);
+  background: rgba(232, 229, 219, 0.1);
+}
+
 .scene-frame.is-dithered .scene-description {
   color: rgba(238, 237, 230, 0.9);
 }
@@ -1142,7 +1197,7 @@ body[data-mode='bloom'] .scene-frame::after {
 @media (max-width: 1080px) {
   .app-shell { width: min(100% - 40px, 900px); }
   .hero-layout { grid-template-columns: 1fr; }
-  .control-panel { padding: 30px 0 0; border-top: 1px solid var(--line); border-left: 0; }
+  .control-panel { position: relative; top: auto; height: auto; max-height: none; padding: 30px 0 0; border-top: 1px solid var(--line); border-left: 0; overflow: visible; }
   .panel-heading p { max-width: 520px; }
   .state-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .panel-footer { margin-top: 30px; }

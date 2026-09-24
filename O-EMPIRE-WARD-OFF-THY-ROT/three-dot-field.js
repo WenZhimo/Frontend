@@ -17,8 +17,11 @@ const screenFragmentShader = `
   uniform vec2 uSceneResolution;
   uniform vec2 uSourceCropScale;
   uniform vec2 uSourceCropOffset;
+  uniform float uImageZoom;
+  uniform vec2 uImagePan;
   uniform float uCameraBlur;
   uniform float uTiltShift;
+  uniform float uPixelBlurMode;
   uniform float uFocusPosition;
   uniform float uFocusRange;
   varying vec2 vUv;
@@ -52,6 +55,8 @@ const screenFragmentShader = `
     vec2 sourcePixel = floor(vUv * uSceneResolution);
     vec2 sourceUv = (sourcePixel + 0.5) / uSceneResolution;
     sourceUv = sourceUv * uSourceCropScale + uSourceCropOffset;
+    sourceUv = (sourceUv - vec2(0.5) - uImagePan) / max(uImageZoom, 0.001) + vec2(0.5);
+    if (sourceUv.x < 0.0 || sourceUv.x > 1.0 || sourceUv.y < 0.0 || sourceUv.y > 1.0) discard;
     // A camera blur is resolved before monochrome quantization, so the
     // softened image is still made of square pixels rather than a smooth
     // post-process pasted over the pixel field. Tilt-shift keeps a horizontal
@@ -64,7 +69,7 @@ const screenFragmentShader = `
     // sample faster than the global lens blur. This makes the falloff easy
     // to read even after the result is rebuilt as two-pixel square cells.
     float tiltBlur = clamp(uTiltShift * outOfFocus * 1.35, 0.0, 1.0);
-    float blurAmount = clamp(max(uCameraBlur, tiltBlur), 0.0, 1.0);
+    float blurAmount = clamp(max(uCameraBlur, tiltBlur) * uPixelBlurMode, 0.0, 1.0);
     float blurRadius = 0.65 + uCameraBlur * 2.8 + tiltBlur * 7.5;
     vec2 sourceTexel = 1.0 / max(uSceneResolution, vec2(1.0));
     vec2 blurStep = sourceTexel * blurRadius / max(uSourceCropScale, vec2(0.02));
@@ -114,8 +119,11 @@ const ditherMaterial = new THREE.ShaderMaterial({
     uSceneResolution: { value: new THREE.Vector2(1, 1) },
     uSourceCropScale: { value: new THREE.Vector2(1, 1) },
     uSourceCropOffset: { value: new THREE.Vector2(0, 0) },
+    uImageZoom: { value: 1 },
+    uImagePan: { value: new THREE.Vector2(0, 0) },
     uCameraBlur: { value: 0.0 },
     uTiltShift: { value: 0.0 },
+    uPixelBlurMode: { value: 0.0 },
     uFocusPosition: { value: 0.5 },
     uFocusRange: { value: 0.16 },
   },
@@ -174,6 +182,75 @@ const sceneTarget = new THREE.WebGLRenderTarget(192, 108, {
   depthBuffer: true,
   stencilBuffer: false,
 });
+const processedTarget = new THREE.WebGLRenderTarget(1, 1, {
+  minFilter: THREE.LinearFilter,
+  magFilter: THREE.LinearFilter,
+  format: THREE.RGBAFormat,
+  type: THREE.UnsignedByteType,
+  depthBuffer: false,
+  stencilBuffer: false,
+});
+const outputFragmentShader = `
+  uniform sampler2D uDithered;
+  uniform vec2 uResolution;
+  uniform float uCameraBlur;
+  uniform float uTiltShift;
+  uniform float uFocusPosition;
+  uniform float uFocusRange;
+  uniform float uPixelRatio;
+  varying vec2 vUv;
+
+  void main() {
+    float focusY = 1.0 - uFocusPosition;
+    float outOfFocus = smoothstep(uFocusRange, 0.5, abs(vUv.y - focusY));
+    float tiltBlur = uTiltShift * outOfFocus;
+    float blurAmount = max(uCameraBlur, tiltBlur);
+    float blurRadius = (uCameraBlur * 22.0 + tiltBlur * 34.0) * uPixelRatio;
+    vec4 center = texture2D(uDithered, vUv);
+    if (blurRadius < 0.5 || blurAmount < 0.001) {
+      gl_FragColor = center;
+      return;
+    }
+
+    // This pass runs after square-pixel reconstruction. Linear texture samples
+    // blend the pixel edges like a photographic lens instead of spreading
+    // intermediate gray values before dithering.
+    vec2 stepUv = blurRadius / uResolution;
+    vec4 blurred = center * 0.3;
+    blurred += texture2D(uDithered, clamp(vUv + vec2( stepUv.x, 0.0), 0.0, 1.0)) * 0.1;
+    blurred += texture2D(uDithered, clamp(vUv + vec2(-stepUv.x, 0.0), 0.0, 1.0)) * 0.1;
+    blurred += texture2D(uDithered, clamp(vUv + vec2(0.0,  stepUv.y), 0.0, 1.0)) * 0.1;
+    blurred += texture2D(uDithered, clamp(vUv + vec2(0.0, -stepUv.y), 0.0, 1.0)) * 0.1;
+    vec2 diagonal = stepUv * 0.72;
+    blurred += texture2D(uDithered, clamp(vUv + diagonal, 0.0, 1.0)) * 0.05;
+    blurred += texture2D(uDithered, clamp(vUv - diagonal, 0.0, 1.0)) * 0.05;
+    blurred += texture2D(uDithered, clamp(vUv + vec2(diagonal.x, -diagonal.y), 0.0, 1.0)) * 0.05;
+    blurred += texture2D(uDithered, clamp(vUv + vec2(-diagonal.x, diagonal.y), 0.0, 1.0)) * 0.05;
+    vec2 farStep = stepUv * 1.55;
+    blurred += texture2D(uDithered, clamp(vUv + vec2( farStep.x, 0.0), 0.0, 1.0)) * 0.025;
+    blurred += texture2D(uDithered, clamp(vUv + vec2(-farStep.x, 0.0), 0.0, 1.0)) * 0.025;
+    blurred += texture2D(uDithered, clamp(vUv + vec2(0.0,  farStep.y), 0.0, 1.0)) * 0.025;
+    blurred += texture2D(uDithered, clamp(vUv + vec2(0.0, -farStep.y), 0.0, 1.0)) * 0.025;
+    gl_FragColor = mix(center, blurred, clamp(blurAmount, 0.0, 1.0));
+  }
+`;
+const outputMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    uDithered: { value: processedTarget.texture },
+    uResolution: { value: new THREE.Vector2(1, 1) },
+    uCameraBlur: { value: 0 },
+    uTiltShift: { value: 0 },
+    uFocusPosition: { value: 0.5 },
+    uFocusRange: { value: 0.16 },
+    uPixelRatio: { value: renderer.getPixelRatio() },
+  },
+  vertexShader: screenVertexShader,
+  fragmentShader: outputFragmentShader,
+  depthTest: false,
+  depthWrite: false,
+});
+const outputScene = new THREE.Scene();
+outputScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), outputMaterial));
 // Use perspective depth so closer geometry projects larger than distant geometry.
 const camera = new THREE.PerspectiveCamera(25, 1, 0.1, 220);
 const cameraDefaults = {
@@ -195,6 +272,7 @@ const solidMeshes = [];
 const mapModels = [];
 const bridgeModels = [];
 const animatedVillageFires = [];
+const blurSettings = { mode: 'photo', cameraBlur: 0, tiltShift: 0, focusPosition: 0.5, focusRange: 0.16 };
 let activeModelCollection = mapModels;
 let activeModel = 'bridge';
 const materialCache = new Map();
@@ -206,11 +284,15 @@ let inputTexture = null;
 let inputSourceSize = new THREE.Vector2(1, 1);
 let inputIsCanvas = false;
 let lastVideoTime = -1;
+let inputZoom = 1;
+const inputPan = new THREE.Vector2();
 
 function updateSourceCrop() {
   if (!inputSource) {
     ditherMaterial.uniforms.uSourceCropScale.value.set(1, 1);
     ditherMaterial.uniforms.uSourceCropOffset.value.set(0, 0);
+    ditherMaterial.uniforms.uImageZoom.value = 1;
+    ditherMaterial.uniforms.uImagePan.value.set(0, 0);
     return;
   }
   const sourceAspect = inputSourceSize.x / Math.max(1, inputSourceSize.y);
@@ -220,19 +302,26 @@ function updateSourceCrop() {
   let offsetX = 0;
   let offsetY = 0;
   if (sourceAspect > targetAspect) {
-    scaleX = targetAspect / sourceAspect;
-    offsetX = (1 - scaleX) * 0.5;
-  } else {
     scaleY = sourceAspect / targetAspect;
     offsetY = (1 - scaleY) * 0.5;
+  } else {
+    scaleX = targetAspect / sourceAspect;
+    offsetX = (1 - scaleX) * 0.5;
   }
   ditherMaterial.uniforms.uSourceCropScale.value.set(scaleX, scaleY);
   ditherMaterial.uniforms.uSourceCropOffset.value.set(offsetX, offsetY);
+  ditherMaterial.uniforms.uImageZoom.value = inputZoom;
+  ditherMaterial.uniforms.uImagePan.value.copy(inputPan);
 }
 
 function setInputSource(source) {
+  const changed = inputSource !== source;
   if (inputTexture) inputTexture.dispose();
   inputSource = source || null;
+  if (changed) {
+    inputZoom = 1;
+    inputPan.set(0, 0);
+  }
   inputTexture = null;
   inputIsCanvas = false;
   lastVideoTime = -1;
@@ -250,6 +339,22 @@ function setInputSource(source) {
       inputSource.videoHeight || inputSource.naturalHeight || inputSource.height || 1,
     );
   }
+  updateSourceCrop();
+  render();
+  return api;
+}
+
+function setInputTransform({ zoom = inputZoom, panX = inputPan.x, panY = inputPan.y } = {}) {
+  inputZoom = clamp(zoom, 0.55, 4.0);
+  inputPan.set(clamp(panX, -0.9, 0.9), clamp(panY, -0.9, 0.9));
+  updateSourceCrop();
+  render();
+  return api;
+}
+
+function resetInputView() {
+  inputZoom = 1;
+  inputPan.set(0, 0);
   updateSourceCrop();
   render();
   return api;
@@ -472,22 +577,25 @@ function addGableFace(group, width, depth, wallHeight, roofHeight, front, tone, 
 }
 
 function makeFlameGeometry() {
-  const radialSegments = 9;
+  const radialSegments = 12;
   const rings = [
     [0.0, 0.12, 0.0],
-    [0.13, 0.34, 0.0],
-    [0.34, 0.3, -0.035],
-    [0.56, 0.235, 0.025],
-    [0.76, 0.16, 0.065],
-    [0.92, 0.07, 0.025],
-    [1.0, 0.0, 0.13],
+    [0.12, 0.36, -0.02],
+    [0.29, 0.32, -0.055],
+    [0.46, 0.27, 0.035],
+    [0.61, 0.22, -0.025],
+    [0.76, 0.16, 0.095],
+    [0.89, 0.105, 0.06],
+    [0.98, 0.045, 0.16],
+    [1.0, 0.0, 0.22],
   ];
   const positions = [];
   const indices = [];
   rings.forEach(([height, radius, centerX], ringIndex) => {
     for (let segment = 0; segment < radialSegments; segment += 1) {
       const angle = segment / radialSegments * Math.PI * 2;
-      positions.push(centerX + Math.cos(angle) * radius, height, Math.sin(angle) * radius * 0.68);
+      const ripple = 1 + 0.09 * Math.sin(angle * 3 + height * 14) + 0.045 * Math.cos(angle * 5 - height * 19);
+      positions.push(centerX + Math.cos(angle) * radius * ripple, height, Math.sin(angle) * radius * ripple * 0.68);
       if (ringIndex > 0) {
         const current = ringIndex * radialSegments + segment;
         const next = ringIndex * radialSegments + (segment + 1) % radialSegments;
@@ -506,36 +614,46 @@ function makeFlameGeometry() {
 
 function makeFireMaterial(brightness) {
   return new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uBrightness: { value: brightness } },
+    uniforms: { uTime: { value: 0 }, uBrightness: { value: brightness }, uPhase: { value: Math.random() * 6.28 } },
     vertexShader: `
       uniform float uTime;
       varying float vFlameHeight;
       varying float vFlameCore;
       varying float vFlamePhase;
+      varying float vFlameWidth;
       void main() {
         vec3 flamePosition = position;
-        float sway = position.y * position.y;
-        flamePosition.x += sin(uTime * 5.7 + position.y * 11.0 + position.z * 6.0) * 0.15 * sway;
-        flamePosition.z += cos(uTime * 4.3 + position.y * 8.0 + position.x * 7.0) * 0.09 * sway;
+        float sway = smoothstep(0.04, 1.0, position.y);
+        flamePosition.x += (sin(uTime * 5.7 + position.y * 11.0 + position.z * 6.0) * 0.16
+          + sin(uTime * 9.1 + position.y * 23.0) * 0.055) * sway;
+        flamePosition.z += (cos(uTime * 4.3 + position.y * 8.0 + position.x * 7.0) * 0.13
+          + sin(uTime * 7.8 - position.y * 16.0) * 0.04) * sway;
         vFlameHeight = position.y;
         vFlameCore = 1.0 - smoothstep(0.025, 0.21, length(position.xz));
         vFlamePhase = position.x * 19.0 + position.z * 23.0;
+        vFlameWidth = length(position.xz);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(flamePosition, 1.0);
       }
     `,
     fragmentShader: `
       uniform float uTime;
       uniform float uBrightness;
+      uniform float uPhase;
       varying float vFlameHeight;
       varying float vFlameCore;
       varying float vFlamePhase;
+      varying float vFlameWidth;
       void main() {
-        float tongue = 0.5 + 0.5 * sin(vFlamePhase + uTime * 8.0 + vFlameHeight * 21.0);
-        float body = mix(0.12, 0.66, smoothstep(0.0, 0.63, vFlameHeight));
-        body *= 1.0 - 0.24 * smoothstep(0.72, 1.0, vFlameHeight);
-        float core = vFlameCore * (1.0 - smoothstep(0.35, 0.94, vFlameHeight));
-        float value = mix(body, 0.98, core);
-        value *= 0.78 + 0.22 * tongue;
+        float waveA = sin(vFlamePhase * 1.4 + uTime * 8.4 + vFlameHeight * 23.0 + uPhase);
+        float waveB = sin(vFlamePhase * 2.3 - uTime * 12.1 + vFlameHeight * 37.0 - uPhase);
+        float flutter = 0.72 + 0.16 * waveA + 0.12 * waveB;
+        float core = vFlameCore * (1.0 - smoothstep(0.28, 0.94, vFlameHeight));
+        float body = mix(0.18, 0.76, smoothstep(0.0, 0.72, vFlameHeight));
+        body *= 1.0 - 0.45 * smoothstep(0.78, 1.0, vFlameHeight);
+        float tongues = smoothstep(0.16, 0.94, 0.5 + 0.5 * (waveA + waveB) * 0.5);
+        float edge = 1.0 - smoothstep(0.18, 0.38, vFlameWidth);
+        float value = max(body * (0.58 + tongues * 0.42), core * 0.98);
+        value *= flutter * mix(0.78, 1.0, edge);
         value *= uBrightness;
         gl_FragColor = vec4(vec3(clamp(value, 0.0, 1.0)), 1.0);
       }
@@ -545,15 +663,138 @@ function makeFireMaterial(brightness) {
   });
 }
 
+function makeSmokeGeometry() {
+  const radialSegments = 28;
+  const rings = [
+    [0.0, 0.09, 0.0],
+    [0.08, 0.17, 0.01],
+    [0.19, 0.24, 0.015],
+    [0.32, 0.38, 0.06],
+    [0.45, 0.5, 0.12],
+    [0.58, 0.63, 0.17],
+    [0.71, 0.76, 0.28],
+    [0.84, 0.98, 0.39],
+    [0.96, 0.92, 0.55],
+    [1.08, 1.08, 0.68],
+    [1.16, 0.84, 0.71],
+    [1.2, 0.08, 0.66],
+  ];
+  const positions = [];
+  const indices = [];
+  rings.forEach(([height, radius, centerX], ringIndex) => {
+    for (let segment = 0; segment < radialSegments; segment += 1) {
+      const angle = segment / radialSegments * Math.PI * 2;
+      const ripple = 1 + 0.075 * Math.sin(angle * 3 + height * 17) + 0.045 * Math.cos(angle * 5 - height * 11);
+      positions.push(
+        centerX + Math.cos(angle) * radius * ripple,
+        height,
+        Math.sin(angle) * radius * ripple * 0.76,
+      );
+      if (ringIndex > 0) {
+        const current = ringIndex * radialSegments + segment;
+        const next = ringIndex * radialSegments + (segment + 1) % radialSegments;
+        const previous = (ringIndex - 1) * radialSegments + segment;
+        const previousNext = (ringIndex - 1) * radialSegments + (segment + 1) % radialSegments;
+        indices.push(previous, previousNext, current, previousNext, next, current);
+      }
+    }
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function makeSmokeMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: `
+      uniform float uTime;
+      varying vec3 vSmokePosition;
+      varying float vSmokeHeight;
+      void main() {
+        vec3 smokePosition = position;
+        float rise = smoothstep(0.02, 1.18, position.y);
+        smokePosition.x += rise * (0.11 * sin(uTime * 0.72 + position.y * 7.2 + position.z * 2.1)
+          + 0.045 * sin(uTime * 1.7 - position.y * 18.0 + position.x * 4.0));
+        smokePosition.z += rise * (0.08 * cos(uTime * 0.61 + position.y * 6.3 + position.x * 3.0)
+          + 0.035 * sin(uTime * 1.35 + position.y * 16.0));
+        float billow = 1.0 + rise * (0.045 * sin(uTime * 0.9 + position.y * 12.0 + position.x * 6.0));
+        smokePosition.xz *= billow;
+        vSmokePosition = smokePosition;
+        vSmokeHeight = clamp(position.y / 1.2, 0.0, 1.0);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(smokePosition, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      varying vec3 vSmokePosition;
+      varying float vSmokeHeight;
+      float hashSmoke(vec3 p) {
+        return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+      }
+      float noiseSmoke(vec3 p) {
+        vec3 i = floor(p);
+        vec3 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float n000 = hashSmoke(i + vec3(0.0, 0.0, 0.0));
+        float n100 = hashSmoke(i + vec3(1.0, 0.0, 0.0));
+        float n010 = hashSmoke(i + vec3(0.0, 1.0, 0.0));
+        float n110 = hashSmoke(i + vec3(1.0, 1.0, 0.0));
+        float n001 = hashSmoke(i + vec3(0.0, 0.0, 1.0));
+        float n101 = hashSmoke(i + vec3(1.0, 0.0, 1.0));
+        float n011 = hashSmoke(i + vec3(0.0, 1.0, 1.0));
+        float n111 = hashSmoke(i + vec3(1.0, 1.0, 1.0));
+        float nx00 = mix(n000, n100, f.x);
+        float nx10 = mix(n010, n110, f.x);
+        float nx01 = mix(n001, n101, f.x);
+        float nx11 = mix(n011, n111, f.x);
+        return mix(mix(nx00, nx10, f.y), mix(nx01, nx11, f.y), f.z);
+      }
+      float fbmSmoke(vec3 p) {
+        float value = 0.0;
+        float amplitude = 0.52;
+        for (int octave = 0; octave < 4; octave++) {
+          value += noiseSmoke(p) * amplitude;
+          p = p * 2.03 + vec3(7.1, 3.7, 5.3);
+          amplitude *= 0.48;
+        }
+        return value;
+      }
+      void main() {
+        vec3 flow = vSmokePosition * vec3(3.0, 2.0, 3.0);
+        flow.y -= uTime * 0.34;
+        flow.x += sin(uTime * 0.22 + flow.y * 0.4) * 0.55;
+        float broadNoise = fbmSmoke(flow);
+        float fineNoise = fbmSmoke(flow * 1.85 + vec3(2.4, -uTime * 0.2, 4.1));
+        float wisps = smoothstep(0.28, 0.73, broadNoise * 0.68 + fineNoise * 0.32);
+        float lowerFade = smoothstep(0.0, 0.11, vSmokeHeight);
+        float upperFade = 1.0 - smoothstep(0.86, 1.0, vSmokeHeight) * 0.42;
+        float density = wisps * lowerFade * upperFade;
+        float tone = mix(0.04, 0.28, smoothstep(0.24, 0.78, fineNoise));
+        float opacity = (0.08 + density * 0.62) * lowerFade * upperFade;
+        if (opacity < 0.018) discard;
+        gl_FragColor = vec4(vec3(tone), opacity);
+      }
+    `,
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+}
+
 function addRoofFire(group, width, depth, wallHeight, roofHeight) {
   const peakX = -width * 0.08;
   const peakY = wallHeight + roofHeight * (1 - Math.abs(peakX) / (width / 2)) - 0.04;
   const baseY = peakY + 0.025;
   const flameGeometry = makeFlameGeometry();
   const flames = [
-    { x: 0, y: baseY, z: 0, radius: 0.62, height: 3.05, brightness: 1.0 },
-    { x: -0.22, y: baseY + 0.035, z: 0.06, radius: 0.37, height: 2.25, brightness: 0.84 },
-    { x: 0.24, y: baseY + 0.02, z: -0.05, radius: 0.34, height: 2.45, brightness: 0.9 },
+    { x: 0, y: baseY, z: 0, radius: 0.66, height: 3.45, brightness: 1.0 },
+    { x: -0.27, y: baseY + 0.015, z: 0.08, radius: 0.4, height: 2.75, brightness: 0.84 },
+    { x: 0.24, y: baseY + 0.025, z: -0.08, radius: 0.37, height: 2.95, brightness: 0.91 },
+    { x: 0.05, y: baseY + 0.04, z: 0.22, radius: 0.27, height: 2.5, brightness: 0.78 },
   ];
   const materials = [];
   flames.forEach(({ x, y, z, radius, height, brightness }) => {
@@ -567,35 +808,19 @@ function addRoofFire(group, width, depth, wallHeight, roofHeight) {
     materials.push(material);
   });
 
-  const smokeMaterial = new THREE.MeshBasicMaterial({
-    color: 0x777777,
-    transparent: true,
-    opacity: 0.48,
-    depthWrite: false,
-  });
-  const smokeGeometry = new THREE.SphereGeometry(1, 8, 6);
-  const smokePuffs = [];
-  [
-    { x: -0.08, y: 2.45, z: 0.02, size: 0.28 },
-    { x: 0.11, y: 3.05, z: -0.03, size: 0.35 },
-    { x: 0.34, y: 3.7, z: 0.04, size: 0.42 },
-    { x: 0.49, y: 4.38, z: -0.04, size: 0.49 },
-    { x: 0.32, y: 5.0, z: 0.02, size: 0.53 },
-  ].forEach(({ x, y, z, size }, index) => {
-    const puff = new THREE.Mesh(smokeGeometry, smokeMaterial);
-    puff.position.set(peakX + x, baseY + y, z);
-    puff.scale.set(size * 1.0, size * 1.24, size * 0.9);
-    puff.renderOrder = 2;
-    puff.castShadow = false;
-    puff.receiveShadow = false;
-    group.add(puff);
-    smokePuffs.push({ mesh: puff, x: peakX + x, y: baseY + y, z, index });
-  });
+  const smokeMaterial = makeSmokeMaterial();
+  const smoke = new THREE.Mesh(makeSmokeGeometry(), smokeMaterial);
+  smoke.position.set(peakX - 0.13, baseY + 0.26, 0.01);
+  smoke.scale.set(1.55, 8.2, 1.08);
+  smoke.renderOrder = 2;
+  smoke.castShadow = false;
+  smoke.receiveShadow = false;
+  group.add(smoke);
 
   const fireLight = new THREE.PointLight(0xffffff, 2.2, 5.5, 2);
   fireLight.position.set(peakX, baseY + 0.42, 0);
   group.add(fireLight);
-  animatedVillageFires.push({ materials, smokePuffs, fireLight });
+  animatedVillageFires.push({ materials, smokeMaterial, fireLight });
 }
 
 function placeCottage({ x, z, width = 1.5, depth = 1.3, wallHeight = 0.95, roofHeight = 0.62, rotation = 0, tone = 0.22, y = 0, chapel = false, scale = 0.7, burning = false }) {
@@ -1073,6 +1298,9 @@ function resize() {
     Math.max(1, Math.round(drawingSize.x / pixelPitch)),
     Math.max(1, Math.round(drawingSize.y / pixelPitch)),
   );
+  processedTarget.setSize(drawingSize.x, drawingSize.y);
+  outputMaterial.uniforms.uResolution.value.set(drawingSize.x, drawingSize.y);
+  outputMaterial.uniforms.uPixelRatio.value = renderer.getPixelRatio();
   ditherMaterial.uniforms.uSceneResolution.value.set(sceneTarget.width, sceneTarget.height);
   updateSourceCrop();
   if (mounted) render();
@@ -1081,15 +1309,9 @@ function resize() {
 function render() {
   if (!mounted) return;
   const fireTime = performance.now() * 0.001;
-  animatedVillageFires.forEach(({ materials, smokePuffs, fireLight }) => {
+  animatedVillageFires.forEach(({ materials, smokeMaterial, fireLight }) => {
     materials.forEach((material) => { material.uniforms.uTime.value = fireTime; });
-    smokePuffs.forEach(({ mesh, x, y, z, index }) => {
-      mesh.position.set(
-        x + Math.sin(fireTime * 0.72 + index * 1.7) * 0.075,
-        y + Math.sin(fireTime * 1.1 + index * 1.3) * 0.055,
-        z + Math.cos(fireTime * 0.65 + index) * 0.045,
-      );
-    });
+    smokeMaterial.uniforms.uTime.value = fireTime;
     fireLight.intensity = 2.1 + 0.45 * Math.sin(fireTime * 7.0) + 0.2 * Math.sin(fireTime * 11.3);
   });
   if (inputTexture) {
@@ -1109,17 +1331,23 @@ function render() {
       }
     }
     ditherMaterial.uniforms.uScene.value = inputTexture;
-    renderer.setRenderTarget(null);
-    renderer.clear();
-    renderer.render(ditherScene, ditherCamera);
+    renderDitheredOutput();
     return;
   }
   ditherMaterial.uniforms.uScene.value = sceneTarget.texture;
   renderer.setRenderTarget(sceneTarget);
   renderer.clear();
   renderer.render(scene, camera);
-  renderer.setRenderTarget(null);
+  renderDitheredOutput();
+}
+
+function renderDitheredOutput() {
+  renderer.setRenderTarget(processedTarget);
+  renderer.clear();
   renderer.render(ditherScene, ditherCamera);
+  renderer.setRenderTarget(null);
+  outputMaterial.uniforms.uDithered.value = processedTarget.texture;
+  renderer.render(outputScene, ditherCamera);
 }
 
 function animate() {
@@ -1160,11 +1388,22 @@ function setOptions(options = {}) {
     pixelSize = clamp(options.pixelSize, 2, 12);
     resize();
   }
-  if (typeof options.cameraBlur === 'number') ditherMaterial.uniforms.uCameraBlur.value = clamp(options.cameraBlur, 0, 1);
-  if (typeof options.tiltShift === 'number') ditherMaterial.uniforms.uTiltShift.value = clamp(options.tiltShift, 0, 1);
-  if (typeof options.focusPosition === 'number') ditherMaterial.uniforms.uFocusPosition.value = clamp(options.focusPosition, 0, 1);
-  if (typeof options.focusRange === 'number') ditherMaterial.uniforms.uFocusRange.value = clamp(options.focusRange, 0.04, 0.45);
-  if (typeof options.cameraBlur === 'number' || typeof options.tiltShift === 'number' || typeof options.focusPosition === 'number' || typeof options.focusRange === 'number') render();
+  if (typeof options.cameraBlur === 'number') blurSettings.cameraBlur = clamp(options.cameraBlur, 0, 1);
+  if (typeof options.tiltShift === 'number') blurSettings.tiltShift = clamp(options.tiltShift, 0, 1);
+  if (typeof options.focusPosition === 'number') blurSettings.focusPosition = clamp(options.focusPosition, 0, 1);
+  if (typeof options.focusRange === 'number') blurSettings.focusRange = clamp(options.focusRange, 0.04, 0.45);
+  if (options.blurMode === 'photo' || options.blurMode === 'pixel') blurSettings.mode = options.blurMode;
+  const usePixelBlur = blurSettings.mode === 'pixel';
+  ditherMaterial.uniforms.uCameraBlur.value = usePixelBlur ? blurSettings.cameraBlur : 0;
+  ditherMaterial.uniforms.uTiltShift.value = usePixelBlur ? blurSettings.tiltShift : 0;
+  ditherMaterial.uniforms.uPixelBlurMode.value = usePixelBlur ? 1 : 0;
+  ditherMaterial.uniforms.uFocusPosition.value = blurSettings.focusPosition;
+  ditherMaterial.uniforms.uFocusRange.value = blurSettings.focusRange;
+  outputMaterial.uniforms.uCameraBlur.value = usePixelBlur ? 0 : blurSettings.cameraBlur;
+  outputMaterial.uniforms.uTiltShift.value = usePixelBlur ? 0 : blurSettings.tiltShift;
+  outputMaterial.uniforms.uFocusPosition.value = blurSettings.focusPosition;
+  outputMaterial.uniforms.uFocusRange.value = blurSettings.focusRange;
+  if (typeof options.cameraBlur === 'number' || typeof options.tiltShift === 'number' || typeof options.focusPosition === 'number' || typeof options.focusRange === 'number' || typeof options.blurMode === 'string') render();
   return api;
 }
 
@@ -1203,9 +1442,12 @@ function resetCamera() {
 let pointerState = null;
 canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 canvas.addEventListener('pointerdown', (event) => {
-  if (inputSource) return;
   if (event.button !== 0 && event.button !== 2) return;
-  pointerState = { x: event.clientX, y: event.clientY, action: event.button === 2 || event.shiftKey ? 'pan' : 'orbit' };
+  pointerState = {
+    x: event.clientX,
+    y: event.clientY,
+    action: inputSource ? 'input-pan' : event.button === 2 || event.shiftKey ? 'pan' : 'orbit',
+  };
   canvas.setPointerCapture(event.pointerId);
   canvas.classList.add(pointerState.action === 'pan' ? 'is-panning' : 'is-orbiting');
 });
@@ -1215,7 +1457,14 @@ canvas.addEventListener('pointermove', (event) => {
   const dy = event.clientY - pointerState.y;
   pointerState.x = event.clientX;
   pointerState.y = event.clientY;
-  if (pointerState.action === 'orbit') {
+  if (pointerState.action === 'input-pan') {
+    const rect = canvas.getBoundingClientRect();
+    const cropScale = ditherMaterial.uniforms.uSourceCropScale.value;
+    setInputTransform({
+      panX: inputPan.x + dx / Math.max(1, rect.width) * cropScale.x,
+      panY: inputPan.y - dy / Math.max(1, rect.height) * cropScale.y,
+    });
+  } else if (pointerState.action === 'orbit') {
     cameraTheta -= dx * 0.008;
     cameraPhi = clamp(cameraPhi + dy * 0.008, 0.12, Math.PI - 0.12);
     positionCamera();
@@ -1240,11 +1489,28 @@ const endPointerGesture = (event) => {
 canvas.addEventListener('pointerup', endPointerGesture);
 canvas.addEventListener('pointercancel', endPointerGesture);
 canvas.addEventListener('wheel', (event) => {
-  if (inputSource) return;
   event.preventDefault();
-  cameraZoom = clamp(cameraZoom * Math.exp(-event.deltaY * 0.001), 0.55, 3.5);
-  positionCamera();
-  render();
+  if (inputSource) {
+    const rect = canvas.getBoundingClientRect();
+    const viewX = (event.clientX - rect.left) / Math.max(1, rect.width);
+    const viewY = 1 - (event.clientY - rect.top) / Math.max(1, rect.height);
+    const cropScale = ditherMaterial.uniforms.uSourceCropScale.value;
+    const cropOffset = ditherMaterial.uniforms.uSourceCropOffset.value;
+    const fitX = viewX * cropScale.x + cropOffset.x;
+    const fitY = viewY * cropScale.y + cropOffset.y;
+    const sourceX = (fitX - 0.5 - inputPan.x) / inputZoom + 0.5;
+    const sourceY = (fitY - 0.5 - inputPan.y) / inputZoom + 0.5;
+    const nextZoom = clamp(inputZoom * Math.exp(-event.deltaY * 0.001), 0.55, 4.0);
+    setInputTransform({
+      zoom: nextZoom,
+      panX: fitX - 0.5 - (sourceX - 0.5) * nextZoom,
+      panY: fitY - 0.5 - (sourceY - 0.5) * nextZoom,
+    });
+  } else {
+    cameraZoom = clamp(cameraZoom * Math.exp(-event.deltaY * 0.001), 0.55, 3.5);
+    positionCamera();
+    render();
+  }
 }, { passive: false });
 
 const api = {
@@ -1260,6 +1526,8 @@ const api = {
   resize,
   setOptions,
   setInputSource,
+  setInputTransform,
+  resetInputView,
   setScene,
   resetCamera,
   randomize,
