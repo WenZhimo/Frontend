@@ -636,13 +636,15 @@ function makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, ro
     atlasKinds.push(kind);
   };
 
-  clusters.forEach(({ x: roofX, z: roofZ, radius, height, brightness }) => {
+  clusters.forEach(({ x: roofX, z: roofZ, radius, height, brightness, baseY, baseZ }) => {
     const x = roofX * roofWidth;
-    const z = roofZ * roofDepth;
-    const surfaceY = wallHeight + roofHeight * (1 - Math.abs(x) / (roofWidth / 2)) + 0.035;
+    const z = Number.isFinite(baseZ) ? baseZ : roofZ * roofDepth;
+    const surfaceY = Number.isFinite(baseY)
+      ? baseY
+      : wallHeight + roofHeight * (1 - Math.abs(x) / (roofWidth / 2)) + 0.035;
     const centerY = surfaceY + radius * 0.55;
-    const ballCount = Math.round(112 + radius * 128);
-    const tongueCount = Math.round(78 + radius * 108);
+    const ballCount = Math.round(18 + radius * 18);
+    const tongueCount = Math.round(16 + radius * 18);
 
     // A jittering cloud of short-lived particles forms the round fireball at
     // the roof. Uniform volume sampling keeps its base bulbous rather than a
@@ -658,7 +660,7 @@ function makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, ro
           centerY + vertical * shell * radius * 0.72,
           z + Math.sin(angle) * radial * radius * 0.82,
         ],
-        size: radius * (0.44 + Math.random() * 0.38),
+        size: radius * (0.86 + Math.random() * 0.52),
         phase: Math.random() * Math.PI * 2,
         kind: 0,
         height: 0,
@@ -679,7 +681,7 @@ function makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, ro
         position: [x, baseY, z],
         offsetX: Math.cos(angle) * radius * spread * 0.86,
         offsetZ: Math.sin(angle) * radius * spread * 0.76,
-        size: radius * (0.4 + Math.random() * 0.34),
+        size: radius * (0.82 + Math.random() * 0.48),
         phase: Math.random(),
         kind: 1,
         height: height * (0.66 + Math.random() * 0.5),
@@ -939,21 +941,26 @@ function makeSmokeMaterial(windScale = 1) {
 function addRoofFire(group, width, depth, wallHeight, roofHeight) {
   const roofWidth = width + 0.18;
   const roofDepth = depth + 0.2;
+  const frontZ = depth / 2 + 0.11;
+  const sideZ = depth / 2 + 0.055;
+  const roofY = (x) => wallHeight + roofHeight * (1 - Math.abs(x) / (width / 2)) + 0.045;
   const peakX = -width * 0.08;
-  const peakY = wallHeight + roofHeight * (1 - Math.abs(peakX) / (width / 2)) - 0.04;
-  // Each entry is spread across both roof planes and along the ridge. Sizes
-  // vary so the fire reads as scattered particle clusters rather than a
-  // single oversized point source.
+  const peakY = roofY(peakX);
+  // These points are attached to existing architectural surfaces: window
+  // openings, the two roof planes, the ridge, and a pair of broken eaves.
+  // They add only animated overlays; house geometry and materials stay intact.
   const clusters = [
-    { x: -0.31, z: -0.34, radius: 0.22, height: 0.82, brightness: 0.8 },
-    { x: -0.06, z: -0.39, radius: 0.27, height: 0.97, brightness: 0.92 },
-    { x: 0.29, z: -0.28, radius: 0.19, height: 0.76, brightness: 0.78 },
-    { x: -0.34, z: -0.02, radius: 0.28, height: 1.05, brightness: 0.96 },
-    { x: -0.1, z: -0.04, radius: 0.2, height: 0.72, brightness: 0.82 },
-    { x: 0.2, z: 0.01, radius: 0.31, height: 1.12, brightness: 1.0 },
-    { x: 0.35, z: 0.19, radius: 0.2, height: 0.76, brightness: 0.8 },
-    { x: -0.25, z: 0.31, radius: 0.25, height: 0.92, brightness: 0.88 },
-    { x: 0.03, z: 0.35, radius: 0.29, height: 1.04, brightness: 0.95 },
+    { x: -0.28, z: 0, baseY: wallHeight * 0.58, baseZ: frontZ, radius: 0.24, height: 0.9, brightness: 0.95 },
+    { x: 0.28, z: 0, baseY: wallHeight * 0.58, baseZ: frontZ, radius: 0.23, height: 0.86, brightness: 0.88 },
+    { x: -0.38, z: -0.36, radius: 0.34, height: 1.22, brightness: 1.0 },
+    { x: -0.05, z: -0.39, radius: 0.39, height: 1.42, brightness: 1.0 },
+    { x: 0.29, z: -0.28, radius: 0.31, height: 1.08, brightness: 0.92 },
+    { x: -0.29, z: 0.12, radius: 0.3, height: 1.12, brightness: 0.94 },
+    { x: 0.17, z: 0.08, radius: 0.36, height: 1.32, brightness: 1.0 },
+    { x: -0.34, z: 0.3, radius: 0.27, height: 1.04, brightness: 0.86 },
+    { x: 0.31, z: 0.3, radius: 0.3, height: 1.18, brightness: 0.92 },
+    { x: -0.43, z: 0, baseY: wallHeight + 0.04, baseZ: sideZ, radius: 0.22, height: 0.72, brightness: 0.8 },
+    { x: 0.43, z: 0, baseY: wallHeight + 0.04, baseZ: sideZ, radius: 0.2, height: 0.7, brightness: 0.78 },
   ];
   const fireMaterial = makeFireParticleMaterial(sceneTarget.height);
   const fireParticles = new THREE.Points(
@@ -966,19 +973,28 @@ function addRoofFire(group, width, depth, wallHeight, roofHeight) {
   fireParticles.receiveShadow = false;
   group.add(fireParticles);
 
-  const smokeMaterial = makeSmokeMaterial(1.0);
-  const smoke = new THREE.Mesh(makeSmokeGeometry(), smokeMaterial);
-  smoke.position.set(peakX + 0.08, peakY + 0.2, -0.03);
-  smoke.scale.set(1.52, 8.2, 1.1);
-  smoke.renderOrder = 2;
-  smoke.castShadow = false;
-  smoke.receiveShadow = false;
-  group.add(smoke);
+  const smokeMaterials = [];
+  const smokePoints = clusters.filter((cluster) => cluster.radius > 0.25).slice(0, 7);
+  smokePoints.forEach((cluster, index) => {
+    const smokeMaterial = makeSmokeMaterial(0.86 + index * 0.1);
+    const smoke = new THREE.Mesh(makeSmokeGeometry(), smokeMaterial);
+    const x = cluster.x * roofWidth;
+    const z = Number.isFinite(cluster.baseZ) ? cluster.baseZ : cluster.z * roofDepth;
+    const y = Number.isFinite(cluster.baseY) ? cluster.baseY : roofY(x);
+    smoke.position.set(x, y + 0.02, z - 0.03);
+    smoke.scale.set(0.66 + (index % 3) * 0.18, 4.8 + (index % 4) * 0.78, 0.56 + (index % 2) * 0.2);
+    smoke.rotation.y = (index - 2) * 0.24;
+    smoke.renderOrder = 2;
+    smoke.castShadow = false;
+    smoke.receiveShadow = false;
+    group.add(smoke);
+    smokeMaterials.push(smokeMaterial);
+  });
 
   const fireLight = new THREE.PointLight(0xffffff, 2.2, 5.5, 2);
-  fireLight.position.set(peakX, peakY + 0.55, 0);
+  fireLight.position.set(peakX, peakY + 0.55, -0.02);
   group.add(fireLight);
-  animatedVillageFires.push({ materials: [fireMaterial], smokeMaterial, fireLight, lightPhase: Math.random() * 6.28 });
+  animatedVillageFires.push({ materials: [fireMaterial], smokeMaterials, fireLight, lightPhase: Math.random() * 6.28 });
 }
 
 function placeCottage({ x, z, width = 1.5, depth = 1.3, wallHeight = 0.95, roofHeight = 0.62, rotation = 0, tone = 0.22, y = 0, chapel = false, scale = 0.7, burning = false }) {
@@ -1472,9 +1488,9 @@ function resize() {
 function render() {
   if (!mounted) return;
   const fireTime = performance.now() * 0.001;
-  animatedVillageFires.forEach(({ materials, smokeMaterial, fireLight, lightPhase }) => {
+  animatedVillageFires.forEach(({ materials, smokeMaterials, fireLight, lightPhase }) => {
     materials.forEach((material) => { material.uniforms.uTime.value = fireTime; });
-    smokeMaterial.uniforms.uTime.value = fireTime;
+    smokeMaterials.forEach((material) => { material.uniforms.uTime.value = fireTime; });
     fireLight.intensity = 2.1 + 0.45 * Math.sin(fireTime * 7.0 + lightPhase) + 0.2 * Math.sin(fireTime * 11.3 - lightPhase);
   });
   if (inputTexture) {
