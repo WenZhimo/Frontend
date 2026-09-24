@@ -200,37 +200,39 @@ const outputFragmentShader = `
   uniform float uPixelRatio;
   varying vec2 vUv;
 
+  vec4 sampleGaussianTap(vec2 offset, vec2 stepUv) {
+    return texture2D(uDithered, clamp(vUv + offset * stepUv, 0.0, 1.0));
+  }
+
   void main() {
     float focusY = 1.0 - uFocusPosition;
     float outOfFocus = smoothstep(uFocusRange, 0.5, abs(vUv.y - focusY));
     float tiltBlur = uTiltShift * outOfFocus;
     float blurAmount = max(uCameraBlur, tiltBlur);
-    float blurRadius = (uCameraBlur * 22.0 + tiltBlur * 34.0) * uPixelRatio;
+    float blurRadius = (uCameraBlur * 20.0 + tiltBlur * 38.0) * uPixelRatio;
     vec4 center = texture2D(uDithered, vUv);
     if (blurRadius < 0.5 || blurAmount < 0.001) {
       gl_FragColor = center;
       return;
     }
 
-    // This pass runs after square-pixel reconstruction. Linear texture samples
-    // blend the pixel edges like a photographic lens instead of spreading
-    // intermediate gray values before dithering.
-    vec2 stepUv = blurRadius / uResolution;
-    vec4 blurred = center * 0.3;
-    blurred += texture2D(uDithered, clamp(vUv + vec2( stepUv.x, 0.0), 0.0, 1.0)) * 0.1;
-    blurred += texture2D(uDithered, clamp(vUv + vec2(-stepUv.x, 0.0), 0.0, 1.0)) * 0.1;
-    blurred += texture2D(uDithered, clamp(vUv + vec2(0.0,  stepUv.y), 0.0, 1.0)) * 0.1;
-    blurred += texture2D(uDithered, clamp(vUv + vec2(0.0, -stepUv.y), 0.0, 1.0)) * 0.1;
-    vec2 diagonal = stepUv * 0.72;
-    blurred += texture2D(uDithered, clamp(vUv + diagonal, 0.0, 1.0)) * 0.05;
-    blurred += texture2D(uDithered, clamp(vUv - diagonal, 0.0, 1.0)) * 0.05;
-    blurred += texture2D(uDithered, clamp(vUv + vec2(diagonal.x, -diagonal.y), 0.0, 1.0)) * 0.05;
-    blurred += texture2D(uDithered, clamp(vUv + vec2(-diagonal.x, diagonal.y), 0.0, 1.0)) * 0.05;
-    vec2 farStep = stepUv * 1.55;
-    blurred += texture2D(uDithered, clamp(vUv + vec2( farStep.x, 0.0), 0.0, 1.0)) * 0.025;
-    blurred += texture2D(uDithered, clamp(vUv + vec2(-farStep.x, 0.0), 0.0, 1.0)) * 0.025;
-    blurred += texture2D(uDithered, clamp(vUv + vec2(0.0,  farStep.y), 0.0, 1.0)) * 0.025;
-    blurred += texture2D(uDithered, clamp(vUv + vec2(0.0, -farStep.y), 0.0, 1.0)) * 0.025;
+    // A 5x5 binomial kernel closely approximates a Gaussian. It runs after
+    // pixel reconstruction so this photo mode softens square edges instead
+    // of spreading the source before quantization.
+    vec2 kernelStep = blurRadius * 0.5 / uResolution;
+    // Pair adjacent binomial taps into bilinear samples: the 9 fetches below
+    // are equivalent to a 5x5 [1, 4, 6, 4, 1] Gaussian kernel.
+    vec2 pairedStep = kernelStep * 1.2;
+    vec4 blurred = sampleGaussianTap(vec2(-1.0, -1.0), pairedStep) * 25.0
+      + sampleGaussianTap(vec2( 0.0, -1.0), pairedStep) * 30.0
+      + sampleGaussianTap(vec2( 1.0, -1.0), pairedStep) * 25.0
+      + sampleGaussianTap(vec2(-1.0,  0.0), pairedStep) * 30.0
+      + sampleGaussianTap(vec2( 0.0,  0.0), pairedStep) * 36.0
+      + sampleGaussianTap(vec2( 1.0,  0.0), pairedStep) * 30.0
+      + sampleGaussianTap(vec2(-1.0,  1.0), pairedStep) * 25.0
+      + sampleGaussianTap(vec2( 0.0,  1.0), pairedStep) * 30.0
+      + sampleGaussianTap(vec2( 1.0,  1.0), pairedStep) * 25.0;
+    blurred /= 256.0;
     gl_FragColor = mix(center, blurred, clamp(blurAmount, 0.0, 1.0));
   }
 `;
@@ -577,17 +579,18 @@ function addGableFace(group, width, depth, wallHeight, roofHeight, front, tone, 
 }
 
 function makeFlameGeometry() {
-  const radialSegments = 12;
+  const radialSegments = 18;
+  // The spherical mesh carries the fireball mass; this narrower form supplies
+  // the wind-tossed tongues that rise from each cluster.
   const rings = [
-    [0.0, 0.12, 0.0],
-    [0.12, 0.36, -0.02],
-    [0.29, 0.32, -0.055],
-    [0.46, 0.27, 0.035],
-    [0.61, 0.22, -0.025],
-    [0.76, 0.16, 0.095],
-    [0.89, 0.105, 0.06],
-    [0.98, 0.045, 0.16],
-    [1.0, 0.0, 0.22],
+    [0.0, 0.34, -0.01],
+    [0.11, 0.4, 0.015],
+    [0.27, 0.31, -0.03],
+    [0.45, 0.24, 0.035],
+    [0.63, 0.16, -0.02],
+    [0.79, 0.095, 0.075],
+    [0.93, 0.035, 0.11],
+    [1.0, 0.0, 0.2],
   ];
   const positions = [];
   const indices = [];
@@ -612,24 +615,40 @@ function makeFlameGeometry() {
   return geometry;
 }
 
-function makeFireMaterial(brightness) {
+function makeFireMaterial(brightness, windScale = 1, fireball = false) {
   return new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uBrightness: { value: brightness }, uPhase: { value: Math.random() * 6.28 } },
+    uniforms: {
+      uTime: { value: 0 },
+      uBrightness: { value: brightness },
+      uPhase: { value: Math.random() * 6.28 },
+      uWind: { value: new THREE.Vector2(0.72, -0.24) },
+      uWindScale: { value: windScale },
+      uFireball: { value: fireball ? 1 : 0 },
+    },
     vertexShader: `
       uniform float uTime;
+      uniform float uPhase;
+      uniform vec2 uWind;
+      uniform float uWindScale;
+      uniform float uFireball;
       varying float vFlameHeight;
       varying float vFlameCore;
       varying float vFlamePhase;
       varying float vFlameWidth;
       void main() {
         vec3 flamePosition = position;
-        float sway = smoothstep(0.04, 1.0, position.y);
+        float shapeHeight = mix(position.y, position.y + 0.5, uFireball);
+        float sway = smoothstep(0.04, 0.94, shapeHeight);
+        float gust = 0.88 + 0.12 * sin(uTime * 1.3 + uPhase);
         flamePosition.x += (sin(uTime * 5.7 + position.y * 11.0 + position.z * 6.0) * 0.16
           + sin(uTime * 9.1 + position.y * 23.0) * 0.055) * sway;
         flamePosition.z += (cos(uTime * 4.3 + position.y * 8.0 + position.x * 7.0) * 0.13
           + sin(uTime * 7.8 - position.y * 16.0) * 0.04) * sway;
-        vFlameHeight = position.y;
-        vFlameCore = 1.0 - smoothstep(0.025, 0.21, length(position.xz));
+        float windLift = mix(1.0, 0.12, uFireball);
+        flamePosition.x += uWind.x * uWindScale * gust * sway * (0.42 + 0.58 * sway) * windLift;
+        flamePosition.z += uWind.y * uWindScale * gust * sway * (0.42 + 0.58 * sway) * windLift;
+        vFlameHeight = shapeHeight;
+        vFlameCore = 1.0 - smoothstep(0.025, mix(0.21, 0.47, uFireball), length(position.xz));
         vFlamePhase = position.x * 19.0 + position.z * 23.0;
         vFlameWidth = length(position.xz);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(flamePosition, 1.0);
@@ -639,6 +658,7 @@ function makeFireMaterial(brightness) {
       uniform float uTime;
       uniform float uBrightness;
       uniform float uPhase;
+      uniform float uFireball;
       varying float vFlameHeight;
       varying float vFlameCore;
       varying float vFlamePhase;
@@ -647,13 +667,21 @@ function makeFireMaterial(brightness) {
         float waveA = sin(vFlamePhase * 1.4 + uTime * 8.4 + vFlameHeight * 23.0 + uPhase);
         float waveB = sin(vFlamePhase * 2.3 - uTime * 12.1 + vFlameHeight * 37.0 - uPhase);
         float flutter = 0.72 + 0.16 * waveA + 0.12 * waveB;
-        float core = vFlameCore * (1.0 - smoothstep(0.28, 0.94, vFlameHeight));
-        float body = mix(0.18, 0.76, smoothstep(0.0, 0.72, vFlameHeight));
-        body *= 1.0 - 0.45 * smoothstep(0.78, 1.0, vFlameHeight);
-        float tongues = smoothstep(0.16, 0.94, 0.5 + 0.5 * (waveA + waveB) * 0.5);
-        float edge = 1.0 - smoothstep(0.18, 0.38, vFlameWidth);
-        float value = max(body * (0.58 + tongues * 0.42), core * 0.98);
-        value *= flutter * mix(0.78, 1.0, edge);
+        float value;
+        if (uFireball > 0.5) {
+          float core = vFlameCore * (0.72 + 0.18 * flutter);
+          float emberBands = 0.5 + 0.5 * sin(vFlameWidth * 31.0 - uTime * 3.4 + uPhase);
+          value = 0.32 + 0.18 * emberBands + core * 0.48;
+          value *= 0.86 + 0.14 * flutter;
+        } else {
+          float core = vFlameCore * (1.0 - smoothstep(0.34, 0.97, vFlameHeight));
+          float body = mix(0.58, 0.3, smoothstep(0.0, 0.76, vFlameHeight));
+          body *= 1.0 - 0.55 * smoothstep(0.76, 1.0, vFlameHeight);
+          float tongues = smoothstep(0.16, 0.94, 0.5 + 0.5 * (waveA + waveB) * 0.5);
+          float edge = 1.0 - smoothstep(0.18, 0.38, vFlameWidth);
+          value = max(body * (0.52 + tongues * 0.48), core * 0.98);
+          value *= flutter * mix(0.78, 1.0, edge);
+        }
         value *= uBrightness;
         gl_FragColor = vec4(vec3(clamp(value, 0.0, 1.0)), 1.0);
       }
@@ -706,20 +734,31 @@ function makeSmokeGeometry() {
   return geometry;
 }
 
-function makeSmokeMaterial() {
+function makeSmokeMaterial(windScale = 1) {
   return new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 } },
+    uniforms: {
+      uTime: { value: 0 },
+      uPhase: { value: Math.random() * 6.28 },
+      uWind: { value: new THREE.Vector2(0.72, -0.24) },
+      uWindScale: { value: windScale },
+    },
     vertexShader: `
       uniform float uTime;
+      uniform float uPhase;
+      uniform vec2 uWind;
+      uniform float uWindScale;
       varying vec3 vSmokePosition;
       varying float vSmokeHeight;
       void main() {
         vec3 smokePosition = position;
         float rise = smoothstep(0.02, 1.18, position.y);
+        float gust = 0.9 + 0.1 * sin(uTime * 0.8 + uPhase);
         smokePosition.x += rise * (0.11 * sin(uTime * 0.72 + position.y * 7.2 + position.z * 2.1)
           + 0.045 * sin(uTime * 1.7 - position.y * 18.0 + position.x * 4.0));
         smokePosition.z += rise * (0.08 * cos(uTime * 0.61 + position.y * 6.3 + position.x * 3.0)
           + 0.035 * sin(uTime * 1.35 + position.y * 16.0));
+        smokePosition.x += uWind.x * uWindScale * gust * rise * (0.65 + 0.95 * rise);
+        smokePosition.z += uWind.y * uWindScale * gust * rise * (0.65 + 0.95 * rise);
         float billow = 1.0 + rise * (0.045 * sin(uTime * 0.9 + position.y * 12.0 + position.x * 6.0));
         smokePosition.xz *= billow;
         vSmokePosition = smokePosition;
@@ -786,41 +825,68 @@ function makeSmokeMaterial() {
 }
 
 function addRoofFire(group, width, depth, wallHeight, roofHeight) {
+  const roofWidth = width + 0.18;
+  const roofDepth = depth + 0.2;
   const peakX = -width * 0.08;
   const peakY = wallHeight + roofHeight * (1 - Math.abs(peakX) / (width / 2)) - 0.04;
-  const baseY = peakY + 0.025;
-  const flameGeometry = makeFlameGeometry();
-  const flames = [
-    { x: 0, y: baseY, z: 0, radius: 0.66, height: 3.45, brightness: 1.0 },
-    { x: -0.27, y: baseY + 0.015, z: 0.08, radius: 0.4, height: 2.75, brightness: 0.84 },
-    { x: 0.24, y: baseY + 0.025, z: -0.08, radius: 0.37, height: 2.95, brightness: 0.91 },
-    { x: 0.05, y: baseY + 0.04, z: 0.22, radius: 0.27, height: 2.5, brightness: 0.78 },
+  const fireballGeometry = new THREE.SphereGeometry(0.5, 14, 10);
+  const tongueGeometry = makeFlameGeometry();
+  // Each entry is spread across both roof planes and along the ridge. Sizes
+  // vary so the fire reads as scattered ember clusters rather than a single
+  // oversized point source.
+  const clusters = [
+    { x: -0.31, z: -0.34, radius: 0.22, height: 0.82, brightness: 0.8 },
+    { x: -0.06, z: -0.39, radius: 0.27, height: 0.97, brightness: 0.92 },
+    { x: 0.29, z: -0.28, radius: 0.19, height: 0.76, brightness: 0.78 },
+    { x: -0.34, z: -0.02, radius: 0.28, height: 1.05, brightness: 0.96 },
+    { x: -0.1, z: -0.04, radius: 0.2, height: 0.72, brightness: 0.82 },
+    { x: 0.2, z: 0.01, radius: 0.31, height: 1.12, brightness: 1.0 },
+    { x: 0.35, z: 0.19, radius: 0.2, height: 0.76, brightness: 0.8 },
+    { x: -0.25, z: 0.31, radius: 0.25, height: 0.92, brightness: 0.88 },
+    { x: 0.03, z: 0.35, radius: 0.29, height: 1.04, brightness: 0.95 },
   ];
   const materials = [];
-  flames.forEach(({ x, y, z, radius, height, brightness }) => {
-    const material = makeFireMaterial(brightness);
-    const flame = new THREE.Mesh(flameGeometry, material);
-    flame.position.set(peakX + x, y, z);
-    flame.scale.set(radius, height, radius);
-    flame.castShadow = false;
-    flame.receiveShadow = false;
-    group.add(flame);
-    materials.push(material);
+  clusters.forEach(({ x: roofX, z: roofZ, radius, height, brightness }, index) => {
+    const x = roofX * roofWidth;
+    const z = roofZ * roofDepth;
+    const surfaceY = wallHeight + roofHeight * (1 - Math.abs(x) / (roofWidth / 2)) + 0.035;
+    const fireballMaterial = makeFireMaterial(brightness * 0.92, 0.16, true);
+    const fireball = new THREE.Mesh(fireballGeometry, fireballMaterial);
+    fireball.position.set(x, surfaceY + radius * 0.7, z);
+    fireball.scale.set(radius * 2.15, radius * 1.42, radius * 1.9);
+    fireball.castShadow = false;
+    fireball.receiveShadow = false;
+    group.add(fireball);
+    materials.push(fireballMaterial);
+
+    const tonguesPerCluster = index % 3 === 0 ? 2 : 1;
+    for (let tongueIndex = 0; tongueIndex < tonguesPerCluster; tongueIndex += 1) {
+      const offsetX = tongueIndex === 0 ? -radius * 0.2 : radius * 0.24;
+      const offsetZ = tongueIndex === 0 ? radius * 0.12 : -radius * 0.16;
+      const tongueMaterial = makeFireMaterial(brightness * (tongueIndex === 0 ? 1 : 0.76), 0.92 + tongueIndex * 0.15);
+      const tongue = new THREE.Mesh(tongueGeometry, tongueMaterial);
+      tongue.position.set(x + offsetX, surfaceY + radius * 0.74, z + offsetZ);
+      tongue.scale.set(radius * (tongueIndex === 0 ? 1.28 : 0.86), height * (tongueIndex === 0 ? 1 : 0.72), radius * 0.98);
+      tongue.castShadow = false;
+      tongue.receiveShadow = false;
+      group.add(tongue);
+      materials.push(tongueMaterial);
+    }
   });
 
-  const smokeMaterial = makeSmokeMaterial();
+  const smokeMaterial = makeSmokeMaterial(1.0);
   const smoke = new THREE.Mesh(makeSmokeGeometry(), smokeMaterial);
-  smoke.position.set(peakX - 0.13, baseY + 0.26, 0.01);
-  smoke.scale.set(1.55, 8.2, 1.08);
+  smoke.position.set(peakX + 0.08, peakY + 0.2, -0.03);
+  smoke.scale.set(1.52, 8.2, 1.1);
   smoke.renderOrder = 2;
   smoke.castShadow = false;
   smoke.receiveShadow = false;
   group.add(smoke);
 
   const fireLight = new THREE.PointLight(0xffffff, 2.2, 5.5, 2);
-  fireLight.position.set(peakX, baseY + 0.42, 0);
+  fireLight.position.set(peakX, peakY + 0.55, 0);
   group.add(fireLight);
-  animatedVillageFires.push({ materials, smokeMaterial, fireLight });
+  animatedVillageFires.push({ materials, smokeMaterial, fireLight, lightPhase: Math.random() * 6.28 });
 }
 
 function placeCottage({ x, z, width = 1.5, depth = 1.3, wallHeight = 0.95, roofHeight = 0.62, rotation = 0, tone = 0.22, y = 0, chapel = false, scale = 0.7, burning = false }) {
@@ -1309,10 +1375,10 @@ function resize() {
 function render() {
   if (!mounted) return;
   const fireTime = performance.now() * 0.001;
-  animatedVillageFires.forEach(({ materials, smokeMaterial, fireLight }) => {
+  animatedVillageFires.forEach(({ materials, smokeMaterial, fireLight, lightPhase }) => {
     materials.forEach((material) => { material.uniforms.uTime.value = fireTime; });
     smokeMaterial.uniforms.uTime.value = fireTime;
-    fireLight.intensity = 2.1 + 0.45 * Math.sin(fireTime * 7.0) + 0.2 * Math.sin(fireTime * 11.3);
+    fireLight.intensity = 2.1 + 0.45 * Math.sin(fireTime * 7.0 + lightPhase) + 0.2 * Math.sin(fireTime * 11.3 - lightPhase);
   });
   if (inputTexture) {
     if (inputIsCanvas) inputTexture.needsUpdate = true;
