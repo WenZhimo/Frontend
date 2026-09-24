@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>篝火粒子原型</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #d9d5cc; }
+    body { display: grid; place-items: center; }
+    canvas { display: block; width: min(100vw, 960px); height: min(100vh, 720px); image-rendering: pixelated; }
+  </style>
+</head>
+<body>
+  <canvas id="fire-demo" aria-label="篝火粒子效果"></canvas>
+  <script type="module">
+    import * as THREE from './assets/vendor/three.module.js';
+
+    const canvas = document.querySelector('#fire-demo');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setClearColor(0xd9d5cc, 1);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-5.6, 5.6, 4.2, -1.8, 0.1, 40);
+    camera.position.z = 10;
+
+    const atlasLoader = new THREE.TextureLoader();
+    const atlasTextures = { bulb: new THREE.Texture(), tongue: new THREE.Texture() };
+    const atlasLoaded = { bulb: false, tongue: false };
+    const atlasConfig = {
+      bulb: { path: './assets/fire/Small_Fireball_10x26.png', columns: 10, rows: 6 },
+      tongue: { path: './assets/fire/Jumping_Small_Fireball_14x45.png', columns: 14, rows: 6 },
+    };
+    Object.entries(atlasConfig).forEach(([name, config]) => {
+      atlasLoader.load(config.path, (texture) => {
+        texture.minFilter = THREE.NearestFilter;
+        texture.magFilter = THREE.NearestFilter;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.generateMipmaps = false;
+        atlasTextures[name] = texture;
+        atlasLoaded[name] = true;
+        if (typeof fire !== 'undefined') {
+          fire.material.uniforms.uBulbAtlas.value = atlasTextures.bulb;
+          fire.material.uniforms.uTongueAtlas.value = atlasTextures.tongue;
+          fire.material.uniforms.uAtlasReady.value = atlasLoaded.bulb && atlasLoaded.tongue ? 1 : 0;
+        }
+      });
+    });
+
+    const fireVertex = `
+      uniform float uTime;
+      uniform float uViewportHeight;
+      attribute float aSize;
+      attribute float aPhase;
+      attribute float aSpeed;
+      attribute float aHeight;
+      attribute float aSpread;
+      attribute float aSeed;
+      attribute float aPalette;
+      attribute float aFrameOffset;
+      attribute float aAtlasKind;
+      varying float vActive;
+      varying float vPalette;
+      varying float vSeed;
+      varying float vFrame;
+      varying float vAtlasKind;
+      void main() {
+        float age = fract(uTime * aSpeed + aPhase);
+        float tongueAge = age * step(0.5, aAtlasKind);
+        float rise = tongueAge * aHeight;
+        float wind = sin(uTime * 1.8 + aSeed * 19.0 + age * 5.0) * (0.06 + age * 0.32);
+        vec3 particlePosition = position;
+        particlePosition.x += sin(aSeed * 31.0 + uTime * 2.1) * aSpread * (1.0 - tongueAge * 0.62) + wind * step(0.5, aAtlasKind);
+        particlePosition.y += rise;
+        float shrink = aAtlasKind < 0.5 ? 1.0 : 1.0 - smoothstep(0.58, 0.94, age);
+        vActive = aAtlasKind < 0.5 ? 1.0 : step(age, 0.965) * step(0.015, shrink);
+        vPalette = aPalette;
+        vSeed = aSeed;
+        vAtlasKind = aAtlasKind;
+        float frameCount = aAtlasKind < 0.5 ? 60.0 : 84.0;
+        float frameAge = aAtlasKind < 0.5 ? fract(uTime * aSpeed * 0.42 + aPhase) : age;
+        vFrame = mod(aFrameOffset + floor(frameAge * frameCount), frameCount);
+        vec4 viewPosition = modelViewMatrix * vec4(particlePosition, 1.0);
+        float depth = max(0.1, -viewPosition.z);
+        gl_PointSize = clamp(aSize * 1.82 * shrink * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 2.0, 74.0);
+        gl_Position = projectionMatrix * viewPosition;
+      }
+    `;
+
+    const fireFragment = `
+      varying float vActive;
+      varying float vPalette;
+      varying float vSeed;
+      varying float vFrame;
+      varying float vAtlasKind;
+      uniform sampler2D uBulbAtlas;
+      uniform sampler2D uTongueAtlas;
+      uniform float uAtlasReady;
+      void main() {
+        if (vActive < 0.5 || uAtlasReady < 0.5) discard;
+        vec2 atlasSize = vAtlasKind < 0.5 ? vec2(10.0, 6.0) : vec2(14.0, 6.0);
+        float spriteAspect = vAtlasKind < 0.5 ? (10.0 / 26.0) : (14.0 / 45.0);
+        float localX = (gl_PointCoord.x - 0.5) / spriteAspect + 0.5;
+        if (localX < 0.0 || localX > 1.0) discard;
+        float column = mod(vFrame, atlasSize.x);
+        float row = floor(vFrame / atlasSize.x);
+        vec2 atlasUv = vec2((column + localX) / atlasSize.x, (row + (1.0 - gl_PointCoord.y)) / atlasSize.y);
+        vec4 sprite = vAtlasKind < 0.5 ? texture2D(uBulbAtlas, atlasUv) : texture2D(uTongueAtlas, atlasUv);
+        if (sprite.a < 0.5) discard;
+        gl_FragColor = vec4(sprite.rgb, 1.0);
+      }
+    `;
+
+    const smokeVertex = `
+      uniform float uTime;
+      uniform float uViewportHeight;
+      attribute float aSize;
+      attribute float aPhase;
+      attribute float aSpeed;
+      attribute float aHeight;
+      attribute float aSpread;
+      attribute float aSeed;
+      varying float vActive;
+      void main() {
+        float age = fract(uTime * aSpeed + aPhase);
+        float rise = age * aHeight;
+        float wind = sin(uTime * 0.62 + aSeed * 15.0 + age * 4.0) * (0.04 + age * 0.45);
+        vec3 particlePosition = position;
+        particlePosition.x += sin(aSeed * 21.0 + uTime * 0.8) * aSpread * (0.35 + age * 0.95) + wind;
+        particlePosition.y += rise;
+        float shrink = 1.0 - smoothstep(0.83, 0.995, age);
+        vActive = step(age, 0.995) * step(0.02, shrink);
+        vec4 viewPosition = modelViewMatrix * vec4(particlePosition, 1.0);
+        float depth = max(0.1, -viewPosition.z);
+        gl_PointSize = clamp(aSize * 1.7 * shrink * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 2.0, 74.0);
+        gl_Position = projectionMatrix * viewPosition;
+      }
+    `;
+
+    const smokeFragment = `
+      varying float vActive;
+      void main() {
+        vec2 point = gl_PointCoord * 2.0 - 1.0;
+        if (length(point) > 1.0 || vActive < 0.5) discard;
+        gl_FragColor = vec4(vec3(0.035), 1.0);
+      }
+    `;
+
+    function makeFireGeometry() {
+      const positions = [], sizes = [], phases = [], speeds = [], heights = [], spreads = [], seeds = [], palettes = [], frameOffsets = [], atlasKinds = [];
+      const emitters = [-1.12, -0.56, 0, 0.56, 1.12];
+      emitters.forEach((x, emitterIndex) => {
+        const count = emitterIndex === 2 ? 220 : 150;
+        for (let i = 0; i < count; i += 1) {
+          positions.push(x + (Math.random() - 0.5) * 0.42, 0.42 + Math.random() * 0.32, 0);
+        sizes.push(0.64 + Math.random() * 0.5);
+          phases.push(Math.random());
+          speeds.push(0.46 + Math.random() * 0.38);
+          heights.push(0.92 + Math.random() * (emitterIndex === 2 ? 1.72 : 1.28));
+          spreads.push(0.08 + Math.random() * 0.18);
+          seeds.push(Math.random());
+          palettes.push(Math.random());
+          const atlasKind = i < count * 0.6 ? 0 : 1;
+          atlasKinds.push(atlasKind);
+          frameOffsets.push(Math.floor(Math.random() * (atlasKind < 0.5 ? 60 : 84)));
+        }
+      });
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1));
+      geometry.setAttribute('aPhase', new THREE.Float32BufferAttribute(phases, 1));
+      geometry.setAttribute('aSpeed', new THREE.Float32BufferAttribute(speeds, 1));
+      geometry.setAttribute('aHeight', new THREE.Float32BufferAttribute(heights, 1));
+      geometry.setAttribute('aSpread', new THREE.Float32BufferAttribute(spreads, 1));
+      geometry.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 1));
+      geometry.setAttribute('aPalette', new THREE.Float32BufferAttribute(palettes, 1));
+      geometry.setAttribute('aFrameOffset', new THREE.Float32BufferAttribute(frameOffsets, 1));
+      geometry.setAttribute('aAtlasKind', new THREE.Float32BufferAttribute(atlasKinds, 1));
+      return geometry;
+    }
+
+    function makeSmokeGeometry() {
+      const positions = [], sizes = [], phases = [], speeds = [], heights = [], spreads = [], seeds = [];
+      for (let i = 0; i < 420; i += 1) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.sqrt(Math.random()) * 1.3;
+        positions.push(Math.cos(angle) * radius, 2.28 + Math.random() * 0.72, -0.2);
+        sizes.push(0.9 + Math.random() * 0.62);
+        phases.push(Math.random());
+        speeds.push(0.12 + Math.random() * 0.12);
+        heights.push(4.0 + Math.random() * 2.0);
+        spreads.push(0.22 + Math.random() * 0.46);
+        seeds.push(Math.random());
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1));
+      geometry.setAttribute('aPhase', new THREE.Float32BufferAttribute(phases, 1));
+      geometry.setAttribute('aSpeed', new THREE.Float32BufferAttribute(speeds, 1));
+      geometry.setAttribute('aHeight', new THREE.Float32BufferAttribute(heights, 1));
+      geometry.setAttribute('aSpread', new THREE.Float32BufferAttribute(spreads, 1));
+      geometry.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 1));
+      return geometry;
+    }
+
+    function makeParticleMaterial(vertexShader, fragmentShader) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uViewportHeight: { value: 720 },
+          uBulbAtlas: { value: atlasTextures.bulb },
+          uTongueAtlas: { value: atlasTextures.tongue },
+          uAtlasReady: { value: 0 },
+        },
+        vertexShader,
+        fragmentShader,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+    }
+
+    const smoke = new THREE.Points(makeSmokeGeometry(), makeParticleMaterial(smokeVertex, smokeFragment));
+    const fire = new THREE.Points(makeFireGeometry(), makeParticleMaterial(fireVertex, fireFragment));
+    smoke.renderOrder = 1;
+    fire.renderOrder = 2;
+    scene.add(smoke, fire);
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(7.2, 1.25),
+      new THREE.MeshBasicMaterial({ color: 0x292622 }),
+    );
+    ground.position.set(0, -0.28, -0.5);
+    scene.add(ground);
+    [-0.28, 0.28].forEach((rotation, index) => {
+      const log = new THREE.Mesh(
+        new THREE.BoxGeometry(2.45, 0.28, 0.34),
+        new THREE.MeshBasicMaterial({ color: index === 0 ? 0x151311 : 0x3d3831 }),
+      );
+      log.position.set(0, 0.18 + index * 0.12, 0.12);
+      log.rotation.z = rotation;
+      scene.add(log);
+    });
+
+    function resize() {
+      const width = Math.max(1, canvas.clientWidth);
+      const height = Math.max(1, canvas.clientHeight);
+      renderer.setSize(width, height, false);
+      const aspect = width / height;
+      camera.left = -4.8 * aspect;
+      camera.right = 4.8 * aspect;
+      camera.top = 4.8;
+      camera.bottom = -1.2;
+      camera.updateProjectionMatrix();
+      const drawingHeight = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
+      smoke.material.uniforms.uViewportHeight.value = drawingHeight;
+      fire.material.uniforms.uViewportHeight.value = drawingHeight;
+    }
+
+    function animate(now) {
+      const time = now * 0.001;
+      smoke.material.uniforms.uTime.value = time;
+      fire.material.uniforms.uTime.value = time;
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>

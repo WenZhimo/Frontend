@@ -1,5 +1,36 @@
 import * as THREE from './assets/vendor/three.module.js';
 
+const fireAtlas = {
+  bulb: new THREE.Texture(),
+  tongue: new THREE.Texture(),
+  ready: false,
+};
+const fireAtlasLoader = new THREE.TextureLoader();
+const fireAtlasSources = [
+  ['bulb', './assets/fire/Small_Fireball_10x26.png'],
+  ['tongue', './assets/fire/Jumping_Small_Fireball_14x45.png'],
+];
+let fireAtlasLoaded = 0;
+fireAtlasSources.forEach(([name, path]) => {
+  fireAtlasLoader.load(path, (texture) => {
+    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.NearestFilter;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.generateMipmaps = false;
+    fireAtlas[name] = texture;
+    fireAtlasLoaded += 1;
+    fireAtlas.ready = fireAtlasLoaded === fireAtlasSources.length;
+    if (fireAtlas.ready && animatedVillageFires.length) {
+      animatedVillageFires.forEach(({ materials }) => materials.forEach((material) => {
+        material.uniforms.uBulbAtlas.value = fireAtlas.bulb;
+        material.uniforms.uTongueAtlas.value = fireAtlas.tongue;
+        material.uniforms.uAtlasReady.value = 1;
+      }));
+    }
+  });
+});
+
 const canvas = document.querySelector('#point-canvas');
 
 const screenVertexShader = `
@@ -588,6 +619,8 @@ function makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, ro
   const spreads = [];
   const brightnesses = [];
   const speeds = [];
+  const frameOffsets = [];
+  const atlasKinds = [];
 
   const addParticle = ({ position, offsetX = 0, offsetZ = 0, size, phase, kind, height, spread, brightness, speed }) => {
     positions.push(...position);
@@ -599,6 +632,8 @@ function makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, ro
     spreads.push(spread);
     brightnesses.push(brightness);
     speeds.push(speed);
+    frameOffsets.push(Math.floor(Math.random() * (kind === 0 ? 60 : 84)));
+    atlasKinds.push(kind);
   };
 
   clusters.forEach(({ x: roofX, z: roofZ, radius, height, brightness }) => {
@@ -665,6 +700,8 @@ function makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, ro
   geometry.setAttribute('aSpread', new THREE.Float32BufferAttribute(spreads, 1));
   geometry.setAttribute('aBrightness', new THREE.Float32BufferAttribute(brightnesses, 1));
   geometry.setAttribute('aSpeed', new THREE.Float32BufferAttribute(speeds, 1));
+  geometry.setAttribute('aFrameOffset', new THREE.Float32BufferAttribute(frameOffsets, 1));
+  geometry.setAttribute('aAtlasKind', new THREE.Float32BufferAttribute(atlasKinds, 1));
   return geometry;
 }
 
@@ -674,6 +711,9 @@ function makeFireParticleMaterial(viewportHeight) {
       uTime: { value: 0 },
       uWind: { value: new THREE.Vector2(0.72, -0.24) },
       uViewportHeight: { value: viewportHeight },
+      uBulbAtlas: { value: fireAtlas.bulb },
+      uTongueAtlas: { value: fireAtlas.tongue },
+      uAtlasReady: { value: fireAtlas.ready ? 1 : 0 },
     },
     vertexShader: `
       uniform float uTime;
@@ -687,9 +727,13 @@ function makeFireParticleMaterial(viewportHeight) {
       attribute float aSpread;
       attribute float aBrightness;
       attribute float aSpeed;
+      attribute float aFrameOffset;
+      attribute float aAtlasKind;
       varying float vAlpha;
       varying float vBrightness;
       varying float vPhase;
+      varying float vFrame;
+      varying float vAtlasKind;
       void main() {
         vec3 particlePosition = position;
         float age = 0.0;
@@ -720,24 +764,37 @@ function makeFireParticleMaterial(viewportHeight) {
         vAlpha = alpha;
         vBrightness = aBrightness * (0.84 + 0.16 * sin(uTime * aSpeed * 6.0 + aPhase * 17.0));
         vPhase = aPhase;
+        vAtlasKind = aAtlasKind;
+        float atlasAge = aKind > 0.5 ? age : fract(uTime * aSpeed + aPhase);
+        float frameCount = aAtlasKind < 0.5 ? 60.0 : 84.0;
+        vFrame = mod(aFrameOffset + floor(atlasAge * frameCount), frameCount);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
     fragmentShader: `
       uniform float uTime;
+      uniform sampler2D uBulbAtlas;
+      uniform sampler2D uTongueAtlas;
+      uniform float uAtlasReady;
       varying float vAlpha;
       varying float vBrightness;
       varying float vPhase;
+      varying float vFrame;
+      varying float vAtlasKind;
       void main() {
-        vec2 spritePoint = gl_PointCoord * 2.0 - 1.0;
-        float radius = length(spritePoint);
-        float gaussianFalloff = exp(-2.35 * radius * radius);
-        float hotCenter = 1.0 - smoothstep(0.0, 1.08, radius);
+        if (uAtlasReady < 0.5 || vAlpha < 0.01) discard;
+        vec2 atlasSize = vAtlasKind < 0.5 ? vec2(10.0, 6.0) : vec2(14.0, 6.0);
+        float spriteAspect = vAtlasKind < 0.5 ? (10.0 / 26.0) : (14.0 / 45.0);
+        float localX = (gl_PointCoord.x - 0.5) / spriteAspect + 0.5;
+        if (localX < 0.0 || localX > 1.0) discard;
+        float column = mod(vFrame, atlasSize.x);
+        float row = floor(vFrame / atlasSize.x);
+        vec2 atlasUv = vec2((column + localX) / atlasSize.x, (row + (1.0 - gl_PointCoord.y)) / atlasSize.y);
+        vec4 sprite = vAtlasKind < 0.5 ? texture2D(uBulbAtlas, atlasUv) : texture2D(uTongueAtlas, atlasUv);
+        if (sprite.a < 0.5) discard;
         float shimmer = 0.88 + 0.12 * sin(uTime * 8.0 + vPhase * 13.0);
-        float value = clamp(vBrightness * (0.6 + hotCenter * 0.36) * shimmer, 0.0, 1.0);
-        float alpha = vAlpha * gaussianFalloff * (0.16 + hotCenter * 0.1);
-        if (alpha < 0.006) discard;
-        gl_FragColor = vec4(vec3(value), alpha);
+        vec3 color = sprite.rgb * clamp(vBrightness * shimmer, 0.55, 1.15);
+        gl_FragColor = vec4(color, sprite.a * vAlpha);
       }
     `,
     transparent: true,
