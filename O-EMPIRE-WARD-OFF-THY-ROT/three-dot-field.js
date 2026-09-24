@@ -753,21 +753,20 @@ function makeFireParticleMaterial(viewportHeight) {
           particlePosition.z += cos(uTime * 5.8 + aPhase * 9.0 - age * 11.0) * 0.04 * age;
           alpha = emerge * vanish;
         } else {
-          float flicker = 0.78 + 0.22 * sin(uTime * aSpeed * 7.0 + aPhase * 9.0);
-          particlePosition.x += sin(uTime * 3.8 + aPhase * 13.0) * 0.018 * flicker;
-          particlePosition.y += cos(uTime * 4.7 + aPhase * 7.0) * 0.014;
-          particlePosition.z += sin(uTime * 3.1 + aPhase * 11.0) * 0.017;
-          alpha = flicker;
+          particlePosition.x += sin(uTime * 1.4 + aPhase * 13.0) * 0.008;
+          particlePosition.y += cos(uTime * 1.7 + aPhase * 7.0) * 0.006;
+          particlePosition.z += sin(uTime * 1.1 + aPhase * 11.0) * 0.006;
+          alpha = 1.0;
         }
         vec4 mvPosition = modelViewMatrix * vec4(particlePosition, 1.0);
         float depth = max(0.1, -mvPosition.z);
         float modelScale = length(modelMatrix[0].xyz);
         gl_PointSize = clamp(aSize * 2.15 * modelScale * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 3.0, 52.0);
         vAlpha = alpha;
-        vBrightness = aBrightness * (0.84 + 0.16 * sin(uTime * aSpeed * 6.0 + aPhase * 17.0));
+        vBrightness = aBrightness;
         vPhase = aPhase;
         vAtlasKind = aAtlasKind;
-        float atlasAge = aKind > 0.5 ? age : fract(uTime * aSpeed + aPhase);
+        float atlasAge = aKind > 0.5 ? age : fract(uTime * aSpeed * 0.22 + aPhase);
         float frameCount = aAtlasKind < 0.5 ? 60.0 : 84.0;
         vFrame = mod(aFrameOffset + floor(atlasAge * frameCount), frameCount);
         gl_Position = projectionMatrix * mvPosition;
@@ -813,7 +812,7 @@ function makeSmokeGeometry(sourceY = 0) {
   const heights = [];
   const spreads = [];
   const seeds = [];
-  const count = 34;
+  const count = 96;
   for (let i = 0; i < count; i += 1) {
     const angle = Math.random() * Math.PI * 2;
     const radius = Math.sqrt(Math.random());
@@ -823,11 +822,11 @@ function makeSmokeGeometry(sourceY = 0) {
       sourceY + heightBand * 0.28,
       Math.sin(angle) * radius * 0.18,
     );
-    sizes.push(0.24 + Math.random() * 0.34);
+    sizes.push(0.42 + Math.random() * 0.48);
     phases.push(Math.random());
-    speeds.push(0.13 + Math.random() * 0.12);
-    heights.push(2.7 + Math.random() * 1.7);
-    spreads.push(0.16 + Math.random() * 0.3);
+    speeds.push(0.08 + Math.random() * 0.045);
+    heights.push(5.2 + Math.random() * 1.5);
+    spreads.push(0.22 + Math.random() * 0.42);
     seeds.push(Math.random());
   }
   const geometry = new THREE.BufferGeometry();
@@ -874,11 +873,11 @@ function makeSmokeMaterial(windScale = 1) {
         smokePosition.z += uWind.y * uWindScale * rise * gust
           + cos(uTime * 0.58 + aSeed * 13.0 + age * 4.0) * aSpread * age * 0.58;
         smokePosition.y += rise;
-        float shrink = 1.0 - smoothstep(0.84, 1.0, age);
+        float shrink = 1.0 - smoothstep(0.94, 1.0, age);
         vec4 viewPosition = modelViewMatrix * vec4(smokePosition, 1.0);
         float depth = max(0.1, -viewPosition.z);
         float modelScale = length(modelMatrix[0].xyz);
-        gl_PointSize = clamp(aSize * shrink * modelScale * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 1.0, 32.0);
+        gl_PointSize = clamp(aSize * 2.2 * shrink * modelScale * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 3.0, 54.0);
         vAge = age;
         vSeed = aSeed;
         gl_Position = projectionMatrix * viewPosition;
@@ -888,18 +887,19 @@ function makeSmokeMaterial(windScale = 1) {
       varying float vAge;
       varying float vSeed;
       void main() {
-        vec2 cell = floor(gl_PointCoord * 5.0);
+        vec2 cell = floor(gl_PointCoord * 7.0);
         float randomCell = fract(sin(dot(cell + vSeed * 17.0, vec2(12.9898, 78.233))) * 43758.5453);
-        float edge = step(0.18, randomCell);
-        float bottomDensity = 1.0 - smoothstep(0.18, 0.85, vAge);
-        float opacity = edge * mix(0.9, 0.42, vAge) * (0.82 + 0.18 * bottomDensity);
-        if (opacity < 0.12) discard;
-        gl_FragColor = vec4(vec3(0.012), opacity);
+        float outerCells = step(0.22, randomCell);
+        float opaqueCore = step(0.12, randomCell + (1.0 - vAge) * 0.2);
+        float coverage = min(outerCells, opaqueCore);
+        if (coverage < 0.5) discard;
+        gl_FragColor = vec4(vec3(0.0), 1.0);
       }
     `,
     transparent: true,
     depthTest: true,
     depthWrite: false,
+    alphaTest: 0.5,
     blending: THREE.NormalBlending,
   });
 }
@@ -933,22 +933,22 @@ function addRoofFire(group, width, depth, wallHeight, roofHeight) {
     makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, roofHeight),
     fireMaterial,
   );
-  fireParticles.renderOrder = 1;
+  fireParticles.renderOrder = 3;
   fireParticles.frustumCulled = false;
   fireParticles.castShadow = false;
   fireParticles.receiveShadow = false;
   group.add(fireParticles);
 
   const smokeMaterials = [];
-  const smokePoints = clusters.filter((cluster) => cluster.radius > 0.25).slice(0, 7);
+  const smokePoints = clusters;
   smokePoints.forEach((cluster, index) => {
     const smokeMaterial = makeSmokeMaterial(0.86 + index * 0.1);
-    const smoke = new THREE.Points(makeSmokeGeometry(), smokeMaterial);
+    const smoke = new THREE.Points(makeSmokeGeometry(0.02), smokeMaterial);
     const x = cluster.x * roofWidth;
     const z = Number.isFinite(cluster.baseZ) ? cluster.baseZ : cluster.z * roofDepth;
     const y = Number.isFinite(cluster.baseY) ? cluster.baseY : roofY(x);
     smoke.position.set(x, y + 0.02, z - 0.03);
-    smoke.scale.set(0.66 + (index % 3) * 0.18, 4.8 + (index % 4) * 0.78, 0.56 + (index % 2) * 0.2);
+    smoke.scale.set(1.12 + (index % 3) * 0.16, 1.0, 0.96 + (index % 2) * 0.18);
     smoke.rotation.y = (index - 2) * 0.24;
     smoke.renderOrder = 2;
     smoke.castShadow = false;

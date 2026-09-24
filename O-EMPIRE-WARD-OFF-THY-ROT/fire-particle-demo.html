@@ -68,7 +68,7 @@
         float age = fract(uTime * aSpeed + aPhase);
         float tongueAge = age * step(0.5, aAtlasKind);
         float rise = tongueAge * aHeight;
-        float wind = sin(uTime * 1.8 + aSeed * 19.0 + age * 5.0) * (0.06 + age * 0.32);
+        float wind = sin(uTime * 1.1 + aSeed * 19.0 + age * 3.0) * (0.04 + age * 0.18);
         vec3 particlePosition = position;
         particlePosition.x += sin(aSeed * 31.0 + uTime * 2.1) * aSpread * (1.0 - tongueAge * 0.62) + wind * step(0.5, aAtlasKind);
         particlePosition.y += rise;
@@ -77,7 +77,7 @@
         vSeed = aSeed;
         vAtlasKind = aAtlasKind;
         float frameCount = aAtlasKind < 0.5 ? 60.0 : 84.0;
-        float frameAge = aAtlasKind < 0.5 ? fract(uTime * aSpeed * 0.42 + aPhase) : age;
+        float frameAge = aAtlasKind < 0.5 ? fract(uTime * aSpeed * 0.16 + aPhase) : age;
         vFrame = mod(aFrameOffset + floor(frameAge * frameCount), frameCount);
         vec4 viewPosition = modelViewMatrix * vec4(particlePosition, 1.0);
         float depth = max(0.1, -viewPosition.z);
@@ -126,11 +126,11 @@
         vec3 particlePosition = position;
         particlePosition.x += sin(aSeed * 21.0 + uTime * 0.8) * aSpread * (0.35 + age * 0.95) + wind;
         particlePosition.y += rise;
-        float shrink = 1.0 - smoothstep(0.83, 0.995, age);
+        float shrink = 1.0 - smoothstep(0.94, 1.0, age);
         vActive = step(age, 0.995) * step(0.02, shrink);
         vec4 viewPosition = modelViewMatrix * vec4(particlePosition, 1.0);
         float depth = max(0.1, -viewPosition.z);
-        gl_PointSize = clamp(aSize * 2.8 * shrink * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 4.0, 128.0);
+        gl_PointSize = clamp(aSize * 3.7 * shrink * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 5.0, 168.0);
         gl_Position = projectionMatrix * viewPosition;
       }
     `;
