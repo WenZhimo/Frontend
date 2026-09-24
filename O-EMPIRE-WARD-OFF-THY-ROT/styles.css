@@ -969,6 +969,20 @@ input[type='range']::-moz-range-thumb {
   margin-top: 8px;
 }
 
+.camera-effects {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.camera-effects > .block-heading:not(:first-child) {
+  margin-top: 20px;
+}
+
+.camera-effects > .range-wrap {
+  margin-top: 8px;
+}
+
 .scene-frame.is-dithered .scene-description {
   color: rgba(238, 237, 230, 0.9);
 }

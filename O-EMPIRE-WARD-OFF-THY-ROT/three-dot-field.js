@@ -17,6 +17,10 @@ const screenFragmentShader = `
   uniform vec2 uSceneResolution;
   uniform vec2 uSourceCropScale;
   uniform vec2 uSourceCropOffset;
+  uniform float uCameraBlur;
+  uniform float uTiltShift;
+  uniform float uFocusPosition;
+  uniform float uFocusRange;
   varying vec2 vUv;
 
   float bayer4(vec2 pixel) {
@@ -48,7 +52,29 @@ const screenFragmentShader = `
     vec2 sourcePixel = floor(vUv * uSceneResolution);
     vec2 sourceUv = (sourcePixel + 0.5) / uSceneResolution;
     sourceUv = sourceUv * uSourceCropScale + uSourceCropOffset;
-    vec4 source = texture2D(uScene, sourceUv);
+    // A camera blur is resolved before monochrome quantization, so the
+    // softened image is still made of square pixels rather than a smooth
+    // post-process pasted over the pixel field. Tilt-shift keeps a horizontal
+    // focus band sharp and increases the lens blur toward both edges.
+    // The UI slider runs from top to bottom, while WebGL UV coordinates run
+    // from bottom to top, so invert the displayed position here.
+    float focusY = 1.0 - uFocusPosition;
+    float outOfFocus = smoothstep(uFocusRange, 0.5, abs(vUv.y - focusY));
+    float blurAmount = clamp(max(uCameraBlur, uTiltShift * outOfFocus), 0.0, 1.0);
+    vec2 sourceTexel = 1.0 / max(uSceneResolution, vec2(1.0));
+    vec2 blurStep = sourceTexel * (0.65 + blurAmount * 2.8) / max(uSourceCropScale, vec2(0.02));
+    vec4 centerSample = texture2D(uScene, clamp(sourceUv, 0.0, 1.0));
+    vec4 blurredSample = centerSample * 4.0;
+    blurredSample += texture2D(uScene, clamp(sourceUv + vec2( blurStep.x, 0.0), 0.0, 1.0));
+    blurredSample += texture2D(uScene, clamp(sourceUv + vec2(-blurStep.x, 0.0), 0.0, 1.0));
+    blurredSample += texture2D(uScene, clamp(sourceUv + vec2(0.0,  blurStep.y), 0.0, 1.0));
+    blurredSample += texture2D(uScene, clamp(sourceUv + vec2(0.0, -blurStep.y), 0.0, 1.0));
+    blurredSample += texture2D(uScene, clamp(sourceUv + blurStep * vec2(0.72, 0.72), 0.0, 1.0));
+    blurredSample += texture2D(uScene, clamp(sourceUv - blurStep * vec2(0.72, 0.72), 0.0, 1.0));
+    blurredSample += texture2D(uScene, clamp(sourceUv + blurStep * vec2(0.72, -0.72), 0.0, 1.0));
+    blurredSample += texture2D(uScene, clamp(sourceUv - blurStep * vec2(0.72, -0.72), 0.0, 1.0));
+    blurredSample /= 12.0;
+    vec4 source = mix(centerSample, blurredSample, blurAmount);
     if (source.a < 0.02) discard;
 
     vec3 plateColor = source.rgb / max(source.a, 0.0001);
@@ -82,6 +108,10 @@ const ditherMaterial = new THREE.ShaderMaterial({
     uSceneResolution: { value: new THREE.Vector2(1, 1) },
     uSourceCropScale: { value: new THREE.Vector2(1, 1) },
     uSourceCropOffset: { value: new THREE.Vector2(0, 0) },
+    uCameraBlur: { value: 0.0 },
+    uTiltShift: { value: 0.0 },
+    uFocusPosition: { value: 0.5 },
+    uFocusRange: { value: 0.16 },
   },
   vertexShader: screenVertexShader,
   fragmentShader: screenFragmentShader,
@@ -838,6 +868,11 @@ function setOptions(options = {}) {
     pixelSize = clamp(options.pixelSize, 2, 12);
     resize();
   }
+  if (typeof options.cameraBlur === 'number') ditherMaterial.uniforms.uCameraBlur.value = clamp(options.cameraBlur, 0, 1);
+  if (typeof options.tiltShift === 'number') ditherMaterial.uniforms.uTiltShift.value = clamp(options.tiltShift, 0, 1);
+  if (typeof options.focusPosition === 'number') ditherMaterial.uniforms.uFocusPosition.value = clamp(options.focusPosition, 0, 1);
+  if (typeof options.focusRange === 'number') ditherMaterial.uniforms.uFocusRange.value = clamp(options.focusRange, 0.04, 0.45);
+  if (typeof options.cameraBlur === 'number' || typeof options.tiltShift === 'number' || typeof options.focusPosition === 'number' || typeof options.focusRange === 'number') render();
   return api;
 }
 

@@ -1,27 +1,27 @@
 const scenes = [
   {
     src: 'assets/references/image.png',
-    alt: 'A pale, grainy map with a tiny settlement in the snow',
-    kicker: 'THE WARD',
-    description: 'The first watch is quiet. The snow has not learned your name.',
+    alt: '雪地中带有小型聚落的浅色颗粒地图',
+    kicker: '守望之地',
+    description: '第一轮守望很安静，雪还没有记住你的名字。',
   },
   {
     src: 'assets/references/image-1.png',
-    alt: 'A monochrome map overwhelmed by red flowers',
-    kicker: 'THE SPREAD',
-    description: 'The red flowers arrive sideways, filling every blank space.',
+    alt: '被红色花朵覆盖的黑白地图',
+    kicker: '蔓延',
+    description: '红色花朵从侧面涌来，填满每一块空白。',
   },
   {
     src: 'assets/references/image-2.png',
-    alt: 'A grainy aerial view of a small settlement and its surrounding fields',
-    kicker: 'THE SETTLEMENT',
-    description: 'Keep the hearths lit. Keep the black snow out.',
+    alt: '小型聚落与周围田地的颗粒俯视图',
+    kicker: '聚落',
+    description: '守住炉火，把黑雪挡在村外。',
   },
   {
     src: 'assets/references/image-3.png',
-    alt: 'A dark, grainy ravine or curtain of shadow with a few pale lights',
-    kicker: 'THE ABYSS',
-    description: 'Beyond the last roof, the map turns its face away.',
+    alt: '带有几处微光的黑暗颗粒深渊',
+    kicker: '深渊',
+    description: '越过最后一片屋顶，地图将脸转向黑暗。',
   },
 ];
 
@@ -54,6 +54,13 @@ const pointDitherOutput = document.querySelector('#point-dither-output');
 const pointNote = document.querySelector('#point-note');
 const pointPixelRange = document.querySelector('#point-pixel-range');
 const pointPixelOutput = document.querySelector('#point-pixel-output');
+const cameraBlurRange = document.querySelector('#camera-blur-range');
+const cameraBlurOutput = document.querySelector('#camera-blur-output');
+const tiltShiftRange = document.querySelector('#tilt-shift-range');
+const tiltShiftOutput = document.querySelector('#tilt-shift-output');
+const focusPositionRange = document.querySelector('#focus-position-range');
+const focusPositionOutput = document.querySelector('#focus-position-output');
+const cameraNote = document.querySelector('#camera-note');
 const modelButtons = [...document.querySelectorAll('[data-model-scene]')];
 const modelSwitch = document.querySelector('.model-switch');
 const cameraReset = document.querySelector('[data-action="reset-camera"]');
@@ -92,6 +99,9 @@ let demoFrame = 0;
 let pointField = window.OEmpirePointField || null;
 let sourceContinuous = false;
 let isDemoCanvasSource = false;
+let cameraBlur = Number(cameraBlurRange?.value || 0);
+let tiltShift = Number(tiltShiftRange?.value || 0);
+let focusPosition = Number(focusPositionRange?.value || 50);
 
 function usesDitherPass() {
   return sourceType === '3d' || sourceType === 'file-image' || sourceType === 'video' || sourceType === 'canvas' || sourceType === 'external-image';
@@ -147,7 +157,7 @@ function showFilteredCanvas() {
   if (sourceType !== 'video') {
     playing = false;
     playButton.setAttribute('aria-pressed', 'false');
-    playLabel.textContent = 'PLAY LOOP';
+    playLabel.textContent = '播放循环';
     playButton.querySelector('.play-glyph').textContent = '▶';
   }
 }
@@ -165,6 +175,9 @@ function showPointField() {
   pointField.mount().setOptions({
     dither: Number(pointDitherRange.value) / 100,
     pixelSize: Number(pointPixelRange.value),
+    cameraBlur: cameraBlur / 100,
+    tiltShift: tiltShift / 100,
+    focusPosition: focusPosition / 100,
   });
   pointField.setInputSource(null).start();
 }
@@ -178,15 +191,18 @@ function showDitheredInput(continuous = false) {
   bloomBlock.hidden = true;
   modeBlock.hidden = true;
   modelButtons.forEach((button) => { button.disabled = true; });
-  sceneKicker.textContent = sourceType === 'video' ? 'VIDEO INPUT' : sourceType === 'canvas' ? 'CANVAS INPUT' : 'IMAGE INPUT';
-  sceneDescription.textContent = 'Each source cell is mapped to monochrome square pixels, then ordered dither rebuilds the middle grey tones.';
-  sceneIndex.textContent = 'IN';
-  signalCode.textContent = 'PIXEL / IN';
+  sceneKicker.textContent = sourceType === 'video' ? '视频输入' : sourceType === 'canvas' ? '画布输入' : '图像输入';
+  sceneDescription.textContent = '每个来源单元都会映射为黑白灰方形像素，再用有序抖动重建中间灰阶。';
+  sceneIndex.textContent = '输入';
+  signalCode.textContent = '像素 / 输入';
   pointField?.stop();
   if (!pointField) return;
   pointField.mount().setOptions({
     dither: Number(pointDitherRange.value) / 100,
     pixelSize: Number(pointPixelRange.value),
+    cameraBlur: cameraBlur / 100,
+    tiltShift: tiltShift / 100,
+    focusPosition: focusPosition / 100,
   });
   pointField.setInputSource(activeSource);
   if (continuous) pointField.start();
@@ -304,13 +320,13 @@ function updateBloom(value) {
   needsRender = true;
 
   if (bloom < 20) {
-    rotNote.textContent = 'The ward is holding. Red flowers stay quiet.';
+    rotNote.textContent = '防线依然稳固，红花保持沉寂。';
   } else if (bloom < 56) {
-    rotNote.textContent = 'A thin line of flowers is opening through the snow.';
+    rotNote.textContent = '一线红花正从雪地里绽开。';
   } else if (bloom < 82) {
-    rotNote.textContent = 'The field is in bloom. Petals take every blank space.';
+    rotNote.textContent = '花海正在扩张，花瓣占据每一处空白。';
   } else {
-    rotNote.textContent = 'The flowers fill the whole field. Keep watching anyway.';
+    rotNote.textContent = '花朵已经铺满整片原野，仍需继续守望。';
   }
 }
 
@@ -320,9 +336,9 @@ function updatePointDither(value) {
   pointDitherRange.style.setProperty('--range-fill', `${dither}%`);
   pointDitherOutput.textContent = `${String(dither).padStart(2, '0')}%`;
   pointField?.setOptions({ dither: dither / 100 });
-  if (dither < 18) pointNote.textContent = 'Mapped square pixels use steady grey steps with almost no ordered dithering.';
-  else if (dither < 58) pointNote.textContent = 'Ordered dithering reconstructs mid-grey from the mapped square pixels.';
-  else pointNote.textContent = 'High contrast pixels stay stable while mid-grey breaks into the square Bayer pattern.';
+  if (dither < 18) pointNote.textContent = '映射后的方形像素使用稳定灰阶，几乎不进行有序抖动。';
+  else if (dither < 58) pointNote.textContent = '有序抖动会用映射后的方形像素重建中间灰阶。';
+  else pointNote.textContent = '高对比像素保持稳定，中间灰阶分解为方形拜耳阵列。';
 }
 
 function updatePointPixelSize(value) {
@@ -331,6 +347,38 @@ function updatePointPixelSize(value) {
   pointPixelRange.style.setProperty('--range-fill', `${((pixelSize - 2) / 10) * 100}%`);
   pointPixelOutput.textContent = `${String(pixelSize).padStart(2, '0')} PX`;
   pointField?.setOptions({ pixelSize });
+}
+
+function updateCameraBlur(value) {
+  cameraBlur = Math.max(0, Math.min(100, Number(value)));
+  cameraBlurRange.value = String(cameraBlur);
+  cameraBlurRange.style.setProperty('--range-fill', `${cameraBlur}%`);
+  cameraBlurOutput.textContent = `${String(cameraBlur).padStart(2, '0')}%`;
+  pointField?.setOptions({ cameraBlur: cameraBlur / 100 });
+  cameraNote.textContent = cameraBlur > 0 && tiltShift > 0
+    ? '全局虚化与移轴焦带同时生效，最终仍保持方形像素边缘。'
+    : cameraBlur > 0
+      ? '虚化作用于最终像素画面，越高越柔和。'
+      : tiltShift > 0
+        ? '移轴会保留一条水平清晰带，远离焦平面的位置逐渐虚化。'
+        : '虚化作用于最终像素画面；移轴保留一条水平清晰带。';
+}
+
+function updateTiltShift(value) {
+  tiltShift = Math.max(0, Math.min(100, Number(value)));
+  tiltShiftRange.value = String(tiltShift);
+  tiltShiftRange.style.setProperty('--range-fill', `${tiltShift}%`);
+  tiltShiftOutput.textContent = `${String(tiltShift).padStart(2, '0')}%`;
+  pointField?.setOptions({ tiltShift: tiltShift / 100 });
+  updateCameraBlur(cameraBlur);
+}
+
+function updateFocusPosition(value) {
+  focusPosition = Math.max(20, Math.min(80, Number(value)));
+  focusPositionRange.value = String(focusPosition);
+  focusPositionRange.style.setProperty('--range-fill', `${((focusPosition - 20) / 60) * 100}%`);
+  focusPositionOutput.textContent = `${String(focusPosition).padStart(2, '0')}%`;
+  pointField?.setOptions({ focusPosition: focusPosition / 100 });
 }
 
 function updateMode(mode, announce = true) {
@@ -343,13 +391,13 @@ function updateMode(mode, announce = true) {
   filter.setOptions({ mode });
   if (mode === 'ward') {
     updateBloom(Math.min(bloom, 40));
-    if (announce) showToast('WARD PASS / PETAL COLOR HELD');
+    if (announce) showToast('守望通道 / 保留花瓣颜色');
   } else if (mode === 'bloom') {
     updateBloom(Math.max(bloom, 72));
-    if (announce) showToast('BLOOM PASS / FLOWERS LIFTED');
+    if (announce) showToast('花潮通道 / 提亮红花');
   } else {
     needsRender = true;
-    if (announce) showToast('RAW PASS / SOURCE COLOR');
+    if (announce) showToast('原始通道 / 保留来源颜色');
   }
 }
 
@@ -361,10 +409,10 @@ async function useReference(index, announce = true) {
   showFilteredCanvas();
   filter.setSource(image);
   updateSceneChrome(normalized);
-  updateSourceChrome(`REFERENCE / ${String(normalized + 1).padStart(2, '0')}`);
-  fileName.textContent = 'or choose a local file';
+  updateSourceChrome(`参考图 / ${String(normalized + 1).padStart(2, '0')}`);
+  fileName.textContent = '或选择本地文件';
   needsRender = true;
-  if (announce) showToast(`${scenes[normalized].kicker} / FILTERED`);
+  if (announce) showToast(`${scenes[normalized].kicker} / 已处理`);
 }
 
 function usePointField(announce = true) {
@@ -375,14 +423,14 @@ function usePointField(announce = true) {
   showPointField();
   playing = true;
   playButton.setAttribute('aria-pressed', 'true');
-  playLabel.textContent = 'PAUSE LOOP';
+  playLabel.textContent = '暂停循环';
   playButton.querySelector('.play-glyph').textContent = 'Ⅱ';
-  updateSourceChrome('3D / DITHERED SCENE');
+  updateSourceChrome('3D / 点阵场景');
   sceneIndex.textContent = '3D';
-  signalCode.textContent = 'LIVE / 3D';
+  signalCode.textContent = '实时 / 3D';
   updateModelScene(pointField?.getActiveScene?.() || 'bridge');
-  sourceKind.textContent = '3D / DITHERED SCENE';
-  if (announce) showToast('3D MODELS / DITHERED SCENE LIVE');
+  sourceKind.textContent = '3D / 点阵场景';
+  if (announce) showToast('3D 模型 / 点阵场景已启动');
 }
 
 function updateModelScene(sceneName) {
@@ -392,15 +440,15 @@ function updateModelScene(sceneName) {
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-pressed', String(active));
   });
-  sceneKicker.textContent = sceneName === 'bridge' ? 'THE BRIDGE' : 'THE SETTLEMENT';
+  sceneKicker.textContent = sceneName === 'bridge' ? '大桥' : '村庄';
   sceneDescription.textContent = sceneName === 'bridge'
-    ? 'A continuous stone crossing with three open arches, suspended above the abyss.'
-    : 'A snowfield village cut into a ridge: timber cottages, a chapel, watchtower, lane and dark pines.';
+    ? '连续的石桥以三座拱洞跨越深渊。'
+    : '雪地村庄嵌入山脊，木屋、礼拜堂、瞭望塔、小路与深色松林彼此相连。';
 }
 
-function attachCanvasSource(canvas, label = 'CANVAS / THREE') {
+function attachCanvasSource(canvas, label = '画布 / THREE') {
   if (!canvas || typeof canvas.getContext !== 'function') {
-    showToast('CANVAS SOURCE NOT FOUND');
+    showToast('没有找到画布来源');
     return;
   }
   activeSource = canvas;
@@ -410,10 +458,10 @@ function attachCanvasSource(canvas, label = 'CANVAS / THREE') {
   updateSourceChrome(label);
   playing = true;
   playButton.setAttribute('aria-pressed', 'true');
-  playLabel.textContent = 'PAUSE LOOP';
+  playLabel.textContent = '暂停循环';
   playButton.querySelector('.play-glyph').textContent = 'Ⅱ';
   needsRender = true;
-  showToast('CANVAS SOURCE ATTACHED');
+  showToast('画布来源已接入');
 }
 
 async function useFile(file) {
@@ -430,12 +478,12 @@ async function useFile(file) {
     isDemoCanvasSource = false;
     playing = false;
     playButton.setAttribute('aria-pressed', 'false');
-    playLabel.textContent = 'PLAY LOOP';
+    playLabel.textContent = '播放循环';
     playButton.querySelector('.play-glyph').textContent = '▶';
     showDitheredInput(false);
-    updateSourceChrome('FILE / IMAGE');
+    updateSourceChrome('文件 / 图像');
     needsRender = true;
-    showToast('IMAGE SOURCE / SQUARE PIXEL DITHER');
+    showToast('图像来源 / 方形像素抖动');
     return;
   }
 
@@ -446,20 +494,20 @@ async function useFile(file) {
     sourceType = 'video';
     isDemoCanvasSource = false;
     showDitheredInput(true);
-    updateSourceChrome('FILE / VIDEO');
+    updateSourceChrome('文件 / 视频');
     playing = true;
     playButton.setAttribute('aria-pressed', 'true');
-    playLabel.textContent = 'PAUSE LOOP';
+    playLabel.textContent = '暂停循环';
     playButton.querySelector('.play-glyph').textContent = 'Ⅱ';
     needsRender = true;
-    showToast('VIDEO SOURCE / LIVE PIXEL DITHER');
+    showToast('视频来源 / 实时像素抖动');
     videoSource.play().catch(() => {
-      if (activeSource === videoSource) showToast('VIDEO READY / PRESS PLAY IF NEEDED');
+      if (activeSource === videoSource) showToast('视频已准备好 / 如需播放请按播放');
     });
     return;
   }
 
-  showToast('USE AN IMAGE OR VIDEO FILE');
+  showToast('请选择图像或视频文件');
 }
 
 function togglePlay(force) {
@@ -482,7 +530,7 @@ function togglePlay(force) {
   }
 
   playButton.setAttribute('aria-pressed', String(playing));
-  playLabel.textContent = playing ? 'PAUSE LOOP' : 'PLAY LOOP';
+  playLabel.textContent = playing ? '暂停循环' : '播放循环';
   playButton.querySelector('.play-glyph').textContent = playing ? 'Ⅱ' : '▶';
 
   if (playing && sourceType === 'reference') {
@@ -490,11 +538,11 @@ function togglePlay(force) {
       useReference(activeScene + 1, false);
       updateBloom(18 + Math.floor(Math.random() * 70));
     }, 4400);
-    showToast('REFERENCE LOOP / 4.4 SEC');
+    showToast('参考图循环 / 4.4 秒');
   } else if (playing) {
-    showToast('SOURCE LOOP ARMED');
+    showToast('来源循环已启动');
   } else {
-    showToast('LOOP PAUSED');
+    showToast('循环已暂停');
   }
 }
 
@@ -503,14 +551,14 @@ function resetField() {
   updateMode('ward');
   updateBloom(38);
   useReference(2, false);
-  showToast('WARD RESTORED / REFERENCE 03');
+  showToast('守望已恢复 / 参考图 03');
 }
 
 function randomize() {
   if (sourceType === '3d') {
     pointField?.randomize();
     updatePointDither(14 + Math.floor(Math.random() * 78));
-    showToast('3D FIELD / DITHER SETTINGS UPDATED');
+    showToast('3D 场景 / 抖动设置已更新');
     return;
   }
   const next = Math.floor(Math.random() * scenes.length);
@@ -526,7 +574,7 @@ function exportPng() {
   if (!usesDitherPass()) filter.render(performance.now());
   exportCanvas.toBlob((blob) => {
     if (!blob) {
-      showToast('EXPORT FAILED');
+      showToast('导出失败');
       return;
     }
     const link = document.createElement('a');
@@ -539,7 +587,7 @@ function exportPng() {
     link.download = `o-empire-${exportName}.png`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 500);
-    showToast(`${usesDitherPass() ? 'SQUARE PIXEL' : 'FILTERED'} PNG EXPORTED`);
+    showToast(`${usesDitherPass() ? '方形像素' : '滤镜画面'} PNG 已导出`);
   }, 'image/png');
 }
 
@@ -566,7 +614,7 @@ sourceTabs.forEach((tab) => {
   tab.addEventListener('click', () => {
     if (tab.dataset.sourceKind === 'reference') useReference(activeScene);
     if (tab.dataset.sourceKind === 'file') fileInput.click();
-    if (tab.dataset.sourceKind === 'canvas') attachCanvasSource(demoCanvas, 'CANVAS / THREE');
+    if (tab.dataset.sourceKind === 'canvas') attachCanvasSource(demoCanvas, '画布 / THREE');
     if (tab.dataset.sourceKind === 'scene3d') usePointField();
   });
 });
@@ -574,6 +622,9 @@ sourceTabs.forEach((tab) => {
 bloomRange.addEventListener('input', (event) => updateBloom(event.target.value));
 pointDitherRange.addEventListener('input', (event) => updatePointDither(event.target.value));
 pointPixelRange.addEventListener('input', (event) => updatePointPixelSize(event.target.value));
+cameraBlurRange.addEventListener('input', (event) => updateCameraBlur(event.target.value));
+tiltShiftRange.addEventListener('input', (event) => updateTiltShift(event.target.value));
+focusPositionRange.addEventListener('input', (event) => updateFocusPosition(event.target.value));
 fileInput.addEventListener('change', (event) => useFile(event.target.files?.[0]));
 
 ['dragenter', 'dragover'].forEach((eventName) => {
@@ -603,7 +654,7 @@ document.querySelector('[data-action="fullscreen"]').addEventListener('click', a
     if (!document.fullscreenElement) await frame.requestFullscreen();
     else await document.exitFullscreen();
   } catch (error) {
-    showToast('FULLSCREEN UNAVAILABLE');
+    showToast('当前无法进入全屏');
   }
 });
 
@@ -627,14 +678,14 @@ window.addEventListener('o-empire-point-field-ready', (event) => {
 
 // Public bridge for a Three.js renderer or another canvas on the host page.
 window.OEmpireFilterPanel = {
-  attachCanvas: (canvas, label = 'CANVAS / THREE') => attachCanvasSource(canvas, label),
+  attachCanvas: (canvas, label = '画布 / THREE') => attachCanvasSource(canvas, label),
   attachImage: (image) => {
     activeSource = image;
     sourceType = 'external-image';
     isDemoCanvasSource = false;
     playing = false;
     showDitheredInput(false);
-    updateSourceChrome('EXTERNAL / IMAGE');
+    updateSourceChrome('外部 / 图像');
     needsRender = true;
   },
   getOutputCanvas: () => (usesDitherPass() ? pointCanvas : outputCanvas),
@@ -649,6 +700,9 @@ resizeOverlay();
 updateBloom(bloom);
 updatePointDither(pointDitherRange.value);
 updatePointPixelSize(pointPixelRange.value);
+updateCameraBlur(cameraBlurRange.value);
+updateTiltShift(tiltShiftRange.value);
+updateFocusPosition(focusPositionRange.value);
 updateMode('ward', false);
 usePointField(false);
 rafId = requestAnimationFrame(renderLoop);
