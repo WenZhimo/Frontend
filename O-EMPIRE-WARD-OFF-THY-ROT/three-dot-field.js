@@ -606,8 +606,8 @@ function makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, ro
     const z = roofZ * roofDepth;
     const surfaceY = wallHeight + roofHeight * (1 - Math.abs(x) / (roofWidth / 2)) + 0.035;
     const centerY = surfaceY + radius * 0.55;
-    const ballCount = Math.round(82 + radius * 95);
-    const tongueCount = Math.round(46 + radius * 68);
+    const ballCount = Math.round(112 + radius * 128);
+    const tongueCount = Math.round(78 + radius * 108);
 
     // A jittering cloud of short-lived particles forms the round fireball at
     // the roof. Uniform volume sampling keeps its base bulbous rather than a
@@ -623,7 +623,7 @@ function makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, ro
           centerY + vertical * shell * radius * 0.72,
           z + Math.sin(angle) * radial * radius * 0.82,
         ],
-        size: radius * (0.28 + Math.random() * 0.3),
+        size: radius * (0.44 + Math.random() * 0.38),
         phase: Math.random() * Math.PI * 2,
         kind: 0,
         height: 0,
@@ -644,7 +644,7 @@ function makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, ro
         position: [x, baseY, z],
         offsetX: Math.cos(angle) * radius * spread * 0.86,
         offsetZ: Math.sin(angle) * radius * spread * 0.76,
-        size: radius * (0.24 + Math.random() * 0.28),
+        size: radius * (0.4 + Math.random() * 0.34),
         phase: Math.random(),
         kind: 1,
         height: height * (0.66 + Math.random() * 0.5),
@@ -716,7 +716,7 @@ function makeFireParticleMaterial(viewportHeight) {
         vec4 mvPosition = modelViewMatrix * vec4(particlePosition, 1.0);
         float depth = max(0.1, -mvPosition.z);
         float modelScale = length(modelMatrix[0].xyz);
-        gl_PointSize = clamp(aSize * modelScale * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 1.0, 24.0);
+        gl_PointSize = clamp(aSize * 1.18 * modelScale * projectionMatrix[1][1] * uViewportHeight / (2.0 * depth), 1.0, 24.0);
         vAlpha = alpha;
         vBrightness = aBrightness * (0.84 + 0.16 * sin(uTime * aSpeed * 6.0 + aPhase * 17.0));
         vPhase = aPhase;
@@ -731,13 +731,12 @@ function makeFireParticleMaterial(viewportHeight) {
       void main() {
         vec2 spritePoint = gl_PointCoord * 2.0 - 1.0;
         float radius = length(spritePoint);
-        if (radius > 1.0) discard;
-        float softEdge = 1.0 - smoothstep(0.48, 1.0, radius);
-        float hotCenter = 1.0 - smoothstep(0.0, 0.78, radius);
+        float gaussianFalloff = exp(-2.35 * radius * radius);
+        float hotCenter = 1.0 - smoothstep(0.0, 1.08, radius);
         float shimmer = 0.88 + 0.12 * sin(uTime * 8.0 + vPhase * 13.0);
-        float value = clamp(vBrightness * (0.54 + hotCenter * 0.43) * shimmer, 0.0, 1.0);
-        float alpha = vAlpha * softEdge * (0.68 + hotCenter * 0.32);
-        if (alpha < 0.015) discard;
+        float value = clamp(vBrightness * (0.6 + hotCenter * 0.36) * shimmer, 0.0, 1.0);
+        float alpha = vAlpha * gaussianFalloff * (0.16 + hotCenter * 0.1);
+        if (alpha < 0.006) discard;
         gl_FragColor = vec4(vec3(value), alpha);
       }
     `,
