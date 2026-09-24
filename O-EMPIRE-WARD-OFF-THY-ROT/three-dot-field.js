@@ -868,10 +868,9 @@ function makeSmokeMaterial(windScale = 1) {
         float rise = age * aHeight;
         float gust = 0.86 + 0.14 * sin(uTime * 0.8 + uPhase + aSeed * 8.0);
         vec3 smokePosition = position;
-        smokePosition.x += uWind.x * uWindScale * rise * gust
-          + sin(uTime * 0.74 + aSeed * 17.0 + age * 5.0) * aSpread * age;
-        smokePosition.z += uWind.y * uWindScale * rise * gust
-          + cos(uTime * 0.58 + aSeed * 13.0 + age * 4.0) * aSpread * age * 0.58;
+        float crossWind = sin(uTime * 0.46 + position.y * 3.1 + aSeed * 2.4) * aSpread * age * 0.09;
+        smokePosition.x += uWind.x * uWindScale * rise * gust + crossWind * -uWind.y;
+        smokePosition.z += uWind.y * uWindScale * rise * gust + crossWind * uWind.x;
         smokePosition.y += rise;
         float shrink = 1.0 - smoothstep(0.94, 1.0, age);
         vec4 viewPosition = modelViewMatrix * vec4(smokePosition, 1.0);

@@ -124,7 +124,9 @@
         float rise = age * aHeight;
         float wind = sin(uTime * 0.62 + aSeed * 15.0 + age * 4.0) * (0.04 + age * 0.45);
         vec3 particlePosition = position;
-        particlePosition.x += sin(aSeed * 21.0 + uTime * 0.8) * aSpread * (0.35 + age * 0.95) + wind;
+        float crossWind = sin(uTime * 0.46 + position.y * 3.1 + aSeed * 2.4) * aSpread * age * 0.09;
+        particlePosition.x += wind + crossWind * -0.24;
+        particlePosition.z += crossWind * 0.72;
         particlePosition.y += rise;
         float shrink = 1.0 - smoothstep(0.94, 1.0, age);
         vActive = step(age, 0.995) * step(0.02, shrink);
