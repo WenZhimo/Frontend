@@ -632,7 +632,7 @@ function makeFireParticleGeometry(clusters, roofWidth, roofDepth, wallHeight, ro
     spreads.push(spread);
     brightnesses.push(brightness);
     speeds.push(speed);
-    frameOffsets.push(kind === 0 ? Math.floor(Math.random() * 60) : Math.floor(Math.random() * 10));
+    frameOffsets.push(Math.floor(Math.random() * 60));
     atlasKinds.push(kind);
   };
 
@@ -767,7 +767,7 @@ function makeFireParticleMaterial(viewportHeight) {
         vPhase = aPhase;
         vAtlasKind = aAtlasKind;
         float atlasAge = aKind > 0.5 ? age : fract(uTime * aSpeed * 0.22 + aPhase);
-        float frameCount = aAtlasKind < 0.5 ? 60.0 : 10.0;
+        float frameCount = 60.0;
         vFrame = mod(aFrameOffset + floor(atlasAge * frameCount), frameCount);
         gl_Position = projectionMatrix * mvPosition;
       }
@@ -784,8 +784,8 @@ function makeFireParticleMaterial(viewportHeight) {
       varying float vAtlasKind;
       void main() {
         if (uAtlasReady < 0.5 || vAlpha < 0.01) discard;
-        vec2 atlasSize = vAtlasKind < 0.5 ? vec2(10.0, 6.0) : vec2(14.0, 6.0);
-        float spriteAspect = vAtlasKind < 0.5 ? (10.0 / 26.0) : (10.0 / 45.0);
+        vec2 atlasSize = vec2(10.0, 6.0);
+        float spriteAspect = vAtlasKind < 0.5 ? (10.0 / 26.0) : (14.0 / 45.0);
         float localX = (gl_PointCoord.x - 0.5) / spriteAspect + 0.5;
         if (localX < 0.0 || localX > 1.0) discard;
         float column = mod(vFrame, atlasSize.x);
@@ -941,14 +941,14 @@ function addRoofFire(group, width, depth, wallHeight, roofHeight) {
   const smokeMaterials = [];
   const smokePoints = clusters;
   smokePoints.forEach((cluster, index) => {
-    const smokeMaterial = makeSmokeMaterial(0.86 + index * 0.1);
+    const smokeMaterial = makeSmokeMaterial(1.0);
     const smoke = new THREE.Points(makeSmokeGeometry(0.02), smokeMaterial);
     const x = cluster.x * roofWidth;
     const z = Number.isFinite(cluster.baseZ) ? cluster.baseZ : cluster.z * roofDepth;
     const y = Number.isFinite(cluster.baseY) ? cluster.baseY : roofY(x);
     smoke.position.set(x, y + 0.02, z - 0.03);
     smoke.scale.set(1.12 + (index % 3) * 0.16, 1.0, 0.96 + (index % 2) * 0.18);
-    smoke.rotation.y = (index - 2) * 0.24;
+    smoke.rotation.y = 0;
     smoke.renderOrder = 2;
     smoke.castShadow = false;
     smoke.receiveShadow = false;
