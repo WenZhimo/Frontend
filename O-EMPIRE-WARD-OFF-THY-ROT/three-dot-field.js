@@ -284,43 +284,106 @@ function getSurfaceMaterial(tone, side = THREE.FrontSide, flatShading = true, su
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uOESurfaceStyle = { value: styleId };
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vOESurfacePosition;')
-        .replace('#include <project_vertex>', '#include <project_vertex>\nvOESurfacePosition = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        .replace('#include <common>', '#include <common>\nvarying vec3 vOESurfacePosition;\nvarying vec3 vOESurfaceNormal;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvOESurfacePosition = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvOESurfaceNormal = normalize(mat3(modelMatrix) * objectNormal);');
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
           `#include <common>
           varying vec3 vOESurfacePosition;
+          varying vec3 vOESurfaceNormal;
           uniform float uOESurfaceStyle;
           float oeSurfaceHash(vec3 p) {
             return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+          }
+          float oeSurfaceHash2(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+          }
+          float oeSurfaceNoise(vec2 p) {
+            vec2 cell = floor(p);
+            vec2 blend = fract(p);
+            blend = blend * blend * (3.0 - 2.0 * blend);
+            float a = oeSurfaceHash2(cell);
+            float b = oeSurfaceHash2(cell + vec2(1.0, 0.0));
+            float c = oeSurfaceHash2(cell + vec2(0.0, 1.0));
+            float d = oeSurfaceHash2(cell + vec2(1.0, 1.0));
+            return mix(mix(a, b, blend.x), mix(c, d, blend.x), blend.y);
+          }
+          float oeSurfaceFbm(vec2 p) {
+            float value = oeSurfaceNoise(p) * 0.57;
+            value += oeSurfaceNoise(p * 2.07 + vec2(13.4, 7.1)) * 0.29;
+            value += oeSurfaceNoise(p * 4.13 + vec2(29.7, 19.3)) * 0.14;
+            return value;
+          }
+          float oeRepeatedLine(float value, float width) {
+            float edge = min(fract(value), 1.0 - fract(value));
+            return 1.0 - smoothstep(width, width * 2.5, edge);
+          }
+          float oeMasonryJoint(vec2 uv) {
+            vec2 cell = uv * vec2(1.55, 2.4);
+            float row = floor(cell.y);
+            cell.x += mod(row, 2.0) * 0.5;
+            vec2 edge = min(fract(cell), 1.0 - fract(cell));
+            return 1.0 - smoothstep(0.025, 0.085, min(edge.x, edge.y));
+          }
+          float oeShingleJoint(vec2 uv) {
+            vec2 cell = uv * vec2(3.2, 4.8);
+            float row = floor(cell.y);
+            cell.x += mod(row, 2.0) * 0.5;
+            vec2 edge = min(fract(cell), 1.0 - fract(cell));
+            float rowJoint = 1.0 - smoothstep(0.025, 0.09, edge.y);
+            float columnJoint = 1.0 - smoothstep(0.025, 0.075, edge.x);
+            return max(rowJoint, columnJoint * 0.72);
           }`,
         )
         .replace(
           '#include <color_fragment>',
           `#include <color_fragment>
-          vec3 oeLargeCell = floor(vOESurfacePosition * vec3(2.7, 3.4, 2.7));
-          vec3 oeFineCell = floor(vOESurfacePosition * vec3(11.0, 15.0, 11.0));
-          float oeLargeGrain = oeSurfaceHash(oeLargeCell);
-          float oeFineGrain = oeSurfaceHash(oeFineCell);
-          vec3 oeStoneCell = fract(vOESurfacePosition * vec3(1.8, 3.0, 1.8));
-          float oeStoneEdge = min(min(oeStoneCell.x, 1.0 - oeStoneCell.x), min(min(oeStoneCell.y, 1.0 - oeStoneCell.y), min(oeStoneCell.z, 1.0 - oeStoneCell.z)));
-          float oeStoneJoint = 1.0 - 0.19 * (1.0 - smoothstep(0.025, 0.075, oeStoneEdge));
-          float oeStoneTexture = oeStoneJoint * (0.94 + (oeLargeGrain - 0.5) * 0.18 + (oeFineGrain - 0.5) * 0.08);
-          float oeSnowTexture = 0.985 + (oeLargeGrain - 0.5) * 0.07 + (oeFineGrain - 0.5) * 0.035;
-          float oeTimberBand = fract(vOESurfacePosition.y * 7.0);
-          float oeTimberJoint = 1.0 - 0.11 * (1.0 - smoothstep(0.025, 0.085, min(oeTimberBand, 1.0 - oeTimberBand)));
-          float oeTimberTexture = oeTimberJoint * (0.96 + (oeLargeGrain - 0.5) * 0.12 + 0.025 * sin(vOESurfacePosition.x * 18.0 + vOESurfacePosition.z * 11.0));
-          float oeFoliageTexture = 0.93 + (oeLargeGrain - 0.5) * 0.15 + (oeFineGrain - 0.5) * 0.08;
-          vec2 oeRoofCell = fract(vOESurfacePosition.xz * vec2(2.8, 3.8));
-          float oeRoofEdge = min(min(oeRoofCell.x, 1.0 - oeRoofCell.x), min(oeRoofCell.y, 1.0 - oeRoofCell.y));
-          float oeShingleTexture = (0.95 + (oeLargeGrain - 0.5) * 0.12) * (1.0 - 0.13 * (1.0 - smoothstep(0.035, 0.09, oeRoofEdge)));
+          vec3 oeNormalWeight = abs(normalize(vOESurfaceNormal));
+          vec2 oeSurfaceUv = vOESurfacePosition.xz;
+          if (oeNormalWeight.x > oeNormalWeight.y && oeNormalWeight.x > oeNormalWeight.z) oeSurfaceUv = vOESurfacePosition.zy;
+          else if (oeNormalWeight.z > oeNormalWeight.y) oeSurfaceUv = vOESurfacePosition.xy;
+
+          vec2 oeStyleOffset = vec2(uOESurfaceStyle * 7.3, uOESurfaceStyle * 3.9);
+          float oeMacroGrain = oeSurfaceFbm(oeSurfaceUv * 0.62 + oeStyleOffset);
+          float oeMidGrain = oeSurfaceFbm(oeSurfaceUv * 2.65 + oeStyleOffset.yx + vec2(5.2, 11.8));
+          float oeFineGrain = oeSurfaceHash(floor(vOESurfacePosition * vec3(17.0, 21.0, 17.0)));
+          float oeSpeckle = oeSurfaceHash(floor(vOESurfacePosition * vec3(39.0, 43.0, 39.0)) + vec3(uOESurfaceStyle * 9.0));
+
+          float oeStoneJoint = oeMasonryJoint(oeSurfaceUv);
+          float oeStoneVein = pow(abs(sin((oeSurfaceUv.x * 0.72 + oeSurfaceUv.y * 0.31 + oeMacroGrain * 0.85) * 7.5)), 12.0);
+          float oeStoneStreak = (1.0 - oeNormalWeight.y) * smoothstep(0.69, 0.9, oeSurfaceFbm(vec2(oeSurfaceUv.x * 0.42, vOESurfacePosition.y * 2.2) + vec2(17.0, 3.0)));
+          float oeStoneChip = smoothstep(0.9, 0.985, oeSpeckle);
+          float oeStoneTexture = 0.88 + oeMacroGrain * 0.22 + oeMidGrain * 0.09 + (oeFineGrain - 0.5) * 0.1;
+          oeStoneTexture -= oeStoneJoint * 0.28 + oeStoneVein * 0.055 + oeStoneStreak * 0.1 + oeStoneChip * 0.08;
+
+          float oeSnowWind = 0.5 + 0.5 * sin(dot(oeSurfaceUv, vec2(1.4, 7.5)) + oeMacroGrain * 5.0);
+          float oeSnowPock = smoothstep(0.91, 0.985, oeSpeckle);
+          float oeSnowTexture = 0.9 + oeMacroGrain * 0.16 + oeMidGrain * 0.08 + oeSnowWind * 0.05 - oeSnowPock * 0.1;
+
+          float oeTimberLogJoint = oeRepeatedLine(vOESurfacePosition.y * 5.2, 0.025);
+          float oeTimberBoardJoint = oeRepeatedLine(oeSurfaceUv.x * 1.7 + floor(vOESurfacePosition.y * 5.2) * 0.31, 0.02);
+          float oeTimberGrain = 0.5 + 0.5 * sin(oeSurfaceUv.x * 15.0 + sin(oeSurfaceUv.y * 4.0) * 1.7 + oeMacroGrain * 5.0);
+          float oeTimberKnot = smoothstep(0.79, 0.95, oeMidGrain) * (0.5 + 0.5 * sin(oeSurfaceUv.y * 23.0));
+          float oeTimberTexture = 0.88 + oeMacroGrain * 0.16 + oeTimberGrain * 0.12 + (oeFineGrain - 0.5) * 0.07;
+          oeTimberTexture -= oeTimberLogJoint * 0.18 + oeTimberBoardJoint * 0.08 + oeTimberKnot * 0.08;
+
+          float oeNeedleBands = 0.5 + 0.5 * sin(dot(oeSurfaceUv, vec2(22.0, 7.0)) + oeMidGrain * 8.0);
+          float oeFoliageTexture = 0.79 + oeMacroGrain * 0.25 + oeMidGrain * 0.16 + oeNeedleBands * 0.08 + (oeFineGrain - 0.5) * 0.1;
+
+          vec2 oeShingleGrid = oeSurfaceUv * vec2(3.2, 4.8);
+          vec2 oeShingleCell = floor(oeShingleGrid + vec2(mod(floor(oeShingleGrid.y), 2.0) * 0.5, 0.0));
+          float oeShingleVariation = oeSurfaceHash2(oeShingleCell);
+          float oeShingleChip = smoothstep(0.9, 0.985, oeSpeckle);
+          float oeShingleTexture = 0.88 + oeMacroGrain * 0.13 + oeShingleVariation * 0.18 + oeMidGrain * 0.07;
+          oeShingleTexture -= oeShingleJoint(oeSurfaceUv) * 0.24 + oeShingleChip * 0.09;
+
           float oeSurfaceTexture = oeStoneTexture;
           if (uOESurfaceStyle > 0.5 && uOESurfaceStyle < 1.5) oeSurfaceTexture = oeSnowTexture;
           else if (uOESurfaceStyle > 1.5 && uOESurfaceStyle < 2.5) oeSurfaceTexture = oeTimberTexture;
           else if (uOESurfaceStyle > 2.5 && uOESurfaceStyle < 3.5) oeSurfaceTexture = oeFoliageTexture;
           else if (uOESurfaceStyle > 3.5) oeSurfaceTexture = oeShingleTexture;
-          diffuseColor.rgb *= oeSurfaceTexture;`,
+          diffuseColor.rgb *= clamp(oeSurfaceTexture, 0.58, 1.3);`,
         );
     };
     material.customProgramCacheKey = () => `oe-monochrome-surface-${styleId}`;
