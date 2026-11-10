@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>CD Case — an open WebGL study</title>
+  <meta name="description" content="A clear CD jewel case in WebGL: refracted plastic, a radial diffraction grating, and a procedural studio. Open-source study.">
+  <meta name="theme-color" content="#f7f5ef">
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.js" } }
+  </script>
+</head>
+<body>
+  <main class="app">
+    <div class="stage" aria-hidden="true">
+      <canvas id="stage" aria-label="A clear CD jewel case with a spinning disc. Drag to turn, click to open."></canvas>
+    </div>
+
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="CD Case home">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">CD CASE</span>
+        <span class="brand-sub">OPEN STUDY</span>
+      </a>
+      <nav class="topnav" aria-label="Project links">
+        <a href="./TECHNICAL.md">NOTES</a>
+        <button type="button" id="about-button" aria-haspopup="dialog">ABOUT</button>
+      </nav>
+    </header>
+
+    <section class="intro">
+      <p class="eyebrow">REAL-TIME MATERIALS / 01</p>
+      <h1>Clear plastic.<br><em>Radial light.</em></h1>
+      <p class="intro-copy">A jewel case built from rounded rods and thin shells, lit by a procedural studio. The disc's colour is a grating, not a texture.</p>
+    </section>
+
+    <p class="hint" aria-hidden="true">drag to turn <span>·</span> click the case to open</p>
+
+    <nav class="dock" aria-label="Discs and view controls">
+      <div class="rail" id="rail" role="list"></div>
+      <span class="divider" aria-hidden="true"></span>
+      <div class="tools">
+        <button type="button" class="tool" id="spin-button" aria-label="Spin the disc" aria-pressed="true" title="Spin (S)">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="2.4"></circle>
+            <path d="M12 5.8a6.2 6.2 0 0 1 6.2 6.2" stroke-linecap="round"></path>
+          </svg>
+        </button>
+        <button type="button" class="tool" id="open-button" aria-label="Open the case" aria-pressed="false" title="Open (O)">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
+            <path d="M11 5.5 3.5 7.8v10.4L11 18.5z"></path><rect x="11" y="5.5" width="9.5" height="13" rx="1.4"></rect>
+            <circle cx="15.75" cy="12" r="2.6"></circle>
+          </svg>
+        </button>
+        <button type="button" class="tool" id="flip-button" aria-label="Show the data side" aria-pressed="false" title="Flip (F)">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="2.4"></circle>
+            <path d="M5.8 12a6.2 6.2 0 0 1 12.4 0" stroke-dasharray="2 3"></path>
+            <path d="m8.3 9.4-2.5 2.6 2.5 2.6"></path>
+          </svg>
+        </button>
+        <button type="button" class="tool" id="pause-button" aria-label="Pause animation" aria-pressed="false" title="Pause (Space)">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z" fill="currentColor"></path>
+          </svg>
+        </button>
+      </div>
+    </nav>
+
+    <div class="loader" id="loader" role="status" aria-live="polite">
+      <span class="loader-line"></span>
+      <span>Preparing the case</span>
+    </div>
+
+    <div class="error" id="error" role="alert" hidden>
+      <p><strong>This study needs WebGL2.</strong></p>
+      <p id="error-detail">Your browser could not start a WebGL2 context.</p>
+    </div>
+
+    <aside class="about-panel" id="about-panel" role="dialog" aria-modal="true" aria-labelledby="about-title" hidden>
+      <button type="button" class="about-close" id="about-close" aria-label="Close about panel">×</button>
+      <p class="eyebrow">ABOUT THIS STUDY</p>
+      <h2 id="about-title">An open re-implementation, not a copy.</h2>
+      <p>The scene is built from scratch around the ideas in the accompanying technical notes: a rounded frame is treated as a refracting solid, flat windows are treated as thin Fresnel shells, and the disc uses a simplified radial-grating model.</p>
+      <p>The cover art is original or openly licensed. The code is MIT. The plastic and the studio are generated at runtime; there are no HDR environments or album-art textures.</p>
+      <p class="about-meta">Inspired by public real-time material studies. All code and artwork here are original or openly licensed.</p>
+      <p class="about-keys"><span>← →</span> disc · <span>O</span> open · <span>F</span> flip · <span>S</span> spin · <span>Space</span> pause</p>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+
+    <footer class="footer">
+      <span>WebGL2 · Three.js</span>
+      <span class="footer-mid">Built for learning · MIT code · CC0 art</span>
+      <a href="./README.md">README</a>
+    </footer>
+  </main>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
+

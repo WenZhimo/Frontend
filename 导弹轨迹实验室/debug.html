@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VECTOR LAB / 轨迹诊断</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="debug-page">
+    <header class="debug-header"><p class="kicker">DEBUG HARNESS / ONE MODE · ONE MISSILE</p><h1>轨迹诊断页</h1><p>每次只启动一种模式和一枚导弹。初始方向随机，页面持续记录坐标；停止、命中或超出最大距离后，输出坐标集合与直线判断结果。</p></header>
+    <section class="debug-toolbar">
+      <label>轨迹模式<select id="debugMode"></select></label>
+      <label>最大采样时长（秒）<input id="debugDuration" type="number" min="2" max="30" step="1" value="10"></label>
+      <button class="action primary" id="debugStart" type="button">开始测试</button>
+      <button class="action" id="debugReset" type="button">重置</button>
+      <a class="action" href="index.html">返回实验台</a>
+      <span class="debug-status" id="debugStatus">READY</span>
+    </section>
+    <section class="debug-grid">
+      <canvas id="debugCanvas" class="debug-canvas" aria-label="单导弹轨迹调试画布"></canvas>
+      <pre id="coordinateLog" class="debug-output">等待开始测试……</pre>
+    </section>
+    <pre id="finalResult" class="debug-result">最终结果将在一次测试结束后写入这里。</pre>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/math.js"></script>
+  <script src="js/guidance.js"></script>
+  <script src="js/simulation.js"></script>
+  <script src="js/debug.js"></script>
+</body>
+</html>

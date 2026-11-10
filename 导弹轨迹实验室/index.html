@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VECTOR LAB / 曲线制导实验台</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><i class="mark"></i><div><h1>VECTOR / 曲线制导实验台</h1><p>LOCAL RULES → EMERGENT PATHS · INERTIA FIRST</p></div></div>
+      <div class="top-actions">
+        <div class="metric"><small>ACTIVE</small><strong id="activeMetric">000</strong></div>
+        <div class="metric"><small>HITS</small><strong id="hitMetric">000</strong></div>
+        <div class="metric"><small>TIME</small><strong id="timeMetric">T+00.0</strong></div>
+        <button class="action" id="pauseButton" type="button">暂停</button>
+        <button class="action primary" id="fireAllButton" type="button">发射全部 · 4 × 11</button>
+        <a class="action debug-link" href="debug.html">调试页</a>
+      </div>
+    </header>
+    <main class="workspace">
+      <section class="intro">
+        <div>
+          <p class="kicker">GUIDANCE FIELD / 11 INDEPENDENT CANVASES</p>
+          <h2>一个点如何用局部规则，长出有目的的轨迹？</h2>
+          <p>每个模块绑定一张独立 Canvas；制导函数直接写在 JavaScript 源码中。导弹从发射器中心出生，推进只提高当前速度，制导从加速阶段开始介入；目标移动时，规则每一帧重新计算。</p>
+        </div>
+        <div class="world-control">
+          <div class="world-label"><span>目标状态 / SHARED OBSERVATION</span><b id="targetModeLabel">STATIC</b></div>
+          <div class="target-mode"><button type="button" data-target-mode="static" class="active">固定</button><button type="button" data-target-mode="drift">漂移</button></div>
+          <label class="range-wrap">漂移<input id="driftRange" type="range" min="0" max="1" value=".42" step=".01"><output id="driftOutput">.42</output></label>
+          <label class="range-wrap">固定发射角<input id="launchAngleRange" type="range" min="-45" max="45" value="0" step="1"><output id="launchAngleOutput">0°</output></label>
+        </div>
+      </section>
+      <section class="module-grid" id="moduleGrid"></section>
+      <div class="footer-note"><span>点击任意画布可设置共享目标；每个发射器中心同时生成 4 枚导弹。</span><span>GUIDANCE SOURCE → <b>js/guidance.js</b></span></div>
+    </main>
+  </div>
+  <script src="js/config.js"></script>
+  <script src="js/math.js"></script>
+  <script src="js/guidance.js"></script>
+  <script src="js/simulation.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

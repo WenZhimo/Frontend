@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VECTOR LAB / 像素弹道渲染</title>
+  <link rel="stylesheet" href="pixel.css">
+</head>
+<body>
+  <main class="pixel-app">
+    <header class="pixel-topbar">
+      <div class="pixel-brand"><span class="pixel-mark"></span><div><p class="pixel-eyebrow">VECTOR LAB / PIXEL BALLISTICS</p><h1>像素弹道渲染场</h1></div></div>
+      <div class="pixel-actions">
+        <span class="pixel-metric"><small>ACTIVE</small><b id="pixelActive">000</b></span>
+        <span class="pixel-metric"><small>HITS</small><b id="pixelHits">000</b></span>
+        <button class="pixel-button" id="pixelPause" type="button">暂停</button>
+        <button class="pixel-button primary" id="pixelFireAll" type="button">发射全部 · 4 × 11</button>
+        <a class="pixel-button" href="index.html">返回实验台</a>
+      </div>
+    </header>
+    <section class="pixel-toolbar">
+      <div><p class="pixel-eyebrow">SPRITE FIELD / 11 MODULES</p><h2>导弹、尾焰和烟雾都以像素粒子实时绘制</h2></div>
+      <div class="pixel-controls">
+        <div class="pixel-mode"><button class="active" data-pixel-target="static" type="button">固定目标</button><button data-pixel-target="drift" type="button">漂移目标</button></div>
+        <label>漂移<input id="pixelDrift" type="range" min="0" max="1" value=".42" step=".01"><output id="pixelDriftValue">.42</output></label>
+        <label>固定发射角<input id="pixelAngle" type="range" min="-45" max="45" value="0" step="1"><output id="pixelAngleValue">0°</output></label>
+      </div>
+    </section>
+    <section class="pixel-grid" id="pixelGrid"></section>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/math.js"></script>
+  <script src="js/guidance.js"></script>
+  <script src="js/simulation.js"></script>
+  <script src="js/pixel.js"></script>
+</body>
+</html>
